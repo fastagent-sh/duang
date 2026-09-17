@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
+import type { AgentCommand } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
+import { complete, completionQuery, matches } from "./commands.ts";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
@@ -432,14 +434,66 @@ export function Composer({
   disabled: boolean;
 }) {
   const lines = Math.min(8, Math.max(2, value.split("\n").length));
+  const [commands, setCommands] = useState<AgentCommand[]>([]);
+  const [dismissed, setDismissed] = useState(false);
+  const [cursor, setCursor] = useState(0);
+
+  const query = completionQuery(value);
+  const suggestions = query === undefined || dismissed ? [] : matches(commands, query);
+  const chosen = suggestions[Math.min(cursor, suggestions.length - 1)];
+
+  // Loaded on the first `/`, per agent: the names are the definition's, and it is live.
+  useEffect(() => {
+    setCommands([]);
+  }, [agentId]);
+  useEffect(() => {
+    if (query === undefined || !agentId || commands.length > 0) return;
+    void duang.listCommands(agentId).then(setCommands);
+  }, [query, agentId, commands.length]);
+  useEffect(() => {
+    if (query === undefined) setDismissed(false);
+    setCursor(0);
+  }, [query]);
+
   return (
-    <div className="rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 pt-2.5 pb-2">
+    <div className="relative rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 pt-2.5 pb-2">
+      {suggestions.length > 0 && (
+        <div className="absolute bottom-full left-0 mb-2 w-96 max-h-64 overflow-y-auto rounded-card bg-surface ring-1 ring-stroke shadow-2xl p-1 z-20">
+          {suggestions.map((command, index) => (
+            <button
+              key={command.name}
+              onMouseEnter={() => setCursor(index)}
+              onClick={() => onChange(complete(command.name))}
+              className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
+                command === chosen ? "bg-white/5" : ""
+              }`}
+            >
+              <span className="font-mono text-[12px]">/{command.name}</span>
+              <span className="truncate text-[11px] text-muted">{command.description}</span>
+              <span className="ml-auto text-[10px] text-muted">{command.source}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {context && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{context}</div>}
       <textarea
         value={value}
         rows={lines}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
+          if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const step = e.key === "ArrowDown" ? 1 : suggestions.length - 1;
+              return setCursor((c) => (Math.min(c, suggestions.length - 1) + step) % suggestions.length);
+            }
+            if (e.key === "Escape") return setDismissed(true);
+            // Enter and Tab accept the name rather than send: a bare `/name` is never a message.
+            if ((e.key === "Enter" || e.key === "Tab") && chosen) {
+              e.preventDefault();
+              return onChange(complete(chosen.name));
+            }
+          }
           // While an IME is composing, Enter picks a candidate — sending there would cut a word in half.
           if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
           e.preventDefault();

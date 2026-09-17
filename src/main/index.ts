@@ -75,6 +75,11 @@ function register(): void {
 
   ipcMain.handle("agent:remove", (_e, agentId: string) => removeAgent(agentId));
 
+  ipcMain.handle("agent:commands", async (_e, agentId: string) => {
+    const { control } = await openAgent(await requireAgent(agentId));
+    return control.commands();
+  });
+
   ipcMain.handle("agent:reveal", async (_e, agentId: string) => {
     shell.showItemInFolder((await requireAgent(agentId)).dir);
   });

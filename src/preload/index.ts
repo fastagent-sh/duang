@@ -1,6 +1,13 @@
 /** The renderer's whole privilege: these calls, nothing else. Written by hand so the shape is typed. */
 import { contextBridge, ipcRenderer } from "electron";
-import type { SessionEntries, SessionEvent, SessionResult, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
+import type {
+  AgentCommand,
+  SessionEntries,
+  SessionEvent,
+  SessionResult,
+  SessionState,
+  SessionSummary,
+} from "@fastagent-sh/fastagent/session";
 
 export interface AgentRow {
   id: string;
@@ -27,6 +34,8 @@ const api = {
   removeAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:remove", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
   scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
+  /** The names this agent exposes — what the composer's `/` completion lists. */
+  listCommands: (agentId: string): Promise<AgentCommand[]> => ipcRenderer.invoke("agent:commands", agentId),
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
   listModels: (): Promise<string[]> => ipcRenderer.invoke("models:list"),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
