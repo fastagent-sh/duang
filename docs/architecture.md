@@ -47,6 +47,12 @@ session and subscription id. Stale subscriptions cannot replace the current view
 close on navigation; running conversations retain theirs until settlement, so switching away does
 not lose streamed output. Reloading or destroying the window closes its subscriptions, not its runs.
 
+**Credential-file selection is application-scoped.** The picker and all assemblies receive the
+same explicit `authPath`; it is never chosen from an agent default or a cached provider probe.
+FastAgent resolves credentials for the actual session model and owns OAuth refresh/writeback.
+The renderer receives model specs and the selected path, never credential contents. See the
+[credential policy](../README.md#run-it) for defaults and explicit overrides.
+
 **Runtime replacement is agent-scoped.** Changing a default model prepares a new assembly and
 updates the selected session before committing the registry choice. Admission is guarded across
 all conversations, including turns still opening their runtime: no model replacement or removal

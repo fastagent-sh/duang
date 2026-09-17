@@ -180,19 +180,27 @@ lock yet, so two instances writing at once can drop each other's rows. Invalid o
 reported rather than replaced with an empty list. Adding the same resolved directory reuses its
 existing row, and removing an agent never deletes the directory or conversation history.
 
-Credentials come from whichever global store has the provider: FastAgent's own
-(`~/.fastagent/.secrets/auth.json`), then pi's (`~/.pi/agent/auth.json`). Only providers that are
-actually logged in appear in the picker. Known gap: an agent's runtime reads one of those files at a
-time, so a conversation left on a model from the other store refuses to send and says to pick that
-model for the conversation, which reopens the agent against the right file. Behind a proxy, the system setting is picked up
-automatically — Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
+The picker and every conversation use the same credential file: FastAgent's own global store
+(`~/.fastagent/.secrets/auth.json`, what `fastagent login -g` writes) by default, or the path in
+`FASTAGENT_AUTH_PATH` (a leading `~` is expanded). The picker displays its resolved path. duang
+neither copies credentials nor silently falls back to a project's `.secrets/auth.json` or to pi's
+store; point `FASTAGENT_AUTH_PATH` at either to use it. SDK-supported environment credentials still
+apply when a provider is absent from the selected file. `FASTAGENT_SECRETS_DIR` does not redirect
+this file.
+
+The picker checks credential configuration without refreshing OAuth or testing the provider.
+Reopening it or pressing Retry rereads the file, so external login changes need no app restart.
+Execution resolves the actual conversation's provider, including history that differs from the
+agent default; OAuth refresh and provider errors remain visible. OAuth refresh writes back to the
+selected file through the SDK. Behind a proxy, the system setting is picked up automatically —
+Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
 
 ## Week 1 implementation and acceptance status
 
 Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
 and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
-not just test counts. Real-provider authentication is blocked by
-[#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
+not just test counts. The credential-routing regression has isolated coverage, but real-provider
+validation remains open in [#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
 [#2](https://github.com/fastagent-sh/duang/issues/2).
 
 The current implementation covers: add or scaffold, choose a model, send, stream text and tools,
@@ -206,8 +214,11 @@ not treated as an empty registry. Removing an agent never deletes its directory 
 Changing the agent's model or removing it is refused while any of its conversations is running.
 
 The smoke check uses isolated temporary credentials and files, exercises the real renderer,
-preload, IPC and FastAgent runtime, and replaces only model HTTP responses. It does not test a
-real provider, OAuth refresh, or proxy connectivity and spends no model credits.
+preload, IPC and FastAgent runtime, and replaces provider HTTP. It covers both default and explicit
+credential paths, directory-configured models, UI provider switching, a Codex default with Anthropic
+history, missing/corrupt credentials, synthetic OAuth-refresh failure and recovery without restart.
+It does not test a real provider, successful OAuth rotation, Codex execution or proxy connectivity
+and spends no model credits.
 
 Known client gaps: the composer shows the selected directory, not the resolved tool workspace;
 unsent drafts are cached by conversation but have no separate list entry after navigation;

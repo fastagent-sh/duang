@@ -3,7 +3,7 @@ import { app } from "electron";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE } from "@fastagent-sh/fastagent/session";
-import { authPathFor } from "./credentials.ts";
+import { authPath } from "./credentials.ts";
 import { AgentRegistry, type AgentRow } from "./agent-files.ts";
 
 export { createAgentIn, type AgentRow } from "./agent-files.ts";
@@ -13,8 +13,6 @@ export const addAgent = (dir: string) => registry.add(dir);
 
 type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;
-  /** The credential file this runtime was opened against, or undefined for FastAgent's own resolution. */
-  authOverride?: string;
 };
 const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
@@ -25,20 +23,13 @@ export class NoAgentError extends Error {}
 
 async function build(row: AgentRow): Promise<Opened> {
   try {
-    let authPath = await authPathFor(row.model);
-    const options = { sessionControl: true, ...(row.model ? { model: row.model } : {}) };
-    let assembly = await createPiAgentFromDir(row.dir, { ...options, ...(authPath ? { authPath } : {}) });
-    // With no override, only FastAgent knows which model the directory selected. Apply the same
-    // credential resolution after that discovery, without importing its private config loader.
-    if (!row.model) {
-      const configuredAuth = await authPathFor(assembly.modelSpec);
-      if (configuredAuth) {
-        assembly = await createPiAgentFromDir(row.dir, { ...options, authPath: configuredAuth });
-        authPath = configuredAuth;
-      }
-    }
+    const assembly = await createPiAgentFromDir(row.dir, {
+      sessionControl: true,
+      authPath,
+      ...(row.model ? { model: row.model } : {}),
+    });
     if (!assembly.sessionControl) throw new Error(`${row.dir}: no session control`);
-    return { ...assembly, control: assembly.sessionControl, authOverride: authPath };
+    return { ...assembly, control: assembly.sessionControl };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // FastAgent currently exposes these setup conditions as prose, not error codes.
@@ -46,17 +37,6 @@ async function build(row: AgentRow): Promise<Opened> {
     if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
     throw error;
   }
-}
-
-/**
- * One runtime per agent holds ONE credential file, and naming a file disables FastAgent's own
- * fallback. A conversation carrying its own model (set while it was open) can therefore name a
- * provider whose credentials live in the store this runtime is not reading — the model chip would
- * be right and the turn would still fail on auth. Say it before the turn, where the fix is.
- */
-export async function credentialRefusal(agent: Opened, model: string | undefined): Promise<string | undefined> {
-  if (!model || (await authPathFor(model)) === agent.authOverride) return undefined;
-  return `This conversation runs ${model}, whose credentials are in the store this agent is not open against. Pick ${model} for this conversation to reopen the agent on it.`;
 }
 
 export function openAgent(row: AgentRow): Promise<Opened> {

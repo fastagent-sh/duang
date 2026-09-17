@@ -36,7 +36,7 @@ const api = {
   /** The names this agent exposes — what the composer's `/` completion lists. */
   listCommands: (agentId: string): Promise<AgentCommand[]> => ipcRenderer.invoke("agent:commands", agentId),
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
-  listModels: (): Promise<string[]> => ipcRenderer.invoke("models:list"),
+  listModels: (): Promise<{ specs: string[]; authPath: string }> => ipcRenderer.invoke("models:list"),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:delete", agentId, session),
   openSession: (
