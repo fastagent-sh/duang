@@ -3,6 +3,11 @@
 What the app is made of, what it shows, and what happens when. `README.md` carries the positioning
 and the infrastructure decisions; this file is the product.
 
+This document includes the roadmap, not only shipped behavior. Week 1 is local-only and remains
+unaccepted. See [implementation status](../README.md#week-1-implementation-and-acceptance-status)
+for verified scope and open gaps, and [#2](https://github.com/fastagent-sh/duang/issues/2) for policy
+decisions still requiring confirmation.
+
 ## Objects
 
 Five, and no more.
@@ -91,16 +96,15 @@ Raycast and Linear, not a consumer chat app. Eight tokens in oklch (`bg`, `surfa
 `text`, `muted`, `accent`, `danger`, `radius`), Inter plus a mono. No design system until there is
 enough UI to systematise.
 
-Three dependencies, no component library:
+Two rendering dependencies, no component library:
 
 - **Tailwind v4**, CSS-first (`@theme`), which is where the ecosystem settled;
-- **Base UI** for overlays only — dialog, popover, dropdown, combobox, tooltip. Focus trapping,
-  Escape behaviour, flip positioning and screen-reader semantics are the parts that are actually
-  hard to get right; everything else on these screens is a div;
 - **streamdown** for markdown, because the hard case is rendering *incomplete* markdown mid-stream
   without flicker.
 
-Plus `lucide-react` for icons. No shadcn: it generates files you then maintain, in a generic SaaS
+The model picker uses Chromium's native `<dialog>` for focus trapping, Escape and focus restoration,
+positioned above the composer chip. Add Base UI only when a required overlay exceeds those native
+behaviors. Plus `lucide-react` for icons. No shadcn: it generates files you then maintain, in a generic SaaS
 register we would spend the whole project overriding. (MonoCode reached the same conclusion — its
 dependency list has no component library at all.)
 
@@ -113,8 +117,8 @@ until that visibly hurts.
 **First run.** No agents. One button: *Add agent* → pick a directory (or scaffold one via
 `fastagent init`) → the app reads the definition and shows the name it found → first message.
 
-**Local conversation.** Type, stream, watch tools. Everything is `SessionControl` against an
-in-process `createPiSessionControl`. `/` completes command names from `commands()` and the line is
+**Local conversation.** Type, stream, watch tools. Turns use `agent.invoke`; observation and run controls use the `SessionControl` returned by
+in-process `createPiAgentFromDir`. `/` completes command names from `commands()` and the line is
 sent verbatim; pi expands it.
 
 **Going live.** *Deploy* on an agent, four steps, each one able to fail out loud:
@@ -160,5 +164,7 @@ or memberships — group chat happens in Telegram. No web or mobile client. No n
 
 ## MVP order
 
-Weeks 1–3 are the left two thirds of the picture with `Local` only; weeks 4–5 add the cloud switch,
-Deploy, and Activity. Files and diffs come after the first conversation works end to end.
+Week 1 aims to close the local conversation loop: setup, model choice, streaming text and tool traces,
+steering, stop, history, safe navigation and visible failures. Week 2 adds files/diffs, discovered
+settings and remaining conversation controls. Week 3 adds manually configured remote endpoints;
+weeks 4–5 add hosted Deploy and Activity. The cloud switch stays absent until a real remote exists.

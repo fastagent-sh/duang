@@ -9,20 +9,17 @@ import type {
   SessionSummary,
 } from "@fastagent-sh/fastagent/session";
 
-export interface AgentRow {
-  id: string;
-  name: string;
-  dir: string;
-  model?: string;
-}
+export type { AgentRow } from "../main/agent-files.ts";
+import type { AgentRow } from "../main/agent-files.ts";
 
 export type OpenResult =
-  | { ok: true; sessions: SessionSummary[] }
+  | { ok: true; sessions: SessionSummary[]; model: string }
   | { ok: false; code: "missing_model" | "no_agent" | "failed"; message: string };
 
 export interface SessionFrame {
   agentId: string;
   session: string;
+  subscription: string;
   event: SessionEvent;
 }
 
@@ -31,7 +28,7 @@ const api = {
   addAgent: (): Promise<AgentRow | undefined> => ipcRenderer.invoke("agents:add"),
   openAgent: (agentId: string): Promise<OpenResult> => ipcRenderer.invoke("agent:open", agentId),
   /** Sets the agent's model, and moves the named conversation onto it straight away. */
-  setModel: (agentId: string, model: string, session?: string): Promise<{ ok: true } | { ok: false; message: string }> =>
+  setModel: (agentId: string, model: string, session?: string): Promise<void> =>
     ipcRenderer.invoke("agent:setModel", agentId, model, session),
   removeAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:remove", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
@@ -42,10 +39,15 @@ const api = {
   listModels: (): Promise<string[]> => ipcRenderer.invoke("models:list"),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:delete", agentId, session),
-  openSession: (agentId: string, session: string): Promise<{ state: SessionState; entries: SessionEntries }> =>
-    ipcRenderer.invoke("session:open", agentId, session),
+  openSession: (
+    agentId: string,
+    session: string,
+    subscription: string,
+  ): Promise<{ state: SessionState; entries: SessionEntries }> =>
+    ipcRenderer.invoke("session:open", agentId, session, subscription),
+  closeSession: (subscription: string): Promise<void> => ipcRenderer.invoke("session:close", subscription),
   /** Say this here. Steering a live run or starting a new one is decided in main, against the runtime. */
-  send: (agentId: string, session: string, text: string): Promise<void> =>
+  send: (agentId: string, session: string, text: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:send", agentId, session, text),
   abort: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:abort", agentId, session),

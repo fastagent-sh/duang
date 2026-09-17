@@ -72,3 +72,6 @@ jobs:
 
       - name: Typecheck and build the Electron application
         run: npm run build
+
+      - name: Electron local-workflow smoke (isolated fake provider)
+        run: node tests/smoke.mjs

@@ -4,7 +4,7 @@
 
 An agent you vibed in a terminal is stuck there. duang gives it a contact card, a chat window,
 and one switch: run it on this machine, or run it in the cloud where it answers your team in
-Telegram while your laptop sleeps. Same agent, same directory, same conversation.
+Telegram while your laptop sleeps. Same agent and controls; local and cloud conversations stay separate.
 
 ## The bet
 
@@ -38,14 +38,14 @@ the one structural decision everything else follows from.
 
 One decision makes the switch cheap: **local and remote are two implementations of one interface.**
 FastAgent's `SessionControl` is implemented in-process by `createPiSessionControl`
-(`@fastagent-sh/fastagent/pi`) and over HTTP+SSE by `session-remote.ts`. The client codes against
+(via `createPiAgentFromDir` in `@fastagent-sh/fastagent/pi`) and over HTTP+SSE by `session-remote.ts`. The client codes against
 the interface; the wire protocol is an implementation detail of the remote one.
 
 ```
 Client (Electron + React)
   agents[]: { name, dir, endpoint? }
         │  one interface: SessionControl
-        ├── no endpoint → createPiSessionControl({ dir })   in Electron main, no transport
+        ├── no endpoint → createPiAgentFromDir(dir)         in Electron main, no transport
         └── endpoint   → remote control over HTTP + SSE
                           └── channels: Telegram / Feishu
 ```
@@ -89,7 +89,7 @@ Consequences, all deliberate:
 - **Electron, not Tauri.** FastAgent is an npm package, so the main process can call it directly.
   No Rust toolchain, no extra IPC bridge.
 - **Contacts, not tabs.** An agent is a persistent contact with memory and presence, not a
-  session tab. Tool traces, diffs and approvals are the expanded view of that conversation.
+  session tab. Tool traces and diffs are the expanded view of that conversation.
 
 ## duang cloud (the hosted runtime)
 
@@ -136,7 +136,8 @@ when one account's active minutes actually threaten the margin, not before.
 
 | Week | Only this |
 |---|---|
-| 1–2 | Agent list, chat, local run via `fastagent dev`, tool traces, file tree and diffs off disk |
+| 1 | Agent registry, first-run setup, local in-process chat, streaming tool traces, history, steer/stop and visible failures |
+| 2 | Local file tree and git diffs, discovered agent settings, remaining conversation controls |
 | 3 | Remote endpoints — same UI, different base URL and token |
 | 4–5 | Control service: GitHub OAuth, upload, deploy to our Fly org, external cron waker, Telegram toggle, activity inbox |
 
@@ -153,7 +154,7 @@ Kill criterion: of 100 installs, fewer than 15 move an agent to a remote endpoin
 online for 7 days within two weeks. Then the wedge is wrong.
 
 Money: the client is free and open source (that's distribution — monocode already anchored this
-price at zero). Revenue is duang cloud, per always-on agent per month. No token resale; users
+price at zero). Revenue is duang cloud, per account per month. No token resale; users
 bring their own model key or subscription.
 
 ## Run it
@@ -161,7 +162,8 @@ bring their own model key or subscription.
 ```bash
 npm ci          # needs a sibling ../fastagent already built at the pinned revision
 npm run dev     # Electron + Vite
-npm test        # registry safety, scaffolding, and renderer regressions
+npm test        # registry, routing, selection, drafts, transcript and command regressions
+npm run test:smoke  # real Electron + IPC + FastAgent, with a fake model HTTP response
 ```
 
 The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
@@ -182,6 +184,40 @@ Credentials come from whichever global store has the provider: FastAgent's own
 (`~/.fastagent/.secrets/auth.json`), then pi's (`~/.pi/agent/auth.json`). Only providers that are
 actually logged in appear in the picker. Behind a proxy, the system setting is picked up
 automatically — Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
+
+## Week 1 implementation and acceptance status
+
+Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
+and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
+not just test counts. Real-provider authentication is blocked by
+[#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
+[#2](https://github.com/fastagent-sh/duang/issues/2).
+
+The current implementation covers: add or scaffold, choose a model, send, stream text and tools,
+steer or stop, switch conversations, and reopen runtime-owned history after a restart. Running
+conversations remain selectable and keep their event subscriptions in the background. Drafts are
+per conversation and in memory only. Rejected sends retain their text; setup and stream failures
+offer retry, and broken agents remain removable.
+
+`agents.json` writes are serialized and atomic. Invalid JSON or filesystem errors are reported,
+not treated as an empty registry. Removing an agent never deletes its directory or conversations.
+Changing the agent's model or removing it is refused while any of its conversations is running.
+
+The smoke check uses isolated temporary credentials and files, exercises the real renderer,
+preload, IPC and FastAgent runtime, and replaces only model HTTP responses. It does not test a
+real provider, OAuth refresh, or proxy connectivity and spends no model credits.
+
+Known client gaps: the composer shows the selected directory, not the resolved tool workspace;
+unsent drafts are cached by conversation but have no separate list entry after navigation;
+startup selects the first agent and its newest conversation, rather than restoring the previous
+selection. Application quit does not warn about active work. These are tracked acceptance gaps,
+not accepted product limitations.
+
+Current runtime limitations: durable entries expose tool names/results but not tool arguments,
+thinking, or settled run outcomes. Those details are visible live but cannot all be reconstructed
+after reopening. Partial output already emitted before a renderer reload cannot be replayed.
+Usage/cost is not published by the current pi adapter. Local channels and schedules are not started
+by duang; cloud deployment, files/diffs, and advanced session controls are later-week work.
 
 ## Relationship to duang-v1 / duang-v2
 

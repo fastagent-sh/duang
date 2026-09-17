@@ -21,12 +21,16 @@ export function ago(ts: number, now: number = Date.now()): string {
   return days < 7 ? `${days}d ago` : new Date(ts).toLocaleDateString();
 }
 
-export function rows(summaries: SessionSummary[], selected?: string): Row[] {
+export function rows(summaries: SessionSummary[], selected?: string, running: string[] = []): Row[] {
   const known = [...summaries]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map((s) => ({ session: s.session, label: s.name ?? s.preview ?? s.session, updatedAt: s.updatedAt }));
-  if (selected && !known.some((row) => row.session === selected)) {
-    return [{ session: selected, label: "New conversation", fresh: true }, ...known];
-  }
-  return known;
+  const local = [...new Set([...(selected ? [selected] : []), ...running])]
+    .filter((session) => !known.some((row) => row.session === session))
+    .map((session) => ({
+      session,
+      label: running.includes(session) ? "Running conversation" : "New conversation",
+      fresh: true,
+    }));
+  return [...local, ...known];
 }
