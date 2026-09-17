@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, github_actions]
+    groups:
+      github-actions:
+        patterns: ['*']
+
+# npm version-update automation is deferred while file:../fastagent needs a
+# separately checked-out/built repository. Review npm and FastAgent updates in
+# ordinary PRs; enable npm automation when that dependency is standalone.

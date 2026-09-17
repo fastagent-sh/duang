@@ -1,0 +1,15 @@
+# Match FastAgent's branch taxonomy; label the change's intent, not every touched path.
+bug:
+  - head-branch: ['^fix/']
+enhancement:
+  - head-branch: ['^feat(ure)?/']
+documentation:
+  - head-branch: ['^docs/']
+refactor:
+  - head-branch: ['^refactor/']
+chore:
+  - head-branch: ['^chore/']
+ci:
+  - head-branch: ['^ci/']
+test:
+  - head-branch: ['^test/']

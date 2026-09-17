@@ -1,0 +1,27 @@
+name: Task
+description: Track verification, maintenance, design decisions, CI or documentation work.
+title: 'task: '
+type: Task
+labels: [chore]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What should be true when this is done? Link the parent issue/milestone and interaction IDs where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and non-goals
+      description: Name affected surfaces and boundaries; distinguish a missing feature from behavior that only needs verification.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification and completion criteria
+      description: List the checks or reproducible user workflows required to close this task. Record known limitations rather than hiding them behind passing mocks.
+    validations:
+      required: true
