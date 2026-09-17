@@ -11,7 +11,7 @@
     "test": "node --test --experimental-strip-types src/renderer/*.test.ts"
   },
   "dependencies": {
-    "@fastagent-sh/fastagent": "^0.21.1"
+    "@fastagent-sh/fastagent": "file:../fastagent"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",

@@ -159,10 +159,14 @@ bring their own model key or subscription.
 ## Run it
 
 ```bash
+(cd ../fastagent && npm run build)   # duang tracks the sibling checkout, not the npm release
 npm install
 npm run dev     # Electron + Vite
 npm test        # the transcript fold
 ```
+
+The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
+range when duang ships a build.
 
 Point *Add agent* at any FastAgent agent directory. Today that opens one conversation per agent,
 locally, in the main process.

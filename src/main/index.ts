@@ -52,16 +52,16 @@ function register(): void {
     const bound = control.sessions.get(session);
 
     streams.get(`${agentId}/${session}`)?.();
-    const iterator = bound.events()[Symbol.asyncIterator]();
+    const stream = bound.events();
+    const iterator = stream[Symbol.asyncIterator]();
     streams.set(`${agentId}/${session}`, () => void iterator.return?.());
 
-    // Subscribe BEFORE backfilling, or a live-only event landing in between is lost. The first
-    // `next()` is what registers the subscription, so it is pulled here and consumed by the loop.
-    // ponytail: FastAgent is adding `events().ready` for exactly this; use it once it ships.
-    const first = iterator.next();
+    // Subscribe → await ready → backfill. Live-only events (`state_changed`, `run_settled`) have no
+    // cursor, so anything landing between the read and the subscription would be gone for good; a
+    // stream is only subscribed once something pulls it, and `ready` is that moment made waitable.
     void (async () => {
       try {
-        for (let next = await first; !next.done; next = await iterator.next()) {
+        for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
           forward(e.sender, agentId, session, next.value);
         }
       } catch (error) {
@@ -72,6 +72,7 @@ function register(): void {
         });
       }
     })();
+    await stream.ready;
 
     // Read back rather than assume: a session that does not exist yet answers with an empty one.
     return { state: await bound.state(), entries: await bound.entries() };
