@@ -76,8 +76,9 @@ threads; address every item before resolving its thread.
 
 ## Product-specific verification
 
-`Desktop checks` currently runs tests and a production build on macOS with Node 24. It is not an
-installer/signing check and does not claim Windows/Linux desktop support or real-provider coverage.
+`Desktop checks` currently runs tests and a production build on Linux with Node 24, because those
+steps are platform-independent. It is not an installer/signing check, does not exercise macOS (the
+only supported target) and does not claim real-provider coverage.
 The initial repository setup does not invoke a desktop smoke command that is not yet committed to
 `main`; the Week 1 [acceptance issue](https://github.com/fastagent-sh/duang/issues/16) must wire the
 committed Electron smoke test into CI before treating it as an automated milestone gate.

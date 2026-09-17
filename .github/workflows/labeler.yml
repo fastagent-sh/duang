@@ -3,6 +3,7 @@ name: Labeler
 # Metadata only: this privileged event must never check out or execute PR code.
 on:
   pull_request_target:
+    # head-branch rules only: the branch name cannot change after these events.
     types: [opened, reopened]
 
 permissions:

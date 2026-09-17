@@ -10,14 +10,18 @@ permissions:
   contents: read
 
 concurrency:
+  # Never cancel a push run on main: its conclusion is the required status for that commit.
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   desktop-checks:
     # Stable check name for future branch protection; no unsupported OS matrix yet.
     name: Desktop checks
-    runs-on: macos-15
+    # These steps are platform-independent, so they run on Linux for cost. Deliberate gap:
+    # nothing here covers darwin install/build, and the product only targets macOS. Add a
+    # macOS job when packaging, native dependencies or a launch smoke test arrive.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
@@ -48,7 +52,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
