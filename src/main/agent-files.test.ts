@@ -63,6 +63,10 @@ test("scaffolding creates only a new agent directory and never overwrites existi
     await writeFile(join(dir, "fastagent.config.ts"), "existing config");
     await assert.rejects(createAgentIn(root), { code: "EEXIST" });
     assert.equal(await readFile(join(dir, "fastagent.config.ts"), "utf8"), "existing config");
+    await rm(dir, { recursive: true });
+    await mkdir(dir);
+    await assert.rejects(createAgentIn(root), { code: "EEXIST" });
+    assert.deepEqual(await readdir(dir), [], "even an empty existing directory must remain untouched");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
