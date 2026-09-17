@@ -179,9 +179,11 @@ export default function App() {
       />
 
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="h-10 shrink-0 border-b border-stroke flex items-center px-4 gap-3 drag">
-          <span className="truncate text-muted">
-            {agentState === "ready" && session ? (rows(sessions, session)[0]?.label ?? "") : ""}
+        <header className="h-10 shrink-0 flex items-center px-5 gap-3 drag">
+          <span className="truncate">
+            {agentState === "ready" && session
+              ? (rows(sessions, session).find((r) => r.session === session)?.label ?? "")
+              : ""}
           </span>
           {state?.usage?.contextTokens !== undefined && state.usage.contextWindow !== undefined && (
             <span className="text-muted text-[11px]">
@@ -208,8 +210,11 @@ export default function App() {
         ) : picking || agentState === "missing_model" ? (
           <ModelPicker
             agentId={agentId}
+            current={agent?.model}
             onPicked={() => {
               setPicking(false);
+              // The row on screen still carries the old model: re-read it, or the header lies.
+              void duang.listAgents().then(setAgents);
               void selectAgent(agentId);
             }}
           />

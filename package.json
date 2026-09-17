@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fastagent-sh/fastagent": "file:../fastagent",
+    "streamdown": "^2.6.0",
     "undici": "^7.18.1"
   },
   "devDependencies": {
