@@ -7,30 +7,43 @@ export type Item =
   | { kind: "tool"; id: string; name: string; args: unknown; result?: unknown; isError?: boolean }
   | { kind: "note"; text: string };
 
-/** Best-effort text out of an engine-specific entry payload. */
-function entryText(data: unknown): string {
-  if (typeof data === "string") return data;
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    if (typeof record.text === "string") return record.text;
-    if (Array.isArray(record.content)) {
-      return record.content
-        .map((part) => (part && typeof part === "object" ? String((part as { text?: string }).text ?? "") : ""))
-        .join("");
-    }
-  }
-  return "";
-}
-
-/** History: only the three kinds the contract guarantees; anything engine-specific is skipped. */
+/**
+ * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
+ *
+ * A tool call and its result arrive apart: the call is announced inside the assistant entry's
+ * `toolCalls` (id and name only — arguments are not kept), and the result is its own `tool` entry
+ * pointing back with `toolCallId`. Rendering them as one row is this function's whole job; anything
+ * engine-specific is skipped, as the contract allows.
+ */
 export function fromEntries(entries: SessionEntry[]): Item[] {
   const items: Item[] = [];
   for (const entry of entries) {
-    if (entry.kind === "user") items.push({ kind: "user", text: entryText(entry.data) });
-    else if (entry.kind === "assistant") items.push({ kind: "assistant", text: entryText(entry.data), open: false });
-    else if (entry.kind === "tool") {
-      const data = (entry.data ?? {}) as { id?: string; name?: string; args?: unknown; content?: unknown };
-      items.push({ kind: "tool", id: String(data.id ?? entry.id), name: String(data.name ?? "tool"), args: data.args, result: data.content });
+    const data = (entry.data ?? {}) as {
+      text?: string;
+      toolCalls?: { id?: string; name?: string }[];
+      toolCallId?: string;
+      toolName?: string;
+      isError?: boolean;
+    };
+    if (entry.kind === "user") {
+      items.push({ kind: "user", text: data.text ?? "" });
+    } else if (entry.kind === "assistant") {
+      if (data.text) items.push({ kind: "assistant", text: data.text, open: false });
+      for (const call of data.toolCalls ?? []) {
+        items.push({ kind: "tool", id: call.id ?? "", name: call.name ?? "tool", args: undefined });
+      }
+    } else if (entry.kind === "tool") {
+      const index = items.findLastIndex((item) => item.kind === "tool" && item.id === data.toolCallId);
+      const result: Item = {
+        kind: "tool",
+        id: data.toolCallId ?? entry.id,
+        name: data.toolName ?? "tool",
+        args: index < 0 ? undefined : (items[index] as Extract<Item, { kind: "tool" }>).args,
+        result: data.text ?? "",
+        isError: data.isError ?? false,
+      };
+      if (index < 0) items.push(result);
+      else items[index] = result;
     }
   }
   return items;

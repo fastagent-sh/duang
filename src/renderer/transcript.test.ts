@@ -47,11 +47,27 @@ test("unknown event types change nothing", () => {
 test("history keeps the guaranteed kinds and skips the rest", () => {
   const items = fromEntries([
     { id: "1", timestamp: 0, kind: "user", data: { text: "hi" } },
-    { id: "2", timestamp: 0, kind: "assistant", data: { content: [{ text: "yo" }] } },
-    { id: "3", timestamp: 0, kind: "engine_private", data: {} },
+    { id: "2", timestamp: 0, kind: "assistant", data: { text: "yo" } },
+    { id: "3", timestamp: 0, kind: "model_change", data: {} },
   ]);
   assert.deepEqual(items, [
     { kind: "user", text: "hi" },
     { kind: "assistant", text: "yo", open: false },
   ]);
+});
+
+test("a history tool call and its result become one finished row", () => {
+  const items = fromEntries([
+    { id: "1", timestamp: 0, kind: "assistant", data: { text: "", toolCalls: [{ id: "t1", name: "bash" }] } },
+    { id: "2", timestamp: 0, kind: "tool", data: { toolCallId: "t1", toolName: "bash", isError: false, text: "ok" } },
+  ]);
+  assert.deepEqual(items, [{ kind: "tool", id: "t1", name: "bash", args: undefined, result: "ok", isError: false }]);
+});
+
+test("a result with no call still shows, and an error is marked", () => {
+  const items = fromEntries([
+    { id: "1", timestamp: 0, kind: "tool", data: { toolCallId: "t9", toolName: "read", isError: true, text: "boom" } },
+  ]);
+  assert.equal(items.length, 1);
+  assert.equal((items[0] as { isError?: boolean }).isError, true);
 });
