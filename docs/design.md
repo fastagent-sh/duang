@@ -1,0 +1,160 @@
+# Product design
+
+What the app is made of, what it shows, and what happens when. `README.md` carries the positioning
+and the infrastructure decisions; this file is the product.
+
+## Objects
+
+Five, and no more.
+
+| Object | Is | Lives |
+|---|---|---|
+| **Agent** | a directory, given a name and an avatar | client, one row per agent |
+| **Conversation** | a FastAgent session | inside the agent's runtime, not in our store |
+| **Run** | one turn of a conversation | transient, projected from the event stream |
+| **Deployment** | this agent's cloud copy: URL, token, channels | control service |
+| **Account** | who pays; exists only because the cloud does | control service |
+
+An agent has **two places**: the local directory, and its cloud copy. They do not share
+conversations, because a cloud agent has neither your files nor your history. The UI says so with a
+`Local | Cloud` switch rather than merging two lists into a lie.
+
+Notably absent: message, thread, group, membership, invite. Conversations are read from the runtime
+(`sessions.list()`, `entries()`); the client stores no transcript of its own.
+
+## Screens
+
+```
+┌──────┬────────────────────┬──────────────────────────────────┐
+│ rail │ conversations      │ conversation                     │
+│      │                    │                                  │
+│ ◉    │ [ Local | Cloud ]  │  header: name · model · context  │
+│ ◎    │                    │                                  │
+│ ◉    │  · yesterday's fix │  user / assistant / thinking     │
+│      │  · telegram: #ops  │  tool calls, collapsed           │
+│ ⊞    │  · schedule: daily │                                  │
+│      │                    │  composer                        │
+└──────┴────────────────────┴──────────────────────────────────┘
+  agents        per agent              one conversation
+  + Activity
+```
+
+**Rail** — one entry per agent, a dot for state (`local` · `deployed` · `running` · `failed`), plus
+one fixed entry: **Activity**.
+
+**Activity** is every cloud agent's conversations merged and sorted by `updatedAt` — the inbox for
+work that happened without you. Unread is a local comparison of `updatedAt`/`messageCount` against
+what this machine last displayed. No server, no push, no new data source.
+
+**Activity does not poll.** A cloud agent is a suspended microVM, and any HTTP request resumes it —
+polling every agent on a timer would undo scale-to-zero and cost more than keeping them up. So the
+list refreshes when you open an agent, and shows *last synced* instead of pretending to be live.
+When live matters, the fix is the already-awake control service: agents post "session X updated"
+at the end of a turn and clients subscribe to that. Not built — it needs a reporting hook in every
+deployment.
+
+Notifications are OS notifications from the main process, and only for the three things Telegram
+cannot already show you: a schedule failed, a deploy finished or failed, an agent crashed. The
+agent's actual work arrives in a Telegram group, which already pushes to your phone; duplicating
+that is how you end up building a push service for no gain.
+
+**Conversation list** — `SessionSummary` rows: `name ?? preview`, relative `updatedAt`, a badge for
+where the conversation came from (you, a channel, a schedule).
+
+**Conversation** — the transcript, and the only screen with real density:
+
+- entries rendered by kind: user, assistant text, thinking (collapsed), tool call (collapsed to one
+  line, expandable to args and result);
+- header: conversation name, model picker, thinking level, context meter and cost from
+  `SessionState.usage`, compact;
+- while a run is live: the composer sends `steer` instead of a new prompt, an Abort button appears,
+  and queued items show `state.pending`;
+- fork lives on the message it forks from; a message with siblings shows `1/2` and switches with
+  `update({ leafEntryId })`.
+
+**Agent settings** — the directory path, the model, and read-only lists of what FastAgent
+discovered there (skills, tools, schedules). Nothing here is editable in the app: the directory is
+the source of truth, and an editor for it is a code editor's job. Below that, the cloud block:
+deploy, or the deployment's URL, channels, redeploy, pause, delete.
+
+**Files** (local agents only) — the agent's directory as a tree, with git status and diffs, read
+straight off disk. Absent for cloud agents, because there is nothing of yours to show.
+
+## Visual direction and stack
+
+Dark-first, dense, keyboard-first, near-monochrome with one accent — the dev-tool register of
+Raycast and Linear, not a consumer chat app. Eight tokens in oklch (`bg`, `surface`, `stroke`,
+`text`, `muted`, `accent`, `danger`, `radius`), Inter plus a mono. No design system until there is
+enough UI to systematise.
+
+Three dependencies, no component library:
+
+- **Tailwind v4**, CSS-first (`@theme`), which is where the ecosystem settled;
+- **Base UI** for overlays only — dialog, popover, dropdown, combobox, tooltip. Focus trapping,
+  Escape behaviour, flip positioning and screen-reader semantics are the parts that are actually
+  hard to get right; everything else on these screens is a div;
+- **streamdown** for markdown, because the hard case is rendering *incomplete* markdown mid-stream
+  without flicker.
+
+Plus `lucide-react` for icons. No shadcn: it generates files you then maintain, in a generic SaaS
+register we would spend the whole project overriding. (MonoCode reached the same conclusion — its
+dependency list has no component library at all.)
+
+macOS gets `titleBarStyle: "hiddenInset"` and `vibrancy: "sidebar"` — native texture for free,
+rather than simulating glass. Skipped: CodeMirror and syntax highlighting; a diff is coloured lines
+until that visibly hurts.
+
+## Flows
+
+**First run.** No agents. One button: *Add agent* → pick a directory (or scaffold one via
+`fastagent init`) → the app reads the definition and shows the name it found → first message.
+
+**Local conversation.** Type, stream, watch tools. Everything is `SessionControl` against an
+in-process `createPiSessionControl`. `/` completes command names from `commands()` and the line is
+sent verbatim; pi expands it.
+
+**Going live.** *Deploy* on an agent, four steps, each one able to fail out loud:
+
+1. sign in to duang cloud (GitHub device flow);
+2. paste a model API key — with the reason stated: a server cannot use your Claude/Codex
+   subscription OAuth;
+3. paste a Telegram bot token, or skip and get an HTTP endpoint only;
+4. deploy, streaming the real log; on success, the URL and one instruction: add the bot to a group
+   and @ it.
+
+**After it's live.** Work arrives in Activity. Opening a channel conversation shows the full
+transcript and tool trace. You can prompt into it — and the app states plainly that your message
+continues the context **but is not sent to the Telegram group**: replies to a group are the
+channel's job, and `/control` does not go through the channel. Taking over means reading and asking
+privately, not speaking as the bot.
+
+**Changing an agent.** Edit the directory in your editor, chat locally to test, press *Redeploy*.
+One button, same upload path.
+
+**Stopping.** Pause suspends the deployment and unregisters the webhook; delete removes the Fly app
+and the deployment row. Both say what they will destroy before doing it.
+
+## Failure, visibly
+
+Every one of these shows the original error text and a retry, never a generic "something went
+wrong":
+
+- Telegram `setWebhook` cannot reach the new URL (FastAgent already distinguishes "still warming
+  up" from "misconfigured");
+- the Fly deploy fails mid-way;
+- the model key is rejected on the first turn;
+- a cloud agent is unreachable — the conversation goes read-only with the reason, and a composer
+  keeps its text rather than swallowing it;
+- a run fails or is aborted: rendered as a settled outcome in the transcript, not a toast that
+  disappears.
+
+## Not built
+
+No approvals or permission prompts: agents run pre-authorized by their directory (also why there is
+no suspended-run state). No remote file browsing. No agent editor. No multi-person groups, invites,
+or memberships — group chat happens in Telegram. No web or mobile client. No notification server.
+
+## MVP order
+
+Weeks 1–3 are the left two thirds of the picture with `Local` only; weeks 4–5 add the cloud switch,
+Deploy, and Activity. Files and diffs come after the first conversation works end to end.
