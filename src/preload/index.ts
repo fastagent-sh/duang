@@ -6,7 +6,12 @@ export interface AgentRow {
   id: string;
   name: string;
   dir: string;
+  model?: string;
 }
+
+export type OpenResult =
+  | { ok: true; sessions: SessionSummary[] }
+  | { ok: false; code: "missing_model" | "failed"; message: string };
 
 export interface SessionFrame {
   agentId: string;
@@ -17,7 +22,9 @@ export interface SessionFrame {
 const api = {
   listAgents: (): Promise<AgentRow[]> => ipcRenderer.invoke("agents:list"),
   addAgent: (): Promise<AgentRow | undefined> => ipcRenderer.invoke("agents:add"),
-  listSessions: (agentId: string): Promise<SessionSummary[]> => ipcRenderer.invoke("sessions:list", agentId),
+  openAgent: (agentId: string): Promise<OpenResult> => ipcRenderer.invoke("agent:open", agentId),
+  setModel: (agentId: string, model: string): Promise<void> => ipcRenderer.invoke("agent:setModel", agentId, model),
+  listModels: (): Promise<string[]> => ipcRenderer.invoke("models:list"),
   openSession: (agentId: string, session: string): Promise<{ state: SessionState; entries: SessionEntries }> =>
     ipcRenderer.invoke("session:open", agentId, session),
   /** Say this here. Steering a live run or starting a new one is decided in main, against the runtime. */

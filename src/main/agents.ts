@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
+import { authPathFor } from "./credentials.ts";
 import type { Agent } from "@fastagent-sh/fastagent/core";
 import type { SessionControl } from "@fastagent-sh/fastagent/session";
 
@@ -11,6 +12,8 @@ export interface AgentRow {
   id: string;
   name: string;
   dir: string;
+  /** duang's model override for this agent. The directory stays the source of truth; we never edit it. */
+  model?: string;
 }
 
 // ponytail: one JSON file, rewritten whole. A list of agents fits in memory; revisit if it ever doesn't.
@@ -39,9 +42,23 @@ export async function addAgent(dir: string): Promise<AgentRow> {
   return row;
 }
 
+export async function setAgentModel(id: string, model: string): Promise<void> {
+  const all = await listAgents();
+  const row = all.find((a) => a.id === id);
+  if (!row) throw new Error(`unknown agent ${id}`);
+  row.model = model;
+  opened.delete(id);
+  await writeFile(file(), JSON.stringify(all, null, 2));
+}
+
 interface Opened {
   agent: Agent;
   control: SessionControl;
+}
+
+/** What the UI must act on differently, as opposed to merely report. */
+export class MissingModelError extends Error {
+  readonly code = "missing_model";
 }
 
 const opened = new Map<string, Promise<Opened>>();
@@ -54,10 +71,27 @@ const opened = new Map<string, Promise<Opened>>();
 export function openAgent(row: AgentRow): Promise<Opened> {
   const cached = opened.get(row.id);
   if (cached) return cached;
-  const promise = createPiAgentFromDir(row.dir, { serving: true, sessionControl: true }).then((a) => {
-    if (!a.sessionControl) throw new Error(`${row.dir}: no session control (config.sessionControl is off)`);
-    return { agent: a.agent, control: a.sessionControl };
-  });
+  const promise = authPathFor(row.model)
+    .then((authPath) =>
+      createPiAgentFromDir(row.dir, {
+        serving: true,
+        sessionControl: true,
+        ...(row.model ? { model: row.model } : {}),
+        ...(authPath ? { authPath } : {}),
+      }),
+    )
+    .then(
+    (a) => {
+      if (!a.sessionControl) throw new Error(`${row.dir}: no session control (config.sessionControl is off)`);
+      return { agent: a.agent, control: a.sessionControl };
+    },
+    (error: unknown) => {
+      // A scaffolded agent has no model until someone picks one; that is a question for the user,
+      // not a failure to report. FastAgent says so in prose, so this is the one place that reads it.
+      const message = error instanceof Error ? error.message : String(error);
+      throw /missing model/i.test(message) ? new MissingModelError(message) : error;
+    },
+  );
   // A failed open must not poison the entry: the user fixes the directory and tries again.
   promise.catch(() => opened.delete(row.id));
   opened.set(row.id, promise);

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
-import { addAgent, listAgents, openAgent, type AgentRow } from "./agents.ts";
+import { addAgent, listAgents, MissingModelError, openAgent, setAgentModel, type AgentRow } from "./agents.ts";
+import { credentials } from "./credentials.ts";
+import { useSystemProxy } from "./proxy.ts";
 import { NO_ACTIVE_RUN_CODE, type SessionEvent } from "@fastagent-sh/fastagent/session";
 
 /** `SESSION_BUSY_CODE` from FastAgent's agent.ts, which no export path re-exports (0.21.1). */
@@ -42,10 +44,23 @@ function register(): void {
     return addAgent(picked.filePaths[0]);
   });
 
-  ipcMain.handle("sessions:list", async (_e, agentId: string) => {
-    const { control } = await openAgent(await requireAgent(agentId));
-    return control.sessions.list();
+  /**
+   * Opening an agent is where everything that can be wrong about it shows up, so this answers with a
+   * reason instead of rejecting: the UI asks for a model when one is missing, and reports the rest.
+   */
+  ipcMain.handle("agent:open", async (_e, agentId: string) => {
+    try {
+      const { control } = await openAgent(await requireAgent(agentId));
+      return { ok: true as const, sessions: await control.sessions.list() };
+    } catch (error) {
+      const code = error instanceof MissingModelError ? "missing_model" : "failed";
+      return { ok: false as const, code, message: error instanceof Error ? error.message : String(error) };
+    }
   });
+
+  ipcMain.handle("agent:setModel", (_e, agentId: string, model: string) => setAgentModel(agentId, model));
+
+  ipcMain.handle("models:list", async () => (await credentials()).specs);
 
   ipcMain.handle("session:open", async (e, agentId: string, session: string) => {
     const { control } = await openAgent(await requireAgent(agentId));
@@ -124,7 +139,8 @@ function register(): void {
   });
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  await useSystemProxy();
   register();
   createWindow();
   app.on("activate", () => {

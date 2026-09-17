@@ -168,8 +168,13 @@ npm test        # the transcript fold
 The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
 range when duang ships a build.
 
-Point *Add agent* at any FastAgent agent directory. Today that opens one conversation per agent,
-locally, in the main process.
+Point *Add agent* at any FastAgent agent directory (`fastagent init` makes one). A scaffolded agent
+has no model, so duang asks for one and stores the choice itself — the directory is never edited.
+
+Credentials come from whichever global store has the provider: FastAgent's own
+(`~/.fastagent/.secrets/auth.json`), then pi's (`~/.pi/agent/auth.json`). Only providers that are
+actually logged in appear in the picker. Behind a proxy, the system setting is picked up
+automatically — Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
 
 ## Relationship to duang-v1 / duang-v2
 
