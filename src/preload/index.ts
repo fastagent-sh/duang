@@ -20,10 +20,9 @@ const api = {
   listSessions: (agentId: string): Promise<SessionSummary[]> => ipcRenderer.invoke("sessions:list", agentId),
   openSession: (agentId: string, session: string): Promise<{ state: SessionState; entries: SessionEntries }> =>
     ipcRenderer.invoke("session:open", agentId, session),
-  prompt: (agentId: string, session: string, text: string): Promise<void> =>
-    ipcRenderer.invoke("session:prompt", agentId, session, text),
-  steer: (agentId: string, session: string, text: string): Promise<SessionResult> =>
-    ipcRenderer.invoke("session:steer", agentId, session, text),
+  /** Say this here. Steering a live run or starting a new one is decided in main, against the runtime. */
+  send: (agentId: string, session: string, text: string): Promise<void> =>
+    ipcRenderer.invoke("session:send", agentId, session, text),
   abort: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:abort", agentId, session),
   onSessionEvent: (listener: (frame: SessionFrame) => void): (() => void) => {

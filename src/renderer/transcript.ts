@@ -78,7 +78,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
     case "retry_scheduled":
       return [...items, { kind: "note", text: `retrying: ${String(data.reason ?? "")}` }];
     // Not from the engine: the main process reports what the stream itself could not.
-    case "invoke_failed":
+    case "send_failed":
     case "stream_failed":
       return [...items, { kind: "note", text: String(data.reason ?? event.type) }];
     default:

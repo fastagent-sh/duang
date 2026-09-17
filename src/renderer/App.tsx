@@ -52,9 +52,7 @@ export default function App() {
     if (!text || !agentId || !session) return;
     setDraft("");
     setItems((list) => echoUser(list, text));
-    // A live run takes steering; an idle one takes a new turn. The runtime's state decides, not the UI.
-    if (running) await duang.steer(agentId, session, text);
-    else await duang.prompt(agentId, session, text);
+    await duang.send(agentId, session, text);
   }
 
   return (

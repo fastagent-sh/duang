@@ -1,7 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import { addAgent, listAgents, openAgent, type AgentRow } from "./agents.ts";
-import type { SessionEvent } from "@fastagent-sh/fastagent/session";
+import { NO_ACTIVE_RUN_CODE, type SessionEvent } from "@fastagent-sh/fastagent/session";
+
+/** `SESSION_BUSY_CODE` from FastAgent's agent.ts, which no export path re-exports (0.21.1). */
+const SESSION_BUSY_CODE = "session_busy";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -74,28 +77,44 @@ function register(): void {
     return { state: await bound.state(), entries: await bound.entries() };
   });
 
-  ipcMain.handle("session:prompt", async (e, agentId: string, session: string, text: string) => {
-    const { agent } = await openAgent(await requireAgent(agentId));
-    // The turn's events reach the UI through the control stream; this loop only drives it and
-    // reports the failure the stream cannot (an invoke that never started a run).
-    void (async () => {
-      try {
-        for await (const _ of agent.invoke({ session }, { text })) {
-          // drained on purpose
-        }
-      } catch (error) {
-        forward(e.sender, agentId, session, {
-          type: "invoke_failed",
-          timestamp: Date.now(),
-          data: { reason: String(error) },
-        });
-      }
-    })();
-  });
+  /**
+   * One verb for "say this here". Which call it becomes is policy, and it is ours: a place with one
+   * human steers a live run instead of queueing behind it (FastAgent's own chat channels choose the
+   * opposite, and `invoke-turn-kit.ts` is where they say so).
+   *
+   * The routing never trusts the state it read: a run can start or settle between the read and the
+   * call. The runtime decides feasibility with two stable codes, and each one names its other door.
+   */
+  ipcMain.handle("session:send", async (e, agentId: string, session: string, text: string) => {
+    const { agent, control } = await openAgent(await requireAgent(agentId));
+    const bound = control.sessions.get(session);
+    const note = (reason: string) =>
+      forward(e.sender, agentId, session, { type: "send_failed", timestamp: Date.now(), data: { reason } });
 
-  ipcMain.handle("session:steer", async (_e, agentId: string, session: string, text: string) => {
-    const { control } = await openAgent(await requireAgent(agentId));
-    return control.sessions.get(session).steer({ text });
+    const startRun = async (): Promise<void> => {
+      let first = true;
+      for await (const event of agent.invoke({ session }, { text })) {
+        // Only a FIRST-event busy is a fail-fast reject; later ones belong to a turn that did start.
+        if (first && event.type === "failed" && event.code === SESSION_BUSY_CODE) {
+          const steered = await bound.steer({ text });
+          if (!steered.ok) note(steered.error.message);
+          return;
+        }
+        first = false;
+      }
+    };
+
+    try {
+      if ((await bound.state()).status === "running") {
+        const steered = await bound.steer({ text });
+        if (steered.ok) return;
+        // The run settled in between — start one. Any other refusal is the person's to see.
+        if (steered.error.code !== NO_ACTIVE_RUN_CODE) return note(steered.error.message);
+      }
+      await startRun();
+    } catch (error) {
+      note(String(error));
+    }
   });
 
   ipcMain.handle("session:abort", async (_e, agentId: string, session: string) => {
