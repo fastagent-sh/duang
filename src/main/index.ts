@@ -2,8 +2,10 @@ import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } f
 import { join } from "node:path";
 import {
   addAgent,
+  createAgentIn,
   listAgents,
   MissingModelError,
+  NoAgentError,
   openAgent,
   removeAgent,
   setAgentModel,
@@ -61,10 +63,13 @@ function register(): void {
       const { control } = await openAgent(await requireAgent(agentId));
       return { ok: true as const, sessions: await control.sessions.list() };
     } catch (error) {
-      const code = error instanceof MissingModelError ? "missing_model" : "failed";
+      const code =
+        error instanceof MissingModelError ? "missing_model" : error instanceof NoAgentError ? "no_agent" : "failed";
       return { ok: false as const, code, message: error instanceof Error ? error.message : String(error) };
     }
   });
+
+  ipcMain.handle("agent:scaffold", async (_e, agentId: string) => createAgentIn((await requireAgent(agentId)).dir));
 
   ipcMain.handle("agent:setModel", (_e, agentId: string, model: string) => setAgentModel(agentId, model));
 

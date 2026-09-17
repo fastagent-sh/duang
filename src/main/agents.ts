@@ -1,7 +1,7 @@
 /** The agent registry: rows on disk, opened assemblies in memory. */
 import { app } from "electron";
 import { randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { authPathFor } from "./credentials.ts";
@@ -69,6 +69,25 @@ export class MissingModelError extends Error {
   readonly code = "missing_model";
 }
 
+/** The directory is fine, it just holds no agent yet — a question for the user, not a failure. */
+export class NoAgentError extends Error {
+  readonly code = "no_agent";
+}
+
+/**
+ * Give a plain project an agent, in the layout FastAgent expects: the agent lives in a subdirectory,
+ * so the project itself stays the workspace the agent works ON. Two files and nothing else — no npm
+ * install, no persona, no tools; the coding tools and the project's `AGENTS.md` come for free, and
+ * `fastagent init` remains the way to get the full scaffold.
+ */
+export async function createAgentIn(dir: string): Promise<string> {
+  const agentDir = join(dir, "fastagent");
+  await mkdir(agentDir, { recursive: true });
+  await writeFile(join(agentDir, "fastagent.config.ts"), "export default {};\n");
+  await writeFile(join(agentDir, ".gitignore"), ".state/\n.secrets/\n.env\n");
+  return agentDir;
+}
+
 const opened = new Map<string, Promise<Opened>>();
 
 /**
@@ -97,7 +116,10 @@ export function openAgent(row: AgentRow): Promise<Opened> {
       // A scaffolded agent has no model until someone picks one; that is a question for the user,
       // not a failure to report. FastAgent says so in prose, so this is the one place that reads it.
       const message = error instanceof Error ? error.message : String(error);
-      throw /missing model/i.test(message) ? new MissingModelError(message) : error;
+      // FastAgent says both of these in prose, so this is the one place that reads them.
+      if (/missing model/i.test(message)) throw new MissingModelError(message);
+      if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
+      throw error;
     },
   );
   // A failed open must not poison the entry: the user fixes the directory and tries again.

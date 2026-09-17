@@ -9,6 +9,7 @@ import {
   Composer,
   ConversationList,
   ModelPicker,
+  NeedsAgent,
   NoAgents,
   NoConversation,
   Rail,
@@ -76,8 +77,10 @@ export default function App() {
       setPicking(false);
       const result = await duang.openAgent(id);
       if (!result.ok) {
-        setStates((s) => ({ ...s, [id]: result.code === "missing_model" ? "missing_model" : "broken" }));
-        if (result.code !== "missing_model") setBroken(result.message);
+        const state: AgentState =
+          result.code === "missing_model" ? "missing_model" : result.code === "no_agent" ? "no_agent" : "broken";
+        setStates((s) => ({ ...s, [id]: state }));
+        if (state === "broken") setBroken(result.message);
         return;
       }
       setStates((s) => ({ ...s, [id]: "ready" }));
@@ -157,7 +160,9 @@ export default function App() {
   const composerBlocked =
     agentState === "broken"
       ? "this agent is broken"
-      : agentState === "missing_model" || picking
+      : agentState === "no_agent"
+        ? "create an agent here first"
+        : agentState === "missing_model" || picking
         ? "pick a model first"
         : !session
           ? "no conversation"
@@ -207,6 +212,12 @@ export default function App() {
           <NoAgents onAdd={() => void addAgent()} />
         ) : broken ? (
           <BrokenAgent agentId={agentId} message={broken} onRemove={() => void removeAgent(agentId)} />
+        ) : agentState === "no_agent" ? (
+          <NeedsAgent
+            dir={agent?.dir ?? ""}
+            onCreate={() => void duang.scaffoldAgent(agentId).then(() => selectAgent(agentId))}
+            onRemove={() => void removeAgent(agentId)}
+          />
         ) : picking || agentState === "missing_model" ? (
           <ModelPicker
             agentId={agentId}

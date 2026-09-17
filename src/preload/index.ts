@@ -11,7 +11,7 @@ export interface AgentRow {
 
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[] }
-  | { ok: false; code: "missing_model" | "failed"; message: string };
+  | { ok: false; code: "missing_model" | "no_agent" | "failed"; message: string };
 
 export interface SessionFrame {
   agentId: string;
@@ -25,6 +25,8 @@ const api = {
   openAgent: (agentId: string): Promise<OpenResult> => ipcRenderer.invoke("agent:open", agentId),
   setModel: (agentId: string, model: string): Promise<void> => ipcRenderer.invoke("agent:setModel", agentId, model),
   removeAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:remove", agentId),
+  /** Give a plain project an agent directory. Returns where it was created. */
+  scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
   listModels: (): Promise<string[]> => ipcRenderer.invoke("models:list"),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>

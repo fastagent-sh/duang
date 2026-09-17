@@ -8,9 +8,14 @@ import { ago, type Row } from "./sessions.ts";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
-export type AgentState = "ready" | "missing_model" | "broken";
+export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 
-const dot: Record<AgentState, string> = { ready: "bg-accent", missing_model: "bg-amber-400", broken: "bg-danger" };
+const dot: Record<AgentState, string> = {
+  ready: "bg-accent",
+  missing_model: "bg-amber-400",
+  no_agent: "bg-amber-400",
+  broken: "bg-danger",
+};
 
 export function Rail({
   agents,
@@ -192,6 +197,44 @@ function Action({ icon, label, onClick }: { icon: React.ReactNode; label: string
     >
       {icon} {label}
     </button>
+  );
+}
+
+/** A plain project: it can hold an agent, it just does not yet. Say exactly what gets written. */
+export function NeedsAgent({
+  dir,
+  onCreate,
+  onRemove,
+}: {
+  dir: string;
+  onCreate: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Panel>
+      <div className="max-w-xl space-y-4">
+        <p className="text-muted leading-relaxed">
+          This folder has no agent yet. duang can create one here — the project stays the agent&apos;s workspace, so it
+          works on these files and reads their <span className="font-mono">AGENTS.md</span>.
+        </p>
+        <pre className="rounded-card bg-surface ring-1 ring-stroke p-3 text-[11px] font-mono text-muted">
+          {`${dir}/fastagent/\n  fastagent.config.ts\n  .gitignore`}
+        </pre>
+        <p className="text-muted text-[11px]">
+          Two files, nothing else. For the full scaffold (persona, skills, example tool) run{" "}
+          <span className="font-mono">fastagent init</span> instead.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onCreate}
+            className="rounded-card bg-accent/15 text-accent ring-1 ring-accent/50 px-3 py-1.5 hover:bg-accent/25"
+          >
+            Create agent here
+          </button>
+          <Action icon={<X size={13} />} label="Remove" onClick={onRemove} />
+        </div>
+      </div>
+    </Panel>
   );
 }
 
