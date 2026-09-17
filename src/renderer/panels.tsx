@@ -1,6 +1,6 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Trash2, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type { AgentCommand } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
@@ -250,16 +250,12 @@ export function NoConversation({ onNew }: { onNew: () => void }) {
 
 /** The model list, floating above the composer chip that opened it. */
 function ModelPopover({
-  agentId,
-  session,
   current,
-  onPicked,
+  onPick,
   onClose,
 }: {
-  agentId: string;
-  session?: string;
   current?: string;
-  onPicked: () => void;
+  onPick: (model: string) => void;
   onClose: () => void;
 }) {
   const [models, setModels] = useState<string[]>();
@@ -291,7 +287,7 @@ function ModelPopover({
               {matches.map((model) => (
                 <button
                   key={model}
-                  onClick={() => void duang.setModel(agentId, model, session).then(onPicked)}
+                  onClick={() => onPick(model)}
                   className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
                     model === current ? "text-accent" : ""
                   }`}
@@ -436,12 +432,13 @@ function firstArg(args: unknown): string {
  */
 export function Composer({
   agentId,
-  session,
   context,
   model,
   picking,
   onPicking,
-  onPicked,
+  onPickModel,
+  busy,
+  onAbort,
   value,
   onChange,
   onSend,
@@ -449,12 +446,13 @@ export function Composer({
   disabled,
 }: {
   agentId?: string;
-  session?: string;
   context?: string;
   model?: string;
   picking: boolean;
   onPicking: (open: boolean) => void;
-  onPicked: () => void;
+  onPickModel: (model: string) => void;
+  busy: boolean;
+  onAbort: () => void;
   value: string;
   onChange: (text: string) => void;
   onSend: () => void;
@@ -535,33 +533,39 @@ export function Composer({
         <div className="relative">
           <button
             onClick={() => onPicking(!picking)}
-            disabled={!agentId}
-            title="Model for this agent"
-            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 ${
+            disabled={!agentId || busy}
+            title={busy ? "Stop the turn to change the model" : "Model for this agent"}
+            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 disabled:opacity-50 ${
               model ? "text-muted" : "text-amber-400"
             }`}
           >
             {model ?? "pick a model"}
             <ChevronDown size={12} />
           </button>
-          {picking && agentId && (
-            <ModelPopover
-              agentId={agentId}
-              session={session}
-              current={model}
-              onPicked={onPicked}
-              onClose={() => onPicking(false)}
-            />
+          {picking && agentId && !busy && (
+            <ModelPopover current={model} onPick={onPickModel} onClose={() => onPicking(false)} />
           )}
         </div>
-        <button
-          onClick={onSend}
-          disabled={disabled || value.trim() === ""}
-          title="Send (⏎) · newline (⇧⏎)"
-          className="ml-auto size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"
-        >
-          <ArrowUp size={15} />
-        </button>
+        {/* While a turn runs, the button that sent it is the button that stops it — stopping is where
+            the eye already is, not in a corner of the window. */}
+        {busy ? (
+          <button
+            onClick={onAbort}
+            title="Stop (Esc)"
+            className="ml-auto size-7 grid place-items-center rounded-card bg-danger/15 text-danger"
+          >
+            <Square size={13} />
+          </button>
+        ) : (
+          <button
+            onClick={onSend}
+            disabled={disabled || value.trim() === ""}
+            title="Send (⏎) · newline (⇧⏎)"
+            className="ml-auto size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"
+          >
+            <ArrowUp size={15} />
+          </button>
+        )}
       </div>
     </div>
   );

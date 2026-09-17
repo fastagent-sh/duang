@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Square } from "lucide-react";
 import type { SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
 import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
@@ -37,7 +36,25 @@ export default function App() {
 
   const agent = agents.find((a) => a.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
-  const running = state?.status === "running";
+  /** One truth for "a turn is in flight": the local wait, which starts before the engine says anything. */
+  const busy = busySince !== undefined || state?.status === "running";
+
+  const abort = () => {
+    if (agentId && session) void duang.abort(agentId, session);
+  };
+
+  async function pickModel(model: string) {
+    setPicking(false);
+    if (!agentId) return;
+    const result = await duang.setModel(agentId, model, session);
+    // A refusal is the runtime's sentence, shown where the person was looking.
+    if (!result.ok) return note(result.message);
+    // The row on screen still carries the old model: re-read it, or the chip lies. The conversation
+    // is re-opened rather than re-selected, because the assembly was rebuilt underneath it and the
+    // old event subscription died with it.
+    void duang.listAgents().then(setAgents);
+    if (session) void open(agentId, session, true);
+  }
 
   // Opening straight into the last-known agent beats a landing screen whose only content is a button.
   const boot = useRef(false);
@@ -148,11 +165,11 @@ export default function App() {
         e.preventDefault();
         startConversation(agentId);
       }
-      if (e.key === "Escape" && agentId && session && running) void duang.abort(agentId, session);
+      if (e.key === "Escape" && busy) abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [agentId, agentState, session, running, startConversation]);
+  }, [agentId, agentState, session, busy, startConversation]);
 
   async function removeAgent(id: string) {
     if (!confirm("Remove this agent from duang? The directory is not touched.")) return;
@@ -187,24 +204,18 @@ export default function App() {
   const composer = (
     <Composer
       agentId={agentId}
-      session={session}
       context={agent ? home(agent.dir) : undefined}
       model={agent?.model}
       picking={picking}
       onPicking={setPicking}
-      onPicked={() => {
-        setPicking(false);
-        // The row on screen still carries the old model: re-read it, or the chip lies. The
-        // conversation is re-opened rather than re-selected, because the agent's assembly was
-        // rebuilt underneath it and the old event subscription died with it.
-        void duang.listAgents().then(setAgents);
-        if (agentId && session) void open(agentId, session, true);
-      }}
+      onPickModel={(model) => void pickModel(model)}
+      busy={busy}
+      onAbort={abort}
       value={draft}
       onChange={setDraft}
       onSend={() => void send()}
       disabled={!!composerBlocked}
-      placeholder={composerBlocked ?? (running ? "steer the run…" : "Ask, build, / for commands…")}
+      placeholder={composerBlocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
     />
   );
 
@@ -233,15 +244,6 @@ export default function App() {
             <span className="text-muted text-[11px]">
               {Math.round((state.usage.contextTokens / state.usage.contextWindow) * 100)}% context
             </span>
-          )}
-          {running && (
-            <button
-              onClick={() => agentId && session && void duang.abort(agentId, session)}
-              className="no-drag ml-auto flex items-center gap-1 text-danger"
-              title="Stop (Esc)"
-            >
-              <Square size={12} /> stop
-            </button>
           )}
         </header>
 

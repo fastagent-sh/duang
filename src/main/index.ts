@@ -76,13 +76,27 @@ function register(): void {
    * future session start on, and `update({ model })` moves the conversation that is open right now
    * without rebuilding anything. A conversation nobody has spoken in yet has no record to update —
    * `no_such_session` is the expected answer there, and the row already covers it.
+   *
+   * A live run refuses the whole thing, before anything is written. Changing the row drops the
+   * assembly, and the turn in flight belongs to the old one: it would keep running somewhere nobody
+   * is listening, so the client would wait for a `run_settled` that never arrives.
    */
   ipcMain.handle("agent:setModel", async (_e, agentId: string, model: string, session?: string) => {
+    const row = await requireAgent(agentId);
+    if (session) {
+      const { control } = await openAgent(row);
+      const status = (await control.sessions.get(session).state()).status;
+      if (status !== "idle") {
+        return { ok: false as const, message: `the conversation is ${status} — stop the turn first` };
+      }
+    }
+
     await setAgentModel(agentId, model);
     const { control } = await openAgent(await requireAgent(agentId));
-    if (!session) return;
+    if (!session) return { ok: true as const };
     const result = await control.sessions.get(session).update({ model });
-    if (!result.ok && result.error.code !== NO_SUCH_SESSION_CODE) throw new Error(result.error.message);
+    if (result.ok || result.error.code === NO_SUCH_SESSION_CODE) return { ok: true as const };
+    return { ok: false as const, message: result.error.message };
   });
 
   ipcMain.handle("agent:remove", (_e, agentId: string) => removeAgent(agentId));

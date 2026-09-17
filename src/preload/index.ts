@@ -31,7 +31,7 @@ const api = {
   addAgent: (): Promise<AgentRow | undefined> => ipcRenderer.invoke("agents:add"),
   openAgent: (agentId: string): Promise<OpenResult> => ipcRenderer.invoke("agent:open", agentId),
   /** Sets the agent's model, and moves the named conversation onto it straight away. */
-  setModel: (agentId: string, model: string, session?: string): Promise<void> =>
+  setModel: (agentId: string, model: string, session?: string): Promise<{ ok: true } | { ok: false; message: string }> =>
     ipcRenderer.invoke("agent:setModel", agentId, model, session),
   removeAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:remove", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
