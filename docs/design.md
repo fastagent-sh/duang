@@ -67,8 +67,12 @@ where the conversation came from (you, a channel, a schedule).
   line, expandable to args and result);
 - header: conversation name, model picker, thinking level, context meter and cost from
   `SessionState.usage`, compact;
-- while a run is live: the composer sends `steer` instead of a new prompt, an Abort button appears,
-  and queued items show `state.pending`;
+- while a run is live: the composer steers instead of prompting, an Abort button appears, and
+  queued items show `state.pending`. **The place decides this, not the surface.** Steering is right
+  where one person can see the run and owns its intent — a local conversation. A channel-born
+  conversation has neither: the live run belongs to someone else's message in a group, so a message
+  typed here queues (`followUp`) instead of folding into their turn. This is why FastAgent's own
+  chat channels queue and pi's interactive mode steers; both are correct for their place;
 - fork lives on the message it forks from; a message with siblings shows `1/2` and switches with
   `update({ leafEntryId })`.
 
