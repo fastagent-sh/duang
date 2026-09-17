@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Square } from "lucide-react";
+import { MessageSquarePlus, Plus, Square } from "lucide-react";
 import type { SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
 import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
+import { rows } from "./sessions.ts";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
@@ -17,20 +18,34 @@ export default function App() {
 
   useEffect(() => void duang.listAgents().then(setAgents), []);
 
-  useEffect(() => {
-    if (!agentId) return;
-    setSessions([]);
-    void duang.listSessions(agentId).then(setSessions);
-  }, [agentId]);
-
   const open = useCallback(async (agent: string, id: string) => {
     setAgentId(agent);
     setSession(id);
     setItems([]);
+    setState(undefined);
     const { state: opened, entries } = await duang.openSession(agent, id);
     setState(opened);
     setItems(fromEntries(entries.entries));
   }, []);
+
+  /** A new conversation is a minted id and nothing else: the runtime learns of it on the first turn. */
+  const startConversation = useCallback(
+    (agent: string) => void open(agent, crypto.randomUUID()),
+    [open],
+  );
+
+  const selectAgent = useCallback(
+    async (agent: string) => {
+      setAgentId(agent);
+      setSessions([]);
+      const list = await duang.listSessions(agent);
+      setSessions(list);
+      const newest = [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      if (newest) void open(agent, newest.session);
+      else startConversation(agent);
+    },
+    [open, startConversation],
+  );
 
   // One subscription for the window; frames for a conversation that is no longer open are dropped.
   const current = useRef({ agentId, session });
@@ -40,6 +55,8 @@ export default function App() {
       duang.onSessionEvent((frame) => {
         if (frame.agentId !== current.current.agentId || frame.session !== current.current.session) return;
         if (frame.event.type === "state_changed") setState((s) => ({ ...(s as SessionState), ...(frame.event.data as object) }));
+        // A settled run is when a fresh conversation becomes one the runtime can list, preview included.
+        if (frame.event.type === "run_settled" && frame.agentId) void duang.listSessions(frame.agentId).then(setSessions);
         setItems((list) => apply(list, frame.event));
       }),
     [],
@@ -61,7 +78,7 @@ export default function App() {
         {agents.map((agent) => (
           <button
             key={agent.id}
-            onClick={() => void open(agent.id, sessionNameFor(agent))}
+            onClick={() => void selectAgent(agent.id)}
             title={agent.name}
             className={`no-drag size-9 rounded-card border text-[11px] ${
               agent.id === agentId ? "border-accent text-accent" : "border-stroke text-muted"
@@ -79,17 +96,32 @@ export default function App() {
         </button>
       </nav>
 
-      <aside className="w-56 shrink-0 border-r border-stroke pt-10 overflow-y-auto">
-        {sessions.map((row) => (
-          <button
-            key={row.session}
-            onClick={() => agentId && void open(agentId, row.session)}
-            className={`block w-full text-left px-3 py-2 truncate ${row.session === session ? "bg-surface" : ""}`}
-          >
-            <div className="truncate">{row.name ?? row.preview ?? row.session}</div>
-            <div className="text-muted text-[11px]">{new Date(row.updatedAt).toLocaleString()}</div>
-          </button>
-        ))}
+      <aside className="w-56 shrink-0 border-r border-stroke flex flex-col">
+        <div className="h-10 shrink-0 flex items-center justify-end px-2 drag">
+          {agentId && (
+            <button
+              onClick={() => startConversation(agentId)}
+              className="no-drag text-muted p-1"
+              title="New conversation"
+            >
+              <MessageSquarePlus size={15} />
+            </button>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {rows(sessions, session).map((row) => (
+            <button
+              key={row.session}
+              onClick={() => agentId && void open(agentId, row.session)}
+              className={`block w-full text-left px-3 py-2 ${row.session === session ? "bg-surface" : ""}`}
+            >
+              <div className={`truncate ${row.fresh ? "text-muted italic" : ""}`}>{row.label}</div>
+              {row.updatedAt !== undefined && (
+                <div className="text-muted text-[11px]">{new Date(row.updatedAt).toLocaleString()}</div>
+              )}
+            </button>
+          ))}
+        </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0">
@@ -153,9 +185,4 @@ function Message({ item }: { item: Item }) {
       <pre className="whitespace-pre-wrap">{JSON.stringify({ args: item.args, result: item.result }, null, 2)}</pre>
     </details>
   );
-}
-
-// ponytail: one conversation per agent until the conversation list has a "new" button.
-function sessionNameFor(agent: AgentRow): string {
-  return `duang-${agent.id.slice(0, 8)}`;
 }
