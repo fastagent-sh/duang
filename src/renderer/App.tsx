@@ -55,11 +55,18 @@ export default function App() {
 
   const note = (text: string) => setItems((list) => [...list, { kind: "note", text }]);
 
-  const open = useCallback(async (id: string, sessionId: string) => {
+  /**
+   * `quiet` re-reads a conversation that is already on screen. Clearing first is right when the
+   * person asked for a different conversation and wrong when nothing they can see is changing — that
+   * blank frame is the flash.
+   */
+  const open = useCallback(async (id: string, sessionId: string, quiet = false) => {
     setSession(sessionId);
-    setItems([]);
-    setState(undefined);
-    setBusySince(undefined);
+    if (!quiet) {
+      setItems([]);
+      setState(undefined);
+      setBusySince(undefined);
+    }
     try {
       const { state: opened, entries } = await duang.openSession(id, sessionId);
       setState(opened);
@@ -180,15 +187,18 @@ export default function App() {
   const composer = (
     <Composer
       agentId={agentId}
+      session={session}
       context={agent ? home(agent.dir) : undefined}
       model={agent?.model}
       picking={picking}
       onPicking={setPicking}
       onPicked={() => {
         setPicking(false);
-        // The row on screen still carries the old model: re-read it, or the chip lies.
+        // The row on screen still carries the old model: re-read it, or the chip lies. The
+        // conversation is re-opened rather than re-selected, because the agent's assembly was
+        // rebuilt underneath it and the old event subscription died with it.
         void duang.listAgents().then(setAgents);
-        if (agentId) void selectAgent(agentId);
+        if (agentId && session) void open(agentId, session, true);
       }}
       value={draft}
       onChange={setDraft}

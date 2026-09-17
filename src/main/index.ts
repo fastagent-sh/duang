@@ -13,7 +13,7 @@ import {
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
 import { useSystemProxy } from "./proxy.ts";
-import { NO_ACTIVE_RUN_CODE, type SessionEvent } from "@fastagent-sh/fastagent/session";
+import { NO_ACTIVE_RUN_CODE, NO_SUCH_SESSION_CODE, type SessionEvent } from "@fastagent-sh/fastagent/session";
 
 /** `SESSION_BUSY_CODE` from FastAgent's agent.ts, which no export path re-exports (0.21.1). */
 const SESSION_BUSY_CODE = "session_busy";
@@ -71,7 +71,19 @@ function register(): void {
 
   ipcMain.handle("agent:scaffold", async (_e, agentId: string) => createAgentIn((await requireAgent(agentId)).dir));
 
-  ipcMain.handle("agent:setModel", (_e, agentId: string, model: string) => setAgentModel(agentId, model));
+  /**
+   * Two places hold a model, so both are set: the stored row decides what a REBUILT assembly and any
+   * future session start on, and `update({ model })` moves the conversation that is open right now
+   * without rebuilding anything. A conversation nobody has spoken in yet has no record to update —
+   * `no_such_session` is the expected answer there, and the row already covers it.
+   */
+  ipcMain.handle("agent:setModel", async (_e, agentId: string, model: string, session?: string) => {
+    await setAgentModel(agentId, model);
+    const { control } = await openAgent(await requireAgent(agentId));
+    if (!session) return;
+    const result = await control.sessions.get(session).update({ model });
+    if (!result.ok && result.error.code !== NO_SUCH_SESSION_CODE) throw new Error(result.error.message);
+  });
 
   ipcMain.handle("agent:remove", (_e, agentId: string) => removeAgent(agentId));
 

@@ -251,11 +251,13 @@ export function NoConversation({ onNew }: { onNew: () => void }) {
 /** The model list, floating above the composer chip that opened it. */
 function ModelPopover({
   agentId,
+  session,
   current,
   onPicked,
   onClose,
 }: {
   agentId: string;
+  session?: string;
   current?: string;
   onPicked: () => void;
   onClose: () => void;
@@ -289,7 +291,7 @@ function ModelPopover({
               {matches.map((model) => (
                 <button
                   key={model}
-                  onClick={() => void duang.setModel(agentId, model).then(onPicked)}
+                  onClick={() => void duang.setModel(agentId, model, session).then(onPicked)}
                   className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
                     model === current ? "text-accent" : ""
                   }`}
@@ -434,6 +436,7 @@ function firstArg(args: unknown): string {
  */
 export function Composer({
   agentId,
+  session,
   context,
   model,
   picking,
@@ -446,6 +449,7 @@ export function Composer({
   disabled,
 }: {
   agentId?: string;
+  session?: string;
   context?: string;
   model?: string;
   picking: boolean;
@@ -541,7 +545,13 @@ export function Composer({
             <ChevronDown size={12} />
           </button>
           {picking && agentId && (
-            <ModelPopover agentId={agentId} current={model} onPicked={onPicked} onClose={() => onPicking(false)} />
+            <ModelPopover
+              agentId={agentId}
+              session={session}
+              current={model}
+              onPicked={onPicked}
+              onClose={() => onPicking(false)}
+            />
           )}
         </div>
         <button
