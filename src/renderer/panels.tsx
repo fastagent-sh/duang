@@ -318,14 +318,37 @@ export function NewConversation({ agentName, children }: { agentName: string; ch
   );
 }
 
-export function Transcript({ items }: { items: Item[] }) {
+/**
+ * The gap this fills is real work with nothing to show: from pressing send until the first token,
+ * the model is thinking and the transcript has nothing to say. Silence there reads as a hang, so the
+ * elapsed seconds are the message — they are also how someone tells slow from stuck.
+ */
+function Working({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="flex items-center gap-2 text-muted text-[12px]">
+      <span className="size-1.5 rounded-full bg-accent animate-pulse" />
+      working… {Math.max(0, Math.round((now - since) / 1000))}s
+    </div>
+  );
+}
+
+export function Transcript({ items, busySince }: { items: Item[]; busySince?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
+
+  // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
+  const last = items.at(-1);
+  const streaming = last?.kind === "assistant" || last?.kind === "thinking" ? last.open : false;
 
   useEffect(() => {
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
-  }, [items]);
+  }, [items, busySince, streaming]);
 
   return (
     <div
@@ -340,6 +363,7 @@ export function Transcript({ items }: { items: Item[] }) {
         {items.map((item, index) => (
           <Message key={index} item={item} />
         ))}
+        {busySince !== undefined && !streaming && <Working since={busySince} />}
       </div>
     </div>
   );

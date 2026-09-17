@@ -31,6 +31,9 @@ export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [state, setState] = useState<SessionState>();
   const [draft, setDraft] = useState("");
+  /** When the turn the person is waiting on began. Set on send, not on `run_started`: the wait starts
+   *  at the keystroke, and the gap before the engine answers is exactly the one worth showing. */
+  const [busySince, setBusySince] = useState<number>();
 
   const agent = agents.find((a) => a.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
@@ -56,6 +59,7 @@ export default function App() {
     setSession(sessionId);
     setItems([]);
     setState(undefined);
+    setBusySince(undefined);
     try {
       const { state: opened, entries } = await duang.openSession(id, sessionId);
       setState(opened);
@@ -111,7 +115,10 @@ export default function App() {
           setState((s) => ({ ...(s as SessionState), ...(frame.event.data as object) }));
         }
         // A settled run is when a fresh conversation becomes one the runtime can list, preview included.
+        // Both endings of a wait: the run settled, or it never started.
+        if (frame.event.type === "send_failed" || frame.event.type === "stream_failed") setBusySince(undefined);
         if (frame.event.type === "run_settled") {
+          setBusySince(undefined);
           void duang.openAgent(frame.agentId).then((r) => r.ok && setSessions(r.sessions));
         }
         setItems((list) => apply(list, frame.event));
@@ -124,6 +131,7 @@ export default function App() {
     if (!text || !agentId || !session) return;
     setDraft("");
     setItems((list) => echoUser(list, text));
+    setBusySince(Date.now());
     await duang.send(agentId, session, text);
   }, [draft, agentId, session]);
 
@@ -241,7 +249,7 @@ export default function App() {
           // Nobody has spoken here yet: the composer IS the screen, not a strip at its foot.
           <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
         ) : (
-          <Transcript items={items} />
+          <Transcript items={items} busySince={busySince} />
         )}
 
         {agentId && (broken || agentState === "no_agent") === false && session && items.length > 0 && (
