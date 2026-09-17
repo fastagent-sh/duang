@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: oklch(0.17 0.008 260);
+  --color-surface: oklch(0.21 0.009 260);
+  --color-stroke: oklch(0.32 0.01 260);
+  --color-text: oklch(0.93 0.004 260);
+  --color-muted: oklch(0.66 0.008 260);
+  --color-accent: oklch(0.72 0.14 215);
+  --color-danger: oklch(0.68 0.17 25);
+  --radius-card: 10px;
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+/* The one place the frameless title bar is paid for: the rail's top gap is draggable. */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}

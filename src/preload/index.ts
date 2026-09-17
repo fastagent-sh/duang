@@ -1,0 +1,38 @@
+/** The renderer's whole privilege: these calls, nothing else. Written by hand so the shape is typed. */
+import { contextBridge, ipcRenderer } from "electron";
+import type { SessionEntries, SessionEvent, SessionResult, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
+
+export interface AgentRow {
+  id: string;
+  name: string;
+  dir: string;
+}
+
+export interface SessionFrame {
+  agentId: string;
+  session: string;
+  event: SessionEvent;
+}
+
+const api = {
+  listAgents: (): Promise<AgentRow[]> => ipcRenderer.invoke("agents:list"),
+  addAgent: (): Promise<AgentRow | undefined> => ipcRenderer.invoke("agents:add"),
+  listSessions: (agentId: string): Promise<SessionSummary[]> => ipcRenderer.invoke("sessions:list", agentId),
+  openSession: (agentId: string, session: string): Promise<{ state: SessionState; entries: SessionEntries }> =>
+    ipcRenderer.invoke("session:open", agentId, session),
+  prompt: (agentId: string, session: string, text: string): Promise<void> =>
+    ipcRenderer.invoke("session:prompt", agentId, session, text),
+  steer: (agentId: string, session: string, text: string): Promise<SessionResult> =>
+    ipcRenderer.invoke("session:steer", agentId, session, text),
+  abort: (agentId: string, session: string): Promise<SessionResult> =>
+    ipcRenderer.invoke("session:abort", agentId, session),
+  onSessionEvent: (listener: (frame: SessionFrame) => void): (() => void) => {
+    const handler = (_e: unknown, frame: SessionFrame): void => listener(frame);
+    ipcRenderer.on("session:event", handler);
+    return () => void ipcRenderer.off("session:event", handler);
+  },
+};
+
+export type DuangApi = typeof api;
+
+contextBridge.exposeInMainWorld("duang", api);

@@ -156,6 +156,17 @@ Money: the client is free and open source (that's distribution — monocode alre
 price at zero). Revenue is duang cloud, per always-on agent per month. No token resale; users
 bring their own model key or subscription.
 
+## Run it
+
+```bash
+npm install
+npm run dev     # Electron + Vite
+npm test        # the transcript fold
+```
+
+Point *Add agent* at any FastAgent agent directory. Today that opens one conversation per agent,
+locally, in the main process.
+
 ## Relationship to duang-v1 / duang-v2
 
 Those repositories designed a collaboration platform (two planes, invite primitives, named hosts,
