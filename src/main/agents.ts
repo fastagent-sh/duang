@@ -42,6 +42,14 @@ export async function addAgent(dir: string): Promise<AgentRow> {
   return row;
 }
 
+/** Removing an agent is removing duang's row. The directory is never touched. */
+export async function removeAgent(id: string): Promise<void> {
+  const all = await listAgents();
+  rows = all.filter((a) => a.id !== id);
+  opened.delete(id);
+  await writeFile(file(), JSON.stringify(rows, null, 2));
+}
+
 export async function setAgentModel(id: string, model: string): Promise<void> {
   const all = await listAgents();
   const row = all.find((a) => a.id === id);

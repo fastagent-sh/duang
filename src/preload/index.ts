@@ -24,7 +24,11 @@ const api = {
   addAgent: (): Promise<AgentRow | undefined> => ipcRenderer.invoke("agents:add"),
   openAgent: (agentId: string): Promise<OpenResult> => ipcRenderer.invoke("agent:open", agentId),
   setModel: (agentId: string, model: string): Promise<void> => ipcRenderer.invoke("agent:setModel", agentId, model),
+  removeAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:remove", agentId),
+  revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
   listModels: (): Promise<string[]> => ipcRenderer.invoke("models:list"),
+  deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
+    ipcRenderer.invoke("session:delete", agentId, session),
   openSession: (agentId: string, session: string): Promise<{ state: SessionState; entries: SessionEntries }> =>
     ipcRenderer.invoke("session:open", agentId, session),
   /** Say this here. Steering a live run or starting a new one is decided in main, against the runtime. */

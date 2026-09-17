@@ -1,6 +1,14 @@
-import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
-import { addAgent, listAgents, MissingModelError, openAgent, setAgentModel, type AgentRow } from "./agents.ts";
+import {
+  addAgent,
+  listAgents,
+  MissingModelError,
+  openAgent,
+  removeAgent,
+  setAgentModel,
+  type AgentRow,
+} from "./agents.ts";
 import { credentials } from "./credentials.ts";
 import { useSystemProxy } from "./proxy.ts";
 import { NO_ACTIVE_RUN_CODE, type SessionEvent } from "@fastagent-sh/fastagent/session";
@@ -59,6 +67,18 @@ function register(): void {
   });
 
   ipcMain.handle("agent:setModel", (_e, agentId: string, model: string) => setAgentModel(agentId, model));
+
+  ipcMain.handle("agent:remove", (_e, agentId: string) => removeAgent(agentId));
+
+  ipcMain.handle("agent:reveal", async (_e, agentId: string) => {
+    shell.showItemInFolder((await requireAgent(agentId)).dir);
+  });
+
+  ipcMain.handle("session:delete", async (_e, agentId: string, session: string) => {
+    const { control } = await openAgent(await requireAgent(agentId));
+    streams.get(`${agentId}/${session}`)?.();
+    return control.sessions.get(session).delete();
+  });
 
   ipcMain.handle("models:list", async () => (await credentials()).specs);
 

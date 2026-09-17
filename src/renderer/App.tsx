@@ -1,62 +1,100 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageSquarePlus, Plus, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import type { SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
 import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
 import { rows } from "./sessions.ts";
+import {
+  BrokenAgent,
+  Composer,
+  ConversationList,
+  ModelPicker,
+  NoAgents,
+  NoConversation,
+  Rail,
+  Transcript,
+  type AgentState,
+} from "./panels.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
-
-interface Problem {
-  code: "missing_model" | "failed";
-  message: string;
-}
 
 export default function App() {
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [agentId, setAgentId] = useState<string>();
+  const [states, setStates] = useState<Record<string, AgentState>>({});
+  const [broken, setBroken] = useState<string>();
+  const [picking, setPicking] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [session, setSession] = useState<string>();
   const [items, setItems] = useState<Item[]>([]);
   const [state, setState] = useState<SessionState>();
   const [draft, setDraft] = useState("");
-  const [problem, setProblem] = useState<Problem>();
 
-  useEffect(() => void duang.listAgents().then(setAgents), []);
+  const agent = agents.find((a) => a.id === agentId);
+  const agentState = agentId ? states[agentId] : undefined;
+  const running = state?.status === "running";
 
-  const open = useCallback(async (agent: string, id: string) => {
-    setAgentId(agent);
-    setSession(id);
+  // Opening straight into the last-known agent beats a landing screen whose only content is a button.
+  const boot = useRef(false);
+  useEffect(() => {
+    void duang.listAgents().then((list) => {
+      setAgents(list);
+      if (!boot.current && list[0]) {
+        boot.current = true;
+        void selectAgent(list[0].id);
+      }
+    });
+    // selectAgent is stable for the first run, which is the only run this effect has.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const note = (text: string) => setItems((list) => [...list, { kind: "note", text }]);
+
+  const open = useCallback(async (id: string, sessionId: string) => {
+    setSession(sessionId);
     setItems([]);
     setState(undefined);
     try {
-      const { state: opened, entries } = await duang.openSession(agent, id);
+      const { state: opened, entries } = await duang.openSession(id, sessionId);
       setState(opened);
       setItems(fromEntries(entries.entries));
     } catch (error) {
-      setProblem({ code: "failed", message: String(error) });
+      setItems([{ kind: "note", text: String(error) }]);
     }
   }, []);
 
   /** A new conversation is a minted id and nothing else: the runtime learns of it on the first turn. */
-  const startConversation = useCallback((agent: string) => void open(agent, crypto.randomUUID()), [open]);
+  const startConversation = useCallback((id: string) => void open(id, crypto.randomUUID()), [open]);
 
   const selectAgent = useCallback(
-    async (agent: string) => {
-      setAgentId(agent);
+    async (id: string) => {
+      setAgentId(id);
       setSessions([]);
       setSession(undefined);
       setItems([]);
-      setProblem(undefined);
-      const result = await duang.openAgent(agent);
-      if (!result.ok) return setProblem({ code: result.code, message: result.message });
+      setBroken(undefined);
+      setPicking(false);
+      const result = await duang.openAgent(id);
+      if (!result.ok) {
+        setStates((s) => ({ ...s, [id]: result.code === "missing_model" ? "missing_model" : "broken" }));
+        if (result.code !== "missing_model") setBroken(result.message);
+        return;
+      }
+      setStates((s) => ({ ...s, [id]: "ready" }));
       setSessions(result.sessions);
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-      if (newest) void open(agent, newest.session);
-      else startConversation(agent);
+      if (newest) void open(id, newest.session);
+      else startConversation(id);
     },
     [open, startConversation],
   );
+
+  const addAgent = useCallback(async () => {
+    const row = await duang.addAgent();
+    if (!row) return;
+    setAgents((list) => (list.some((a) => a.id === row.id) ? list : [...list, row]));
+    void selectAgent(row.id);
+  }, [selectAgent]);
 
   // One subscription for the window; frames for a conversation that is no longer open are dropped.
   const current = useRef({ agentId, session });
@@ -65,7 +103,9 @@ export default function App() {
     () =>
       duang.onSessionEvent((frame) => {
         if (frame.agentId !== current.current.agentId || frame.session !== current.current.session) return;
-        if (frame.event.type === "state_changed") setState((s) => ({ ...(s as SessionState), ...(frame.event.data as object) }));
+        if (frame.event.type === "state_changed") {
+          setState((s) => ({ ...(s as SessionState), ...(frame.event.data as object) }));
+        }
         // A settled run is when a fresh conversation becomes one the runtime can list, preview included.
         if (frame.event.type === "run_settled") {
           void duang.openAgent(frame.agentId).then((r) => r.ok && setSessions(r.sessions));
@@ -75,166 +115,118 @@ export default function App() {
     [],
   );
 
-  const running = state?.status === "running";
-
-  async function send() {
+  const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !agentId || !session) return;
     setDraft("");
     setItems((list) => echoUser(list, text));
     await duang.send(agentId, session, text);
+  }, [draft, agentId, session]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n" && agentId && agentState === "ready") {
+        e.preventDefault();
+        startConversation(agentId);
+      }
+      if (e.key === "Escape" && agentId && session && running) void duang.abort(agentId, session);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [agentId, agentState, session, running, startConversation]);
+
+  async function removeAgent(id: string) {
+    if (!confirm("Remove this agent from duang? The directory is not touched.")) return;
+    await duang.removeAgent(id);
+    setAgents((list) => list.filter((a) => a.id !== id));
+    setAgentId(undefined);
+    setBroken(undefined);
+    setSessions([]);
+    setSession(undefined);
   }
+
+  async function deleteSession(target: string) {
+    if (!agentId || !confirm("Delete this conversation? Its history is gone.")) return;
+    const result = await duang.deleteSession(agentId, target);
+    if (!result.ok) return note(result.error.message);
+    const remaining = await duang.openAgent(agentId);
+    if (remaining.ok) setSessions(remaining.sessions);
+    if (target === session) startConversation(agentId);
+  }
+
+  const composerBlocked =
+    agentState === "broken"
+      ? "this agent is broken"
+      : agentState === "missing_model" || picking
+        ? "pick a model first"
+        : !session
+          ? "no conversation"
+          : undefined;
 
   return (
     <div className="flex h-full">
-      <nav className="w-14 shrink-0 border-r border-stroke flex flex-col items-center gap-2 pt-10 drag">
-        {agents.map((agent) => (
-          <button
-            key={agent.id}
-            onClick={() => void selectAgent(agent.id)}
-            title={`${agent.name}\n${agent.dir}`}
-            className={`no-drag size-9 rounded-card border text-[11px] ${
-              agent.id === agentId ? "border-accent text-accent" : "border-stroke text-muted"
-            }`}
-          >
-            {agent.name.slice(0, 2)}
-          </button>
-        ))}
-        <button
-          onClick={() =>
-            void duang.addAgent().then((row) => {
-              if (!row) return;
-              setAgents((list) => (list.some((a) => a.id === row.id) ? list : [...list, row]));
-              void selectAgent(row.id);
-            })
-          }
-          className="no-drag size-9 rounded-card border border-stroke text-muted grid place-items-center"
-          title="Add agent"
-        >
-          <Plus size={16} />
-        </button>
-      </nav>
+      <Rail agents={agents} agentId={agentId} states={states} onSelect={(id) => void selectAgent(id)} onAdd={() => void addAgent()} />
 
-      <aside className="w-56 shrink-0 border-r border-stroke flex flex-col">
-        <div className="h-10 shrink-0 flex items-center justify-end px-2 drag">
-          {agentId && !problem && (
-            <button onClick={() => startConversation(agentId)} className="no-drag text-muted p-1" title="New conversation">
-              <MessageSquarePlus size={15} />
-            </button>
-          )}
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {rows(sessions, session).map((row) => (
-            <button
-              key={row.session}
-              onClick={() => agentId && void open(agentId, row.session)}
-              className={`block w-full text-left px-3 py-2 ${row.session === session ? "bg-surface" : ""}`}
-            >
-              <div className={`truncate ${row.fresh ? "text-muted italic" : ""}`}>{row.label}</div>
-              {row.updatedAt !== undefined && (
-                <div className="text-muted text-[11px]">{new Date(row.updatedAt).toLocaleString()}</div>
-              )}
-            </button>
-          ))}
-        </div>
-      </aside>
+      <ConversationList
+        agent={agent}
+        rows={rows(sessions, session)}
+        session={session}
+        disabled={agentState !== "ready"}
+        onOpen={(id) => agentId && void open(agentId, id)}
+        onNew={() => agentId && startConversation(agentId)}
+        onDelete={(id) => void deleteSession(id)}
+        onPickModel={() => setPicking(true)}
+      />
 
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0">
         <header className="h-10 shrink-0 border-b border-stroke flex items-center px-4 gap-3 drag">
-          <span className="truncate">{session ?? "no conversation"}</span>
-          <span className="text-muted text-[11px]">{state?.model}</span>
+          <span className="truncate text-muted">
+            {agentState === "ready" && session ? (rows(sessions, session)[0]?.label ?? "") : ""}
+          </span>
+          {state?.usage?.contextTokens !== undefined && state.usage.contextWindow !== undefined && (
+            <span className="text-muted text-[11px]">
+              {Math.round((state.usage.contextTokens / state.usage.contextWindow) * 100)}% context
+            </span>
+          )}
           {running && (
             <button
               onClick={() => agentId && session && void duang.abort(agentId, session)}
               className="no-drag ml-auto flex items-center gap-1 text-danger"
+              title="Stop (Esc)"
             >
               <Square size={12} /> stop
             </button>
           )}
         </header>
 
-        {problem?.code === "missing_model" && agentId ? (
-          <ModelPicker agentId={agentId} onPicked={() => void selectAgent(agentId)} />
-        ) : problem ? (
-          <div className="m-4 rounded-card border border-danger/50 p-3 text-danger whitespace-pre-wrap">{problem.message}</div>
+        {agents.length === 0 ? (
+          <NoAgents onAdd={() => void addAgent()} />
+        ) : !agentId ? (
+          <NoAgents onAdd={() => void addAgent()} />
+        ) : broken ? (
+          <BrokenAgent agentId={agentId} message={broken} onRemove={() => void removeAgent(agentId)} />
+        ) : picking || agentState === "missing_model" ? (
+          <ModelPicker
+            agentId={agentId}
+            onPicked={() => {
+              setPicking(false);
+              void selectAgent(agentId);
+            }}
+          />
+        ) : !session ? (
+          <NoConversation onNew={() => startConversation(agentId)} />
         ) : (
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {items.map((item, index) => (
-              <Message key={index} item={item} />
-            ))}
-          </div>
+          <Transcript items={items} />
         )}
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-          className="border-t border-stroke p-3"
-        >
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={running ? "steer the run…" : "message"}
-            disabled={!session || !!problem}
-            className="w-full bg-surface rounded-card px-3 py-2 outline-none placeholder:text-muted"
-          />
-        </form>
+        <Composer
+          value={draft}
+          onChange={setDraft}
+          onSend={() => void send()}
+          disabled={!!composerBlocked}
+          placeholder={composerBlocked ?? (running ? "steer the run…" : "message")}
+        />
       </main>
     </div>
-  );
-}
-
-/** The one thing a scaffolded agent is missing. Filtered, because the catalogue is over a thousand long. */
-function ModelPicker({ agentId, onPicked }: { agentId: string; onPicked: () => void }) {
-  const [models, setModels] = useState<string[]>([]);
-  const [filter, setFilter] = useState("");
-
-  useEffect(() => void duang.listModels().then(setModels), []);
-  const matches = models.filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 40);
-
-  return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <p className="text-muted mb-3">This agent has no model yet. Pick one — duang stores it, the directory is untouched.</p>
-      <input
-        autoFocus
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="filter models (try: sonnet, gpt)"
-        className="w-full bg-surface rounded-card px-3 py-2 outline-none placeholder:text-muted mb-2"
-      />
-      {matches.map((model) => (
-        <button
-          key={model}
-          onClick={() => void duang.setModel(agentId, model).then(onPicked)}
-          className="block w-full text-left px-3 py-1.5 font-mono text-[11px] hover:bg-surface rounded-card"
-        >
-          {model}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Message({ item }: { item: Item }) {
-  if (item.kind !== "tool") {
-    const tone =
-      item.kind === "user"
-        ? "text-accent"
-        : item.kind === "thinking"
-          ? "text-muted italic"
-          : item.kind === "note"
-            ? "text-danger text-[11px]"
-            : "";
-    return <div className={`whitespace-pre-wrap ${tone}`}>{item.text}</div>;
-  }
-  return (
-    <details className="font-mono text-[11px] text-muted">
-      <summary className="cursor-default">
-        {item.name}
-        {item.isError ? " · failed" : item.result === undefined ? " · running" : ""}
-      </summary>
-      <pre className="whitespace-pre-wrap">{JSON.stringify({ args: item.args, result: item.result }, null, 2)}</pre>
-    </details>
   );
 }
