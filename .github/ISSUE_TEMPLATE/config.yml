@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Product design and architecture
+    url: https://github.com/fastagent-sh/duang/tree/main/docs
+    about: Check product scope and interaction requirements before proposing a change.
+  - name: Week 1 milestone
+    url: https://github.com/fastagent-sh/duang/milestone/1
+    about: Check existing local-workflow issues before creating a duplicate.

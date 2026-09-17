@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a user-visible capability or change to a workflow.
+title: 'feat: '
+type: Feature
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who is blocked, and what are they trying to do with an agent?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Proposed interaction and workflow
+      description: Describe the entry point, user action, visible result, and failure/recovery behavior. Prefer the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable outcomes that would prove the user's problem is solved.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope, alternatives and milestone
+      description: What is explicitly not included? Link related issues or the intended milestone; cloud/files/advanced controls are not automatically Week 1 work.
