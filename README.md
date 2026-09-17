@@ -161,15 +161,21 @@ bring their own model key or subscription.
 ```bash
 npm ci          # needs a sibling ../fastagent already built at the pinned revision
 npm run dev     # Electron + Vite
-npm test
+npm test        # registry safety, scaffolding, and renderer regressions
 ```
 
 The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
 range when duang ships a build. Fresh-checkout setup, the pinned revision, review and merge
 workflow: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
-Point *Add agent* at any FastAgent agent directory (`fastagent init` makes one). A scaffolded agent
-has no model, so duang asks for one and stores the choice itself — the directory is never edited.
+Point *Add agent* at a FastAgent directory or a plain project. A plain project offers to create
+`fastagent/fastagent.config.ts` and `.gitignore` after confirmation; an existing `fastagent/`
+directory is never overwritten. A scaffolded agent has no model, so duang asks for one and stores
+the choice in its registry rather than editing the agent's config.
+
+The registry uses serialized, atomic writes. Invalid or unreadable data is reported rather than
+replaced with an empty list. Adding the same resolved directory reuses its existing row, and
+removing an agent never deletes the directory or conversation history.
 
 Credentials come from whichever global store has the provider: FastAgent's own
 (`~/.fastagent/.secrets/auth.json`), then pi's (`~/.pi/agent/auth.json`). Only providers that are
