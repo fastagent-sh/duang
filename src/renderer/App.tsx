@@ -8,8 +8,9 @@ import {
   BrokenAgent,
   Composer,
   ConversationList,
-  ModelPicker,
+  home,
   NeedsAgent,
+  NewConversation,
   NoAgents,
   NoConversation,
   Rail,
@@ -162,11 +163,32 @@ export default function App() {
       ? "this agent is broken"
       : agentState === "no_agent"
         ? "create an agent here first"
-        : agentState === "missing_model" || picking
-        ? "pick a model first"
-        : !session
-          ? "no conversation"
-          : undefined;
+        : agentState === "missing_model"
+          ? "pick a model to start"
+          : !session
+            ? "no conversation"
+            : undefined;
+
+  const composer = (
+    <Composer
+      agentId={agentId}
+      context={agent ? home(agent.dir) : undefined}
+      model={agent?.model}
+      picking={picking}
+      onPicking={setPicking}
+      onPicked={() => {
+        setPicking(false);
+        // The row on screen still carries the old model: re-read it, or the chip lies.
+        void duang.listAgents().then(setAgents);
+        if (agentId) void selectAgent(agentId);
+      }}
+      value={draft}
+      onChange={setDraft}
+      onSend={() => void send()}
+      disabled={!!composerBlocked}
+      placeholder={composerBlocked ?? (running ? "steer the run…" : "Ask, build, / for commands…")}
+    />
+  );
 
   return (
     <div className="flex h-full">
@@ -180,7 +202,6 @@ export default function App() {
         onOpen={(id) => agentId && void open(agentId, id)}
         onNew={() => agentId && startConversation(agentId)}
         onDelete={(id) => void deleteSession(id)}
-        onPickModel={() => setPicking(true)}
       />
 
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -206,9 +227,7 @@ export default function App() {
           )}
         </header>
 
-        {agents.length === 0 ? (
-          <NoAgents onAdd={() => void addAgent()} />
-        ) : !agentId ? (
+        {!agentId ? (
           <NoAgents onAdd={() => void addAgent()} />
         ) : broken ? (
           <BrokenAgent agentId={agentId} message={broken} onRemove={() => void removeAgent(agentId)} />
@@ -218,30 +237,18 @@ export default function App() {
             onCreate={() => void duang.scaffoldAgent(agentId).then(() => selectAgent(agentId))}
             onRemove={() => void removeAgent(agentId)}
           />
-        ) : picking || agentState === "missing_model" ? (
-          <ModelPicker
-            agentId={agentId}
-            current={agent?.model}
-            onPicked={() => {
-              setPicking(false);
-              // The row on screen still carries the old model: re-read it, or the header lies.
-              void duang.listAgents().then(setAgents);
-              void selectAgent(agentId);
-            }}
-          />
-        ) : !session ? (
-          <NoConversation onNew={() => startConversation(agentId)} />
+        ) : !session || items.length === 0 ? (
+          // Nobody has spoken here yet: the composer IS the screen, not a strip at its foot.
+          <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
         ) : (
           <Transcript items={items} />
         )}
 
-        <Composer
-          value={draft}
-          onChange={setDraft}
-          onSend={() => void send()}
-          disabled={!!composerBlocked}
-          placeholder={composerBlocked ?? (running ? "steer the run…" : "message")}
-        />
+        {agentId && (broken || agentState === "no_agent") === false && session && items.length > 0 && (
+          <div className="shrink-0 px-6 pb-5 pt-2">
+            <div className="max-w-3xl mx-auto">{composer}</div>
+          </div>
+        )}
       </main>
     </div>
   );

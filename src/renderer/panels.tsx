@@ -1,6 +1,6 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronRight, FolderOpen, Plus, Trash2, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
@@ -9,6 +9,9 @@ import { ago, type Row } from "./sessions.ts";
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
+
+/** A path as a person writes it. */
+export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
 
 const dot: Record<AgentState, string> = {
   ready: "bg-accent",
@@ -70,7 +73,6 @@ export function ConversationList({
   onOpen,
   onNew,
   onDelete,
-  onPickModel,
 }: {
   agent?: AgentRow;
   rows: Row[];
@@ -79,7 +81,6 @@ export function ConversationList({
   onOpen: (session: string) => void;
   onNew: () => void;
   onDelete: (session: string) => void;
-  onPickModel: () => void;
 }) {
   return (
     <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-black/10">
@@ -98,22 +99,14 @@ export function ConversationList({
       </div>
 
       {agent && (
-        <div className="px-3 pb-2 flex items-center gap-1 text-[11px]">
-          <button
-            onClick={onPickModel}
-            className="truncate rounded-card px-1.5 py-0.5 font-mono text-muted hover:bg-white/5 hover:text-text"
-            title="Change model"
-          >
-            {agent.model ?? "no model"}
-          </button>
-          <button
-            onClick={() => void duang.revealAgent(agent.id)}
-            title={agent.dir}
-            className="ml-auto size-6 grid place-items-center rounded-card text-muted hover:bg-white/5 hover:text-text"
-          >
-            <FolderOpen size={13} />
-          </button>
-        </div>
+        <button
+          onClick={() => void duang.revealAgent(agent.id)}
+          title={agent.dir}
+          className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-white/5 hover:text-text"
+        >
+          <FolderOpen size={12} />
+          <span className="truncate">{home(agent.dir)}</span>
+        </button>
       )}
 
       <div className="flex-1 overflow-y-auto min-h-0 px-1.5 pb-2 space-y-0.5">
@@ -253,15 +246,17 @@ export function NoConversation({ onNew }: { onNew: () => void }) {
   );
 }
 
-/** The one thing a scaffolded agent is missing, and the one setting duang keeps for itself. */
-export function ModelPicker({
+/** The model list, floating above the composer chip that opened it. */
+function ModelPopover({
   agentId,
   current,
   onPicked,
+  onClose,
 }: {
   agentId: string;
   current?: string;
   onPicked: () => void;
+  onClose: () => void;
 }) {
   const [models, setModels] = useState<string[]>();
   const [filter, setFilter] = useState("");
@@ -270,24 +265,25 @@ export function ModelPicker({
   const matches = (models ?? []).filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 60);
 
   return (
-    <Panel>
-      <div className="max-w-xl mx-auto">
+    <>
+      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div className="absolute bottom-full left-0 mb-2 z-20 w-80 rounded-card bg-surface ring-1 ring-stroke shadow-2xl p-2">
         {models?.length === 0 ? (
-          <p className="text-muted leading-relaxed">
+          <p className="text-muted text-[12px] p-2 leading-relaxed">
             No provider is logged in. Run <span className="font-mono">fastagent login</span> (or pi&apos;s login), then
             reopen duang.
           </p>
         ) : (
           <>
-            <p className="text-muted mb-3">Pick a model. duang stores the choice; the agent directory is untouched.</p>
             <input
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="filter models (try: sonnet, gpt)"
-              className="w-full bg-surface rounded-card px-3 py-2 mb-2 outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
+              onKeyDown={(e) => e.key === "Escape" && onClose()}
+              placeholder="filter models"
+              className="w-full bg-bg rounded-card px-2.5 py-1.5 mb-1.5 text-[12px] outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
             />
-            <div className="space-y-0.5">
+            <div className="max-h-64 overflow-y-auto">
               {matches.map((model) => (
                 <button
                   key={model}
@@ -299,12 +295,24 @@ export function ModelPicker({
                   {model}
                 </button>
               ))}
-              {models && matches.length === 0 && <p className="text-muted text-[11px] px-2">Nothing matches.</p>}
+              {models && matches.length === 0 && <p className="text-muted text-[11px] px-2 py-1.5">Nothing matches.</p>}
             </div>
           </>
         )}
       </div>
-    </Panel>
+    </>
+  );
+}
+
+/** The opening screen of a conversation nobody has spoken in yet. */
+export function NewConversation({ agentName, children }: { agentName: string; children: React.ReactNode }) {
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
+      <div className="w-full max-w-3xl -mt-16">
+        <h1 className="text-[22px] font-medium mb-5">What should we work on in {agentName}?</h1>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -392,43 +400,77 @@ function firstArg(args: unknown): string {
   return text.length > 80 ? `${text.slice(0, 80)}…` : text;
 }
 
-/** Enter sends, Shift+Enter breaks the line; when it cannot send, the placeholder says why. */
+/**
+ * The composer card: context, input, and the settings that belong to the next message rather than to
+ * the app — which is why the model chip lives here and not in a settings screen.
+ *
+ * Enter sends, Shift+Enter breaks the line; when it cannot send, the placeholder says why.
+ */
 export function Composer({
+  agentId,
+  context,
+  model,
+  picking,
+  onPicking,
+  onPicked,
   value,
   onChange,
   onSend,
   placeholder,
   disabled,
 }: {
+  agentId?: string;
+  context?: string;
+  model?: string;
+  picking: boolean;
+  onPicking: (open: boolean) => void;
+  onPicked: () => void;
   value: string;
   onChange: (text: string) => void;
   onSend: () => void;
   placeholder: string;
   disabled: boolean;
 }) {
-  const lines = Math.min(6, value.split("\n").length);
+  const lines = Math.min(8, Math.max(2, value.split("\n").length));
   return (
-    <div className="shrink-0 px-6 pb-5 pt-2">
-      <div className="max-w-3xl mx-auto relative">
-        <textarea
-          value={value}
-          rows={lines}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            // While an IME is composing, Enter picks a candidate — sending there would cut a word in half.
-            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
-            e.preventDefault();
-            if (!disabled) onSend();
-          }}
-          placeholder={placeholder}
-          disabled={disabled}
-          className="w-full resize-none bg-surface rounded-card pl-3 pr-11 py-2.5 outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted disabled:opacity-50"
-        />
+    <div className="rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 pt-2.5 pb-2">
+      {context && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{context}</div>}
+      <textarea
+        value={value}
+        rows={lines}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          // While an IME is composing, Enter picks a candidate — sending there would cut a word in half.
+          if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+          e.preventDefault();
+          if (!disabled) onSend();
+        }}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full resize-none bg-transparent outline-none placeholder:text-muted disabled:opacity-60"
+      />
+      <div className="flex items-center gap-2 mt-1">
+        <div className="relative">
+          <button
+            onClick={() => onPicking(!picking)}
+            disabled={!agentId}
+            title="Model for this agent"
+            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 ${
+              model ? "text-muted" : "text-amber-400"
+            }`}
+          >
+            {model ?? "pick a model"}
+            <ChevronDown size={12} />
+          </button>
+          {picking && agentId && (
+            <ModelPopover agentId={agentId} current={model} onPicked={onPicked} onClose={() => onPicking(false)} />
+          )}
+        </div>
         <button
           onClick={onSend}
           disabled={disabled || value.trim() === ""}
           title="Send (⏎) · newline (⇧⏎)"
-          className="absolute right-2 bottom-2.5 size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"
+          className="ml-auto size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"
         >
           <ArrowUp size={15} />
         </button>

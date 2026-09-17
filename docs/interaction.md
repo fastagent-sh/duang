@@ -29,7 +29,8 @@ An agent is in one of three states, and the rail dot says which:
 | State | Rail | The conversation area shows |
 |---|---|---|
 | ready | accent when selected | conversations |
-| needs a model | amber dot | the model picker |
+| needs a model | amber dot | the new-conversation screen, with the chip's list already open |
+| holds no agent yet | amber dot | what duang would write, and a button to write it |
 | broken (not an agent directory, unreadable) | red dot | the reason, verbatim, with *Remove* and *Reveal in Finder* |
 
 **A broken agent must always be removable.** Adding the wrong directory is the most likely first
@@ -54,9 +55,17 @@ Empty states, in the conversation area:
 
 ## Composer
 
-A textarea that grows to six lines, then scrolls. **Enter sends, Shift+Enter breaks the line.** It
-is never disabled silently: when it cannot send, the placeholder says why (*pick a model first*,
-*this agent is broken*).
+A card, not a strip: the workspace path on top, the input in the middle, and the model chip at the
+foot. **The model belongs to the next message, so it lives where the message is written** — not in a
+settings screen. Clicking the chip floats the list above it; that is the only model picker.
+
+A conversation nobody has spoken in yet has no transcript to sit under, so the composer *is* the
+screen: centred, under *What should we work on in ‹agent›?*. It drops to the foot of the window as
+soon as the first message lands.
+
+The textarea grows to eight lines, then scrolls. **Enter sends, Shift+Enter breaks the line**, and
+Enter during IME composition picks a candidate instead. It is never disabled silently: when it
+cannot send, the placeholder says why (*pick a model to start*, *this agent is broken*).
 
 While a run is live the placeholder becomes *steer the run…*, the header shows Stop, and queued
 input shows as a count. Sending still works — that is the point of steering.
