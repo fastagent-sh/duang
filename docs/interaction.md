@@ -39,6 +39,9 @@ Setup has four states, and the rail dot says which:
 **A broken agent must always be removable.** Adding the wrong directory is the most likely first
 mistake, and an app that cannot undo it is stuck.
 
+Changing the model moves the open conversation onto it and makes it the default for conversations
+started later. Other existing conversations keep the model they recorded.
+
 The composer chip changes the model, the directory path reveals it in Finder, and *Remove agent*
 is always available below the conversation list. Removing asks once and removes only duang's row;
 the directory is never touched. Model changes and removal are refused while any conversation of
@@ -81,6 +84,11 @@ While a run is live the placeholder becomes *steer the run…*, the header and c
 and queued input shows as a count. Sending still works — that is the point of steering. Drafts
 stay with their conversation while navigating; they are not persisted across app restarts.
 A send refused before admission returns to the draft and does not appear as a delivered message.
+
+## Window and quit
+
+Closing a window does not stop a running turn — the runtime lives in the main process. Quitting with
+active work warns that execution will be interrupted. Nothing resumes a run automatically afterwards.
 
 ## Keyboard
 

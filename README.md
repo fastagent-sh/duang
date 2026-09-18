@@ -164,7 +164,13 @@ npm ci          # needs a sibling ../fastagent already built at the pinned revis
 npm run dev     # Electron + Vite
 npm test        # registry, routing, selection, drafts, transcript and command regressions
 npm run test:smoke  # real Electron + IPC + FastAgent, with a fake model HTTP response
+DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine's credential file
 ```
+
+`test:live` is the only check that proves authentication end to end: it makes unfaked Codex and
+Anthropic requests through the real IPC path, so it spends model credits and needs working logins.
+It skips itself without `DUANG_LIVE=1`, isolates the registry and agent directory, and prints no
+credential values.
 
 The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
 range when duang ships a build. Fresh-checkout setup, the pinned revision, review and merge
@@ -199,8 +205,9 @@ Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatche
 
 Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
 and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
-not just test counts. The credential-routing regression has isolated coverage, but real-provider
-validation remains open in [#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
+not just test counts. The credential-routing regression has isolated coverage, and `test:live` now
+exercises the real path, but a passing live run is still unrecorded in
+[#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
 [#2](https://github.com/fastagent-sh/duang/issues/2).
 
 The current implementation covers: add or scaffold, choose a model, send, stream text and tools,
