@@ -65,11 +65,16 @@ export function createStore(api: DuangApi) {
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
-    // One transition point for the wait clock: every way a turn can end clears it here, so no ending
-    // path has to remember to.
+    // One transition point for both derived facts: the wait clock, and how long a view keeps its
+    // subscription. Every way a turn can end passes through here, so no ending path has to remember.
     for (const c of conversations.values()) {
       if (busy(c)) c.busySince ??= Date.now();
-      else c.busySince = undefined;
+      else {
+        c.busySince = undefined;
+        // A conversation nobody is looking at is retained only while it can still produce something
+        // this view needs: its own backfill, or a turn in flight.
+        if (c !== view.conversation && !c.loading) close(c);
+      }
     }
     const running = [...conversations.values()].filter(busy);
     view.busy = !!view.conversation && busy(view.conversation);
@@ -94,11 +99,7 @@ export function createStore(api: DuangApi) {
     if (conversations.get(key(c.agentId, c.session)) === c) conversations.delete(key(c.agentId, c.session));
     void api.closeSession(c.subscription).catch((error) => note(error));
   };
-  const leave = () => {
-    const c = view.conversation;
-    if (c && !busy(c)) close(c);
-    publish({ conversation: undefined });
-  };
+  const leave = () => publish({ conversation: undefined });
 
   async function refreshList(id: string) {
     if (id !== view.agentId) return;
@@ -217,13 +218,11 @@ export function createStore(api: DuangApi) {
       if (c.state) c.state = { ...c.state, status: "idle", activeRunId: undefined };
       if (frame.ended.expected) c.ended = frame.ended.reason;
       else c.error = frame.ended.reason;
-      if (c !== view.conversation) close(c);
       publish();
       return;
     }
     if (c.loading) c.events.push(frame.event);
     else fold(c, frame.event);
-    if (c !== view.conversation && !c.loading && !busy(c)) close(c);
     publish();
   });
 
@@ -402,7 +401,6 @@ export function createStore(api: DuangApi) {
         restoreRejected();
       } finally {
         c.sends--;
-        if (c !== view.conversation && !busy(c)) close(c);
         publish();
       }
     },

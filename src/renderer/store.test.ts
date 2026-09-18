@@ -150,13 +150,14 @@ test("background turns retain their stream and transcript, then release it after
   assert.equal(opens.length, count, "a live view is reused, not backfilled over its own deltas");
   assert.ok(c.items.some((item) => item.kind === "assistant" && item.text === "background answer"));
   emit(c, "run_settled", { status: "completed" });
+  assert.equal(closed.includes(c.subscription), false, "a send still in flight keeps the subscription");
   sent.resolve({ ok: true });
   await sending;
   assert.equal(c.state?.status, "idle");
   assert.equal(c.state?.pending.steering, 0);
   assert.equal(c.busySince, undefined);
   await store.newConversation();
-  assert.ok(closed.includes(c.subscription));
+  assert.ok(closed.includes(c.subscription), "an idle conversation nobody is looking at releases its stream");
   store.dispose();
 });
 
