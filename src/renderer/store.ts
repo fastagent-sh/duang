@@ -1,5 +1,5 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
-import type { AgentRow, DuangApi, SessionFrame } from "../preload/index.ts";
+import type { AgentRow, DuangApi, Models, SessionFrame } from "../preload/index.ts";
 import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
@@ -29,7 +29,7 @@ interface View {
   loading: boolean;
   error?: string;
   /** The model picker's contents: undefined while loading, so the picker can say so. */
-  models?: { specs: string[]; authPath: string };
+  models?: Models;
   modelsError?: string;
   /** The `/` completion list for the selected agent. */
   commands: AgentCommand[];
@@ -269,7 +269,12 @@ export function createStore(api: DuangApi) {
         const commands = await api.listCommands(id);
         if (commandsFor === id) publish({ commands });
       } catch (error) {
-        if (commandsFor === id) publish({ commandsError: String(error) });
+        // Release the once-per-agent claim: without this the agent is stuck with an empty
+        // completion list for the rest of the session. The next `/` keystroke retries.
+        if (commandsFor === id) {
+          commandsFor = undefined;
+          publish({ commandsError: String(error) });
+        }
       }
     },
     newConversation: () => open(crypto.randomUUID()),

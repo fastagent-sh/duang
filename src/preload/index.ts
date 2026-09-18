@@ -12,6 +12,12 @@ import type {
 export type { AgentRow } from "../main/agent-files.ts";
 import type { AgentRow } from "../main/agent-files.ts";
 
+/** What the picker shows: the specs this machine can run, and the file they were read from. */
+export interface Models {
+  specs: string[];
+  authPath: string;
+}
+
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
   | { ok: false; code: "missing_model" | "no_agent" | "failed"; message: string };

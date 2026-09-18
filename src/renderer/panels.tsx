@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type { AgentCommand } from "@fastagent-sh/fastagent/session";
-import type { AgentRow } from "../preload/index.ts";
+import type { AgentRow, Models } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
@@ -266,7 +266,7 @@ function ModelPopover({
   onClose,
 }: {
   current?: string;
-  models?: { specs: string[]; authPath: string };
+  models?: Models;
   error?: string;
   onRetry: () => void;
   onPick: (model: string) => void;
@@ -500,6 +500,7 @@ export function Composer({
   agentId,
   context,
   model,
+  needsModel,
   models,
   modelsError,
   onLoadModels,
@@ -521,7 +522,9 @@ export function Composer({
   agentId?: string;
   context?: string;
   model?: string;
-  models?: { specs: string[]; authPath: string };
+  /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
+  needsModel: boolean;
+  models?: Models;
   modelsError?: string;
   onLoadModels: () => void;
   commands: AgentCommand[];
@@ -628,10 +631,10 @@ export function Composer({
             disabled={!agentId || busy || modelDisabled}
             title={busy ? "Stop the turn to change the model" : "Model for this agent"}
             className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 disabled:opacity-50 ${
-              model ? "text-muted" : "text-amber-400"
+              !model && needsModel ? "text-amber-400" : "text-muted"
             }`}
           >
-            {model ?? "pick a model"}
+            {model ?? (needsModel ? "pick a model" : "reading model…")}
             <ChevronDown size={12} />
           </button>
           {picking && agentId && !busy && !modelDisabled && (

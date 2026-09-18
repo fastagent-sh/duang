@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
@@ -33,8 +33,6 @@ export default function App() {
   useEffect(() => {
     setPicking(agentState === "missing_model");
   }, [agentId, agentState]);
-  // Stable, because the composer calls it from an effect that runs while a `/` line is being typed.
-  const needCommands = useCallback(() => void store.loadCommands(), [store]);
   // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
   useEffect(() => {
     if (picking) void store.loadModels();
@@ -76,12 +74,13 @@ export default function App() {
       // What the conversation will RUN with, else the agent's own default. Nothing else may answer
       // this: a chip that names a model the turn will not use is the failure worth avoiding.
       model={c?.state?.model ?? view.model}
+      needsModel={agentState === "missing_model"}
       models={view.models}
       modelsError={view.modelsError}
       onLoadModels={() => void store.loadModels()}
       commands={view.commands}
       commandsError={view.commandsError}
-      onNeedCommands={needCommands}
+      onNeedCommands={store.loadCommands}
       picking={picking}
       onPicking={setPicking}
       onPickModel={(model) => {
