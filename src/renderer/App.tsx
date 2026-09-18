@@ -67,6 +67,8 @@ export default function App() {
         agent={agent}
         rows={sessionRows}
         session={c?.session}
+        state={agentState}
+        working={!!agentId && view.runningAgents.includes(agentId)}
         disabled={agentState !== "ready" || view.loading}
         onOpen={(id) => void store.open(id)}
         onNew={() => void store.newConversation()}

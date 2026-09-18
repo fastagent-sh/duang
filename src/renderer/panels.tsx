@@ -84,6 +84,8 @@ export function ConversationList({
   agent,
   rows,
   session,
+  state,
+  working,
   disabled,
   onOpen,
   onNew,
@@ -94,6 +96,8 @@ export function ConversationList({
   agent?: AgentRow;
   rows: Row[];
   session?: string;
+  state?: AgentState;
+  working: boolean;
   disabled: boolean;
   onOpen: (session: string) => void;
   onNew: () => void;
@@ -105,7 +109,14 @@ export function ConversationList({
     <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-black/10">
       {/* pl-6 clears the window controls, which overhang the rail into this column. */}
       <div className="h-10 shrink-0 flex items-center gap-2 pl-6 pr-2 drag">
-        <span className="truncate flex-1 font-medium">{agent?.name ?? ""}</span>
+        <span className="truncate font-medium">{agent?.name ?? ""}</span>
+        {/* The rail's dot is a colour; this is the same fact in words, where it is always readable. */}
+        {agent && (working || (state && state !== "ready")) && (
+          <span className={`truncate text-[11px] ${state === "broken" ? "text-danger" : "text-muted"}`}>
+            {working ? "working" : says[state!].toLowerCase()}
+          </span>
+        )}
+        <span className="flex-1" />
         {agent && !disabled && (
           <button
             onClick={onNew}
