@@ -16,12 +16,15 @@ export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
   | { ok: false; code: "missing_model" | "no_agent" | "failed"; message: string };
 
-export interface SessionFrame {
-  agentId: string;
-  session: string;
-  subscription: string;
-  event: SessionEvent;
-}
+/**
+ * One channel, two kinds of news: what the runtime said, and the fact that main ended this
+ * subscription. The second is duang's own lifecycle, not a session event, so it travels as itself
+ * rather than as a synthetic failure.
+ */
+export type SessionFrame = { agentId: string; session: string; subscription: string } & (
+  | { event: SessionEvent; ended?: never }
+  | { event?: never; ended: { reason: string; expected: boolean } }
+);
 
 const api = {
   listAgents: (): Promise<AgentRow[]> => ipcRenderer.invoke("agents:list"),

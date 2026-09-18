@@ -135,9 +135,6 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       ];
     case "serving_error":
       return [...items, { kind: "note", text: String(data.message) }];
-    // Not from the engine: main reports why this conversation's event stream ended.
-    case "stream_failed":
-      return [...items, { kind: "note", text: String(data.reason ?? event.type) }];
     default:
       return items;
   }
