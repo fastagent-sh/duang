@@ -31,7 +31,13 @@ export class AgentRegistry {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
     }
-    const rows: unknown = JSON.parse(text);
+    let rows: unknown;
+    try {
+      rows = JSON.parse(text);
+    } catch (error) {
+      // A bare SyntaxError names a column, not a file. The person has to know what to open.
+      throw new Error(`${this.file}: ${(error as Error).message}`, { cause: error });
+    }
     if (
       !Array.isArray(rows) ||
       rows.some(
