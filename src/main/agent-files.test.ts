@@ -37,7 +37,8 @@ test("invalid or unreadable registry fails visibly and is never replaced with an
     const registry = new AgentRegistry(file);
     for (const corrupt of ["{broken", "{}", '[{"id":"a","name":5,"dir":"/tmp"}]']) {
       await writeFile(file, corrupt);
-      await assert.rejects(registry.list());
+      // Whatever is wrong, the message must name the file the person has to open.
+      await assert.rejects(registry.list(), (error: Error) => error.message.startsWith(`${file}: `));
       await assert.rejects(registry.add(root));
       assert.equal(await readFile(file, "utf8"), corrupt);
     }
