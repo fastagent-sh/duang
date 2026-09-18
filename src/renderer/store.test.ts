@@ -141,7 +141,7 @@ test("an unsent conversation keeps a row, so leaving it is not discarding it", a
   assert.deepEqual(store.getSnapshot().draftSessions, [], "another agent's drafts stay out of this list");
   await store.selectAgent("a");
   assert.deepEqual(store.getSnapshot().draftSessions, ["unsent"]);
-  await store.open("unsent");
+  assert.equal(store.getSnapshot().conversation?.session, "unsent", "returning lands where you left");
   assert.equal(store.getSnapshot().conversation?.draft, "typed but never sent");
   store.setDraft("");
   await store.open("other");

@@ -90,6 +90,8 @@ export function createStore(api: DuangApi) {
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
   const drafts = new Map<string, string>();
+  /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
+  const lastOpened = new Map<string, string>();
   let navigation = 0;
   let listRequest = 0;
   let modelsRequest = 0;
@@ -150,6 +152,7 @@ export function createStore(api: DuangApi) {
   async function open(session: string) {
     const agentId = view.agentId;
     if (!agentId) return;
+    lastOpened.set(agentId, session);
     leave();
     const existing = conversations.get(key(agentId, session));
     if (existing) {
@@ -219,7 +222,17 @@ export function createStore(api: DuangApi) {
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const running = [...conversations.values()].find((c) => c.agentId === id && busy(c));
-      await open(running?.session ?? newest?.session ?? crypto.randomUUID());
+      // Coming back to an agent returns to the conversation you left, including one the runtime does
+      // not know yet. It is dropped when its session is gone and nothing local keeps it alive.
+      const previous = lastOpened.get(id);
+      const revivable =
+        previous &&
+        (result.sessions.some((s) => s.session === previous) ||
+          conversations.has(key(id, previous)) ||
+          drafts.get(key(id, previous))?.trim())
+          ? previous
+          : undefined;
+      await open(revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
