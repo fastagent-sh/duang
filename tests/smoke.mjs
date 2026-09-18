@@ -63,6 +63,12 @@ if (!process.versions.electron) {
     if (selectedAuth !== defaultAuth) await writeFile(defaultAuth, JSON.stringify({ "openai-codex": codex }));
     await writeFile(selectedAuth, JSON.stringify(stored));
     await writeFile(join(configured, "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
+    // A skill is what `commands()` lists, so the composer's `/` completion has something to find.
+    await mkdir(join(configured, "skills", "demo"), { recursive: true });
+    await writeFile(
+      join(configured, "skills", "demo", "SKILL.md"),
+      "---\nname: demo\ndescription: A skill the completion list should offer.\n---\n\nSay demo.\n",
+    );
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(
       join(data, "agents.json"),
@@ -183,6 +189,14 @@ if (!process.versions.electron) {
       })()`);
       await until(`document.querySelector('dialog').innerText.includes(${JSON.stringify(model)})`, "filtered model");
       await click(model);
+    }
+    async function type(text) {
+      await evaluate(`(() => {
+    const input = document.querySelector('textarea');
+    input.focus();
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(text)});
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
     }
     async function message(text) {
       await evaluate(`(() => {
@@ -344,6 +358,24 @@ if (!process.versions.electron) {
       assert.equal(recovered.ok, true);
       assert.equal(anthropicRequests, 3);
       assert.deepEqual(JSON.parse(await readFile(selectedAuth, "utf8")), stored, "valid tokens are not refreshed or copied");
+      // `/` completion: the names come from the agent's definition, Escape dismisses the list, and
+      // accepting one leaves the line in the composer instead of sending it.
+      await evaluate("document.querySelector('textarea').focus()");
+      await type("/");
+      await until("document.body.innerText.includes('A skill the completion list should offer')", "command list");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until(
+        "!document.body.innerText.includes('A skill the completion list should offer')",
+        "Escape dismisses the command list",
+      );
+      await type("/d");
+      await until("document.body.innerText.includes('A skill the completion list should offer')", "list reopens");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+      await until("document.querySelector('textarea').value === '/demo '", "Enter accepts the name, it does not send");
+      await type("");
+
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
       const registry = join(data, "agents.json");
       const savedRegistry = await readFile(registry, "utf8");

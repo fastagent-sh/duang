@@ -559,8 +559,10 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   useEffect(() => {
     if (query !== undefined && agentId && !disabled) void store.loadCommands();
   }, [query, agentId, disabled, store]);
+  // Escape hides the list for the name as typed; typing on is a new request for it. Keeping it
+  // dismissed until the line stops being a command leaves `/d` with no completion at all.
   useEffect(() => {
-    if (query === undefined) setDismissed(false);
+    setDismissed(false);
     setCursor(0);
   }, [query]);
 

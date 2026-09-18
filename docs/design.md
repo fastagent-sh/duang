@@ -118,8 +118,9 @@ until that visibly hurts.
 `fastagent init`) → the app reads the definition and shows the name it found → first message.
 
 **Local conversation.** Type, stream, watch tools. Turns use `agent.invoke`; observation and run controls use the `SessionControl` returned by
-in-process `createPiAgentFromDir`. `/` completes command names from `commands()` and the line is
-sent verbatim; pi expands it.
+in-process `createPiAgentFromDir`. `/` completes names from `commands()`, which is a listing and not
+an invocation surface: nothing expands `/name`, so the line is sent as written and the agent decides
+what to do with it. Naming one of its own skills is a strong hint, not a command.
 
 **Going live.** *Deploy* on an agent, four steps, each one able to fail out loud:
 
