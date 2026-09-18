@@ -11,12 +11,8 @@ import type {
 
 export type { AgentRow } from "../main/agent-files.ts";
 import type { AgentRow } from "../main/agent-files.ts";
-
-/** What the picker shows: the specs this machine can run, and the file they were read from. */
-export interface Models {
-  specs: string[];
-  authPath: string;
-}
+export type { Models } from "../main/credentials.ts";
+import type { Models } from "../main/credentials.ts";
 
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
@@ -49,7 +45,7 @@ const api = {
   /** The names this agent exposes — what the composer's `/` completion lists. */
   listCommands: (agentId: string): Promise<AgentCommand[]> => ipcRenderer.invoke("agent:commands", agentId),
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
-  listModels: (): Promise<{ specs: string[]; authPath: string }> => ipcRenderer.invoke("models:list"),
+  listModels: (): Promise<Models> => ipcRenderer.invoke("models:list"),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:delete", agentId, session),
   openSession: (
