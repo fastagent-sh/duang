@@ -2,13 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
-import type { AgentCommand } from "@fastagent-sh/fastagent/session";
-import type { AgentRow, Models } from "../preload/index.ts";
+import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
-import type { AgentState } from "./store.ts";
-
+import type { AgentState, Store, View } from "./store.ts";
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
@@ -258,20 +256,18 @@ export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate:
 
 /** The model list, floating above the composer chip that opened it. */
 function ModelPopover({
+  view,
+  store,
   current,
-  models,
-  error,
-  onRetry,
-  onPick,
   onClose,
 }: {
+  view: View;
+  store: Store;
   current?: string;
-  models?: Models;
-  error?: string;
-  onRetry: () => void;
-  onPick: (model: string) => void;
   onClose: () => void;
 }) {
+  const { models, modelsError: error } = view;
+  const onRetry = () => void store.loadModels();
   const [filter, setFilter] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => {
@@ -299,6 +295,10 @@ function ModelPopover({
         event.preventDefault();
         event.stopPropagation();
         close();
+      }}
+      // The modal owns Escape while it is open: the window-level handler behind it stops runs.
+      onKeyDown={(event) => {
+        if (event.key === "Escape") event.stopPropagation();
       }}
       onClick={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -353,7 +353,8 @@ function ModelPopover({
                 key={model}
                 onClick={() => {
                   dialog.current?.close();
-                  onPick(model);
+                  onClose();
+                  void store.pickModel(model);
                 }}
                 className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
                   model === current ? "text-accent" : ""
@@ -496,52 +497,19 @@ function firstArg(args: unknown): string {
  *
  * Enter sends, Shift+Enter breaks the line; when it cannot send, the placeholder says why.
  */
-export function Composer({
-  agentId,
-  context,
-  model,
-  needsModel,
-  models,
-  modelsError,
-  onLoadModels,
-  commands,
-  commandsError,
-  onNeedCommands,
-  picking,
-  onPicking,
-  onPickModel,
-  busy,
-  modelDisabled,
-  onAbort,
-  value,
-  onChange,
-  onSend,
-  placeholder,
-  disabled,
-}: {
-  agentId?: string;
-  context?: string;
-  model?: string;
+export function Composer({ view, store }: { view: View; store: Store }) {
+  const { agentId, conversation: c, busy } = view;
+  const agent = view.agents.find((row) => row.id === agentId);
+  const state = agentId ? view.states[agentId] : undefined;
+  // What the conversation will RUN with, else the agent's own default. Nothing else may answer
+  // this: a chip that names a model the turn will not use is the failure worth avoiding.
+  const model = c?.state?.model ?? view.model;
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
-  needsModel: boolean;
-  models?: Models;
-  modelsError?: string;
-  onLoadModels: () => void;
-  commands: AgentCommand[];
-  commandsError?: string;
-  onNeedCommands: () => void;
-  picking: boolean;
-  onPicking: (open: boolean) => void;
-  onPickModel: (model: string) => void;
-  busy: boolean;
-  modelDisabled: boolean;
-  onAbort: () => void;
-  value: string;
-  onChange: (text: string) => void;
-  onSend: () => void;
-  placeholder: string;
-  disabled: boolean;
-}) {
+  const needsModel = state === "missing_model";
+  const modelDisabled = view.loading || !!c?.loading || state === "broken" || state === "no_agent";
+  const value = c?.draft ?? "";
+  const disabled = !!view.blocked;
+
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = input.current;
@@ -551,15 +519,22 @@ export function Composer({
   }, [value]);
   const [dismissed, setDismissed] = useState(false);
   const [cursor, setCursor] = useState(0);
+  const [picking, setPicking] = useState(false);
+  // An agent with no model cannot start: open the list rather than leave the person guessing.
+  useEffect(() => setPicking(needsModel), [agentId, needsModel]);
+  // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
+  useEffect(() => {
+    if (picking) void store.loadModels();
+  }, [picking, store]);
 
   const query = completionQuery(value);
-  const suggestions = query === undefined || dismissed ? [] : matches(commands, query);
+  const suggestions = query === undefined || dismissed ? [] : matches(view.commands, query);
   const chosen = suggestions[Math.min(cursor, suggestions.length - 1)];
 
   // The first `/` is what asks for the names; the store decides they are fetched once per agent.
   useEffect(() => {
-    if (query !== undefined && agentId && !disabled) onNeedCommands();
-  }, [query, agentId, disabled, onNeedCommands]);
+    if (query !== undefined && agentId && !disabled) void store.loadCommands();
+  }, [query, agentId, disabled, store]);
   useEffect(() => {
     if (query === undefined) setDismissed(false);
     setCursor(0);
@@ -573,7 +548,7 @@ export function Composer({
             <button
               key={command.name}
               onMouseEnter={() => setCursor(index)}
-              onClick={() => onChange(complete(command.name))}
+              onClick={() => store.setDraft(complete(command.name))}
               className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
                 command === chosen ? "bg-white/5" : ""
               }`}
@@ -585,10 +560,10 @@ export function Composer({
           ))}
         </div>
       )}
-      {context && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{context}</div>}
-      {commandsError && query !== undefined && (
+      {agent && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{home(agent.dir)}</div>}
+      {view.commandsError && query !== undefined && (
         <p role="alert" className="text-danger text-[11px]">
-          {commandsError}
+          {view.commandsError}
         </p>
       )}
       <textarea
@@ -596,7 +571,7 @@ export function Composer({
         aria-label="Message"
         value={value}
         rows={2}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => store.setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -612,22 +587,22 @@ export function Composer({
             // Enter and Tab accept the name rather than send: a bare `/name` is never a message.
             if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && chosen) {
               e.preventDefault();
-              return onChange(complete(chosen.name));
+              return store.setDraft(complete(chosen.name));
             }
           }
           // While an IME is composing, Enter picks a candidate — sending there would cut a word in half.
           if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
           e.preventDefault();
-          if (!disabled) onSend();
+          if (!disabled) void store.send();
         }}
-        placeholder={placeholder}
+        placeholder={view.blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
         disabled={disabled}
         className="w-full min-h-10 resize-none bg-transparent leading-5 outline-none placeholder:text-muted disabled:opacity-60"
       />
       <div className="flex items-center gap-2 mt-1">
         <div className="relative">
           <button
-            onClick={() => onPicking(!picking)}
+            onClick={() => setPicking(!picking)}
             disabled={!agentId || busy || modelDisabled}
             title={busy ? "Stop the turn to change the model" : "Model for this agent"}
             className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 disabled:opacity-50 ${
@@ -638,21 +613,14 @@ export function Composer({
             <ChevronDown size={12} />
           </button>
           {picking && agentId && !busy && !modelDisabled && (
-            <ModelPopover
-              current={model}
-              models={models}
-              error={modelsError}
-              onRetry={onLoadModels}
-              onPick={onPickModel}
-              onClose={() => onPicking(false)}
-            />
+            <ModelPopover view={view} store={store} current={model} onClose={() => setPicking(false)} />
           )}
         </div>
         {/* While a turn runs, the button that sent it is the button that stops it — stopping is where
             the eye already is, not in a corner of the window. */}
         {busy ? (
           <button
-            onClick={onAbort}
+            onClick={() => void store.abort()}
             title="Stop (Esc)"
             className="ml-auto size-7 grid place-items-center rounded-card bg-danger/15 text-danger"
           >
@@ -660,7 +628,7 @@ export function Composer({
           </button>
         ) : (
           <button
-            onClick={onSend}
+            onClick={() => void store.send()}
             disabled={disabled || value.trim() === ""}
             title="Send (⏎) · newline (⇧⏎)"
             className="ml-auto size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"

@@ -20,7 +20,7 @@ interface Conversation {
   runStarts: number;
   events: SessionEvent[];
 }
-interface View {
+export interface View {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
@@ -37,11 +37,29 @@ interface View {
   conversation?: Conversation;
   /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
   busy: boolean;
+  /**
+   * Why the composer cannot send, in the words the person should read, or undefined when it can.
+   * One rule, derived once: the placeholder shows it and `send` treats reaching it as a bug.
+   */
+  blocked?: string;
   runningAgents: string[];
   runningSessions: string[];
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
+
+/** In the order the person should hear it: the nearest reason first, the agent's setup after. */
+function blockedBy(view: View): string | undefined {
+  const c = view.conversation;
+  const state = view.agentId ? view.states[view.agentId] : undefined;
+  if (view.loading || c?.loading) return "opening conversation…";
+  if (c?.error || c?.ended) return "reconnect before sending";
+  if (state === "broken") return "this agent is broken";
+  if (state === "no_agent") return "create an agent here first";
+  if (state === "missing_model") return "pick a model to start";
+  if (!c) return "no conversation";
+  return state === "ready" ? undefined : "this agent is not ready";
+}
 
 /** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
 export function createStore(api: DuangApi) {
@@ -65,16 +83,22 @@ export function createStore(api: DuangApi) {
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
-    // One transition point for the wait clock: every way a turn can end clears it here, so no ending
-    // path has to remember to.
+    // One transition point for both derived facts: the wait clock, and how long a view keeps its
+    // subscription. Every way a turn can end passes through here, so no ending path has to remember.
     for (const c of conversations.values()) {
       if (busy(c)) c.busySince ??= Date.now();
-      else c.busySince = undefined;
+      else {
+        c.busySince = undefined;
+        // A conversation nobody is looking at is retained only while it can still produce something
+        // this view needs: its own backfill, or a turn in flight.
+        if (c !== view.conversation && !c.loading) close(c);
+      }
     }
     const running = [...conversations.values()].filter(busy);
     view.busy = !!view.conversation && busy(view.conversation);
     view.runningAgents = [...new Set(running.map((c) => c.agentId))];
     view.runningSessions = running.filter((c) => c.agentId === view.agentId).map((c) => c.session);
+    view.blocked = blockedBy(view);
     for (const listener of listeners) listener();
   };
   const note = (error: unknown, c = view.conversation) => {
@@ -94,11 +118,7 @@ export function createStore(api: DuangApi) {
     if (conversations.get(key(c.agentId, c.session)) === c) conversations.delete(key(c.agentId, c.session));
     void api.closeSession(c.subscription).catch((error) => note(error));
   };
-  const leave = () => {
-    const c = view.conversation;
-    if (c && !busy(c)) close(c);
-    publish({ conversation: undefined });
-  };
+  const leave = () => publish({ conversation: undefined });
 
   async function refreshList(id: string) {
     if (id !== view.agentId) return;
@@ -217,13 +237,11 @@ export function createStore(api: DuangApi) {
       if (c.state) c.state = { ...c.state, status: "idle", activeRunId: undefined };
       if (frame.ended.expected) c.ended = frame.ended.reason;
       else c.error = frame.ended.reason;
-      if (c !== view.conversation) close(c);
       publish();
       return;
     }
     if (c.loading) c.events.push(frame.event);
     else fold(c, frame.event);
-    if (c !== view.conversation && !c.loading && !busy(c)) close(c);
     publish();
   });
 
@@ -373,8 +391,10 @@ export function createStore(api: DuangApi) {
     async send() {
       const c = view.conversation;
       const text = c?.draft.trim();
-      if (!c || !text || c.loading || c.error || c.ended || view.loading || view.states[c.agentId] !== "ready")
-        return;
+      if (!c || !text) return;
+      // The composer was disabled and said why, so arriving here is this app's bug rather than a
+      // choice the person can revisit. Dropping the message in silence is how that stays hidden.
+      if (view.blocked) throw new Error(`Cannot send while ${view.blocked}`);
       c.draft = "";
       c.items = echoUser(c.items, text);
       const echo = c.items.at(-1);
@@ -402,7 +422,6 @@ export function createStore(api: DuangApi) {
         restoreRejected();
       } finally {
         c.sends--;
-        if (c !== view.conversation && !busy(c)) close(c);
         publish();
       }
     },
@@ -431,3 +450,5 @@ export function createStore(api: DuangApi) {
     },
   };
 }
+
+export type Store = ReturnType<typeof createStore>;

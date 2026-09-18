@@ -6,7 +6,6 @@ import {
   BrokenAgent,
   Composer,
   ConversationList,
-  home,
   NeedsAgent,
   NewConversation,
   NoAgents,
@@ -19,7 +18,6 @@ const duang = (window as unknown as { duang: DuangApi }).duang;
 export default function App() {
   const [store] = useState(() => createStore(duang));
   const view = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  const [picking, setPicking] = useState(false);
   const { agents, agentId, states, sessions, conversation: c } = view;
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
@@ -31,72 +29,23 @@ export default function App() {
     return store.dispose;
   }, [store]);
   useEffect(() => {
-    setPicking(agentState === "missing_model");
-  }, [agentId, agentState]);
-  // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
-  useEffect(() => {
-    if (picking) void store.loadModels();
-  }, [picking, store]);
-  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
       if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
         event.preventDefault();
         void store.newConversation();
       }
-      if (event.key === "Escape" && busy && !picking) void store.abort();
+      // The open model picker stops Escape itself, so reaching here means no dialog wanted it.
+      if (event.key === "Escape" && busy) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, agentState, busy, picking, view.loading]);
+  }, [store, agentState, busy, view.loading]);
 
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
-  const blocked =
-    view.loading || c?.loading
-      ? "opening conversation…"
-      : c?.error || c?.ended
-        ? "reconnect before sending"
-        : agentState === "broken"
-          ? "this agent is broken"
-          : agentState === "no_agent"
-            ? "create an agent here first"
-            : agentState === "missing_model"
-              ? "pick a model to start"
-              : !c
-                ? "no conversation"
-                : undefined;
-  const composer = (
-    <Composer
-      agentId={agentId}
-      context={agent ? home(agent.dir) : undefined}
-      // What the conversation will RUN with, else the agent's own default. Nothing else may answer
-      // this: a chip that names a model the turn will not use is the failure worth avoiding.
-      model={c?.state?.model ?? view.model}
-      needsModel={agentState === "missing_model"}
-      models={view.models}
-      modelsError={view.modelsError}
-      onLoadModels={() => void store.loadModels()}
-      commands={view.commands}
-      commandsError={view.commandsError}
-      onNeedCommands={store.loadCommands}
-      picking={picking}
-      onPicking={setPicking}
-      onPickModel={(model) => {
-        setPicking(false);
-        void store.pickModel(model);
-      }}
-      busy={busy}
-      modelDisabled={view.loading || !!c?.loading || agentState === "broken" || agentState === "no_agent"}
-      onAbort={() => void store.abort()}
-      value={c?.draft ?? ""}
-      onChange={store.setDraft}
-      onSend={() => void store.send()}
-      disabled={!!blocked}
-      placeholder={blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
-    />
-  );
+  const composer = <Composer view={view} store={store} />;
   const error = c?.error ?? (agentState !== "broken" && agentState !== "missing_model" ? view.error : undefined);
 
   return (

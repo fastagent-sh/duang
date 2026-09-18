@@ -75,11 +75,13 @@ test("first model selection unlocks a new conversation; configured models come f
   await store.load();
   assert.equal(store.getSnapshot().states.a, "missing_model");
   assert.equal(store.getSnapshot().conversation, undefined);
+  assert.equal(store.getSnapshot().blocked, "pick a model to start");
   api.openAgent = async () => ready;
   await store.pickModel("provider/model");
   assert.equal(store.getSnapshot().states.a, "ready");
   assert.equal(store.getSnapshot().model, "provider/model");
   assert.equal(store.getSnapshot().conversation?.loading, false);
+  assert.equal(store.getSnapshot().blocked, undefined, "the one rule that disables the composer");
   store.dispose();
 });
 
@@ -150,13 +152,14 @@ test("background turns retain their stream and transcript, then release it after
   assert.equal(opens.length, count, "a live view is reused, not backfilled over its own deltas");
   assert.ok(c.items.some((item) => item.kind === "assistant" && item.text === "background answer"));
   emit(c, "run_settled", { status: "completed" });
+  assert.equal(closed.includes(c.subscription), false, "a send still in flight keeps the subscription");
   sent.resolve({ ok: true });
   await sending;
   assert.equal(c.state?.status, "idle");
   assert.equal(c.state?.pending.steering, 0);
   assert.equal(c.busySince, undefined);
   await store.newConversation();
-  assert.ok(closed.includes(c.subscription));
+  assert.ok(closed.includes(c.subscription), "an idle conversation nobody is looking at releases its stream");
   store.dispose();
 });
 
@@ -201,7 +204,8 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   end(current, "stream disconnected", false);
   assert.equal(store.getSnapshot().busy, false);
   store.setDraft("keep me");
-  await store.send();
+  assert.equal(store.getSnapshot().blocked, "reconnect before sending");
+  await assert.rejects(() => store.send(), /reconnect before sending/, "a blocked send is a bug, not a no-op");
   assert.equal(current.draft, "keep me");
   assert.equal(current.error, "stream disconnected");
   await store.retry();
@@ -225,7 +229,8 @@ test("an expected end of a subscription is reported without pretending the conve
   );
   assert.equal(store.getSnapshot().busy, false, "a deaf view must stop waiting for run_settled");
   store.setDraft("blocked");
-  await store.send();
+  assert.equal(store.getSnapshot().blocked, "reconnect before sending");
+  await assert.rejects(() => store.send(), /reconnect before sending/);
   assert.equal(current.draft, "blocked", "sending waits for the reconnect");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.ended, undefined);
