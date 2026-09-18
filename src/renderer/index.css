@@ -29,8 +29,13 @@ body {
 }
 
 /* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
-   this background. Pointer focus stays silent; :focus-visible is the browser's own judgement of that. */
-:focus-visible {
+   this background. Pointer focus stays silent; :focus-visible is the browser's own judgement of that.
+   Text fields are left out: they show focus through their caret and their own container, so a ring
+   there is a second border around the first. */
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 4px;
