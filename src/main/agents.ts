@@ -2,7 +2,7 @@
 import { app } from "electron";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
-import { NO_SUCH_SESSION_CODE } from "@fastagent-sh/fastagent/session";
+import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
 import { AgentRegistry, type AgentRow } from "./agent-files.ts";
 
@@ -72,16 +72,31 @@ export async function withAgentRun<T>(row: AgentRow, run: (agent: Opened) => Pro
   }
 }
 
-function beginChange(id: string): void {
-  if (changing.has(id)) throw new Error("Agent settings are changing; try again.");
+/**
+ * An expected refusal is an answer, not an exception: the person can act on it, and a thrown one
+ * would reach the renderer wrapped in Electron's `Error invoking remote method` prose.
+ */
+export const refuse = (code: string, message: string): SessionResult => ({
+  ok: false,
+  error: { code, message, retryable: true },
+});
+
+/** Undefined when the change may proceed; the caller must release `changing` afterwards. */
+function beginChange(id: string): SessionResult | undefined {
+  if (changing.has(id)) return refuse("agent_changing", "Agent settings are changing; try again.");
   if (sending.has(id))
-    throw new Error("An agent conversation is running — stop it before changing or removing the agent.");
+    return refuse(
+      "agent_busy",
+      "An agent conversation is running — stop it before changing or removing the agent.",
+    );
   changing.add(id);
+  return undefined;
 }
 
 /** Prepare the replacement first; failed setup must leave the working runtime and saved choice intact. */
-export async function setAgentModel(row: AgentRow, model: string, session?: string): Promise<void> {
-  beginChange(row.id);
+export async function setAgentModel(row: AgentRow, model: string, session?: string): Promise<SessionResult> {
+  const refusal = beginChange(row.id);
+  if (refusal) return refusal;
   try {
     const replacement = await build({ ...row, model });
     if (session) {
@@ -90,16 +105,19 @@ export async function setAgentModel(row: AgentRow, model: string, session?: stri
     }
     await registry.setModel(row.id, model);
     opened.set(row.id, Promise.resolve(replacement));
+    return { ok: true };
   } finally {
     changing.delete(row.id);
   }
 }
 
-export async function removeAgent(id: string): Promise<void> {
-  beginChange(id);
+export async function removeAgent(id: string): Promise<SessionResult> {
+  const refusal = beginChange(id);
+  if (refusal) return refusal;
   try {
     await registry.remove(id);
     opened.delete(id);
+    return { ok: true };
   } finally {
     changing.delete(id);
   }

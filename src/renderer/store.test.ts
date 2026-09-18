@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { SessionResult } from "@fastagent-sh/fastagent/session";
 import type { DuangApi, OpenResult, SessionFrame } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 
@@ -28,8 +29,8 @@ function harness() {
     ],
     addAgent: async () => undefined,
     openAgent: async () => ready,
-    setModel: async () => {},
-    removeAgent: async () => {},
+    setModel: async () => ({ ok: true }) as SessionResult,
+    removeAgent: async () => ({ ok: true }) as SessionResult,
     scaffoldAgent: async () => "/a/fastagent",
     listCommands: async () => [],
     revealAgent: async () => {},
@@ -228,5 +229,27 @@ test("an expected end of a subscription is reported without pretending the conve
   assert.equal(current.draft, "blocked", "sending waits for the reconnect");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.ended, undefined);
+  store.dispose();
+});
+
+test("a refused model change or removal is shown, and changes nothing", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const before = store.getSnapshot();
+  const c = before.conversation!;
+  const busy: SessionResult = {
+    ok: false,
+    error: { code: "agent_busy", message: "An agent conversation is running", retryable: true },
+  };
+  api.setModel = async () => busy;
+  api.removeAgent = async () => busy;
+  await store.pickModel("provider/other");
+  assert.equal(store.getSnapshot().model, "provider/model", "the chip keeps the model that is actually loaded");
+  assert.equal(store.getSnapshot().conversation, c, "a refusal does not tear down the conversation");
+  assert.equal(store.getSnapshot().loading, false);
+  await store.removeAgent();
+  assert.equal(store.getSnapshot().agentId, "a");
+  const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
+  assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
   store.dispose();
 });
