@@ -1,7 +1,9 @@
 # Architecture
 
 Which process owns what, and where the boundaries are. `docs/design.md` is the product;
-`README.md` is the positioning.
+`README.md` is the positioning and current acceptance status. The local client below is
+implemented; remote clients, the control service and deployment sections describe future work.
+Week 1 remains unaccepted; see [current gaps](../README.md#week-1-implementation-and-acceptance-status).
 
 ## Processes
 
@@ -11,7 +13,7 @@ Which process owns what, and where the boundaries are. `docs/design.md` is the p
 │      │ preload: a typed mirror of           │
 │      │ SessionControl + one event channel   │
 │  main (Node 22.20 via Electron >= 38.3)     │
-│      ├── createPiSessionControl({ dir })  ← local agents, in-process
+│      ├── createPiAgentFromDir(dir)       ← local agents, in-process
 │      ├── remote SessionControl (HTTP+SSE) ← cloud agents
 │      ├── the filesystem: agent dirs, git, diffs
 │      └── OS notifications
@@ -34,23 +36,34 @@ directory path it can act on, a Fly token, or a model key — it asks main, and 
 
 ## The client
 
-**Main owns every `SessionControl`.** Local agents get `createPiSessionControl` from
-`@fastagent-sh/fastagent/pi`; cloud agents get the HTTP+SSE implementation. Both satisfy the same
-interface, so the code above them is one path.
+**Main owns every `SessionControl`.** Local agents get an agent plus its control plane from
+`createPiAgentFromDir` in `@fastagent-sh/fastagent/pi`; cloud agents will get the HTTP+SSE
+implementation. Both satisfy the same interface. Local turns use `agent.invoke`; observing,
+steering, stopping and reading history use the bound session control.
 
-**The preload mirrors that interface method for method** — twelve functions, written once by hand,
-no stringly-typed gateway. Event streams are different in kind: main subscribes to `events()` once
-per open conversation and forwards frames on a single IPC channel keyed by `(agentId, sessionId)`;
-the renderer folds them into its view.
+**The preload exposes typed, named operations**, not a stringly-typed gateway. Week 1 exposes only
+the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
+session and subscription id. Stale subscriptions cannot replace the current view. Idle subscriptions
+close on navigation; running conversations retain theirs until settlement, so switching away does
+not lose streamed output. Reloading or destroying the window closes its subscriptions, not its runs.
+
+**Runtime replacement is agent-scoped.** Changing a default model prepares a new assembly and
+updates the selected session before committing the registry choice. Admission is guarded across
+all conversations, including turns still opening their runtime: no model replacement or removal
+while a send is in flight. Failed assembly setup keeps the previous assembly and registry choice. Updating the session and
+registry is not a cross-file transaction; a registry write failure after a session update can leave
+the conversation model changed without changing the default. This still needs acceptance work.
 
 **Renderer state is a plain TS store read through `useSyncExternalStore`.** No state library: the
 authoritative state lives in the runtime and is re-read (`state()`, `entries()`) rather than
 derived from our own writes.
 
-**The client persists almost nothing** — `userData/agents.json`: for each agent a name, avatar,
-directory, optional deployment endpoint, and the last-seen marker per conversation that makes
-unread work. Conversations themselves are the runtime's files, not ours. Tokens go in Electron
-`safeStorage`, not that file.
+**The client persists almost nothing** — `userData/agents.json`: currently each agent's id, name,
+directory and optional model override. Reads validate the file; only a missing file means an empty
+registry. Writes serialize read/modify/rename, so concurrent changes do not lose rows and a failed
+write never publishes an in-memory success. Conversations remain the runtime's files. Drafts and
+live presentation state are in memory only. Deployment endpoints, unread markers and tokens are
+later-week work; tokens belong in Electron `safeStorage`, never the registry.
 
 `ponytail:` one JSON file with atomic writes; move to SQLite when a list of agents stops fitting in
 memory, which is not a real horizon for this product.

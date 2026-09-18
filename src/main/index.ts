@@ -3,30 +3,43 @@ import { join } from "node:path";
 import {
   addAgent,
   createAgentIn,
+  credentialRefusal,
   listAgents,
   MissingModelError,
   NoAgentError,
   openAgent,
   removeAgent,
   setAgentModel,
+  withAgentRun,
   type AgentRow,
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
 import { useSystemProxy } from "./proxy.ts";
-import { NO_ACTIVE_RUN_CODE, NO_SUCH_SESSION_CODE, type SessionEvent } from "@fastagent-sh/fastagent/session";
-
-/** `SESSION_BUSY_CODE` from FastAgent's agent.ts, which no export path re-exports (0.21.1). */
-const SESSION_BUSY_CODE = "session_busy";
+import { send } from "./send.ts";
+import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1180,
     height: 780,
+    minWidth: 800,
+    minHeight: 540,
     titleBarStyle: "hiddenInset",
     vibrancy: "sidebar",
     backgroundColor: "#00000000",
-    webPreferences: { preload: join(import.meta.dirname, "../preload/index.mjs"), sandbox: false },
+    webPreferences: {
+      preload: join(import.meta.dirname, "../preload/index.mjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
   });
+  // Model-generated links must never navigate a privileged renderer to another origin.
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (event) => event.preventDefault());
+  const senderId = win.webContents.id;
+  win.webContents.on("destroyed", () => stopWindowStreams(senderId));
+  win.webContents.on("did-start-loading", () => stopWindowStreams(senderId));
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
   return win;
@@ -38,172 +51,141 @@ async function requireAgent(agentId: string): Promise<AgentRow> {
   return row;
 }
 
-/** One forwarding loop per open conversation, keyed so a re-subscribe replaces rather than doubles. */
-const streams = new Map<string, () => void>();
+function requireSession(session: string): void {
+  if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
+}
 
-function forward(sender: IpcMainInvokeEvent["sender"], agentId: string, session: string, event: SessionEvent): void {
-  if (!sender.isDestroyed()) sender.send("session:event", { agentId, session, event });
+type Stream = { senderId: number; agentId: string; close: () => void; end: (reason: string) => void };
+// The renderer retains background subscriptions only while their turns are running.
+const streams = new Map<string, Stream>();
+function stopStream(key: string): void {
+  const stream = streams.get(key);
+  streams.delete(key);
+  stream?.close();
+}
+function stopWindowStreams(senderId: number): void {
+  for (const [key, stream] of streams) if (stream.senderId === senderId) stopStream(key);
+}
+/** Cutting an agent's subscriptions is invisible to the renderer unless each one says why it ended. */
+function stopAgentStreams(agentId: string, reason: string): void {
+  for (const [key, stream] of streams)
+    if (stream.agentId === agentId) {
+      stream.end(reason);
+      stopStream(key);
+    }
 }
 
 function register(): void {
   ipcMain.handle("agents:list", () => listAgents());
-
   ipcMain.handle("agents:add", async () => {
     const picked = await dialog.showOpenDialog({ properties: ["openDirectory"] });
-    if (picked.canceled || !picked.filePaths[0]) return undefined;
-    return addAgent(picked.filePaths[0]);
+    if (!picked.canceled && picked.filePaths[0]) return addAgent(picked.filePaths[0]);
   });
-
-  /**
-   * Opening an agent is where everything that can be wrong about it shows up, so this answers with a
-   * reason instead of rejecting: the UI asks for a model when one is missing, and reports the rest.
-   */
   ipcMain.handle("agent:open", async (_e, agentId: string) => {
     try {
-      const { control } = await openAgent(await requireAgent(agentId));
-      return { ok: true as const, sessions: await control.sessions.list() };
+      const { control, modelSpec } = await openAgent(await requireAgent(agentId));
+      return { ok: true, sessions: await control.sessions.list(), model: modelSpec };
     } catch (error) {
       const code =
         error instanceof MissingModelError ? "missing_model" : error instanceof NoAgentError ? "no_agent" : "failed";
-      return { ok: false as const, code, message: error instanceof Error ? error.message : String(error) };
+      return { ok: false, code, message: error instanceof Error ? error.message : String(error) };
     }
   });
-
-  ipcMain.handle("agent:scaffold", async (_e, agentId: string) => createAgentIn((await requireAgent(agentId)).dir));
-
-  /**
-   * Two places hold a model, so both are set: the stored row decides what a REBUILT assembly and any
-   * future session start on, and `update({ model })` moves the conversation that is open right now
-   * without rebuilding anything. A conversation nobody has spoken in yet has no record to update —
-   * `no_such_session` is the expected answer there, and the row already covers it.
-   *
-   * A live run refuses the whole thing, before anything is written. Changing the row drops the
-   * assembly, and the turn in flight belongs to the old one: it would keep running somewhere nobody
-   * is listening, so the client would wait for a `run_settled` that never arrives.
-   */
-  ipcMain.handle("agent:setModel", async (_e, agentId: string, model: string, session?: string) => {
-    const row = await requireAgent(agentId);
-    if (session) {
-      const { control } = await openAgent(row);
-      const status = (await control.sessions.get(session).state()).status;
-      if (status !== "idle") {
-        return { ok: false as const, message: `the conversation is ${status} — stop the turn first` };
-      }
-    }
-
-    await setAgentModel(agentId, model);
-    const { control } = await openAgent(await requireAgent(agentId));
-    if (!session) return { ok: true as const };
-    const result = await control.sessions.get(session).update({ model });
-    if (result.ok || result.error.code === NO_SUCH_SESSION_CODE) return { ok: true as const };
-    return { ok: false as const, message: result.error.message };
+  ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
+  ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
+    if (typeof model !== "string" || !(await credentials()).specs.includes(model))
+      throw new Error("Choose an available model");
+    if (session !== undefined) requireSession(session);
+    await setAgentModel(await requireAgent(id), model, session);
+    stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
   });
-
-  ipcMain.handle("agent:remove", (_e, agentId: string) => removeAgent(agentId));
-
-  ipcMain.handle("agent:commands", async (_e, agentId: string) => {
-    const { control } = await openAgent(await requireAgent(agentId));
-    return control.commands();
+  ipcMain.handle("agent:remove", async (_e, id: string) => {
+    await removeAgent(id);
+    stopAgentStreams(id, "The agent was removed");
   });
-
-  ipcMain.handle("agent:reveal", async (_e, agentId: string) => {
-    shell.showItemInFolder((await requireAgent(agentId)).dir);
-  });
-
-  ipcMain.handle("session:delete", async (_e, agentId: string, session: string) => {
-    const { control } = await openAgent(await requireAgent(agentId));
-    streams.get(`${agentId}/${session}`)?.();
-    return control.sessions.get(session).delete();
-  });
-
+  ipcMain.handle("agent:commands", async (_e, id: string) =>
+    (await openAgent(await requireAgent(id))).control.commands(),
+  );
+  ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("models:list", async () => (await credentials()).specs);
 
-  ipcMain.handle("session:open", async (e, agentId: string, session: string) => {
-    const { control } = await openAgent(await requireAgent(agentId));
-    const bound = control.sessions.get(session);
-
-    streams.get(`${agentId}/${session}`)?.();
-    const stream = bound.events();
-    const iterator = stream[Symbol.asyncIterator]();
-    streams.set(`${agentId}/${session}`, () => void iterator.return?.());
-
-    // Subscribe → await ready → backfill. Live-only events (`state_changed`, `run_settled`) have no
-    // cursor, so anything landing between the read and the subscription would be gone for good; a
-    // stream is only subscribed once something pulls it, and `ready` is that moment made waitable.
-    void (async () => {
-      try {
-        for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
-          forward(e.sender, agentId, session, next.value);
-        }
-      } catch (error) {
-        forward(e.sender, agentId, session, {
-          type: "stream_failed",
-          timestamp: Date.now(),
-          data: { reason: String(error) },
-        });
-      }
-    })();
-    await stream.ready;
-
-    // Read back rather than assume: a session that does not exist yet answers with an empty one.
-    return { state: await bound.state(), entries: await bound.entries() };
+  ipcMain.handle("session:delete", async (_e, id: string, session: string) => {
+    requireSession(session);
+    const { control } = await openAgent(await requireAgent(id));
+    // A refused delete must leave the live subscription intact.
+    return control.sessions.get(session).delete();
   });
-
-  /**
-   * One verb for "say this here". Which call it becomes is policy, and it is ours: a place with one
-   * human steers a live run instead of queueing behind it (FastAgent's own chat channels choose the
-   * opposite, and `invoke-turn-kit.ts` is where they say so).
-   *
-   * The routing never trusts the state it read: a run can start or settle between the read and the
-   * call. The runtime decides feasibility with two stable codes, and each one names its other door.
-   */
-  ipcMain.handle("session:send", async (e, agentId: string, session: string, text: string) => {
-    const { agent, control } = await openAgent(await requireAgent(agentId));
-    const bound = control.sessions.get(session);
-    const note = (reason: string) =>
-      forward(e.sender, agentId, session, { type: "send_failed", timestamp: Date.now(), data: { reason } });
-
-    const startRun = async (): Promise<void> => {
-      let first = true;
-      for await (const event of agent.invoke({ session }, { text })) {
-        // Only a FIRST-event busy is a fail-fast reject; later ones belong to a turn that did start.
-        if (first && event.type === "failed" && event.code === SESSION_BUSY_CODE) {
-          const steered = await bound.steer({ text });
-          if (!steered.ok) note(steered.error.message);
-          return;
-        }
-        first = false;
+  ipcMain.handle("session:close", (e, subscription: string) => stopStream(`${e.sender.id}/${subscription}`));
+  ipcMain.handle("session:open", async (e, id: string, session: string, subscription: string) => {
+    requireSession(session);
+    const key = `${e.sender.id}/${subscription}`;
+    stopStream(key);
+    const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {}, end: () => {} };
+    streams.set(key, slot);
+    const forward = (event: SessionEvent) => {
+      if (!e.sender.isDestroyed() && streams.get(key) === slot) {
+        e.sender.send("session:event", { agentId: id, session, subscription, event });
       }
     };
-
+    slot.end = (reason: string) => forward({ type: "stream_failed", timestamp: Date.now(), data: { reason } });
     try {
-      if ((await bound.state()).status === "running") {
-        const steered = await bound.steer({ text });
-        if (steered.ok) return;
-        // The run settled in between — start one. Any other refusal is the person's to see.
-        if (steered.error.code !== NO_ACTIVE_RUN_CODE) return note(steered.error.message);
-      }
-      await startRun();
+      const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
+      if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
+      const stream = bound.events();
+      const iterator = stream[Symbol.asyncIterator]();
+      slot.close = () => {
+        void iterator.return?.().catch((error) => console.error("session close:", error));
+      };
+      void (async () => {
+        // Both endings leave the renderer deaf: FastAgent closing its subscriber looks like a normal
+        // `done`, and a silent one would keep the conversation running on screen forever.
+        let reason = "The conversation's event stream ended";
+        try {
+          for (let next = await iterator.next(); !next.done; next = await iterator.next()) forward(next.value);
+        } catch (error) {
+          reason = String(error);
+        }
+        slot.end(reason);
+        if (streams.get(key) === slot) streams.delete(key);
+      })();
+      await stream.ready;
+      return { entries: await bound.entries(), state: await bound.state() };
     } catch (error) {
-      note(String(error));
+      if (streams.get(key) === slot) stopStream(key);
+      throw error;
     }
   });
-
-  ipcMain.handle("session:abort", async (_e, agentId: string, session: string) => {
-    const { control } = await openAgent(await requireAgent(agentId));
-    return control.sessions.get(session).abort();
+  ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
+    requireSession(session);
+    if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
+    return withAgentRun(await requireAgent(id), async (opened) => {
+      const bound = opened.control.sessions.get(session);
+      const refusal = await credentialRefusal(opened, (await bound.state()).model);
+      if (refusal) return { ok: false, error: { code: "credentials_unavailable", message: refusal, retryable: false } };
+      return send(opened.agent, bound, text);
+    });
+  });
+  ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
+    requireSession(session);
+    return (await openAgent(await requireAgent(id))).control.sessions.get(session).abort();
   });
 }
 
-void app.whenReady().then(async () => {
-  await useSystemProxy();
-  register();
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+void app
+  .whenReady()
+  .then(async () => {
+    await useSystemProxy();
+    register();
+    createWindow();
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  })
+  .catch((error) => {
+    console.error(error);
+    dialog.showErrorBox("duang could not start", String(error));
+    app.quit();
   });
-});
-
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

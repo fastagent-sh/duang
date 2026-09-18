@@ -18,10 +18,10 @@ jobs:
   desktop-checks:
     # Stable check name for future branch protection; no unsupported OS matrix yet.
     name: Desktop checks
-    # These steps are platform-independent, so they run on Linux for cost. Deliberate gap:
-    # nothing here covers darwin install/build, and the product only targets macOS. Add a
-    # macOS job when packaging, native dependencies or a launch smoke test arrive.
-    runs-on: ubuntu-latest
+    # macOS is the only supported target, and the smoke step launches a real Electron window:
+    # on a Linux runner that needs xvfb plus a disabled Chromium sandbox, which is neither the
+    # platform we ship nor a configuration worth asserting against. Still no packaging or signing.
+    runs-on: macos-15
     timeout-minutes: 20
     defaults:
       run:
@@ -72,3 +72,6 @@ jobs:
 
       - name: Typecheck and build the Electron application
         run: npm run build
+
+      - name: Electron local-workflow smoke (isolated fake provider)
+        run: node tests/smoke.mjs

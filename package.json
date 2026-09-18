@@ -8,7 +8,8 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
-    "test": "node --test --experimental-strip-types 'src/**/*.test.ts'"
+    "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
+    "test:smoke": "npm run build && node tests/smoke.mjs"
   },
   "dependencies": {
     "@fastagent-sh/fastagent": "file:../fastagent",

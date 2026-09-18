@@ -1,296 +1,156 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
-import type { AgentRow, DuangApi } from "../preload/index.ts";
-import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { DuangApi } from "../preload/index.ts";
+import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
 import {
   BrokenAgent,
   Composer,
   ConversationList,
-  Failure,
   home,
   NeedsAgent,
   NewConversation,
   NoAgents,
-  NoConversation,
   Rail,
   Transcript,
-  type AgentState,
 } from "./panels.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
 export default function App() {
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [agentId, setAgentId] = useState<string>();
-  const [states, setStates] = useState<Record<string, AgentState>>({});
-  const [broken, setBroken] = useState<string>();
-  /** Storage failures reject in main and would otherwise die in an unhandled promise, leaving a
-   *  corrupt registry looking exactly like an empty one. Show the message, keep the app usable. */
-  const [failure, setFailure] = useState<string>();
-  const report = useCallback((error: unknown) => setFailure(error instanceof Error ? error.message : String(error)), []);
-  // Any `duang.*` call can reject now that main reports storage failures instead of swallowing them.
-  // One listener covers every call site, including the ones added later.
-  useEffect(() => {
-    const onRejection = (event: PromiseRejectionEvent) => {
-      event.preventDefault();
-      report(event.reason);
-    };
-    window.addEventListener("unhandledrejection", onRejection);
-    return () => window.removeEventListener("unhandledrejection", onRejection);
-  }, [report]);
+  const [store] = useState(() => createStore(duang));
+  const view = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [picking, setPicking] = useState(false);
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [session, setSession] = useState<string>();
-  const [items, setItems] = useState<Item[]>([]);
-  const [state, setState] = useState<SessionState>();
-  const [draft, setDraft] = useState("");
-  /** When the turn the person is waiting on began. Set on send, not on `run_started`: the wait starts
-   *  at the keystroke, and the gap before the engine answers is exactly the one worth showing. */
-  const [busySince, setBusySince] = useState<number>();
-
-  const agent = agents.find((a) => a.id === agentId);
+  const { agents, agentId, states, sessions, conversation: c } = view;
+  const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
-  /** One truth for "a turn is in flight": the local wait, which starts before the engine says anything. */
-  const busy = busySince !== undefined || state?.status === "running";
-
-  const abort = () => {
-    if (agentId && session) void duang.abort(agentId, session);
-  };
-
-  async function pickModel(model: string) {
-    setPicking(false);
-    if (!agentId) return;
-    const result = await duang.setModel(agentId, model, session);
-    // A refusal is the runtime's sentence, shown where the person was looking.
-    if (!result.ok) return note(result.message);
-    // The row on screen still carries the old model: re-read it, or the chip lies. The conversation
-    // is re-opened rather than re-selected, because the assembly was rebuilt underneath it and the
-    // old event subscription died with it.
-    void duang.listAgents().then(setAgents);
-    if (session) void open(agentId, session, true);
-  }
-
-  // Opening straight into the last-known agent beats a landing screen whose only content is a button.
-  const boot = useRef(false);
-  useEffect(() => {
-    void duang.listAgents().then((list) => {
-      setAgents(list);
-      if (!boot.current && list[0]) {
-        boot.current = true;
-        void selectAgent(list[0].id);
-      }
-    });
-    // selectAgent is stable for the first run, which is the only run this effect has.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const note = (text: string) => setItems((list) => [...list, { kind: "note", text }]);
-
-  /**
-   * `quiet` re-reads a conversation that is already on screen. Clearing first is right when the
-   * person asked for a different conversation and wrong when nothing they can see is changing — that
-   * blank frame is the flash.
-   */
-  const open = useCallback(async (id: string, sessionId: string, quiet = false) => {
-    setSession(sessionId);
-    if (!quiet) {
-      setItems([]);
-      setState(undefined);
-      setBusySince(undefined);
-    }
-    try {
-      const { state: opened, entries } = await duang.openSession(id, sessionId);
-      setState(opened);
-      setItems(fromEntries(entries.entries));
-    } catch (error) {
-      setItems([{ kind: "note", text: String(error) }]);
-    }
-  }, []);
-
-  /** A new conversation is a minted id and nothing else: the runtime learns of it on the first turn. */
-  const startConversation = useCallback((id: string) => void open(id, crypto.randomUUID()), [open]);
-
-  const selectAgent = useCallback(
-    async (id: string) => {
-      setAgentId(id);
-      setSessions([]);
-      setSession(undefined);
-      setItems([]);
-      setBroken(undefined);
-      setPicking(false);
-      const result = await duang.openAgent(id);
-      if (!result.ok) {
-        const state: AgentState =
-          result.code === "missing_model" ? "missing_model" : result.code === "no_agent" ? "no_agent" : "broken";
-        setStates((s) => ({ ...s, [id]: state }));
-        if (state === "broken") setBroken(result.message);
-        return;
-      }
-      setStates((s) => ({ ...s, [id]: "ready" }));
-      setSessions(result.sessions);
-      const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-      if (newest) void open(id, newest.session);
-      else startConversation(id);
-    },
-    [open, startConversation],
-  );
-
-  const addAgent = useCallback(async () => {
-    setFailure(undefined);
-    const row = await duang.addAgent();
-    if (!row) return;
-    setAgents((list) => (list.some((a) => a.id === row.id) ? list : [...list, row]));
-    void selectAgent(row.id);
-  }, [selectAgent]);
-
-  // One subscription for the window; frames for a conversation that is no longer open are dropped.
-  const current = useRef({ agentId, session });
-  current.current = { agentId, session };
-  useEffect(
-    () =>
-      duang.onSessionEvent((frame) => {
-        if (frame.agentId !== current.current.agentId || frame.session !== current.current.session) return;
-        if (frame.event.type === "state_changed") {
-          setState((s) => ({ ...(s as SessionState), ...(frame.event.data as object) }));
-        }
-        // A settled run is when a fresh conversation becomes one the runtime can list, preview included.
-        // Both endings of a wait: the run settled, or it never started.
-        if (frame.event.type === "send_failed" || frame.event.type === "stream_failed") setBusySince(undefined);
-        if (frame.event.type === "run_settled") {
-          setBusySince(undefined);
-          void duang.openAgent(frame.agentId).then((r) => r.ok && setSessions(r.sessions));
-        }
-        setItems((list) => apply(list, frame.event));
-      }),
-    [],
-  );
-
-  const send = useCallback(async () => {
-    const text = draft.trim();
-    if (!text || !agentId || !session) return;
-    setDraft("");
-    setItems((list) => echoUser(list, text));
-    setBusySince(Date.now());
-    try {
-      await duang.send(agentId, session, text);
-    } catch (error) {
-      // No run started, so no `run_settled` is coming: end the wait here, or the composer stays
-      // locked on "steer the run…" forever. Reporting stays with the global listener.
-      setBusySince(undefined);
-      throw error;
-    }
-  }, [draft, agentId, session]);
+  const busy = view.busy;
+  const sessionRows = rows(sessions, c?.session, view.runningSessions);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "n" && agentId && agentState === "ready") {
-        e.preventDefault();
-        startConversation(agentId);
+    void store.load();
+    return store.dispose;
+  }, [store]);
+  useEffect(() => {
+    setPicking(agentState === "missing_model");
+  }, [agentId, agentState]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
+        event.preventDefault();
+        void store.newConversation();
       }
-      if (e.key === "Escape" && busy) abort();
+      if (event.key === "Escape" && busy && !picking) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [agentId, agentState, session, busy, startConversation]);
+  }, [store, agentState, busy, picking, view.loading]);
 
-  async function removeAgent(id: string) {
-    if (!confirm("Remove this agent from duang? The directory is not touched.")) return;
-    // Only forget the row once main says it is gone, or the sidebar would lie about the file.
-    await duang.removeAgent(id);
-    setAgents((list) => list.filter((a) => a.id !== id));
-    setAgentId(undefined);
-    setBroken(undefined);
-    setSessions([]);
-    setSession(undefined);
-  }
-
-  async function deleteSession(target: string) {
-    if (!agentId || !confirm("Delete this conversation? Its history is gone.")) return;
-    const result = await duang.deleteSession(agentId, target);
-    if (!result.ok) return note(result.error.message);
-    const remaining = await duang.openAgent(agentId);
-    if (remaining.ok) setSessions(remaining.sessions);
-    if (target === session) startConversation(agentId);
-  }
-
-  const composerBlocked =
-    agentState === "broken"
-      ? "this agent is broken"
-      : agentState === "no_agent"
-        ? "create an agent here first"
-        : agentState === "missing_model"
-          ? "pick a model to start"
-          : !session
-            ? "no conversation"
-            : undefined;
-
+  const remove = () => {
+    if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
+  };
+  const blocked =
+    view.loading || c?.loading
+      ? "opening conversation…"
+      : c?.error
+        ? "reconnect before sending"
+        : agentState === "broken"
+          ? "this agent is broken"
+          : agentState === "no_agent"
+            ? "create an agent here first"
+            : agentState === "missing_model"
+              ? "pick a model to start"
+              : !c
+                ? "no conversation"
+                : undefined;
   const composer = (
     <Composer
       agentId={agentId}
       context={agent ? home(agent.dir) : undefined}
-      model={agent?.model}
+      model={c?.state?.model ?? view.model ?? agent?.model}
       picking={picking}
       onPicking={setPicking}
-      onPickModel={(model) => void pickModel(model)}
+      onPickModel={(model) => {
+        setPicking(false);
+        void store.pickModel(model);
+      }}
       busy={busy}
-      onAbort={abort}
-      value={draft}
-      onChange={setDraft}
-      onSend={() => void send()}
-      disabled={!!composerBlocked}
-      placeholder={composerBlocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
+      modelDisabled={view.loading || !!c?.loading || agentState === "broken" || agentState === "no_agent"}
+      onAbort={() => void store.abort()}
+      value={c?.draft ?? ""}
+      onChange={store.setDraft}
+      onSend={() => void store.send()}
+      disabled={!!blocked}
+      placeholder={blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
     />
   );
+  const error = c?.error ?? (agentState !== "broken" && agentState !== "missing_model" ? view.error : undefined);
 
   return (
     <div className="flex h-full">
-      <Rail agents={agents} agentId={agentId} states={states} onSelect={(id) => void selectAgent(id)} onAdd={() => void addAgent()} />
-
+      <Rail
+        agents={agents}
+        agentId={agentId}
+        states={states}
+        running={view.runningAgents}
+        onSelect={(id) => void store.selectAgent(id)}
+        onAdd={() => void store.addAgent()}
+      />
       <ConversationList
         agent={agent}
-        rows={rows(sessions, session)}
-        session={session}
-        disabled={agentState !== "ready"}
-        onOpen={(id) => agentId && void open(agentId, id)}
-        onNew={() => agentId && startConversation(agentId)}
-        onDelete={(id) => void deleteSession(id)}
+        rows={sessionRows}
+        session={c?.session}
+        disabled={agentState !== "ready" || view.loading}
+        onOpen={(id) => void store.open(id)}
+        onNew={() => void store.newConversation()}
+        onReveal={() => void store.reveal()}
+        onRemove={remove}
+        onDelete={(id) => {
+          if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(id);
+        }}
       />
-
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
         <header className="h-10 shrink-0 flex items-center px-5 gap-3 drag">
-          <span className="truncate">
-            {agentState === "ready" && session
-              ? (rows(sessions, session).find((r) => r.session === session)?.label ?? "")
-              : ""}
-          </span>
-          {state?.usage?.contextTokens !== undefined && state.usage.contextWindow !== undefined && (
+          <span className="truncate">{sessionRows.find((row) => row.session === c?.session)?.label ?? ""}</span>
+          {c?.state?.usage?.contextTokens !== undefined && !!c.state.usage.contextWindow && (
             <span className="text-muted text-[11px]">
-              {Math.round((state.usage.contextTokens / state.usage.contextWindow) * 100)}% context
+              {Math.round((c.state.usage.contextTokens / c.state.usage.contextWindow) * 100)}% context
             </span>
           )}
+          {!!c?.state?.pending && c.state.pending.steering + c.state.pending.followUp > 0 && (
+            <span className="text-muted text-[11px]">{c.state.pending.steering + c.state.pending.followUp} queued</span>
+          )}
+          {busy && (
+            <button className="no-drag ml-auto text-danger" onClick={() => void store.abort()}>
+              Stop
+            </button>
+          )}
         </header>
-
-        {failure && <Failure message={failure} onDismiss={() => setFailure(undefined)} />}
-
+        {error && (
+          <div role="alert" className="px-6 py-2 text-danger whitespace-pre-wrap break-words">
+            {error}{" "}
+            <button className="underline" onClick={() => void store.retry()}>
+              Retry
+            </button>
+          </div>
+        )}
         {!agentId ? (
-          <NoAgents onAdd={() => void addAgent()} />
-        ) : broken ? (
-          <BrokenAgent agentId={agentId} message={broken} onRemove={() => void removeAgent(agentId)} />
-        ) : agentState === "no_agent" ? (
-          <NeedsAgent
-            dir={agent?.dir ?? ""}
-            onCreate={() => void duang.scaffoldAgent(agentId).then(() => selectAgent(agentId))}
-            onRemove={() => void removeAgent(agentId)}
+          <NoAgents onAdd={() => void store.addAgent()} />
+        ) : agentState === "broken" ? (
+          <BrokenAgent
+            message={view.error ?? ""}
+            onRemove={remove}
+            onReveal={() => void store.reveal()}
+            onRetry={() => void store.retry()}
           />
-        ) : !session || items.length === 0 ? (
-          // Nobody has spoken here yet: the composer IS the screen, not a strip at its foot.
+        ) : agentState === "no_agent" ? (
+          <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
+        ) : !c || c.items.length === 0 ? (
           <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
         ) : (
-          <Transcript items={items} busySince={busySince} />
+          <Transcript key={c.subscription} items={c.items} busySince={c.busySince} />
         )}
-
-        {agentId && (broken || agentState === "no_agent") === false && session && items.length > 0 && (
+        {agentId && agentState === "ready" && c && c.items.length > 0 && (
           <div className="shrink-0 px-6 pb-5 pt-2">
             <div className="max-w-3xl mx-auto">{composer}</div>
           </div>

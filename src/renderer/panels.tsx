@@ -7,10 +7,9 @@ import type { AgentRow, DuangApi } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
+import type { AgentState } from "./store.ts";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
-
-export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
@@ -26,12 +25,14 @@ export function Rail({
   agents,
   agentId,
   states,
+  running,
   onSelect,
   onAdd,
 }: {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
+  running: string[];
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
@@ -43,15 +44,22 @@ export function Rail({
         return (
           <button
             key={agent.id}
+            aria-label={agent.name}
+            aria-pressed={selected}
             onClick={() => onSelect(agent.id)}
             title={`${agent.name}\n${agent.dir}`}
             className={`no-drag relative size-9 rounded-card text-[11px] font-medium uppercase transition-colors ${
-              selected ? "bg-accent/15 text-accent ring-1 ring-accent/60" : "text-muted hover:bg-white/5 hover:text-text"
+              selected
+                ? "bg-accent/15 text-accent ring-1 ring-accent/60"
+                : "text-muted hover:bg-white/5 hover:text-text"
             }`}
           >
             {agent.name.slice(0, 2)}
-            {state && state !== "ready" && (
-              <span className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-bg ${dot[state]}`} />
+            {(running.includes(agent.id) || (state && state !== "ready")) && (
+              <span
+                aria-label={running.includes(agent.id) ? "Running" : state}
+                className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-bg ${running.includes(agent.id) ? "bg-accent animate-pulse" : dot[state!]}`}
+              />
             )}
           </button>
         );
@@ -75,6 +83,8 @@ export function ConversationList({
   onOpen,
   onNew,
   onDelete,
+  onReveal,
+  onRemove,
 }: {
   agent?: AgentRow;
   rows: Row[];
@@ -83,6 +93,8 @@ export function ConversationList({
   onOpen: (session: string) => void;
   onNew: () => void;
   onDelete: (session: string) => void;
+  onReveal: () => void;
+  onRemove: () => void;
 }) {
   return (
     <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-black/10">
@@ -102,7 +114,7 @@ export function ConversationList({
 
       {agent && (
         <button
-          onClick={() => void duang.revealAgent(agent.id)}
+          onClick={onReveal}
           title={agent.dir}
           className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-white/5 hover:text-text"
         >
@@ -118,6 +130,8 @@ export function ConversationList({
             <div key={row.session} className="group relative">
               <button
                 onClick={() => onOpen(row.session)}
+                disabled={disabled}
+                aria-current={selected ? "page" : undefined}
                 className={`block w-full text-left rounded-card px-2 py-1.5 transition-colors ${
                   selected ? "bg-surface" : "hover:bg-white/5"
                 }`}
@@ -129,7 +143,7 @@ export function ConversationList({
                 <button
                   onClick={() => onDelete(row.session)}
                   title="Delete conversation"
-                  className="absolute right-1.5 top-1.5 hidden group-hover:grid size-5 place-items-center rounded text-muted hover:text-danger"
+                  className="absolute right-1.5 top-1.5 grid opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 size-5 place-items-center rounded text-muted hover:text-danger"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -138,6 +152,11 @@ export function ConversationList({
           );
         })}
       </div>
+      {agent && (
+        <button onClick={onRemove} className="m-3 text-left text-[11px] text-muted hover:text-danger">
+          Remove agent…
+        </button>
+      )}
     </aside>
   );
 }
@@ -182,7 +201,17 @@ export function NoAgents({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-export function BrokenAgent({ agentId, message, onRemove }: { agentId: string; message: string; onRemove: () => void }) {
+export function BrokenAgent({
+  message,
+  onRemove,
+  onReveal,
+  onRetry,
+}: {
+  message: string;
+  onRemove: () => void;
+  onReveal: () => void;
+  onRetry: () => void;
+}) {
   return (
     <Panel>
       <div className="max-w-2xl space-y-3">
@@ -191,7 +220,10 @@ export function BrokenAgent({ agentId, message, onRemove }: { agentId: string; m
         </div>
         <div className="flex gap-2">
           <Action icon={<X size={13} />} label="Remove agent" onClick={onRemove} />
-          <Action icon={<FolderOpen size={13} />} label="Reveal in Finder" onClick={() => void duang.revealAgent(agentId)} />
+          <Action icon={<FolderOpen size={13} />} label="Reveal in Finder" onClick={onReveal} />
+          <button onClick={onRetry} className="underline">
+            Retry
+          </button>
         </div>
       </div>
     </Panel>
@@ -210,15 +242,7 @@ function Action({ icon, label, onClick }: { icon: React.ReactNode; label: string
 }
 
 /** A plain project: it can hold an agent, it just does not yet. Say exactly what gets written. */
-export function NeedsAgent({
-  dir,
-  onCreate,
-  onRemove,
-}: {
-  dir: string;
-  onCreate: () => void;
-  onRemove: () => void;
-}) {
+export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate: () => void; onRemove: () => void }) {
   return (
     <Panel>
       <div className="max-w-xl space-y-4">
@@ -247,21 +271,6 @@ export function NeedsAgent({
   );
 }
 
-export function NoConversation({ onNew }: { onNew: () => void }) {
-  return (
-    <Panel>
-      <div className="mt-20 text-center">
-        <button
-          onClick={onNew}
-          className="rounded-card bg-accent/15 text-accent ring-1 ring-accent/50 px-3 py-1.5 hover:bg-accent/25"
-        >
-          New conversation
-        </button>
-      </div>
-    </Panel>
-  );
-}
-
 /** The model list, floating above the composer chip that opened it. */
 function ModelPopover({
   current,
@@ -274,47 +283,113 @@ function ModelPopover({
 }) {
   const [models, setModels] = useState<string[]>();
   const [filter, setFilter] = useState("");
+  const [error, setError] = useState<string>();
+  const [attempt, setAttempt] = useState(0);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const close = () => {
+    // Close while still connected so Chromium can restore focus before React removes the dialog.
+    dialog.current?.close();
+    onClose();
+  };
 
-  useEffect(() => void duang.listModels().then(setModels), []);
+  useEffect(() => {
+    const el = dialog.current!;
+    const anchor = el.parentElement!.getBoundingClientRect();
+    el.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - 336))}px`;
+    el.style.bottom = `${window.innerHeight - anchor.top + 8}px`;
+    el.style.maxHeight = `${Math.max(100, anchor.top - 16)}px`;
+    el.showModal();
+    return () => el.close();
+  }, []);
+  useEffect(() => {
+    let current = true;
+    setError(undefined);
+    void duang.listModels().then(
+      (list) => {
+        if (current) setModels(list);
+      },
+      (failure) => {
+        if (current) setError(String(failure));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [attempt]);
   const matches = (models ?? []).filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 60);
 
   return (
-    <>
-      <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div className="absolute bottom-full left-0 mb-2 z-20 w-80 rounded-card bg-surface ring-1 ring-stroke shadow-2xl p-2">
-        {models?.length === 0 ? (
-          <p className="text-muted text-[12px] p-2 leading-relaxed">
-            No provider is logged in. Run <span className="font-mono">fastagent login</span> (or pi&apos;s login), then
-            reopen duang.
-          </p>
-        ) : (
-          <>
-            <input
-              autoFocus
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              onKeyDown={(e) => e.key === "Escape" && onClose()}
-              placeholder="filter models"
-              className="w-full bg-bg rounded-card px-2.5 py-1.5 mb-1.5 text-[12px] outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
-            />
-            <div className="max-h-64 overflow-y-auto">
-              {matches.map((model) => (
-                <button
-                  key={model}
-                  onClick={() => onPick(model)}
-                  className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
-                    model === current ? "text-accent" : ""
-                  }`}
-                >
-                  {model}
-                </button>
-              ))}
-              {models && matches.length === 0 && <p className="text-muted text-[11px] px-2 py-1.5">Nothing matches.</p>}
-            </div>
-          </>
-        )}
-      </div>
-    </>
+    <dialog
+      ref={dialog}
+      aria-label="Choose a model"
+      onCancel={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom
+        )
+          close();
+      }}
+      className="fixed m-0 top-auto right-auto w-80 overflow-y-auto rounded-card bg-surface text-text ring-1 ring-stroke shadow-2xl p-2 backdrop:bg-transparent"
+    >
+      <button onClick={close} className="float-right p-1" aria-label="Close model picker">
+        <X size={14} />
+      </button>
+      {error ? (
+        <p role="alert" className="text-danger p-2">
+          {error}{" "}
+          <button className="underline" onClick={() => setAttempt((n) => n + 1)}>
+            Retry
+          </button>
+        </p>
+      ) : models?.length === 0 ? (
+        <p className="text-muted text-[12px] p-2 leading-relaxed">
+          No provider is logged in. Run <span className="font-mono">fastagent login</span> (or pi&apos;s login), then
+          reopen duang.
+        </p>
+      ) : (
+        <>
+          <input
+            autoFocus
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filter models"
+            placeholder="filter models"
+            className="w-full bg-bg rounded-card px-2.5 py-1.5 mb-1.5 text-[12px] outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
+          />
+          <div className="max-h-64 overflow-y-auto">
+            {!models && (
+              <p role="status" className="text-muted p-2">
+                Loading models…
+              </p>
+            )}
+            {matches.map((model) => (
+              <button
+                key={model}
+                onClick={() => {
+                  dialog.current?.close();
+                  onPick(model);
+                }}
+                className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
+                  model === current ? "text-accent" : ""
+                }`}
+              >
+                {model}
+              </button>
+            ))}
+            {models && matches.length === 0 && <p className="text-muted text-[11px] px-2 py-1.5">Nothing matches.</p>}
+          </div>
+        </>
+      )}
+    </dialog>
   );
 }
 
@@ -412,7 +487,7 @@ function Message({ item }: { item: Item }) {
 }
 
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
-  const running = item.result === undefined;
+  const running = item.status === "running";
   const summary = firstArg(item.args);
   return (
     <details className="group rounded-card bg-surface/60 ring-1 ring-stroke/60">
@@ -420,7 +495,7 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
         <ChevronRight size={12} className="text-muted transition-transform group-open:rotate-90" />
         <span className={item.isError ? "text-danger" : "text-text"}>{item.name}</span>
         {summary && <span className="text-muted truncate">{summary}</span>}
-        <span className="ml-auto text-muted">{item.isError ? "failed" : running ? "running…" : "done"}</span>
+        <span className="ml-auto text-muted">{item.isError ? "failed" : running ? "running…" : item.status}</span>
       </summary>
       <pre className="px-2.5 pb-2.5 text-[11px] font-mono text-muted whitespace-pre-wrap break-all">
         {JSON.stringify({ args: item.args, result: item.result }, null, 2)}
@@ -452,6 +527,7 @@ export function Composer({
   onPicking,
   onPickModel,
   busy,
+  modelDisabled,
   onAbort,
   value,
   onChange,
@@ -466,6 +542,7 @@ export function Composer({
   onPicking: (open: boolean) => void;
   onPickModel: (model: string) => void;
   busy: boolean;
+  modelDisabled: boolean;
   onAbort: () => void;
   value: string;
   onChange: (text: string) => void;
@@ -473,10 +550,20 @@ export function Composer({
   placeholder: string;
   disabled: boolean;
 }) {
-  const lines = Math.min(8, Math.max(2, value.split("\n").length));
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, parseFloat(getComputedStyle(el).lineHeight) * 8)}px`;
+  }, [value]);
   const [commands, setCommands] = useState<AgentCommand[]>([]);
   const [dismissed, setDismissed] = useState(false);
   const [cursor, setCursor] = useState(0);
+  const [commandError, setCommandError] = useState<string>();
+  const loadedFor = useRef<string>(undefined);
+  const currentAgent = useRef(agentId);
+  currentAgent.current = agentId;
 
   const query = completionQuery(value);
   const suggestions = query === undefined || dismissed ? [] : matches(commands, query);
@@ -485,11 +572,21 @@ export function Composer({
   // Loaded on the first `/`, per agent: the names are the definition's, and it is live.
   useEffect(() => {
     setCommands([]);
+    setCommandError(undefined);
+    loadedFor.current = undefined;
   }, [agentId]);
   useEffect(() => {
-    if (query === undefined || !agentId || commands.length > 0) return;
-    void duang.listCommands(agentId).then(setCommands);
-  }, [query, agentId, commands.length]);
+    if (query === undefined || !agentId || disabled || loadedFor.current === agentId) return;
+    loadedFor.current = agentId;
+    void duang.listCommands(agentId).then(
+      (list) => {
+        if (currentAgent.current === agentId) setCommands(list);
+      },
+      (error) => {
+        if (currentAgent.current === agentId) setCommandError(String(error));
+      },
+    );
+  }, [query, agentId, disabled]);
   useEffect(() => {
     if (query === undefined) setDismissed(false);
     setCursor(0);
@@ -516,9 +613,16 @@ export function Composer({
         </div>
       )}
       {context && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{context}</div>}
+      {commandError && query !== undefined && (
+        <p role="alert" className="text-danger text-[11px]">
+          {commandError}
+        </p>
+      )}
       <textarea
+        ref={input}
+        aria-label="Message"
         value={value}
-        rows={lines}
+        rows={2}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
@@ -527,9 +631,13 @@ export function Composer({
               const step = e.key === "ArrowDown" ? 1 : suggestions.length - 1;
               return setCursor((c) => (Math.min(c, suggestions.length - 1) + step) % suggestions.length);
             }
-            if (e.key === "Escape") return setDismissed(true);
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              return setDismissed(true);
+            }
             // Enter and Tab accept the name rather than send: a bare `/name` is never a message.
-            if ((e.key === "Enter" || e.key === "Tab") && chosen) {
+            if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && chosen) {
               e.preventDefault();
               return onChange(complete(chosen.name));
             }
@@ -541,13 +649,13 @@ export function Composer({
         }}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full resize-none bg-transparent outline-none placeholder:text-muted disabled:opacity-60"
+        className="w-full min-h-10 resize-none bg-transparent leading-5 outline-none placeholder:text-muted disabled:opacity-60"
       />
       <div className="flex items-center gap-2 mt-1">
         <div className="relative">
           <button
             onClick={() => onPicking(!picking)}
-            disabled={!agentId || busy}
+            disabled={!agentId || busy || modelDisabled}
             title={busy ? "Stop the turn to change the model" : "Model for this agent"}
             className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 disabled:opacity-50 ${
               model ? "text-muted" : "text-amber-400"
@@ -556,7 +664,7 @@ export function Composer({
             {model ?? "pick a model"}
             <ChevronDown size={12} />
           </button>
-          {picking && agentId && !busy && (
+          {picking && agentId && !busy && !modelDisabled && (
             <ModelPopover current={model} onPick={onPickModel} onClose={() => onPicking(false)} />
           )}
         </div>

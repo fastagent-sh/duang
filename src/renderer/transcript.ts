@@ -4,7 +4,15 @@ import type { SessionEntry, SessionEvent } from "@fastagent-sh/fastagent/session
 export type Item =
   | { kind: "user"; text: string }
   | { kind: "assistant" | "thinking"; text: string; open: boolean }
-  | { kind: "tool"; id: string; name: string; args: unknown; result?: unknown; isError?: boolean }
+  | {
+      kind: "tool";
+      id: string;
+      name: string;
+      args: unknown;
+      result?: unknown;
+      isError?: boolean;
+      status: "running" | "done" | "interrupted";
+    }
   | { kind: "note"; text: string };
 
 /**
@@ -15,7 +23,21 @@ export type Item =
  * pointing back with `toolCallId`. Rendering them as one row is this function's whole job; anything
  * engine-specific is skipped, as the contract allows.
  */
-export function fromEntries(entries: SessionEntry[]): Item[] {
+export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item[] {
+  if (leafEntryId) {
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    const path: SessionEntry[] = [];
+    const seen = new Set<string>();
+    let id: string | undefined = leafEntryId;
+    while (id) {
+      const entry = byId.get(id);
+      if (!entry || seen.has(id)) throw new Error(`Invalid session entry chain at ${id}`);
+      seen.add(id);
+      path.push(entry);
+      id = entry.parentId;
+    }
+    entries = path.reverse();
+  }
   const items: Item[] = [];
   for (const entry of entries) {
     const data = (entry.data ?? {}) as {
@@ -30,7 +52,13 @@ export function fromEntries(entries: SessionEntry[]): Item[] {
     } else if (entry.kind === "assistant") {
       if (data.text) items.push({ kind: "assistant", text: data.text, open: false });
       for (const call of data.toolCalls ?? []) {
-        items.push({ kind: "tool", id: call.id ?? "", name: call.name ?? "tool", args: undefined });
+        items.push({
+          kind: "tool",
+          id: call.id ?? "",
+          name: call.name ?? "tool",
+          args: undefined,
+          status: "interrupted",
+        });
       }
     } else if (entry.kind === "tool") {
       const index = items.findLastIndex((item) => item.kind === "tool" && item.id === data.toolCallId);
@@ -41,6 +69,7 @@ export function fromEntries(entries: SessionEntry[]): Item[] {
         args: index < 0 ? undefined : (items[index] as Extract<Item, { kind: "tool" }>).args,
         result: data.text ?? "",
         isError: data.isError ?? false,
+        status: "done",
       };
       if (index < 0) items.push(result);
       else items[index] = result;
@@ -62,14 +91,15 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       return [...items, { kind, text: String(data.delta ?? ""), open: true }];
     }
     case "message_finished": {
-      const last = items.at(-1);
-      if (last && (last.kind === "assistant" || last.kind === "thinking") && last.open) {
-        return [...items.slice(0, -1), { ...last, open: false }];
-      }
-      return items;
+      return items.map((item) =>
+        item.kind === "assistant" || item.kind === "thinking" ? { ...item, open: false } : item,
+      );
     }
     case "tool_started":
-      return [...items, { kind: "tool", id: String(data.id), name: String(data.name), args: data.args }];
+      return [
+        ...items,
+        { kind: "tool", id: String(data.id), name: String(data.name), args: data.args, status: "running" },
+      ];
     case "tool_progress":
     case "tool_finished": {
       const id = String(data.id);
@@ -78,20 +108,34 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       const tool = items[index] as Extract<Item, { kind: "tool" }>;
       const updated: Item =
         event.type === "tool_finished"
-          ? { ...tool, result: data.content, isError: Boolean(data.isError) }
+          ? { ...tool, result: data.content, isError: Boolean(data.isError), status: "done" }
           : { ...tool, result: data.partialResult };
       return [...items.slice(0, index), updated, ...items.slice(index + 1)];
     }
     case "run_settled": {
-      // A completed run says nothing the transcript does not already show; a failed or aborted one does.
+      items = items.map((item): Item => {
+        if (item.kind === "assistant" || item.kind === "thinking") return { ...item, open: false };
+        if (item.kind === "tool" && item.status === "running") return { ...item, status: "interrupted" };
+        return item;
+      });
       if (data.status === "completed") return items;
       const error = data.error as { message?: string } | undefined;
-      return [...items, { kind: "note", text: `run ${String(data.status)}${error?.message ? `: ${error.message}` : ""}` }];
+      return [
+        ...items,
+        { kind: "note", text: `run ${String(data.status)}${error?.message ? `: ${error.message}` : ""}` },
+      ];
     }
     case "retry_scheduled":
-      return [...items, { kind: "note", text: `retrying: ${String(data.reason ?? "")}` }];
-    // Not from the engine: the main process reports what the stream itself could not.
-    case "send_failed":
+      return [
+        ...items,
+        {
+          kind: "note",
+          text: `retrying ${String(data.attempt)}/${String(data.maxAttempts)}: ${String(data.error ?? "")}`,
+        },
+      ];
+    case "serving_error":
+      return [...items, { kind: "note", text: String(data.message) }];
+    // Not from the engine: main reports why this conversation's event stream ended.
     case "stream_failed":
       return [...items, { kind: "note", text: String(data.reason ?? event.type) }];
     default:

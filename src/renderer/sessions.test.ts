@@ -33,3 +33,13 @@ test("once the runtime reports it, the placeholder is gone", () => {
   const list = rows([summary("new-id", 5, { preview: "first message" })], "new-id");
   assert.deepEqual(list, [{ session: "new-id", label: "first message", updatedAt: 5 }]);
 });
+
+test("an unsettled first turn remains selectable after starting another conversation", () => {
+  const list = rows([], "new", ["running"]);
+  assert.deepEqual(
+    list.map((row) => row.session),
+    ["new", "running"],
+  );
+  assert.equal(list[1]?.label, "Running conversation");
+  assert.equal(rows([], "running", ["running"]).length, 1);
+});
