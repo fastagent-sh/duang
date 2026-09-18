@@ -3,7 +3,6 @@ import { join } from "node:path";
 import {
   addAgent,
   createAgentIn,
-  credentialRefusal,
   listAgents,
   MissingModelError,
   NoAgentError,
@@ -107,7 +106,7 @@ function register(): void {
     (await openAgent(await requireAgent(id))).control.commands(),
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
-  ipcMain.handle("models:list", async () => (await credentials()).specs);
+  ipcMain.handle("models:list", credentials);
 
   ipcMain.handle("session:delete", async (_e, id: string, session: string) => {
     requireSession(session);
@@ -158,12 +157,11 @@ function register(): void {
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
-    return withAgentRun(await requireAgent(id), async (opened) => {
-      const bound = opened.control.sessions.get(session);
-      const refusal = await credentialRefusal(opened, (await bound.state()).model);
-      if (refusal) return { ok: false, error: { code: "credentials_unavailable", message: refusal, retryable: false } };
-      return send(opened.agent, bound, text);
-    });
+    // One credential file serves every runtime, so no conversation can name a model this agent
+    // cannot authenticate: the picker only ever offered what that file has.
+    return withAgentRun(await requireAgent(id), ({ agent, control }) =>
+      send(agent, control.sessions.get(session), text),
+    );
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
     requireSession(session);

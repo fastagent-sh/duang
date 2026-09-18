@@ -4,7 +4,7 @@ Every state of the core chain — add an agent, pick a model, open a conversatio
 watch it run — and what the app shows in each. `docs/design.md` says what the surfaces are; this
 says how they should behave. This is a requirement, not a declaration that Week 1 has passed.
 See [implementation status](../README.md#week-1-implementation-and-acceptance-status) for current
-gaps, including credential routing, workspace display, unsent-draft reachability and quit warnings.
+gaps, including real-provider verification, workspace display, unsent-draft reachability and quit warnings.
 
 ## Layout
 
@@ -65,6 +65,9 @@ Empty states, in the conversation area:
 A card, not a strip: the workspace path on top, the input in the middle, and the model chip at the
 foot. **The model belongs to the next message, so it lives where the message is written** — not in a
 settings screen. Clicking the chip floats the list above it; that is the only model picker.
+It shows the credential-file path and lists configured providers without refreshing OAuth. An empty
+list explains how to log in to that file and offers Retry; configuration does not guarantee that a
+provider will accept the next request. See the [credential policy](../README.md#run-it).
 
 A conversation nobody has spoken in yet has no transcript to sit under, so the composer *is* the
 screen: centred, under *What should we work on in ‹agent›?*. It drops to the foot of the window as

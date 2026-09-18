@@ -10,16 +10,19 @@ import electron from "electron";
 
 // The parent removes the fixture only after Chromium has stopped writing its disk caches.
 if (!process.versions.electron) {
-  const root = mkdtempSync(join(tmpdir(), "duang-smoke-"));
-  try {
-    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
-      stdio: "inherit",
-      env: { ...process.env, DUANG_SMOKE_ROOT: root, HOME: root },
-      timeout: 90000,
-    });
-    process.exitCode = child.status ?? 1;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+  for (const override of [false, true]) {
+    const root = mkdtempSync(join(tmpdir(), "duang-smoke-"));
+    try {
+      const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
+        stdio: "inherit",
+        env: { ...process.env, DUANG_SMOKE_ROOT: root, DUANG_SMOKE_AUTH_OVERRIDE: String(override), HOME: root },
+        timeout: 90000,
+      });
+      process.exitCode = child.status ?? 1;
+      if (process.exitCode) break;
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 } else {
   const { app, BrowserWindow } = electron;
@@ -35,16 +38,30 @@ if (!process.versions.electron) {
       mkdir(workspace),
       mkdir(configured, { recursive: true }),
       mkdir(join(root, ".pi", "agent"), { recursive: true }),
+      mkdir(join(root, ".fastagent", ".secrets"), { recursive: true }),
     ]);
-    // Isolate both credential stores before FastAgent is imported. Never use the developer's subscription.
+    // Isolate all credential stores before FastAgent is imported. Never use the developer's subscription.
     process.env.HOME = root;
     for (const name of Object.keys(process.env)) {
-      if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|PROXY$/i.test(name)) delete process.env[name];
+      if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^AWS_|^GOOGLE_|^AZURE_|^PI_|PROXY$/i.test(name)) delete process.env[name];
     }
-    await writeFile(
-      join(root, ".pi", "agent", "auth.json"),
-      JSON.stringify({ openai: { type: "api_key", key: "smoke-key" } }),
-    );
+    const codex = { type: "oauth", access: "synthetic-codex", refresh: "synthetic-refresh", expires: Date.now() + 3600000 };
+    const stored = {
+      openai: { type: "api_key", key: "smoke-key" },
+      anthropic: { type: "oauth", access: "sk-ant-oat01-synthetic", refresh: "synthetic-refresh", expires: Date.now() + 3600000 },
+      "openai-codex": codex,
+    };
+    // The expectation is FastAgent's own global path, not a copy of it: a duang default that drifts
+    // from `fastagent login` must fail here rather than agree with a literal this file made up.
+    const { GLOBAL_AUTH_PATH: defaultAuth } = await import("@fastagent-sh/fastagent/pi");
+    const selectedAuth = process.env.DUANG_SMOKE_AUTH_OVERRIDE === "true" ? join(root, "custom-auth.json") : defaultAuth;
+    if (selectedAuth !== defaultAuth) process.env.FASTAGENT_AUTH_PATH = selectedAuth;
+    // Stores duang must never read on its own. Holding only `openai-codex` makes a wrong pick visible:
+    // the `anthropic/...` assertions below cannot pass from these files.
+    await writeFile(join(root, ".fastagent", "auth.json"), JSON.stringify({ "openai-codex": codex }));
+    await writeFile(join(root, ".pi", "agent", "auth.json"), JSON.stringify({ openai: { type: "api_key", key: "wrong-store" } }));
+    if (selectedAuth !== defaultAuth) await writeFile(defaultAuth, JSON.stringify({ "openai-codex": codex }));
+    await writeFile(selectedAuth, JSON.stringify(stored));
     await writeFile(join(configured, "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(
@@ -57,8 +74,30 @@ if (!process.versions.electron) {
 
     let requests = 0;
     let hold = false;
+    let anthropicRequests = 0;
     globalThis.fetch = async (url, options = {}) => {
-      assert.match(String(url), /^https:\/\/api\.openai\.com\/v1\/responses$/, "unexpected outbound request");
+      const target = String(url instanceof Request ? url.url : url);
+      const headers = new Headers(options.headers ?? (url instanceof Request ? url.headers : undefined));
+      if (target === "https://platform.claude.com/v1/oauth/token") {
+        throw new Error("Synthetic OAuth refresh rejected");
+      }
+      if (target.startsWith("https://api.anthropic.com/v1/messages")) {
+        assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
+        anthropicRequests++;
+        const events = [
+          { type: "message_start", message: { id: "msg_synthetic", type: "message", role: "assistant", content: [], model: "claude-sonnet-4-5", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } },
+          { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+          { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Anthropic smoke answer" } },
+          { type: "content_block_stop", index: 0 },
+          { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 5 } },
+          { type: "message_stop" },
+        ];
+        return new Response(events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), {
+          headers: { "content-type": "text/event-stream" },
+        });
+      }
+      assert.match(target, /^https:\/\/api\.openai\.com\/v1\/responses$/, "unexpected outbound request");
+      assert.equal(headers.get("authorization"), "Bearer smoke-key");
       requests++;
       if (hold) {
         return new Promise((_resolve, reject) => {
@@ -135,6 +174,16 @@ if (!process.versions.electron) {
     button.click();
   })()`);
     }
+    async function chooseModel(model) {
+      await until("document.querySelector('dialog input') !== null", "model filter");
+      await evaluate(`(() => {
+        const input = document.querySelector('dialog input');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(model)});
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await until(`document.querySelector('dialog').innerText.includes(${JSON.stringify(model)})`, "filtered model");
+      await click(model);
+    }
     async function message(text) {
       await evaluate(`(() => {
     const input = document.querySelector('textarea');
@@ -159,8 +208,7 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
       await click("Create agent here");
       await until("document.querySelector('dialog[open]') !== null", "first model picker opens automatically");
-      await until("document.body.innerText.includes('openai/gpt-4o-mini')", "available models");
-      await click("openai/gpt-4o-mini");
+      await chooseModel("openai/gpt-4o-mini");
       await until(
         "document.querySelector('textarea') && !document.querySelector('textarea').disabled",
         "first model unlocks composer",
@@ -224,12 +272,61 @@ if (!process.versions.electron) {
         "document.body.innerText.includes('What should we work on in Configured') && !document.querySelector('textarea').disabled",
         "directory-configured model",
       );
-      await message("Use the configured model with pi credentials.");
-      await until("document.body.innerText.includes('Smoke answer')", "configured model uses pi-only credentials too");
+      await message("Use the configured model with the selected credentials.");
+      await until("document.body.innerText.includes('Smoke answer') && !document.body.innerText.includes('working…')", "configured model uses the same credential file");
+
+      const models = await evaluate("window.duang.listModels()");
+      assert.equal(models.authPath, selectedAuth);
+      assert.ok(models.specs.includes("anthropic/claude-sonnet-4-5"));
+      const codexModel = models.specs.find((spec) => spec.startsWith("openai-codex/"));
+      assert.ok(codexModel);
+      const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
+      await click("openai/gpt-4o-mini");
+      await until("document.querySelector('dialog[open]') !== null", "cross-provider model picker");
+      await chooseModel("anthropic/claude-sonnet-4-5");
+      await until("!document.querySelector('textarea').disabled && document.body.innerText.includes('anthropic/claude-sonnet-4-5')", "selected conversation changes provider");
+      await message("Use the Anthropic conversation model.");
+      await until("document.body.innerText.includes('Anthropic smoke answer') && !document.body.innerText.includes('working…')", "synthetic Anthropic OAuth request");
+      assert.equal(anthropicRequests, 1);
+
+      // Change only the agent default, then reopen Anthropic history through a fresh renderer.
+      await evaluate(`window.duang.setModel('configured', ${JSON.stringify(codexModel)})`);
+      win.webContents.reload();
+      await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      await until("document.body.innerText.includes('Smoke answer')", "reload initial agent");
+      await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
+      await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
+      assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), codexModel);
+      await message("Continue the historical Anthropic conversation.");
+      await until("document.body.innerText.split('Anthropic smoke answer').length === 3 && !document.body.innerText.includes('working…')", "mixed-provider history resolves its own credential");
+      assert.equal(anthropicRequests, 2);
+
+      // A missing historical provider fails without silently switching models; fixing the file needs no restart.
+      await writeFile(selectedAuth, JSON.stringify({ "openai-codex": codex }));
+      const missing = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Missing provider check')`);
+      assert.equal(missing.ok, false);
+      assert.equal(missing.error.message, "Provider is not configured: anthropic");
+      assert.equal(anthropicRequests, 2);
+      assert.ok(!(await evaluate("window.duang.listModels()")).specs.some((spec) => spec.startsWith("anthropic/")));
+      const expired = { ...stored, anthropic: { ...stored.anthropic, expires: 0 } };
+      await writeFile(selectedAuth, JSON.stringify(expired));
+      assert.ok((await evaluate("window.duang.listModels()")).specs.includes("anthropic/claude-sonnet-4-5"), "picker does not attempt OAuth refresh");
+      const refreshFailure = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Expired token check')`);
+      assert.equal(refreshFailure.ok, false);
+      assert.match(refreshFailure.error.message, /Synthetic OAuth refresh rejected/);
+      assert.deepEqual(JSON.parse(await readFile(selectedAuth, "utf8")), expired, "failed refresh preserves the credential");
+      await writeFile(selectedAuth, "{invalid");
+      assert.match(await evaluate("window.duang.listModels().then(() => '', error => error.message)"), /corrupt auth file/);
+      await writeFile(selectedAuth, JSON.stringify(stored));
+      assert.ok((await evaluate("window.duang.listModels()")).specs.includes("anthropic/claude-sonnet-4-5"));
+      const recovered = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Retry with restored credentials')`);
+      assert.equal(recovered.ok, true);
+      assert.equal(anthropicRequests, 3);
+      assert.deepEqual(JSON.parse(await readFile(selectedAuth, "utf8")), stored, "valid tokens are not refreshed or copied");
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
       console.log(
-        "Electron smoke passed: scaffold → model → send → tool → history → background run → model guard → abort → reload",
+        `Electron smoke passed (${selectedAuth === defaultAuth ? "default auth" : "explicit auth"}): local workflow, cross-provider history, missing/corrupt credentials and recovery`,
       );
     } catch (error) {
       console.error(error);

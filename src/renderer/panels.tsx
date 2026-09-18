@@ -282,6 +282,7 @@ function ModelPopover({
   onClose: () => void;
 }) {
   const [models, setModels] = useState<string[]>();
+  const [authPath, setAuthPath] = useState<string>();
   const [filter, setFilter] = useState("");
   const [error, setError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
@@ -306,7 +307,10 @@ function ModelPopover({
     setError(undefined);
     void duang.listModels().then(
       (list) => {
-        if (current) setModels(list);
+        if (current) {
+          setModels(list.specs);
+          setAuthPath(list.authPath);
+        }
       },
       (failure) => {
         if (current) setError(String(failure));
@@ -343,6 +347,7 @@ function ModelPopover({
       <button onClick={close} className="float-right p-1" aria-label="Close model picker">
         <X size={14} />
       </button>
+      {authPath && <p className="text-muted text-[11px] p-2 break-all">Credentials: {authPath}</p>}
       {error ? (
         <p role="alert" className="text-danger p-2">
           {error}{" "}
@@ -352,8 +357,11 @@ function ModelPopover({
         </p>
       ) : models?.length === 0 ? (
         <p className="text-muted text-[12px] p-2 leading-relaxed">
-          No provider is logged in. Run <span className="font-mono">fastagent login</span> (or pi&apos;s login), then
-          reopen duang.
+          No provider is configured. Use <span className="font-mono">fastagent login</span> with
+          <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to the file above, then{" "}
+          <button className="underline" onClick={() => setAttempt((n) => n + 1)}>
+            Retry
+          </button>.
         </p>
       ) : (
         <>
