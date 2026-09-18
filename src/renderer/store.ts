@@ -17,7 +17,7 @@ interface Conversation {
   runStarts: number;
   events: SessionEvent[];
 }
-export interface View {
+interface View {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
