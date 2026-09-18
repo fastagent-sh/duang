@@ -8,6 +8,7 @@ import {
   NoAgentError,
   openAgent,
   refuse,
+  registryFile,
   removeAgent,
   setAgentModel,
   withAgentRun,
@@ -123,6 +124,7 @@ function register(): void {
     (await openAgent(await requireAgent(id))).control.commands(),
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
+  ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
   ipcMain.handle("models:list", credentials);
 
   ipcMain.handle("session:delete", async (_e, id: string, session: string) => {

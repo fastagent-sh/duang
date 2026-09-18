@@ -11,6 +11,7 @@ import {
   NoAgents,
   Rail,
   Transcript,
+  UnreadableRegistry,
 } from "./panels.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
@@ -112,10 +113,13 @@ export default function App() {
           )
         )}
         {!agentId ? (
-          // An unreadable registry is not an empty one. Offering "add your first agent" here would
-          // both deny the failure and hand over an action that cannot succeed until the file is fixed;
-          // the error row above already carries the path and Retry.
-          !view.error && <NoAgents onAdd={() => void store.addAgent()} />
+          // An unreadable registry is not an empty one: offering "add your first agent" would deny the
+          // failure and hand over an action that cannot succeed until the file is fixed.
+          view.error ? (
+            <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+          ) : (
+            <NoAgents onAdd={() => void store.addAgent()} />
+          )
         ) : agentState === "broken" ? (
           <BrokenAgent
             message={view.error ?? ""}

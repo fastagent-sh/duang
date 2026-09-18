@@ -351,10 +351,9 @@ if (!process.versions.electron) {
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       await until("document.body.innerText.includes('agents.json')", "registry failure is reported");
-      assert.ok(
-        !(await evaluate("document.body.innerText")).includes("Add an agent directory"),
-        "a corrupt registry must not be presented as an empty one",
-      );
+      const registryFailure = await evaluate("document.body.innerText");
+      assert.ok(!registryFailure.includes("Add an agent directory"), "a corrupt registry is not an empty one");
+      assert.ok(registryFailure.includes("Reveal agents.json"), "the person is shown where to fix it");
       await writeFile(registry, savedRegistry);
       await click("Retry");
       await until("document.body.innerText.includes('Smoke answer')", "Retry recovers the registry");

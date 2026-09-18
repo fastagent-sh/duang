@@ -355,9 +355,9 @@ export function createStore(api: DuangApi) {
       }
     },
     async reveal() {
-      if (!view.agentId) return;
       try {
-        await api.revealAgent(view.agentId);
+        // No selected agent means the list itself is what failed; show that file instead.
+        await (view.agentId ? api.revealAgent(view.agentId) : api.revealRegistry());
       } catch (error) {
         note(error);
       }

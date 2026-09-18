@@ -45,6 +45,8 @@ const api = {
   /** The names this agent exposes — what the composer's `/` completion lists. */
   listCommands: (agentId: string): Promise<AgentCommand[]> => ipcRenderer.invoke("agent:commands", agentId),
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
+  /** Where duang keeps its agent list — the one thing to open when that file cannot be read. */
+  revealRegistry: (): Promise<void> => ipcRenderer.invoke("registry:reveal"),
   listModels: (): Promise<Models> => ipcRenderer.invoke("models:list"),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:delete", agentId, session),

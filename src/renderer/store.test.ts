@@ -34,6 +34,7 @@ function harness() {
     scaffoldAgent: async () => "/a/fastagent",
     listCommands: async () => [],
     revealAgent: async () => {},
+    revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {
