@@ -56,7 +56,9 @@ The renderer receives model specs and the selected path, never credential conten
 **Runtime replacement is agent-scoped.** Changing a default model prepares a new assembly and
 updates the selected session before committing the registry choice. Admission is guarded across
 all conversations, including turns still opening their runtime: no model replacement or removal
-while a send is in flight. Failed assembly setup keeps the previous assembly and registry choice. Updating the session and
+while a send is in flight. The exclusion is asymmetric — a send arriving during a change is
+refused, because running it would use a model the person never saw, while a read waits for the
+change and receives the runtime that replaced the old one. Failed assembly setup keeps the previous assembly and registry choice. Updating the session and
 registry is not a cross-file transaction; a registry write failure after a session update can leave
 the conversation model changed without changing the default. This still needs acceptance work.
 
