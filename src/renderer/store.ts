@@ -3,6 +3,33 @@ import type { AgentRow, DuangApi, Models, SessionFrame } from "../preload/index.
 import { apply, fromEntries, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
+
+/**
+ * Where the window was last left. Navigation, not conversation data: the transcript belongs to the
+ * runtime, and losing this only costs one click. So it is stored as best effort and never repaired
+ * — anything unreadable is simply a first start.
+ */
+const SELECTION_KEY = "duang.selection";
+interface Selection {
+  agentId?: string;
+  perAgent: [string, string][];
+}
+function readSelection(): Selection | undefined {
+  try {
+    const stored = globalThis.localStorage?.getItem(SELECTION_KEY);
+    const parsed = stored ? (JSON.parse(stored) as Selection) : undefined;
+    return parsed && Array.isArray(parsed.perAgent) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function writeSelection(selection: Selection): void {
+  try {
+    globalThis.localStorage?.setItem(SELECTION_KEY, JSON.stringify(selection));
+  } catch {
+    // A full or disabled store costs a click after the next restart, nothing else.
+  }
+}
 interface Conversation {
   agentId: string;
   session: string;
@@ -91,7 +118,9 @@ export function createStore(api: DuangApi) {
   const conversations = new Map<string, Conversation>();
   const drafts = new Map<string, string>();
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
-  const lastOpened = new Map<string, string>();
+  const stored = readSelection();
+  const lastOpened = new Map<string, string>(stored?.perAgent);
+  let lastAgent = stored?.agentId;
   let navigation = 0;
   let listRequest = 0;
   let modelsRequest = 0;
@@ -153,6 +182,8 @@ export function createStore(api: DuangApi) {
     const agentId = view.agentId;
     if (!agentId) return;
     lastOpened.set(agentId, session);
+    lastAgent = agentId;
+    writeSelection({ agentId, perAgent: [...lastOpened] });
     leave();
     const existing = conversations.get(key(agentId, session));
     if (existing) {
@@ -277,7 +308,9 @@ export function createStore(api: DuangApi) {
     try {
       const agents = await api.listAgents();
       publish({ agents, loading: false });
-      if (agents[0]) await selectAgent(agents[0].id);
+      // Reopen the agent this machine was last using; a removed one falls back to the first row.
+      const start = agents.find((row) => row.id === lastAgent) ?? agents[0];
+      if (start) await selectAgent(start.id);
     } catch (error) {
       publish({ loading: false, error: message(error) });
     }
