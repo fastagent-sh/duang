@@ -344,6 +344,22 @@ if (!process.versions.electron) {
       assert.equal(recovered.ok, true);
       assert.equal(anthropicRequests, 3);
       assert.deepEqual(JSON.parse(await readFile(selectedAuth, "utf8")), stored, "valid tokens are not refreshed or copied");
+      // An unreadable registry must read as a failure, not as a fresh install with no agents.
+      const registry = join(data, "agents.json");
+      const savedRegistry = await readFile(registry, "utf8");
+      await writeFile(registry, "[{\"id\"");
+      win.webContents.reload();
+      await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      await until("document.body.innerText.includes('agents.json')", "registry failure is reported");
+      assert.ok(
+        !(await evaluate("document.body.innerText")).includes("Add an agent directory"),
+        "a corrupt registry must not be presented as an empty one",
+      );
+      await writeFile(registry, savedRegistry);
+      await click("Retry");
+      await until("document.body.innerText.includes('Smoke answer')", "Retry recovers the registry");
+      assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
+
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
       console.log(
