@@ -3,6 +3,44 @@ import type { AgentRow, DuangApi, Models, SessionFrame } from "../preload/index.
 import { apply, fromEntries, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
+
+/**
+ * Where the window was last left. Navigation, not conversation data: the transcript belongs to the
+ * runtime, and losing this only costs one click. So it is stored as best effort and never repaired
+ * — anything unreadable is simply a first start.
+ */
+const SELECTION_KEY = "duang.selection";
+const DRAFTS_KEY = "duang.drafts";
+interface Selection {
+  agentId?: string;
+  perAgent: [string, string][];
+}
+/** Unsent text, kept until it is sent, cleared, or its conversation or agent goes away. */
+function readDrafts(): [string, string][] {
+  try {
+    const stored = globalThis.localStorage?.getItem(DRAFTS_KEY);
+    const parsed = stored ? (JSON.parse(stored) as [string, string][]) : undefined;
+    return Array.isArray(parsed) ? parsed.filter(([k, v]) => typeof k === "string" && typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function readSelection(): Selection | undefined {
+  try {
+    const stored = globalThis.localStorage?.getItem(SELECTION_KEY);
+    const parsed = stored ? (JSON.parse(stored) as Selection) : undefined;
+    return parsed && Array.isArray(parsed.perAgent) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function writeStored(storageKey: string, value: string): void {
+  try {
+    globalThis.localStorage?.setItem(storageKey, value);
+  } catch {
+    // A full or disabled store costs a click or a retyped line after the next restart, nothing else.
+  }
+}
 interface Conversation {
   agentId: string;
   session: string;
@@ -44,6 +82,8 @@ export interface View {
   blocked?: string;
   runningAgents: string[];
   runningSessions: string[];
+  /** Selected agent's conversations holding unsent text, so a draft never becomes unreachable. */
+  draftSessions: string[];
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
@@ -83,10 +123,16 @@ export function createStore(api: DuangApi) {
     commands: [],
     runningAgents: [],
     runningSessions: [],
+    draftSessions: [],
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
-  const drafts = new Map<string, string>();
+  const drafts = new Map<string, string>(readDrafts());
+  let persisted = "";
+  /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
+  const stored = readSelection();
+  const lastOpened = new Map<string, string>(stored?.perAgent);
+  let lastAgent = stored?.agentId;
   let navigation = 0;
   let listRequest = 0;
   let modelsRequest = 0;
@@ -109,6 +155,20 @@ export function createStore(api: DuangApi) {
     view.busy = !!view.conversation && busy(view.conversation);
     view.runningAgents = [...new Set(running.map((c) => c.agentId))];
     view.runningSessions = running.filter((c) => c.agentId === view.agentId).map((c) => c.session);
+    // A conversation the runtime has never heard of exists only while it is on screen. Without a row
+    // of its own, walking away from unsent text is the same as discarding it. The open conversation
+    // holds its own draft, so read both here: this is the single view of what is unsent.
+    const unsent = new Map(drafts);
+    if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
+    const kept = [...unsent].filter(([, text]) => text.trim());
+    view.draftSessions = kept
+      .filter(([id]) => id.startsWith(`${view.agentId ?? ""}/`))
+      .map(([id]) => id.slice((view.agentId ?? "").length + 1));
+    const serialized = JSON.stringify(kept);
+    if (serialized !== persisted) {
+      persisted = serialized;
+      writeStored(DRAFTS_KEY, serialized);
+    }
     view.blocked = blockedBy(view);
     for (const listener of listeners) listener();
   };
@@ -142,6 +202,9 @@ export function createStore(api: DuangApi) {
   async function open(session: string) {
     const agentId = view.agentId;
     if (!agentId) return;
+    lastOpened.set(agentId, session);
+    lastAgent = agentId;
+    writeStored(SELECTION_KEY, JSON.stringify({ agentId, perAgent: [...lastOpened] } satisfies Selection));
     leave();
     const existing = conversations.get(key(agentId, session));
     if (existing) {
@@ -211,7 +274,17 @@ export function createStore(api: DuangApi) {
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const running = [...conversations.values()].find((c) => c.agentId === id && busy(c));
-      await open(running?.session ?? newest?.session ?? crypto.randomUUID());
+      // Coming back to an agent returns to the conversation you left, including one the runtime does
+      // not know yet. It is dropped when its session is gone and nothing local keeps it alive.
+      const previous = lastOpened.get(id);
+      const revivable =
+        previous &&
+        (result.sessions.some((s) => s.session === previous) ||
+          conversations.has(key(id, previous)) ||
+          drafts.get(key(id, previous))?.trim())
+          ? previous
+          : undefined;
+      await open(revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
@@ -256,7 +329,9 @@ export function createStore(api: DuangApi) {
     try {
       const agents = await api.listAgents();
       publish({ agents, loading: false });
-      if (agents[0]) await selectAgent(agents[0].id);
+      // Reopen the agent this machine was last using; a removed one falls back to the first row.
+      const start = agents.find((row) => row.id === lastAgent) ?? agents[0];
+      if (start) await selectAgent(start.id);
     } catch (error) {
       publish({ loading: false, error: message(error) });
     }
@@ -355,9 +430,9 @@ export function createStore(api: DuangApi) {
       }
     },
     async reveal() {
-      if (!view.agentId) return;
       try {
-        await api.revealAgent(view.agentId);
+        // No selected agent means the list itself is what failed; show that file instead.
+        await (view.agentId ? api.revealAgent(view.agentId) : api.revealRegistry());
       } catch (error) {
         note(error);
       }
@@ -369,6 +444,7 @@ export function createStore(api: DuangApi) {
         const result = await api.removeAgent(id);
         if (!result.ok) return note(result.error.message);
         for (const c of conversations.values()) if (c.agentId === id) close(c);
+        for (const draftKey of [...drafts.keys()]) if (draftKey.startsWith(`${id}/`)) drafts.delete(draftKey);
         publish({ agents: await api.listAgents() });
         if (view.agentId !== id) return;
         ++navigation;

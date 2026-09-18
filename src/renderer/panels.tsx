@@ -184,6 +184,30 @@ export function NoAgents({ onAdd }: { onAdd: () => void }) {
   );
 }
 
+/**
+ * duang cannot read its own agent list. It must not repair the file: the broken one may be the only
+ * record of which directories are agents. So the recovery is the person's — open it, fix or move it,
+ * retry — and the app's job is to make both actions reachable.
+ */
+export function UnreadableRegistry({ onReveal, onRetry }: { onReveal: () => void; onRetry: () => void }) {
+  return (
+    <Panel>
+      <div className="max-w-sm mx-auto mt-20 text-center space-y-4">
+        <p className="text-muted leading-relaxed">
+          duang could not read its agent list, so it is not showing one. Your agent directories and their
+          conversations are untouched, and the file is left exactly as it is.
+        </p>
+        <div className="flex gap-2 justify-center">
+          <Action icon={<FolderOpen size={13} />} label="Reveal agents.json" onClick={onReveal} />
+          <button onClick={onRetry} className="underline">
+            Retry
+          </button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 export function BrokenAgent({
   message,
   onRemove,
@@ -535,8 +559,10 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   useEffect(() => {
     if (query !== undefined && agentId && !disabled) void store.loadCommands();
   }, [query, agentId, disabled, store]);
+  // Escape hides the list for the name as typed; typing on is a new request for it. Keeping it
+  // dismissed until the line stops being a command leaves `/d` with no completion at all.
   useEffect(() => {
-    if (query === undefined) setDismissed(false);
+    setDismissed(false);
     setCursor(0);
   }, [query]);
 
@@ -564,6 +590,12 @@ export function Composer({ view, store }: { view: View; store: Store }) {
       {view.commandsError && query !== undefined && (
         <p role="alert" className="text-danger text-[11px]">
           {view.commandsError}
+        </p>
+      )}
+      {/* Pressing `/` on an agent with no skills used to do nothing at all, which reads as broken. */}
+      {query !== undefined && !view.commandsError && view.commands.length === 0 && agent && (
+        <p className="text-muted text-[11px]">
+          No commands — this agent has no skills in <span className="font-mono">{home(agent.dir)}/fastagent/skills</span>
         </p>
       )}
       <textarea

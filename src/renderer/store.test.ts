@@ -14,6 +14,8 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 const ready: OpenResult = { ok: true, model: "provider/model", sessions: [] };
+const listed = (session: string): OpenResult =>
+  ({ ok: true, model: "provider/model", sessions: [{ session, updatedAt: 5, createdAt: 0, messageCount: 2 }] }) as never;
 const empty = () => ({
   state: { status: "idle" as const, pending: { steering: 0, followUp: 0 } },
   entries: { entries: [] },
@@ -34,6 +36,7 @@ function harness() {
     scaffoldAgent: async () => "/a/fastagent",
     listCommands: async () => [],
     revealAgent: async () => {},
+    revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {
@@ -128,6 +131,66 @@ test("drafts stay with conversations; rejected sends preserve text and report th
   assert.ok(c.items.some((item) => item.kind === "note" && item.text === "original IPC failure"));
   await store.open("two");
   assert.equal(store.getSnapshot().conversation?.draft, "unsent second");
+  store.dispose();
+});
+
+test("a restart reopens the agent and conversation the window was left on", async () => {
+  const values = new Map<string, string>();
+  const localStorage = {
+    getItem: (k: string) => values.get(k) ?? null,
+    setItem: (k: string, v: string) => void values.set(k, v),
+  };
+  Object.defineProperty(globalThis, "localStorage", { value: localStorage, configurable: true });
+  try {
+    const first = harness();
+    first.api.openAgent = async () => listed("kept");
+    await first.store.load();
+    await first.store.selectAgent("b");
+    await first.store.open("kept");
+    first.store.dispose();
+
+    const second = harness();
+    second.api.openAgent = async () => listed("kept");
+    await second.store.load();
+    assert.equal(second.store.getSnapshot().agentId, "b");
+    assert.equal(second.store.getSnapshot().conversation?.session, "kept");
+    second.store.setDraft("typed before quitting");
+    second.store.dispose();
+
+    // Unsent text survives the restart too, and stops existing once it is cleared.
+    const third = harness();
+    third.api.openAgent = async () => listed("kept");
+    await third.store.load();
+    assert.equal(third.store.getSnapshot().conversation?.draft, "typed before quitting");
+    assert.deepEqual(third.store.getSnapshot().draftSessions, ["kept"]);
+    third.store.setDraft("");
+    third.store.dispose();
+
+    const fourth = harness();
+    fourth.api.openAgent = async () => listed("kept");
+    await fourth.store.load();
+    assert.equal(fourth.store.getSnapshot().conversation?.draft, "");
+    assert.deepEqual(fourth.store.getSnapshot().draftSessions, []);
+    fourth.store.dispose();
+  } finally {
+    Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
+
+test("an unsent conversation keeps a row, so leaving it is not discarding it", async () => {
+  const { store } = harness();
+  await store.load();
+  await store.open("unsent");
+  store.setDraft("typed but never sent");
+  await store.selectAgent("b");
+  assert.deepEqual(store.getSnapshot().draftSessions, [], "another agent's drafts stay out of this list");
+  await store.selectAgent("a");
+  assert.deepEqual(store.getSnapshot().draftSessions, ["unsent"]);
+  assert.equal(store.getSnapshot().conversation?.session, "unsent", "returning lands where you left");
+  assert.equal(store.getSnapshot().conversation?.draft, "typed but never sent");
+  store.setDraft("");
+  await store.open("other");
+  assert.deepEqual(store.getSnapshot().draftSessions, [], "an emptied draft leaves no row behind");
   store.dispose();
 });
 

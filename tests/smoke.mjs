@@ -63,6 +63,12 @@ if (!process.versions.electron) {
     if (selectedAuth !== defaultAuth) await writeFile(defaultAuth, JSON.stringify({ "openai-codex": codex }));
     await writeFile(selectedAuth, JSON.stringify(stored));
     await writeFile(join(configured, "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
+    // A skill is what `commands()` lists, so the composer's `/` completion has something to find.
+    await mkdir(join(configured, "skills", "demo"), { recursive: true });
+    await writeFile(
+      join(configured, "skills", "demo", "SKILL.md"),
+      "---\nname: demo\ndescription: A skill the completion list should offer.\n---\n\nSay demo.\n",
+    );
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(
       join(data, "agents.json"),
@@ -184,6 +190,14 @@ if (!process.versions.electron) {
       await until(`document.querySelector('dialog').innerText.includes(${JSON.stringify(model)})`, "filtered model");
       await click(model);
     }
+    async function type(text) {
+      await evaluate(`(() => {
+    const input = document.querySelector('textarea');
+    input.focus();
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(text)});
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+    }
     async function message(text) {
       await evaluate(`(() => {
     const input = document.querySelector('textarea');
@@ -206,6 +220,10 @@ if (!process.versions.electron) {
       await import("../out/main/index.js");
       await loaded;
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
+      assert.ok(
+        !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
+        "the scaffold offer must not be contradicted by the runtime's `run fastagent init` error",
+      );
       await click("Create agent here");
       await until("document.querySelector('dialog[open]') !== null", "first model picker opens automatically");
       await chooseModel("openai/gpt-4o-mini");
@@ -340,6 +358,46 @@ if (!process.versions.electron) {
       assert.equal(recovered.ok, true);
       assert.equal(anthropicRequests, 3);
       assert.deepEqual(JSON.parse(await readFile(selectedAuth, "utf8")), stored, "valid tokens are not refreshed or copied");
+      // `/` completion: the names come from the agent's definition, Escape dismisses the list, and
+      // accepting one leaves the line in the composer instead of sending it.
+      await evaluate("document.querySelector('textarea').focus()");
+      await type("/");
+      await until("document.body.innerText.includes('A skill the completion list should offer')", "command list");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until(
+        "!document.body.innerText.includes('A skill the completion list should offer')",
+        "Escape dismisses the command list",
+      );
+      await type("/d");
+      await until("document.body.innerText.includes('A skill the completion list should offer')", "list reopens");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+      await until("document.querySelector('textarea').value === '/demo '", "Enter accepts the name, it does not send");
+      await type("");
+
+      // An agent with no skills must say so; silence here reads as a broken composer.
+      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
+      await type("/");
+      await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
+      await type("");
+
+      // An unreadable registry must read as a failure, not as a fresh install with no agents.
+      const registry = join(data, "agents.json");
+      const savedRegistry = await readFile(registry, "utf8");
+      await writeFile(registry, "[{\"id\"");
+      win.webContents.reload();
+      await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      await until("document.body.innerText.includes('agents.json')", "registry failure is reported");
+      const registryFailure = await evaluate("document.body.innerText");
+      assert.ok(!registryFailure.includes("Add an agent directory"), "a corrupt registry is not an empty one");
+      assert.ok(registryFailure.includes("Reveal agents.json"), "the person is shown where to fix it");
+      await writeFile(registry, savedRegistry);
+      await click("Retry");
+      await until("document.body.innerText.includes('Smoke answer')", "Retry recovers the registry");
+      assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
+
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
       console.log(

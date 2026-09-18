@@ -11,6 +11,7 @@ import {
   NoAgents,
   Rail,
   Transcript,
+  UnreadableRegistry,
 } from "./panels.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
@@ -22,7 +23,7 @@ export default function App() {
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
-  const sessionRows = rows(sessions, c?.session, view.runningSessions);
+  const sessionRows = rows(sessions, c?.session, view.runningSessions, view.draftSessions);
 
   useEffect(() => {
     void store.load();
@@ -46,7 +47,11 @@ export default function App() {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
   const composer = <Composer view={view} store={store} />;
-  const error = c?.error ?? (agentState !== "broken" && agentState !== "missing_model" ? view.error : undefined);
+  // States whose own panel already explains the setup problem and offers the fix. Repeating the
+  // runtime's prose above them contradicts it: a plain project is told to run `fastagent init`
+  // while duang is offering to scaffold it.
+  const owned = agentState === "broken" || agentState === "missing_model" || agentState === "no_agent";
+  const error = c?.error ?? (owned ? undefined : view.error);
 
   return (
     <div className="flex h-full">
@@ -82,11 +87,7 @@ export default function App() {
           {!!c?.state?.pending && c.state.pending.steering + c.state.pending.followUp > 0 && (
             <span className="text-muted text-[11px]">{c.state.pending.steering + c.state.pending.followUp} queued</span>
           )}
-          {busy && (
-            <button className="no-drag ml-auto text-danger" onClick={() => void store.abort()}>
-              Stop
-            </button>
-          )}
+
         </header>
         {error ? (
           <div role="alert" className="px-6 py-2 text-danger whitespace-pre-wrap break-words">
@@ -108,7 +109,13 @@ export default function App() {
           )
         )}
         {!agentId ? (
-          <NoAgents onAdd={() => void store.addAgent()} />
+          // An unreadable registry is not an empty one: offering "add your first agent" would deny the
+          // failure and hand over an action that cannot succeed until the file is fixed.
+          view.error ? (
+            <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+          ) : (
+            <NoAgents onAdd={() => void store.addAgent()} />
+          )
         ) : agentState === "broken" ? (
           <BrokenAgent
             message={view.error ?? ""}

@@ -80,7 +80,7 @@ The textarea grows to eight lines, then scrolls. **Enter sends, Shift+Enter brea
 Enter during IME composition picks a candidate instead. It is never disabled silently: when it
 cannot send, the placeholder says why (*pick a model to start*, *this agent is broken*).
 
-While a run is live the placeholder becomes *steer the run…*, the header and composer show Stop,
+While a run is live the placeholder becomes *steer the run…*, the composer shows Stop where Send was,
 and queued input shows as a count. Sending still works — that is the point of steering. Drafts
 stay with their conversation while navigating; they are not persisted across app restarts.
 A send refused before admission returns to the draft and does not appear as a delivered message.

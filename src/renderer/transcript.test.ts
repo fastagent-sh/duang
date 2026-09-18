@@ -83,9 +83,10 @@ test("tool progress is a snapshot, not completion; settlement closes unfinished 
   assert.equal((items[0] as Extract<Item, { kind: "tool" }>).status, "running");
   items = apply(items, event("message_delta", { channel: "thinking", delta: "reasoning" }));
   items = apply(items, event("message_delta", { channel: "text", delta: "partial answer" }));
-  items = apply(items, event("run_settled", { status: "aborted" }));
+  items = apply(items, event("run_settled", { status: "aborted", error: { message: "This operation was aborted" } }));
   assert.equal((items[0] as Extract<Item, { kind: "tool" }>).status, "interrupted");
   assert.ok(items.every((item) => (item.kind === "thinking" || item.kind === "assistant" ? !item.open : true)));
+  // Stopping is the person's own action: the abort machinery's wording adds nothing they can use.
   assert.deepEqual(items.at(-1), { kind: "note", text: "run aborted" });
 });
 

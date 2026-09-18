@@ -119,7 +119,10 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         return item;
       });
       if (data.status === "completed") return items;
-      const error = data.error as { message?: string } | undefined;
+      // An aborted run carries the abort machinery's own words ("This operation was aborted",
+      // "Request aborted"). The person pressed Stop; that is the whole explanation. Only a FAILED
+      // run has a reason they could not already know, so only that one keeps its message.
+      const error = data.status === "aborted" ? undefined : (data.error as { message?: string } | undefined);
       return [
         ...items,
         { kind: "note", text: `run ${String(data.status)}${error?.message ? `: ${error.message}` : ""}` },

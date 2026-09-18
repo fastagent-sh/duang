@@ -7,7 +7,9 @@ import { authPath } from "./credentials.ts";
 import { AgentRegistry, type AgentRow } from "./agent-files.ts";
 
 export { createAgentIn, type AgentRow } from "./agent-files.ts";
-const registry = new AgentRegistry(join(app.getPath("userData"), "agents.json"));
+/** Exported so a person whose registry cannot be parsed can be shown where it is. */
+export const registryFile = join(app.getPath("userData"), "agents.json");
+const registry = new AgentRegistry(registryFile);
 export const listAgents = () => registry.list();
 export const addAgent = (dir: string) => registry.add(dir);
 
