@@ -14,6 +14,14 @@ export const addAgent = (dir: string) => registry.add(dir);
 type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;
 };
+/**
+ * Admission is agent-scoped and asymmetric, which is why FastAgent's `inProcessLease` cannot serve
+ * it: that lease is a single-writer floor per SESSION (`tryAcquire` returns null while anyone holds
+ * it), and it already guards session writes one layer down. Here several conversations of one agent
+ * may send at once — hence a count, not a flag — while a model change or removal must exclude all of
+ * them, including turns still opening their runtime. Shared-vs-exclusive is not what a `Set<string>`
+ * of busy sessions can express.
+ */
 const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
 const changing = new Set<string>();
