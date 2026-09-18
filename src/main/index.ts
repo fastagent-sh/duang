@@ -91,7 +91,9 @@ function stopAgentStreams(agentId: string, reason: string): void {
 function register(): void {
   ipcMain.handle("agents:list", () => listAgents());
   ipcMain.handle("agents:add", async () => {
-    const picked = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    // createDirectory: the project you want an agent in may not exist yet, and macOS hides New Folder
+    // unless it is asked for.
+    const picked = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
     if (!picked.canceled && picked.filePaths[0]) return addAgent(picked.filePaths[0]);
   });
   ipcMain.handle("agent:open", async (_e, agentId: string) => {
