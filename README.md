@@ -32,8 +32,9 @@ Not: general developers, enterprises, teams needing collaboration features.
 
 ## Design
 
-Objects, screens and flows are in [docs/design.md](docs/design.md); processes, boundaries and the
-deploy pipeline are in [docs/architecture.md](docs/architecture.md). The rest of this section is
+Objects, screens and flows are in [docs/design.md](docs/design.md); how it looks and why is
+[docs/ui.md](docs/ui.md); processes, boundaries and the deploy pipeline are in
+[docs/architecture.md](docs/architecture.md). The rest of this section is
 the one structural decision everything else follows from.
 
 One decision makes the switch cheap: **local and remote are two implementations of one interface.**
