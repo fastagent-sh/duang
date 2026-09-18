@@ -3,6 +3,9 @@
 What duang looks like and why. `docs/interaction.md` says how the app must behave; this says how it
 should read. Where the two disagree, behaviour wins and this file is wrong.
 
+A Chinese translation lives in [`ui.zh.md`](ui.zh.md) for reading convenience. This file is the
+source of truth: change it first, then the translation.
+
 ## 0. What the product actually asks of the interface
 
 Every decision below is derived from five facts about duang, not from what other products do.
