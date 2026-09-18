@@ -3,6 +3,27 @@
 What duang looks like and why. `docs/interaction.md` says how the app must behave; this says how it
 should read. Where the two disagree, behaviour wins and this file is wrong.
 
+## 0. What the product actually asks of the interface
+
+Every decision below is derived from five facts about duang, not from what other products do.
+
+1. **The person is a developer who already has an agent working for other people.** Not a consumer
+   trying an assistant.
+2. **The local half exists so you can take over.** README: when the deployed agent misbehaves you
+   "open the same chat, read the full tool trace, and take over". The first job of this interface is
+   reading what an agent did and intervening — oversight, not company.
+3. **The two sides of a conversation are wildly asymmetric.** What you type is short and rare: a
+   task, a correction, a stop. What the agent produces is long, structured and the thing you scan —
+   commands, output, diffs, reports.
+4. **Work runs in the background, in parallel, for a long time.** You come back to it as often as you
+   watch it, and you need to see which of several conversations is alive.
+5. **The transcript is the work record.** Later weeks add a read-only workspace panel and a cloud
+   activity inbox, but nothing moves the agent's working detail out of the transcript.
+
+Two consequences worth stating before the details. Anything that fragments the agent's output
+(bubbles, cards per paragraph, decoration) fights fact 3 and fact 5. Anything that hides parallel
+work to keep the list tidy fights fact 4.
+
 Written after walking the Week 1 acceptance matrix, where every individual signal was truthful and
 the whole still read badly. The fixes for that are here, not in another round of patches
 ([#41](https://github.com/fastagent-sh/duang/issues/41),
@@ -22,53 +43,70 @@ Details in §9.
 
 ## 2. References and what was taken from each
 
-- **Grok Bot** (desktop, and xAI's design write-up) — agents as the primary object rather than chat
-  history; state carried by the agent's own presence instead of an extra indicator layer; a
-  three-level view of the agent's workspace (status, preview, takeover); a heterogeneous transcript
-  where conversation, system events and structured cards share one timeline. Not taken: one Bot to
-  one conversation. duang's sessions are genuinely parallel.
-- **Claude Code desktop** — sessions visible and filterable by state, because parallel work is the
-  normal case for a coding agent.
+Borrowing a solution means borrowing its premise. Each of these is listed with the premise that
+made it work there, and whether that premise holds here.
+
+- **Grok Bot** (desktop, and xAI's design write-up) — taken: agents as the primary object rather
+  than a chat history; system events and structured results sharing one timeline with conversation;
+  removing controls rather than adding them.
+  **Refused, with reasons:** *bubbles on both sides* — their premise is that the heavy work lives on
+  the Bot's own computer panel, so the transcript carries short reports; ours is fact 5, where the
+  transcript is the work. *Presence animated on the avatar* — their premise is one conversation per
+  Bot, so agent presence is conversation presence; ours is fact 4, where the useful question is which
+  conversation is running. *Status / preview / takeover* — their premise is a machine you can only
+  watch through a screen; our files are on this disk and already open in the person's editor. *Pin
+  and hide* — their premise is a roster of up to 50 Bots; ours is the few agents you actually have.
+- **Claude Code desktop** — parallel sessions stay visible and are filterable by state, because
+  parallel work is the normal case for a coding agent. Same premise as our fact 4.
 - **Telegram** — the row rhythm of a contact list: avatar, name, one line of what happened, relative
-  time. Not taken: the assumption that a contact has exactly one thread.
+  time. Refused: the assumption that a contact has exactly one thread.
 - **Carbon, HPE design systems, WCAG 1.4.1** — the status rules in §9.
 - **macOS 26** — glass only in the navigation layer, sidebars to the window edge, native materials
   over simulated ones.
 
 ## 3. Structure
 
-Two columns. A third appears in Week 2 and its space is reserved now so nothing has to move.
+Two columns. Later weeks add a third and two sidebar elements; their space is reserved now so nothing
+has to move when they arrive.
 
 ```
 ┌ sidebar 320 (glass) ───────────┬ conversation ──────────────┬ (week 2) ┐
 │ duang·              ⌘K    ＋   │  title        model ⌄   ⏹  │  files   │
-│ ┌────────────────────────────┐ │                            │  diffs   │
-│ │ ◉ AM  amazonseo.ai     2m  │ │  turns                     │  settings│
-│ │       reading messages/es… │ │                            │          │
-│ │       ⌄ 3 more             │ │                            │          │
-│ └────────────────────────────┘ │                            │          │
-│   ● EX  existing-agent     1h  │                            │          │
-│         你好，我是…            ├────────────────────────────┤          │
-│                                │  composer                  │          │
+│ [ local | cloud ]   (week 3)   │                            │  diffs   │
+│ ◎ Activity          (week 4)   │  turns                     │  settings│
+│ ┌────────────────────────────┐ │                            │          │
+│ │ AM  amazonseo.ai       2m  │ │                            │          │
+│ │     reading messages/es…   │ │                            │          │
+│ │   • fixing the i18n check  │ │                            │          │
+│ │     working                │ │                            │          │
+│ │   ⌄ 2 more                 │ │                            │          │
+│ └────────────────────────────┘ ├────────────────────────────┤          │
+│   EX  existing-agent     1h    │  composer                  │          │
+│       你好，我是…              │                            │          │
 └────────────────────────────────┴────────────────────────────┴──────────┘
 ```
 
 **Sidebar rows are agents, not conversations** — one row each, with the current conversation's
-preview on the second line. That row is the Telegram contact row, and an agent with one conversation
-never shows anything else.
+preview on the second line. An agent with a single conversation shows nothing more than a contact row.
 
-**Other conversations fold under their agent.** A `⌄ 3 more` control expands them in place: indented
-rows with title, relative time and, when it applies, state. Two exceptions are never folded: a
-conversation that is running, and one holding unsent text. Parallel work stays visible without being
-promoted above the roster.
+**Running conversations are always listed under their agent**, expanded or not, because fact 4 makes
+"what is alive right now" the question the sidebar exists to answer. A conversation holding unsent
+text is listed for the same reason. Everything else folds behind `⌄ 2 more`, which expands in place
+into indented rows with title, relative time and state.
 
-**Pin and hide** belong to the agent row. Hiding removes an agent from the list without stopping
-anything it is doing; hidden agents live behind one entry at the bottom of the sidebar. Both are
-registry fields, not new objects.
+**Presence is per conversation, not per agent.** The state word sits on the conversation row; the
+agent row only summarises it. Products that animate presence on the avatar have one conversation per
+agent, so the two are the same thing — here they are not, and the useful answer is which conversation.
 
-Reserved for Week 2: the right panel holds the agent's workspace — file tree, diffs, discovered
-settings. It follows Grok Bot's middle level: a pinned preview you can glance at without being
-drawn into operating it.
+Reserved, in arrival order: a `local | cloud` segmented control in the sidebar header (week 3), a
+pinned **Activity** row above the roster (week 4), and the right panel (week 2) holding the file
+tree, diffs and discovered settings. That panel is a **reader**: the files are on this machine and
+already open in the person's editor, so duang shows them and stays out of the way instead of building
+a workspace to operate.
+
+Not included: pinning, hiding, archiving, folders. They belong to rosters of fifty agents; on a list
+of five they are management work invented for its own sake. Add one when a real list stops being
+readable.
 
 ## 4. Colour
 
@@ -135,42 +173,49 @@ stop, close).
 
 ## 8. Message rendering
 
-Grok Bot's desktop app uses bubbles on both sides, with consecutive assistant messages as separate
-small bubbles; its structured results break out of the bubble as cards, and system events sit in the
-middle of the timeline as one quiet line. duang takes that, with one difference: our agent writes
-long technical answers, so the deciding question is not who is speaking but **whether the content can
-be read at a glance**.
+The transcript is a work record with two very unequal sides (facts 3 and 5), so the two sides are
+drawn differently on purpose.
 
-- **Short turns are bubbles**, both sides. The agent's running commentary ("reading the config",
-  "done, here is what I found") is a series of small left bubbles, which is exactly the rhythm of an
-  agent working out loud.
-- **Content that needs width breaks out**: code blocks, diffs, tables, tool cards, file lists. These
-  render full width in the reading column, outside any bubble.
-- **A long written answer is a document**, left aligned, no bubble, capped at a 720 reading column.
-- **Thinking** collapses to one muted line (`thinking · 3s`), expanding to a quoted block.
-- **Tool calls are cards**: icon, command, and the state badge immediately after the command — not
-  pushed to the far right where it loses its subject. Expanding shows arguments and result; results
-  longer than twelve lines fold.
-- **Steered messages** carry an accent rule down their leading edge and the line `joined the run`.
-  Nothing else in the transcript records that today.
-- **System events are centred, muted, one line**: model changed, run stopped, a send refused.
-- **Streaming** ends with a block cursor `▍` trailing the text. It says "still writing" without a
-  spinner, and it disappears on settle.
+**What you send is a bubble.** Right aligned, `accent-weak`, max width 560. Your turns are short and
+sparse, and their job is to be findable when you scroll back: *what did I ask for, and when did I
+change it?* A bubble is a good anchor precisely because it is small and visually distinct.
+
+**What the agent produces is a document.** Left aligned, no bubble, one reading column of 720, full
+markdown. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
+fragments a record that needs to be scanned, and gives up the width its content needs. Products that
+bubble both sides keep the heavy work somewhere else — a separate workspace panel — so what remains
+in the transcript really is chat. Ours is the work.
+
+Everything else follows from those two:
+
+- **Tool calls are cards** in the document flow: icon, command, and the state immediately after the
+  command rather than pushed to the far right where it loses its subject. Expanded, a card shows
+  arguments and result; results over twelve lines fold.
+- **Thinking** collapses to one muted line (`thinking · 3s`) and expands into a quoted block.
+- **System events are one centred muted line**: model changed, run stopped, a send refused. They are
+  facts about the session, not things anyone said.
+- **A steered message** keeps its bubble and adds an accent rule down its leading edge with the
+  label `joined the run`, because after the fact nothing else distinguishes it from a message that
+  started one.
+- **Streaming** trails a block cursor `▍`, which says "still writing" without a spinner and vanishes
+  on settle.
+- **Turn spacing** is 24 within a turn and 32 between turns. Long output needs the rhythm more than
+  a dense list does.
 
 ## 9. Status
 
-Three tiers, decided by what the person has to do about it. This replaces the earlier rule that every
-state needs a word, which would have added noise to exactly the states nobody acts on. Carbon's
-guidance is explicit that an indicator with no required action should be plain text or nothing; HPE's
-rule of thumb is that a status must carry at least three of colour, icon, shape and text.
+Three tiers, decided by what the person has to do about it. Carbon is explicit that an indicator with
+no required action should be plain text or nothing; HPE's rule of thumb is that a status carries at
+least three of colour, icon, shape and text. Fact 4 adds our own requirement: the person is often
+away, so "is it still working" must be answerable from the sidebar without opening anything.
 
 | Tier | States | How it is shown |
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
-| **Reassurance only** | working, thinking, tool running | Motion and shape on the agent's avatar and the conversation row; text on hover and to assistive technology. No sentence in the way. |
+| **Reassurance only** | working, thinking, running | A word plus a pulsing dot on the conversation row, and in the transcript the elapsed time. No sentence in the reading flow. |
 | **Nothing to do** | ready, completed | Show nothing. |
 
-One vocabulary everywhere — the same condition may not be `working` in one place and `running` in
+One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
 another:
 
 `working` · `thinking` · `running` · `done` · `failed` · `stopped` · `needs a model` · `no agent yet`
@@ -179,16 +224,16 @@ another:
 `stopped` is new and required: a tool the person interrupted currently reports `failed`, which blames
 the tool for the person's decision.
 
-**Presence lives on the avatar.** A working agent's avatar animates; the avatar is also the identity,
-so state and identity occupy one object instead of two. Hovering reveals what it is doing. This is
-Grok Bot's approach and it survives our accessibility rule because the reassurance tier is precisely
-the tier that does not need a sentence.
+**Presence belongs to the conversation.** The dot and the word live on the conversation row, and an
+agent row shows `working` only as a summary of its conversations. Animating presence on the avatar is
+right in products where an agent has exactly one thread; here it would answer a question nobody asked
+(*is this agent alive*) instead of the real one (*which of its conversations is running*).
 
 ## 10. Motion
 
 140ms, `cubic-bezier(0.2, 0, 0, 1)`. Four things move: rows expanding and collapsing (180ms),
-popovers appearing (opacity plus 4px rise, 120ms), hover backgrounds (100ms), and the working
-avatar (1.8s breathing loop). Streaming text is not animated — token arrival is the animation, and a
+popovers appearing (opacity plus 4px rise, 120ms), hover backgrounds (100ms), and the running dot on
+a conversation row (1.8s pulse). Streaming text is not animated — token arrival is the animation, and a
 transition on top of it produces jitter. Everything collapses to instant under
 `prefers-reduced-motion`.
 
@@ -209,7 +254,7 @@ name is playful enough on its own; the typography does not add to it.
 Agent avatars are rounded squares, not circles — circles are people, squares are programs, and the
 distinction earns its keep in a product whose whole metaphor is "an agent is a contact". The avatar
 shows the first two letters over a background chosen by hashing the name across eight low-saturation
-hues, and it is the surface that carries presence (§9).
+hues. It carries identity only; presence is on the conversation row (§9).
 
 ## 13. Order of work
 
@@ -217,11 +262,12 @@ hues, and it is the surface that carries presence (§9).
    `lucide-react` for `@phosphor-icons/react`. No structural change, no behaviour change.
 2. **Components.** Buttons (primary, secondary, ghost, danger; heights 28 and 32), badges, cards,
    popovers, composer.
-3. **Status.** The single vocabulary, the three tiers, `stopped`, presence on the avatar.
-4. **Sidebar.** Merge rail and list into one 320 glass column with folded conversations, pin and
-   hide. This one changes navigation, so every smoke assertion that locates a control by label has to
-   be re-checked.
-5. **Transcript.** Bubbles, break-out cards, centred system events, the streaming cursor.
+3. **Status.** The single vocabulary, the three tiers, `stopped`, presence on the conversation row.
+4. **Sidebar.** Merge rail and list into one 320 glass column: agent rows, running and drafted
+   conversations always listed, the rest folded. This one changes navigation, so every smoke
+   assertion that locates a control by label has to be re-checked.
+5. **Transcript.** User bubbles, the agent's document column, tool cards, centred system events, the
+   steering rule, the streaming cursor.
 6. **Keyboard.** Roving tabindex, focusable transcript.
 
 Steps 1–3 and 5–6 do not change behaviour and can land with the existing tests. Step 4 does.
