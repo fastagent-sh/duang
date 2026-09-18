@@ -228,8 +228,7 @@ history, missing/corrupt credentials, synthetic OAuth-refresh failure and recove
 It does not test a real provider and spends no model credits; real providers, OAuth rotation, Codex
 execution and proxy connectivity are covered by `test:live` instead.
 
-Known client gaps: the composer shows the selected directory, not the resolved tool workspace;
-unsent drafts are cached by conversation but have no separate list entry after navigation;
+Known client gaps: unsent drafts are cached by conversation but have no separate list entry after navigation;
 startup selects the first agent and its newest conversation, rather than restoring the previous
 selection. Application quit does not warn about active work. These are tracked acceptance gaps,
 not accepted product limitations.
