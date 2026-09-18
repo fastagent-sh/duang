@@ -3,7 +3,8 @@
 Which process owns what, and where the boundaries are. `docs/design.md` is the product;
 `README.md` is the positioning and current acceptance status. The local client below is
 implemented; remote clients, the control service and deployment sections describe future work.
-Week 1 remains unaccepted; see [current gaps](../README.md#week-1-implementation-and-acceptance-status).
+Week 1 is accepted; see [acceptance status](../README.md#week-1-acceptance-status) for the
+limitations that came with it.
 
 ## Processes
 

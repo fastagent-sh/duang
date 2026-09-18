@@ -2,9 +2,9 @@
 
 Every state of the core chain — add an agent, pick a model, open a conversation, say something,
 watch it run — and what the app shows in each. `docs/design.md` says what the surfaces are; this
-says how they should behave. This is a requirement, not a declaration that Week 1 has passed.
-See [implementation status](../README.md#week-1-implementation-and-acceptance-status) for current
-gaps, including real-provider verification, workspace display, unsent-draft reachability and quit warnings.
+says how they should behave. This is the requirement; see
+[acceptance status](../README.md#week-1-acceptance-status) for what Week 1 actually shipped and the
+limitations it was accepted with.
 
 ## Layout
 
