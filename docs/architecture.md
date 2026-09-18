@@ -12,7 +12,7 @@ Week 1 remains unaccepted; see [current gaps](../README.md#week-1-implementation
 │  renderer (React)     no node, no fs        │
 │      │ preload: a typed mirror of           │
 │      │ SessionControl + one event channel   │
-│  main (Node 22.20 via Electron >= 38.3)     │
+│  main (Node 24.21 via Electron 44.4)        │
 │      ├── createPiAgentFromDir(dir)       ← local agents, in-process
 │      ├── remote SessionControl (HTTP+SSE) ← cloud agents
 │      ├── the filesystem: agent dirs, git, diffs
