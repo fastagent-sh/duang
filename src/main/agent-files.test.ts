@@ -73,6 +73,7 @@ test("scaffolding creates only a new agent directory and never overwrites existi
 });
 
 test("a scaffold that cannot write its files leaves no directory behind", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root ignores the permission bits this test relies on");
   const root = await mkdtemp(join(tmpdir(), "duang-scaffold-"));
   // A umask without the write bit makes the new directory read-only, so the first writeFile fails.
   const previous = process.umask(0o222);

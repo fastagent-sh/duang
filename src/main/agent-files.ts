@@ -6,6 +6,7 @@ export interface AgentRow {
   id: string;
   name: string;
   dir: string;
+  /** duang's model override for this agent. The directory stays the source of truth; we never edit it. */
   model?: string;
 }
 
@@ -95,7 +96,14 @@ export class AgentRegistry {
   }
 }
 
-/** Only create a new directory. Never overwrite a project's existing configuration or ignore rules. */
+/**
+ * Give a plain project an agent, in the layout FastAgent expects: the agent lives in a subdirectory,
+ * so the project itself stays the workspace the agent works ON. Two files and nothing else — no npm
+ * install, no persona, no tools; the coding tools and the project's `AGENTS.md` come for free, and
+ * `fastagent init` remains the way to get the full scaffold.
+ *
+ * Only ever create a new directory: a project's existing configuration or ignore rules are not ours.
+ */
 export async function createAgentIn(dir: string): Promise<string> {
   const agentDir = join(dir, "fastagent");
   // No `recursive`: an existing directory fails here with EEXIST and is never touched below.

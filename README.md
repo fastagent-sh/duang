@@ -173,9 +173,10 @@ Point *Add agent* at a FastAgent directory or a plain project. A plain project o
 directory is never overwritten. A scaffolded agent has no model, so duang asks for one and stores
 the choice in its registry rather than editing the agent's config.
 
-The registry uses serialized, atomic writes. Invalid or unreadable data is reported rather than
-replaced with an empty list. Adding the same resolved directory reuses its existing row, and
-removing an agent never deletes the directory or conversation history.
+The registry uses atomic writes, serialized within one running instance — there is no cross-process
+lock yet, so two instances writing at once can drop each other's rows. Invalid or unreadable data is
+reported rather than replaced with an empty list. Adding the same resolved directory reuses its
+existing row, and removing an agent never deletes the directory or conversation history.
 
 Credentials come from whichever global store has the provider: FastAgent's own
 (`~/.fastagent/.secrets/auth.json`), then pi's (`~/.pi/agent/auth.json`). Only providers that are
