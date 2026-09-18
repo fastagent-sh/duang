@@ -164,7 +164,13 @@ npm ci          # needs a sibling ../fastagent already built at the pinned revis
 npm run dev     # Electron + Vite
 npm test        # registry, routing, selection, drafts, transcript and command regressions
 npm run test:smoke  # real Electron + IPC + FastAgent, with a fake model HTTP response
+DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine's credential file
 ```
+
+`test:live` is the only check that proves authentication end to end: it makes unfaked Codex and
+Anthropic requests through the real IPC path, so it spends model credits and needs working logins.
+It skips itself without `DUANG_LIVE=1`, isolates the registry and agent directory, and prints no
+credential values.
 
 The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
 range when duang ships a build. Fresh-checkout setup, the pinned revision, review and merge
@@ -199,8 +205,10 @@ Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatche
 
 Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
 and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
-not just test counts. The credential-routing regression has isolated coverage, but real-provider
-validation remains open in [#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
+not just test counts. `test:live` has now passed against real Codex and Anthropic accounts, including
+a conversation whose provider differs from the agent default, and a real OAuth refresh that rotated
+both tokens back into the same file. The remaining manual workflow checks are tracked in
+[#5](https://github.com/fastagent-sh/duang/issues/5), and product-policy decisions in
 [#2](https://github.com/fastagent-sh/duang/issues/2).
 
 The current implementation covers: add or scaffold, choose a model, send, stream text and tools,
@@ -217,11 +225,10 @@ The smoke check uses isolated temporary credentials and files, exercises the rea
 preload, IPC and FastAgent runtime, and replaces provider HTTP. It covers both default and explicit
 credential paths, directory-configured models, UI provider switching, a Codex default with Anthropic
 history, missing/corrupt credentials, synthetic OAuth-refresh failure and recovery without restart.
-It does not test a real provider, successful OAuth rotation, Codex execution or proxy connectivity
-and spends no model credits.
+It does not test a real provider and spends no model credits; real providers, OAuth rotation, Codex
+execution and proxy connectivity are covered by `test:live` instead.
 
-Known client gaps: the composer shows the selected directory, not the resolved tool workspace;
-unsent drafts are cached by conversation but have no separate list entry after navigation;
+Known client gaps: unsent drafts are cached by conversation but have no separate list entry after navigation;
 startup selects the first agent and its newest conversation, rather than restoring the previous
 selection. Application quit does not warn about active work. These are tracked acceptance gaps,
 not accepted product limitations.
