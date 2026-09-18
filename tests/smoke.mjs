@@ -264,6 +264,16 @@ if (!process.versions.electron) {
       hold = true;
       await message("Hold this turn so I can stop it.");
       await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "active stop control");
+      // State and consequences in words, not only in colour.
+      assert.match(
+        await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').title"),
+        /not undone/,
+      );
+      assert.match(await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').title"), /\nWorking$/);
+      assert.match(
+        await evaluate("document.querySelector('button[aria-label=\"Configured\"]').title"),
+        /\n(Ready|Needs a model|Broken|No agent in this directory yet)$/,
+      );
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "background run keeps going");
       const refused = await evaluate("window.duang.setModel('smoke', 'openai/gpt-4.1')");
