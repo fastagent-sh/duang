@@ -16,6 +16,7 @@ import { credentials } from "./credentials.ts";
 import { useSystemProxy } from "./proxy.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
+import type { SessionFrame } from "../preload/index.ts";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -54,7 +55,12 @@ function requireSession(session: string): void {
   if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
 }
 
-type Stream = { senderId: number; agentId: string; close: () => void; end: (reason: string) => void };
+type Stream = {
+  senderId: number;
+  agentId: string;
+  close: () => void;
+  end: (reason: string, expected: boolean) => void;
+};
 // The renderer retains background subscriptions only while their turns are running.
 const streams = new Map<string, Stream>();
 function stopStream(key: string): void {
@@ -69,7 +75,7 @@ function stopWindowStreams(senderId: number): void {
 function stopAgentStreams(agentId: string, reason: string): void {
   for (const [key, stream] of streams)
     if (stream.agentId === agentId) {
-      stream.end(reason);
+      stream.end(reason, true);
       stopStream(key);
     }
 }
@@ -121,12 +127,13 @@ function register(): void {
     stopStream(key);
     const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {}, end: () => {} };
     streams.set(key, slot);
-    const forward = (event: SessionEvent) => {
+    const post = (frame: Omit<SessionFrame, "agentId" | "session" | "subscription">) => {
       if (!e.sender.isDestroyed() && streams.get(key) === slot) {
-        e.sender.send("session:event", { agentId: id, session, subscription, event });
+        e.sender.send("session:event", { agentId: id, session, subscription, ...frame });
       }
     };
-    slot.end = (reason: string) => forward({ type: "stream_failed", timestamp: Date.now(), data: { reason } });
+    const forward = (event: SessionEvent) => post({ event });
+    slot.end = (reason, expected) => post({ ended: { reason, expected } });
     try {
       const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
       if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
@@ -137,14 +144,15 @@ function register(): void {
       };
       void (async () => {
         // Both endings leave the renderer deaf: FastAgent closing its subscriber looks like a normal
-        // `done`, and a silent one would keep the conversation running on screen forever.
-        let reason = "The conversation's event stream ended";
+        // `done`, and a silent one would keep the conversation running on screen forever. Only the
+        // throw is a failure; a clean `done` is the runtime letting this subscriber go.
+        let ending = { reason: "This conversation stopped receiving updates", expected: true };
         try {
           for (let next = await iterator.next(); !next.done; next = await iterator.next()) forward(next.value);
         } catch (error) {
-          reason = String(error);
+          ending = { reason: String(error), expected: false };
         }
-        slot.end(reason);
+        slot.end(ending.reason, ending.expected);
         if (streams.get(key) === slot) streams.delete(key);
       })();
       await stream.ready;

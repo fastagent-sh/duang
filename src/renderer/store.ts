@@ -12,6 +12,8 @@ interface Conversation {
   draft: string;
   loading: boolean;
   error?: string;
+  /** Main ended this subscription on purpose. Nothing broke; this view just stopped listening. */
+  ended?: string;
   /** Derived in `publish` from the busy transition, never assigned by the code that causes it. */
   busySince?: number;
   sends: number;
@@ -183,17 +185,22 @@ export function createStore(api: DuangApi) {
       c.state = { ...state, pending: data as unknown as SessionState["pending"] };
     } else if (event.type === "state_changed") {
       c.state = { ...state, ...data };
-    } else if (event.type === "stream_failed") {
-      c.error = String(data.reason);
-      // The subscription is gone, so nothing will report the end of a run this view can no longer
-      // hear. Retry re-opens and re-reads the runtime's real state.
-      c.state = { ...state, status: "idle", activeRunId: undefined };
     }
     c.items = apply(c.items, event);
   }
   const unsubscribe = api.onSessionEvent((frame: SessionFrame) => {
     const c = conversations.get(key(frame.agentId, frame.session));
     if (!c || c.subscription !== frame.subscription) return;
+    if (frame.ended) {
+      // Nothing will report the end of a run this view can no longer hear, so stop waiting for one.
+      // Retry re-opens and re-reads the runtime's real state.
+      if (c.state) c.state = { ...c.state, status: "idle", activeRunId: undefined };
+      if (frame.ended.expected) c.ended = frame.ended.reason;
+      else c.error = frame.ended.reason;
+      if (c !== view.conversation) close(c);
+      publish();
+      return;
+    }
     if (c.loading) c.events.push(frame.event);
     else fold(c, frame.event);
     if (c !== view.conversation && !c.loading && !busy(c)) close(c);
@@ -313,7 +320,8 @@ export function createStore(api: DuangApi) {
     async send() {
       const c = view.conversation;
       const text = c?.draft.trim();
-      if (!c || !text || c.loading || c.error || view.loading || view.states[c.agentId] !== "ready") return;
+      if (!c || !text || c.loading || c.error || c.ended || view.loading || view.states[c.agentId] !== "ready")
+        return;
       c.draft = "";
       c.items = echoUser(c.items, text);
       const echo = c.items.at(-1);

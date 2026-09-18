@@ -58,7 +58,14 @@ function harness() {
       event: { type, data, timestamp: 1, runId: "run" },
     });
   };
-  return { api, store, emit, closed, opens };
+  const end = (
+    c: NonNullable<ReturnType<typeof store.getSnapshot>["conversation"]>,
+    reason: string,
+    expected: boolean,
+  ) => {
+    listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, expected } });
+  };
+  return { api, store, emit, end, closed, opens };
 }
 
 test("first model selection unlocks a new conversation; configured models come from the runtime", async () => {
@@ -173,7 +180,7 @@ test("settlement in another agent cannot invalidate the visible agent's list ref
 });
 
 test("failed delete and abort remain visible; a stale stream never changes a reopened session", async () => {
-  const { api, store, emit } = harness();
+  const { api, store, emit, end } = harness();
   await store.load();
   const old = store.getSnapshot().conversation!;
   const refusal = { ok: false as const, error: { code: "busy", message: "runtime refused", retryable: true } };
@@ -190,7 +197,7 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   emit(current, "run_started");
   assert.equal(store.getSnapshot().busy, true);
   // A dead subscription reports nothing further, so the run controls must not wait for `run_settled`.
-  emit(current, "stream_failed", { reason: "stream disconnected" });
+  end(current, "stream disconnected", false);
   assert.equal(store.getSnapshot().busy, false);
   store.setDraft("keep me");
   await store.send();
@@ -199,5 +206,27 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.draft, "keep me");
   assert.equal(store.getSnapshot().conversation?.error, undefined);
+  store.dispose();
+});
+
+test("an expected end of a subscription is reported without pretending the conversation failed", async () => {
+  const { store, emit, end } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  emit(c, "run_started");
+  end(c, "The agent's runtime was rebuilt for the new model", true);
+  const current = store.getSnapshot().conversation!;
+  assert.equal(current.ended, "The agent's runtime was rebuilt for the new model");
+  assert.equal(current.error, undefined, "an intended end is not a failure");
+  assert.ok(
+    current.items.every((item) => item.kind !== "note"),
+    "and it does not write itself into the transcript",
+  );
+  assert.equal(store.getSnapshot().busy, false, "a deaf view must stop waiting for run_settled");
+  store.setDraft("blocked");
+  await store.send();
+  assert.equal(current.draft, "blocked", "sending waits for the reconnect");
+  await store.retry();
+  assert.equal(store.getSnapshot().conversation?.ended, undefined);
   store.dispose();
 });

@@ -52,7 +52,7 @@ export default function App() {
   const blocked =
     view.loading || c?.loading
       ? "opening conversation…"
-      : c?.error
+      : c?.error || c?.ended
         ? "reconnect before sending"
         : agentState === "broken"
           ? "this agent is broken"
@@ -126,13 +126,24 @@ export default function App() {
             </button>
           )}
         </header>
-        {error && (
+        {error ? (
           <div role="alert" className="px-6 py-2 text-danger whitespace-pre-wrap break-words">
             {error}{" "}
             <button className="underline" onClick={() => void store.retry()}>
               Retry
             </button>
           </div>
+        ) : (
+          // An ended subscription is not a failure: the conversation is intact, this view stopped
+          // listening. Say it in the calm voice and offer the one action that fixes it.
+          c?.ended && (
+            <div role="status" className="px-6 py-2 text-muted whitespace-pre-wrap break-words">
+              {c.ended}{" "}
+              <button className="underline" onClick={() => void store.retry()}>
+                Reconnect
+              </button>
+            </div>
+          )
         )}
         {!agentId ? (
           <NoAgents onAdd={() => void store.addAgent()} />
