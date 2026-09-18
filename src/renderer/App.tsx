@@ -53,20 +53,6 @@ export default function App() {
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
-  const blocked =
-    view.loading || c?.loading
-      ? "opening conversation…"
-      : c?.error || c?.ended
-        ? "reconnect before sending"
-        : agentState === "broken"
-          ? "this agent is broken"
-          : agentState === "no_agent"
-            ? "create an agent here first"
-            : agentState === "missing_model"
-              ? "pick a model to start"
-              : !c
-                ? "no conversation"
-                : undefined;
   const composer = (
     <Composer
       agentId={agentId}
@@ -93,8 +79,8 @@ export default function App() {
       value={c?.draft ?? ""}
       onChange={store.setDraft}
       onSend={() => void store.send()}
-      disabled={!!blocked}
-      placeholder={blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
+      disabled={!!view.blocked}
+      placeholder={view.blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
     />
   );
   const error = c?.error ?? (agentState !== "broken" && agentState !== "missing_model" ? view.error : undefined);
