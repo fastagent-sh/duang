@@ -683,6 +683,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
           <button
             onClick={() => void store.send()}
             disabled={disabled || value.trim() === ""}
+            aria-label="Send"
             title="Send (⏎) · newline (⇧⏎)"
             className="ml-auto size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"
           >

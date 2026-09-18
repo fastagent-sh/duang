@@ -134,6 +134,22 @@ test("drafts stay with conversations; rejected sends preserve text and report th
   store.dispose();
 });
 
+test("a rejected send returns its text without eating what was typed meanwhile", async () => {
+  const { api, store } = harness();
+  await store.load();
+  await store.open("one");
+  const refusal = deferred<SessionResult>();
+  api.send = () => refusal.promise;
+  store.setDraft("first message");
+  const sending = store.send();
+  // The person does not wait for admission; they start the next line while it is still pending.
+  store.setDraft("typed while waiting");
+  refusal.resolve({ ok: false, error: { code: "refused", message: "no", retryable: true } });
+  await sending;
+  assert.equal(store.getSnapshot().conversation?.draft, "first message\ntyped while waiting");
+  store.dispose();
+});
+
 test("a restart reopens the agent and conversation the window was left on", async () => {
   const values = new Map<string, string>();
   const localStorage = {

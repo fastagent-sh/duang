@@ -75,6 +75,8 @@ if (!process.versions.electron) {
       JSON.stringify([
         { id: "smoke", name: "Smoke", dir: workspace },
         { id: "configured", name: "Configured", dir: configured },
+        // A directory that was registered and then moved or deleted: one broken agent, nothing else.
+        { id: "gone", name: "Gone", dir: join(root, "moved-away") },
       ]),
     );
 
@@ -204,7 +206,7 @@ if (!process.versions.electron) {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(text)});
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
-      await evaluate("document.querySelector('button[title^=\"Send\"]').click()");
+      await evaluate("document.querySelector('button[aria-label=\"Send\"]').click()");
     }
 
     try {
@@ -286,7 +288,7 @@ if (!process.versions.electron) {
       await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "return to active run");
       await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').click()");
       await until("document.body.innerText.includes('run aborted')", "abort is a settled transcript outcome");
-      await until("document.querySelector('button[title^=\"Send\"]') !== null", "composer leaves running state");
+      await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "composer leaves running state");
 
       // Persisted registry and history survive reloading the renderer.
       win.webContents.reload();
@@ -388,6 +390,52 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
       await type("/");
       await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
+      await type("");
+
+      // A registered directory that no longer exists breaks only its own agent, and stays removable.
+      await evaluate("document.querySelector('button[aria-label=\"Gone\"]').click()");
+      await until("document.body.innerText.includes('moved-away')", "the missing directory is named");
+      assert.match(await evaluate("document.body.innerText"), /Remove agent/);
+      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      await until("document.body.innerText.includes('Smoke answer')", "the other agents are unaffected");
+
+      // The picker's own states: named for assistive technology, and honest when nothing matches.
+      await click("openai/gpt-4o-mini");
+      await until("document.querySelector('dialog[open]') !== null", "picker for its empty state");
+      assert.equal(await evaluate("document.querySelector('dialog').getAttribute('aria-label')"), "Choose a model");
+      await evaluate(`(() => {
+        const input = document.querySelector('dialog input');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'no-such-model');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await until("document.querySelector('dialog').innerText.includes('Nothing matches')", "no filter matches");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("document.querySelector('dialog') === null", "picker closes again");
+
+      // Delete is reachable by keyboard, not only by hovering the row.
+      assert.equal(
+        await evaluate(`(() => {
+          const row = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
+          row.focus();
+          return getComputedStyle(row).opacity;
+        })()`),
+        "1",
+        "a focused delete control is visible",
+      );
+
+      // Whitespace is not a message, and the composer stops growing at eight lines.
+      await type("   \n  ");
+      assert.equal(await evaluate("document.querySelector('button[aria-label=\"Send\"]').disabled"), true);
+      await type(Array.from({ length: 12 }, (_, i) => `line ${i}`).join("\n"));
+      assert.ok(
+        await evaluate(`(() => {
+          const input = document.querySelector('textarea');
+          const lines = parseFloat(getComputedStyle(input).lineHeight);
+          return input.clientHeight <= lines * 8 + 2 && input.scrollHeight > input.clientHeight;
+        })()`),
+        "the composer scrolls instead of growing past eight lines",
+      );
       await type("");
 
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
