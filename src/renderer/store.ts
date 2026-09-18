@@ -12,6 +12,7 @@ interface Conversation {
   draft: string;
   loading: boolean;
   error?: string;
+  /** Derived in `publish` from the busy transition, never assigned by the code that causes it. */
   busySince?: number;
   sends: number;
   runStarts: number;
@@ -31,8 +32,8 @@ export interface View {
   runningAgents: string[];
   runningSessions: string[];
 }
-const busy = (c: Conversation) =>
-  c.sends > 0 || c.busySince !== undefined || c.state?.status === "running" || c.state?.status === "compacting";
+/** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
+const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
 
 /** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
 export function createStore(api: DuangApi) {
@@ -53,6 +54,12 @@ export function createStore(api: DuangApi) {
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
+    // One transition point for the wait clock: every way a turn can end clears it here, so no ending
+    // path has to remember to.
+    for (const c of conversations.values()) {
+      if (busy(c)) c.busySince ??= Date.now();
+      else c.busySince = undefined;
+    }
     const running = [...conversations.values()].filter(busy);
     view.busy = !!view.conversation && busy(view.conversation);
     view.runningAgents = [...new Set(running.map((c) => c.agentId))];
@@ -126,7 +133,6 @@ export function createStore(api: DuangApi) {
       // subscription and view across navigation, so its deltas are never reconstructed from history.
       for (const event of c.events) fold(c, event);
       c.events = [];
-      if (c.state.status === "running") c.busySince ??= Date.now();
       publish();
     } catch (error) {
       if (conversations.get(key(agentId, session)) !== c) return;
@@ -170,10 +176,8 @@ export function createStore(api: DuangApi) {
     if (event.type === "run_started") {
       c.runStarts++;
       c.state = { ...state, status: "running", activeRunId: event.runId };
-      c.busySince ??= event.timestamp;
     } else if (event.type === "run_settled") {
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: 0, followUp: 0 } };
-      c.busySince = undefined;
       void refreshList(c.agentId);
     } else if (event.type === "queue_changed") {
       c.state = { ...state, pending: data as unknown as SessionState["pending"] };
@@ -181,7 +185,6 @@ export function createStore(api: DuangApi) {
       c.state = { ...state, ...data };
     } else if (event.type === "stream_failed") {
       c.error = String(data.reason);
-      c.busySince = undefined;
       // The subscription is gone, so nothing will report the end of a run this view can no longer
       // hear. Retry re-opens and re-reads the runtime's real state.
       c.state = { ...state, status: "idle", activeRunId: undefined };
@@ -320,7 +323,6 @@ export function createStore(api: DuangApi) {
         c.items = c.items.filter((item) => item !== echo);
         c.draft = c.draft ? `${text}\n${c.draft}` : text;
       };
-      c.busySince ??= Date.now();
       c.sends++;
       publish();
       try {
@@ -339,7 +341,6 @@ export function createStore(api: DuangApi) {
         restoreRejected();
       } finally {
         c.sends--;
-        if (c.state?.status !== "running") c.busySince = undefined;
         if (c !== view.conversation && !busy(c)) close(c);
         publish();
       }
