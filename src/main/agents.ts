@@ -21,10 +21,14 @@ type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
  * may send at once — hence a count, not a flag — while a model change or removal must exclude all of
  * them, including turns still opening their runtime. Shared-vs-exclusive is not what a `Set<string>`
  * of busy sessions can express.
+ *
+ * The exclusion is asymmetric in one more way: a send is refused while settings change, because
+ * running it would use a model the person never saw, but a READ has nothing to revisit — it waits
+ * and gets the runtime that replaced the old one.
  */
 const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
-const changing = new Set<string>();
+const changing = new Map<string, Promise<void>>();
 
 export class MissingModelError extends Error {}
 export class NoAgentError extends Error {}
@@ -47,8 +51,14 @@ async function build(row: AgentRow): Promise<Opened> {
   }
 }
 
-export function openAgent(row: AgentRow): Promise<Opened> {
-  if (changing.has(row.id)) return Promise.reject(new Error("Agent settings are changing; try again."));
+export async function openAgent(row: AgentRow): Promise<Opened> {
+  // Waiting, not failing: "try again" is not a choice the person can act on, and it reached the
+  // renderer as an unclassified error, which paints a working agent as broken. The registry read
+  // that admitted this call is stale once the change lands, so re-check what it checked.
+  while (changing.has(row.id)) {
+    await changing.get(row.id);
+    if (!(await registry.list()).some((a) => a.id === row.id)) throw new Error(`unknown agent ${row.id}`);
+  }
   const cached = opened.get(row.id);
   if (cached) return cached;
   const promise = build(row);
@@ -60,8 +70,11 @@ export function openAgent(row: AgentRow): Promise<Opened> {
 }
 
 /** Count admission as busy too: model changes must not race a turn that is still opening its runtime. */
-export async function withAgentRun<T>(row: AgentRow, run: (agent: Opened) => Promise<T>): Promise<T> {
-  if (changing.has(row.id)) throw new Error("Agent settings are changing; try again.");
+export async function withAgentRun(
+  row: AgentRow,
+  run: (agent: Opened) => Promise<SessionResult>,
+): Promise<SessionResult> {
+  if (changing.has(row.id)) return refuse("agent_changing", "Agent settings are changing; try again.");
   sending.set(row.id, (sending.get(row.id) ?? 0) + 1);
   try {
     return await run(await openAgent(row));
@@ -81,23 +94,29 @@ export const refuse = (code: string, message: string): SessionResult => ({
   error: { code, message, retryable: true },
 });
 
-/** Undefined when the change may proceed; the caller must release `changing` afterwards. */
-function beginChange(id: string): SessionResult | undefined {
-  if (changing.has(id)) return refuse("agent_changing", "Agent settings are changing; try again.");
+/** One agent's settings change, excluded against its own sends and announced to its own readers. */
+function change(id: string, apply: () => Promise<SessionResult>): Promise<SessionResult> {
+  if (changing.has(id)) return Promise.resolve(refuse("agent_changing", "Agent settings are changing; try again."));
   if (sending.has(id))
-    return refuse(
-      "agent_busy",
-      "An agent conversation is running — stop it before changing or removing the agent.",
+    return Promise.resolve(
+      refuse("agent_busy", "An agent conversation is running — stop it before changing or removing the agent."),
     );
-  changing.add(id);
-  return undefined;
+  // Nothing can interleave between starting the work and publishing it: `apply` cannot reach another
+  // admission before its first await, and this runs in the same synchronous block.
+  const running = apply();
+  changing.set(
+    id,
+    running.then(
+      () => {},
+      () => {},
+    ),
+  );
+  return running.finally(() => changing.delete(id));
 }
 
 /** Prepare the replacement first; failed setup must leave the working runtime and saved choice intact. */
-export async function setAgentModel(row: AgentRow, model: string, session?: string): Promise<SessionResult> {
-  const refusal = beginChange(row.id);
-  if (refusal) return refusal;
-  try {
+export function setAgentModel(row: AgentRow, model: string, session?: string): Promise<SessionResult> {
+  return change(row.id, async () => {
     const replacement = await build({ ...row, model });
     if (session) {
       const result = await replacement.control.sessions.get(session).update({ model });
@@ -106,19 +125,13 @@ export async function setAgentModel(row: AgentRow, model: string, session?: stri
     await registry.setModel(row.id, model);
     opened.set(row.id, Promise.resolve(replacement));
     return { ok: true };
-  } finally {
-    changing.delete(row.id);
-  }
+  });
 }
 
-export async function removeAgent(id: string): Promise<SessionResult> {
-  const refusal = beginChange(id);
-  if (refusal) return refusal;
-  try {
+export function removeAgent(id: string): Promise<SessionResult> {
+  return change(id, async () => {
     await registry.remove(id);
     opened.delete(id);
     return { ok: true };
-  } finally {
-    changing.delete(id);
-  }
+  });
 }

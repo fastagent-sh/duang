@@ -291,7 +291,23 @@ if (!process.versions.electron) {
       assert.equal(anthropicRequests, 1);
 
       // Change only the agent default, then reopen Anthropic history through a fresh renderer.
-      await evaluate(`window.duang.setModel('configured', ${JSON.stringify(codexModel)})`);
+      // The read issued alongside the change must wait for the new runtime instead of reporting a
+      // broken agent. Whether it lands inside the window is main's to schedule, so assert only the
+      // outcome; the forced-window verification is described in the PR.
+      const racing = await evaluate(`(async () => {
+        const change = window.duang.setModel('configured', ${JSON.stringify(codexModel)});
+        const reads = [];
+        for (let i = 0; i < 40; i++) {
+          reads.push(window.duang.openAgent('configured'));
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        return [await change, await Promise.all(reads)];
+      })()`);
+      assert.equal(racing[0].ok, true);
+      assert.ok(
+        racing[1].every((read) => read.ok),
+        "a read during a settings change waits for the new runtime, it does not report a broken agent",
+      );
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       await until("document.body.innerText.includes('Smoke answer')", "reload initial agent");
