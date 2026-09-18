@@ -10,9 +10,20 @@ export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
  * — anything unreadable is simply a first start.
  */
 const SELECTION_KEY = "duang.selection";
+const DRAFTS_KEY = "duang.drafts";
 interface Selection {
   agentId?: string;
   perAgent: [string, string][];
+}
+/** Unsent text, kept until it is sent, cleared, or its conversation or agent goes away. */
+function readDrafts(): [string, string][] {
+  try {
+    const stored = globalThis.localStorage?.getItem(DRAFTS_KEY);
+    const parsed = stored ? (JSON.parse(stored) as [string, string][]) : undefined;
+    return Array.isArray(parsed) ? parsed.filter(([k, v]) => typeof k === "string" && typeof v === "string") : [];
+  } catch {
+    return [];
+  }
 }
 function readSelection(): Selection | undefined {
   try {
@@ -23,11 +34,11 @@ function readSelection(): Selection | undefined {
     return undefined;
   }
 }
-function writeSelection(selection: Selection): void {
+function writeStored(storageKey: string, value: string): void {
   try {
-    globalThis.localStorage?.setItem(SELECTION_KEY, JSON.stringify(selection));
+    globalThis.localStorage?.setItem(storageKey, value);
   } catch {
-    // A full or disabled store costs a click after the next restart, nothing else.
+    // A full or disabled store costs a click or a retyped line after the next restart, nothing else.
   }
 }
 interface Conversation {
@@ -116,7 +127,8 @@ export function createStore(api: DuangApi) {
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
-  const drafts = new Map<string, string>();
+  const drafts = new Map<string, string>(readDrafts());
+  let persisted = "";
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
   const lastOpened = new Map<string, string>(stored?.perAgent);
@@ -144,10 +156,19 @@ export function createStore(api: DuangApi) {
     view.runningAgents = [...new Set(running.map((c) => c.agentId))];
     view.runningSessions = running.filter((c) => c.agentId === view.agentId).map((c) => c.session);
     // A conversation the runtime has never heard of exists only while it is on screen. Without a row
-    // of its own, walking away from unsent text is the same as discarding it.
-    view.draftSessions = [...drafts]
-      .filter(([id, text]) => text.trim() && id.startsWith(`${view.agentId ?? ""}/`))
+    // of its own, walking away from unsent text is the same as discarding it. The open conversation
+    // holds its own draft, so read both here: this is the single view of what is unsent.
+    const unsent = new Map(drafts);
+    if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
+    const kept = [...unsent].filter(([, text]) => text.trim());
+    view.draftSessions = kept
+      .filter(([id]) => id.startsWith(`${view.agentId ?? ""}/`))
       .map(([id]) => id.slice((view.agentId ?? "").length + 1));
+    const serialized = JSON.stringify(kept);
+    if (serialized !== persisted) {
+      persisted = serialized;
+      writeStored(DRAFTS_KEY, serialized);
+    }
     view.blocked = blockedBy(view);
     for (const listener of listeners) listener();
   };
@@ -183,7 +204,7 @@ export function createStore(api: DuangApi) {
     if (!agentId) return;
     lastOpened.set(agentId, session);
     lastAgent = agentId;
-    writeSelection({ agentId, perAgent: [...lastOpened] });
+    writeStored(SELECTION_KEY, JSON.stringify({ agentId, perAgent: [...lastOpened] } satisfies Selection));
     leave();
     const existing = conversations.get(key(agentId, session));
     if (existing) {
@@ -423,6 +444,7 @@ export function createStore(api: DuangApi) {
         const result = await api.removeAgent(id);
         if (!result.ok) return note(result.error.message);
         for (const c of conversations.values()) if (c.agentId === id) close(c);
+        for (const draftKey of [...drafts.keys()]) if (draftKey.startsWith(`${id}/`)) drafts.delete(draftKey);
         publish({ agents: await api.listAgents() });
         if (view.agentId !== id) return;
         ++navigation;

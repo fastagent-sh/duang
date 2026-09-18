@@ -154,7 +154,24 @@ test("a restart reopens the agent and conversation the window was left on", asyn
     await second.store.load();
     assert.equal(second.store.getSnapshot().agentId, "b");
     assert.equal(second.store.getSnapshot().conversation?.session, "kept");
+    second.store.setDraft("typed before quitting");
     second.store.dispose();
+
+    // Unsent text survives the restart too, and stops existing once it is cleared.
+    const third = harness();
+    third.api.openAgent = async () => listed("kept");
+    await third.store.load();
+    assert.equal(third.store.getSnapshot().conversation?.draft, "typed before quitting");
+    assert.deepEqual(third.store.getSnapshot().draftSessions, ["kept"]);
+    third.store.setDraft("");
+    third.store.dispose();
+
+    const fourth = harness();
+    fourth.api.openAgent = async () => listed("kept");
+    await fourth.store.load();
+    assert.equal(fourth.store.getSnapshot().conversation?.draft, "");
+    assert.deepEqual(fourth.store.getSnapshot().draftSessions, []);
+    fourth.store.dispose();
   } finally {
     Reflect.deleteProperty(globalThis, "localStorage");
   }
