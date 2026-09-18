@@ -7,6 +7,7 @@ import {
   BrokenAgent,
   Composer,
   ConversationList,
+  Failure,
   home,
   NeedsAgent,
   NewConversation,
@@ -24,6 +25,10 @@ export default function App() {
   const [agentId, setAgentId] = useState<string>();
   const [states, setStates] = useState<Record<string, AgentState>>({});
   const [broken, setBroken] = useState<string>();
+  /** Storage failures reject in main and would otherwise die in an unhandled promise, leaving a
+   *  corrupt registry looking exactly like an empty one. Show the message, keep the app usable. */
+  const [failure, setFailure] = useState<string>();
+  const report = useCallback((error: unknown) => setFailure(error instanceof Error ? error.message : String(error)), []);
   const [picking, setPicking] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [session, setSession] = useState<string>();
@@ -52,20 +57,23 @@ export default function App() {
     // The row on screen still carries the old model: re-read it, or the chip lies. The conversation
     // is re-opened rather than re-selected, because the assembly was rebuilt underneath it and the
     // old event subscription died with it.
-    void duang.listAgents().then(setAgents);
+    void duang.listAgents().then(setAgents).catch(report);
     if (session) void open(agentId, session, true);
   }
 
   // Opening straight into the last-known agent beats a landing screen whose only content is a button.
   const boot = useRef(false);
   useEffect(() => {
-    void duang.listAgents().then((list) => {
-      setAgents(list);
-      if (!boot.current && list[0]) {
-        boot.current = true;
-        void selectAgent(list[0].id);
-      }
-    });
+    void duang
+      .listAgents()
+      .then((list) => {
+        setAgents(list);
+        if (!boot.current && list[0]) {
+          boot.current = true;
+          void selectAgent(list[0].id);
+        }
+      })
+      .catch(report);
     // selectAgent is stable for the first run, which is the only run this effect has.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -122,11 +130,20 @@ export default function App() {
   );
 
   const addAgent = useCallback(async () => {
-    const row = await duang.addAgent();
+    setFailure(undefined);
+    // The picker itself and the registry write both live in main; a rejection here is the only
+    // sign the person gets that their click did nothing.
+    let row: AgentRow | undefined;
+    try {
+      row = await duang.addAgent();
+    } catch (error) {
+      return report(error);
+    }
     if (!row) return;
-    setAgents((list) => (list.some((a) => a.id === row.id) ? list : [...list, row]));
-    void selectAgent(row.id);
-  }, [selectAgent]);
+    const added = row;
+    setAgents((list) => (list.some((a) => a.id === added.id) ? list : [...list, added]));
+    void selectAgent(added.id);
+  }, [selectAgent, report]);
 
   // One subscription for the window; frames for a conversation that is no longer open are dropped.
   const current = useRef({ agentId, session });
@@ -173,7 +190,12 @@ export default function App() {
 
   async function removeAgent(id: string) {
     if (!confirm("Remove this agent from duang? The directory is not touched.")) return;
-    await duang.removeAgent(id);
+    // Only forget the row once main says it is gone, or the sidebar would lie about the file.
+    try {
+      await duang.removeAgent(id);
+    } catch (error) {
+      return report(error);
+    }
     setAgents((list) => list.filter((a) => a.id !== id));
     setAgentId(undefined);
     setBroken(undefined);
@@ -247,6 +269,8 @@ export default function App() {
           )}
         </header>
 
+        {failure && <Failure message={failure} onDismiss={() => setFailure(undefined)} />}
+
         {!agentId ? (
           <NoAgents onAdd={() => void addAgent()} />
         ) : broken ? (
@@ -254,7 +278,7 @@ export default function App() {
         ) : agentState === "no_agent" ? (
           <NeedsAgent
             dir={agent?.dir ?? ""}
-            onCreate={() => void duang.scaffoldAgent(agentId).then(() => selectAgent(agentId))}
+            onCreate={() => void duang.scaffoldAgent(agentId).then(() => selectAgent(agentId), report)}
             onRemove={() => void removeAgent(agentId)}
           />
         ) : !session || items.length === 0 ? (

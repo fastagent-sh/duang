@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { AgentRegistry, createAgentIn } from "./agent-files.ts";
 
-test("registry serializes writes, survives restart and deduplicates real paths", async () => {
+test("registry serializes writes in one process, survives restart and deduplicates real paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
   try {
     const file = join(root, "data", "agents.json");
@@ -70,4 +70,16 @@ test("scaffolding creates only a new agent directory and never overwrites existi
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a scaffold that cannot write its files leaves no directory behind", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "duang-scaffold-"));
+  // A umask without the write bit makes the new directory read-only, so the first writeFile fails.
+  const previous = process.umask(0o222);
+  t.after(async () => {
+    process.umask(previous);
+    await rm(root, { recursive: true, force: true });
+  });
+  await assert.rejects(createAgentIn(root), { code: "EACCES" });
+  assert.deepEqual(await readdir(root), [], "a retry must not hit EEXIST on our own leftovers");
 });

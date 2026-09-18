@@ -98,8 +98,16 @@ export class AgentRegistry {
 /** Only create a new directory. Never overwrite a project's existing configuration or ignore rules. */
 export async function createAgentIn(dir: string): Promise<string> {
   const agentDir = join(dir, "fastagent");
+  // No `recursive`: an existing directory fails here with EEXIST and is never touched below.
   await mkdir(agentDir);
-  await writeFile(join(agentDir, "fastagent.config.ts"), "export default {};\n", { flag: "wx" });
-  await writeFile(join(agentDir, ".gitignore"), ".state/\n.secrets/\n.env\n", { flag: "wx" });
+  try {
+    await writeFile(join(agentDir, "fastagent.config.ts"), "export default {};\n", { flag: "wx" });
+    await writeFile(join(agentDir, ".gitignore"), ".state/\n.secrets/\n.env\n", { flag: "wx" });
+  } catch (error) {
+    // This call created the directory, so a half-written one is ours to remove. Leaving it would
+    // make every later attempt fail with EEXIST and strand the Create button for good.
+    await rm(agentDir, { recursive: true });
+    throw error;
+  }
   return agentDir;
 }
