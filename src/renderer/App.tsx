@@ -87,11 +87,7 @@ export default function App() {
           {!!c?.state?.pending && c.state.pending.steering + c.state.pending.followUp > 0 && (
             <span className="text-muted text-[11px]">{c.state.pending.steering + c.state.pending.followUp} queued</span>
           )}
-          {busy && (
-            <button className="no-drag ml-auto text-danger" onClick={() => void store.abort()}>
-              Stop
-            </button>
-          )}
+
         </header>
         {error ? (
           <div role="alert" className="px-6 py-2 text-danger whitespace-pre-wrap break-words">
