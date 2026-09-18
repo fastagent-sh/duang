@@ -51,9 +51,10 @@ made it work there, and whether that premise holds here.
   removing controls rather than adding them.
   **Refused, with reasons:** *bubbles on both sides* — their premise is that the heavy work lives on
   the Bot's own computer panel, so the transcript carries short reports; ours is fact 5, where the
-  transcript is the work. *Presence animated on the avatar* — their premise is one conversation per
-  Bot, so agent presence is conversation presence; ours is fact 4, where the useful question is which
-  conversation is running. *Status / preview / takeover* — their premise is a machine you can only
+  transcript is the work. *An avatar that performs a lifecycle* — their premise is one
+  conversation per Bot plus an expressive character to animate; ours is a lettered tile and parallel
+  conversations, so the avatar carries agent presence as a quiet ring while the conversation rows say
+  which one is running. *Status / preview / takeover* — their premise is a machine you can only
   watch through a screen; our files are on this disk and already open in the person's editor. *Pin
   and hide* — their premise is a roster of up to 50 Bots; ours is the few agents you actually have.
 - **Claude Code desktop** — parallel sessions stay visible and are filterable by state, because
@@ -94,9 +95,19 @@ preview on the second line. An agent with a single conversation shows nothing mo
 text is listed for the same reason. Everything else folds behind `⌄ 2 more`, which expands in place
 into indented rows with title, relative time and state.
 
-**Presence is per conversation, not per agent.** The state word sits on the conversation row; the
-agent row only summarises it. Products that animate presence on the avatar have one conversation per
-agent, so the two are the same thing — here they are not, and the useful answer is which conversation.
+**Presence is told at two levels, because the sidebar has two questions to answer.** The avatar
+carries the agent's own presence: while any of its conversations is working, a slow accent ring
+breathes around it, visible whether or not the group is expanded. The agent row states it in words —
+`working`, or `2 working` when several are. The conversation rows carry which one: a pulsing dot and
+the state word on the specific conversation.
+
+Folded, that is complete: ring plus summary. Expanded, it resolves to the individual conversation.
+The ring is never the only signal, so colour is never doing the work alone (§9).
+
+What the avatar does not do is act. Products where the avatar performs a lifecycle — thinking,
+waiting, celebrating — have one conversation per agent, an expressive character to animate, and a
+consumer's relationship with it. Ours is two letters on a tile representing a directory; a breathing
+ring is presence, a performance would be costume.
 
 Reserved, in arrival order: a `local | cloud` segmented control in the sidebar header (week 3), a
 pinned **Activity** row above the roster (week 4), and the right panel (week 2) holding the file
@@ -180,8 +191,8 @@ drawn differently on purpose.
 sparse, and their job is to be findable when you scroll back: *what did I ask for, and when did I
 change it?* A bubble is a good anchor precisely because it is small and visually distinct.
 
-**What the agent produces is a document.** Left aligned, no bubble, one reading column of 720, full
-markdown. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
+**What the agent produces is a document.** Left aligned, no bubble, one reading column of 720 (or the
+full width minus 48 when the window is narrower than 1000), full markdown. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
 fragments a record that needs to be scanned, and gives up the width its content needs. Products that
 bubble both sides keep the heavy work somewhere else — a separate workspace panel — so what remains
 in the transcript really is chat. Ours is the work.
@@ -212,28 +223,31 @@ away, so "is it still working" must be answerable from the sidebar without openi
 | Tier | States | How it is shown |
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
-| **Reassurance only** | working, thinking, running | A word plus a pulsing dot on the conversation row, and in the transcript the elapsed time. No sentence in the reading flow. |
+| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar, a pulsing dot and the word on the conversation row, elapsed time in the transcript. No sentence in the reading flow. |
 | **Nothing to do** | ready, completed | Show nothing. |
 
 One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
 another:
 
-`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `needs a model` · `no agent yet`
-· `broken`
+`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `refused` · `needs a model` ·
+`no agent yet` · `broken`
+
+`refused` and `failed` stay separate on purpose: a refused send never ran, so the text is still the
+person's to edit; a failed run did run, and its effects may already exist.
 
 `stopped` is new and required: a tool the person interrupted currently reports `failed`, which blames
 the tool for the person's decision.
 
-**Presence belongs to the conversation.** The dot and the word live on the conversation row, and an
-agent row shows `working` only as a summary of its conversations. Animating presence on the avatar is
-right in products where an agent has exactly one thread; here it would answer a question nobody asked
-(*is this agent alive*) instead of the real one (*which of its conversations is running*).
+**Presence is layered, never duplicated.** The avatar answers *is this agent busy at all* with a
+breathing ring, the agent row says it in words (`working`, `2 working`), and the conversation rows
+answer *which one* with a dot and the state word. Each level adds information the one above cannot
+give; none of them repeats the other, and none of them is colour alone.
 
 ## 10. Motion
 
 140ms, `cubic-bezier(0.2, 0, 0, 1)`. Four things move: rows expanding and collapsing (180ms),
-popovers appearing (opacity plus 4px rise, 120ms), hover backgrounds (100ms), and the running dot on
-a conversation row (1.8s pulse). Streaming text is not animated — token arrival is the animation, and a
+popovers appearing (opacity plus 4px rise, 120ms), hover backgrounds (100ms), and presence — the
+avatar ring and the conversation dot breathing together at 1.8s. Streaming text is not animated — token arrival is the animation, and a
 transition on top of it produces jitter. Everything collapses to instant under
 `prefers-reduced-motion`.
 
@@ -254,7 +268,8 @@ name is playful enough on its own; the typography does not add to it.
 Agent avatars are rounded squares, not circles — circles are people, squares are programs, and the
 distinction earns its keep in a product whose whole metaphor is "an agent is a contact". The avatar
 shows the first two letters over a background chosen by hashing the name across eight low-saturation
-hues. It carries identity only; presence is on the conversation row (§9).
+hues. Identity is the tile; presence is the ring around it (§9), never a change to the tile itself,
+so an agent looks like the same agent whether it is busy or idle.
 
 ## 13. Order of work
 
@@ -262,7 +277,8 @@ hues. It carries identity only; presence is on the conversation row (§9).
    `lucide-react` for `@phosphor-icons/react`. No structural change, no behaviour change.
 2. **Components.** Buttons (primary, secondary, ghost, danger; heights 28 and 32), badges, cards,
    popovers, composer.
-3. **Status.** The single vocabulary, the three tiers, `stopped`, presence on the conversation row.
+3. **Status.** The single vocabulary, the three tiers, `stopped`, and presence at both levels — the
+   avatar ring and the conversation dot.
 4. **Sidebar.** Merge rail and list into one 320 glass column: agent rows, running and drafted
    conversations always listed, the rest folded. This one changes navigation, so every smoke
    assertion that locates a control by label has to be re-checked.
