@@ -10,7 +10,13 @@ function expandHome(path: string): string {
 
 export const authPath = resolve(expandHome(process.env.FASTAGENT_AUTH_PATH || GLOBAL_AUTH_PATH));
 
-export async function credentials(): Promise<{ specs: string[]; authPath: string }> {
+/** What the picker shows: the specs this machine can run, and the file they were read from. */
+export interface Models {
+  specs: string[];
+  authPath: string;
+}
+
+export async function credentials(): Promise<Models> {
   const models = createPiModels({
     authPath,
     warn(message) {

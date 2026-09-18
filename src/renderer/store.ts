@@ -1,6 +1,6 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, SessionFrame } from "../preload/index.ts";
-import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
+import { apply, fromEntries, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 interface Conversation {
@@ -47,6 +47,17 @@ export interface View {
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
+
+/**
+ * The sentence the other program wrote, and nothing of ours around it. Only unexpected failures
+ * throw across IPC, and Electron wraps those as "Error invoking remote method 'x': Error: <what main
+ * said>"; expected refusals arrive as values and never come through here.
+ */
+const message = (error: unknown): string =>
+  (error instanceof Error ? error.message : String(error)).replace(
+    /^Error invoking remote method '[^']*': (Error: )?/,
+    "",
+  );
 
 /** In the order the person should hear it: the nearest reason first, the agent's setup after. */
 function blockedBy(view: View): string | undefined {
@@ -102,12 +113,7 @@ export function createStore(api: DuangApi) {
     for (const listener of listeners) listener();
   };
   const note = (error: unknown, c = view.conversation) => {
-    // Only unexpected failures throw across IPC now, and Electron wraps those as
-    // "Error invoking remote method 'x': Error: <what main said>". Expected refusals arrive as values.
-    const text = (error instanceof Error ? error.message : String(error)).replace(
-      /^Error invoking remote method '[^']*': (Error: )?/,
-      "",
-    );
+    const text = message(error);
     if (c) {
       c.items = [...c.items, { kind: "note", text }];
       publish();
@@ -169,7 +175,7 @@ export function createStore(api: DuangApi) {
     } catch (error) {
       if (conversations.get(key(agentId, session)) !== c) return;
       c.loading = false;
-      c.error = String(error);
+      c.error = message(error);
       publish();
     }
   }
@@ -208,7 +214,7 @@ export function createStore(api: DuangApi) {
       await open(running?.session ?? newest?.session ?? crypto.randomUUID());
     } catch (error) {
       if (request === navigation)
-        publish({ loading: false, error: String(error), states: { ...view.states, [id]: "broken" } });
+        publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
     }
   }
 
@@ -252,7 +258,7 @@ export function createStore(api: DuangApi) {
       publish({ agents, loading: false });
       if (agents[0]) await selectAgent(agents[0].id);
     } catch (error) {
-      publish({ loading: false, error: String(error) });
+      publish({ loading: false, error: message(error) });
     }
   }
 
@@ -275,7 +281,7 @@ export function createStore(api: DuangApi) {
         const models = await api.listModels();
         if (request === modelsRequest) publish({ models });
       } catch (error) {
-        if (request === modelsRequest) publish({ modelsError: String(error) });
+        if (request === modelsRequest) publish({ modelsError: message(error) });
       }
     },
     /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
@@ -291,7 +297,7 @@ export function createStore(api: DuangApi) {
         // completion list for the rest of the session. The next `/` keystroke retries.
         if (commandsFor === id) {
           commandsFor = undefined;
-          publish({ commandsError: String(error) });
+          publish({ commandsError: message(error) });
         }
       }
     },
@@ -396,7 +402,7 @@ export function createStore(api: DuangApi) {
       // choice the person can revisit. Dropping the message in silence is how that stays hidden.
       if (view.blocked) throw new Error(`Cannot send while ${view.blocked}`);
       c.draft = "";
-      c.items = echoUser(c.items, text);
+      c.items = [...c.items, { kind: "user", text }];
       const echo = c.items.at(-1);
       const runStarts = c.runStarts;
       const restoreRejected = () => {

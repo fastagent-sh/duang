@@ -139,7 +139,3 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       return items;
   }
 }
-
-export function echoUser(items: Item[], text: string): Item[] {
-  return [...items, { kind: "user", text }];
-}

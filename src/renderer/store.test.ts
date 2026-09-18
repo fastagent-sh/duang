@@ -131,6 +131,27 @@ test("drafts stay with conversations; rejected sends preserve text and report th
   store.dispose();
 });
 
+test("a failure is shown as the sentence main wrote, wherever it lands", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const wrapped = new Error("Error invoking remote method 'session:open': Error: no such session");
+  api.openSession = async () => {
+    throw wrapped;
+  };
+  await store.open("gone");
+  assert.equal(store.getSnapshot().conversation?.error, "no such session");
+  api.openSession = async () => empty();
+  api.send = async () => {
+    throw wrapped;
+  };
+  await store.retry();
+  store.setDraft("hi");
+  await store.send();
+  const notes = store.getSnapshot().conversation?.items.filter((item) => item.kind === "note");
+  assert.equal(notes?.at(-1)?.text, "no such session", "the banner and the transcript say the same thing");
+  store.dispose();
+});
+
 test("background turns retain their stream and transcript, then release it after settlement", async () => {
   const { api, store, emit, closed, opens } = harness();
   await store.load();
@@ -277,7 +298,7 @@ test("the picker rereads models on every open, and a stale answer never lands", 
     throw new Error("corrupt auth file");
   };
   await store.loadModels();
-  assert.equal(store.getSnapshot().modelsError, "Error: corrupt auth file");
+  assert.equal(store.getSnapshot().modelsError, "corrupt auth file", "the reader's own sentence, unwrapped");
   assert.equal(store.getSnapshot().models, undefined, "a failed read must not show stale models as current");
 
   // A slow first read must not overwrite what the reopened picker already showed.
@@ -313,7 +334,7 @@ test("command names load once per agent, retry after a failure, and never cross 
     throw new Error("definition unreadable");
   };
   await store.loadCommands();
-  assert.equal(store.getSnapshot().commandsError, "Error: definition unreadable");
+  assert.equal(store.getSnapshot().commandsError, "definition unreadable");
   api.listCommands = async (agentId) => {
     commandCalls.push(agentId);
     return [{ name: "review", description: "", source: "definition" }];
