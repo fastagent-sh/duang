@@ -3,10 +3,9 @@
 What the app is made of, what it shows, and what happens when. `README.md` carries the positioning
 and the infrastructure decisions; this file is the product.
 
-This document includes the roadmap, not only shipped behavior. Week 1 is local-only and remains
-unaccepted. See [implementation status](../README.md#week-1-implementation-and-acceptance-status)
-for verified scope and open gaps, and [#2](https://github.com/fastagent-sh/duang/issues/2) for policy
-decisions still requiring confirmation.
+This document includes the roadmap, not only shipped behavior. Week 1 is local-only and accepted;
+see [acceptance status](../README.md#week-1-acceptance-status) for the scope it covers and the
+limitations it was accepted with.
 
 ## Objects
 

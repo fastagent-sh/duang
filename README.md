@@ -201,43 +201,56 @@ agent default; OAuth refresh and provider errors remain visible. OAuth refresh w
 selected file through the SDK. Behind a proxy, the system setting is picked up automatically —
 Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
 
-## Week 1 implementation and acceptance status
+## Week 1 acceptance status
 
-Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
-and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
-not just test counts. `test:live` has now passed against real Codex and Anthropic accounts, including
-a conversation whose provider differs from the agent default, and a real OAuth refresh that rotated
-both tokens back into the same file. The remaining manual workflow checks are tracked in
-[#5](https://github.com/fastagent-sh/duang/issues/5), and product-policy decisions in
-[#2](https://github.com/fastagent-sh/duang/issues/2).
+Week 1 is **accepted**, with the limitations below stated rather than hidden. The
+[milestone](https://github.com/fastagent-sh/duang/milestone/1) and its
+[release gate](https://github.com/fastagent-sh/duang/issues/16) record workflow evidence, not test
+counts: all thirteen acceptance scenarios were walked on macOS with real agents and real providers,
+and the defects that walk exposed are fixed on `main`.
 
-The current implementation covers: add or scaffold, choose a model, send, stream text and tools,
-steer or stop, switch conversations, and reopen runtime-owned history after a restart. Running
-conversations remain selectable and keep their event subscriptions in the background. Drafts are
-per conversation and in memory only. Rejected sends retain their text; setup and stream failures
-offer retry, and broken agents remain removable.
+What works: add an existing agent or scaffold one in a plain project, pick a model, send, stream
+text and tool activity, steer a live run, stop it, switch between agents and conversations while
+work continues in the background, and reopen runtime-owned history after a restart. The window
+returns to the agent and conversation it was left on, and unsent text survives a restart with it.
 
-`agents.json` writes are serialized and atomic. Invalid JSON or filesystem errors are reported,
-not treated as an empty registry. Removing an agent never deletes its directory or conversations.
-Changing the agent's model or removing it is refused while any of its conversations is running.
+`agents.json` writes are serialized and atomic. Invalid JSON or filesystem errors are reported with
+the original diagnostic and a way to reach the file, never replaced with an empty list. Removing an
+agent never deletes its directory or conversations. Changing an agent's model or removing it is
+refused while any of its conversations is running.
 
-The smoke check uses isolated temporary credentials and files, exercises the real renderer,
-preload, IPC and FastAgent runtime, and replaces provider HTTP. It covers both default and explicit
-credential paths, directory-configured models, UI provider switching, a Codex default with Anthropic
-history, missing/corrupt credentials, synthetic OAuth-refresh failure and recovery without restart.
-It does not test a real provider and spends no model credits; real providers, OAuth rotation, Codex
-execution and proxy connectivity are covered by `test:live` instead.
+The picker and every conversation resolve credentials from one file. `test:live` passes against
+real Codex and Anthropic accounts, including a conversation whose provider differs from the agent
+default and a real OAuth refresh that rotated both tokens back into the same file. The smoke check
+covers the same paths deterministically with isolated credentials and replaced provider HTTP.
 
-Known client gaps: unsent drafts are cached by conversation but have no separate list entry after navigation;
-startup selects the first agent and its newest conversation, rather than restoring the previous
-selection. Application quit does not warn about active work. These are tracked acceptance gaps,
-not accepted product limitations.
+Accepted limitations, each recorded in its issue:
 
-Current runtime limitations: durable entries expose tool names/results but not tool arguments,
-thinking, or settled run outcomes. Those details are visible live but cannot all be reconstructed
-after reopening. Partial output already emitted before a renderer reload cannot be replayed.
-Usage/cost is not published by the current pi adapter. Local channels and schedules are not started
-by duang; cloud deployment, files/diffs, and advanced session controls are later-week work.
+- **Status display** is truthful but fragmented — seven signals, four vocabularies, and no way to
+  see from the list which conversation is running. Agents other than the selected one still show
+  their state by colour alone. Redesign deferred to
+  [#42](https://github.com/fastagent-sh/duang/issues/42) so it happens once, against the finished
+  surface.
+- **`/name` does not invoke anything.** Completion spells the name; the agent reads the line as
+  text and usually acts on it, which is the model's judgement rather than a promise. Making it
+  deterministic is a FastAgent contract question
+  ([fastagent#572](https://github.com/fastagent-sh/fastagent/issues/572)); duang will not expand
+  commands itself, because that breaks for remote agents whose files are not on this machine.
+- **History replay is partial.** Durable entries expose tool names and results but not tool
+  arguments, thinking or settled run outcomes, and partial output emitted before a reload is not
+  replayed. Nothing presents partial history as a complete trace.
+- **Usage and cost are not shown.** The runtime records them per turn, but the live session state
+  duang reads does not carry them; nothing is invented in their place.
+- **Skills load only from the agent's own `fastagent/skills/`**, so global skills are invisible
+  ([fastagent#570](https://github.com/fastagent-sh/fastagent/issues/570)), and an unreadable agent
+  directory is reported upstream as "no agent here"
+  ([fastagent#571](https://github.com/fastagent-sh/fastagent/issues/571)).
+- **One unexplained incident**: a run whose output was produced and stored never rendered live,
+  once, and has not reproduced. Recorded with its evidence in
+  [#10](https://github.com/fastagent-sh/duang/issues/10) rather than patched blind.
+
+Out of scope by design: local channels and schedules are not started by duang; cloud deployment,
+files and diffs, and advanced session controls are later-week work.
 
 ## Relationship to duang-v1 / duang-v2
 
