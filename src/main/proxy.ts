@@ -8,7 +8,6 @@
  */
 import { session } from "electron";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
-import { log } from "./log.ts";
 
 function fromEnv(): string | undefined {
   return process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.ALL_PROXY ?? process.env.all_proxy;
@@ -23,7 +22,7 @@ async function fromSystem(): Promise<string | undefined> {
 
 export async function useSystemProxy(): Promise<void> {
   const url = fromEnv() ?? (await fromSystem());
-  if (!url) return log("proxy: direct");
+  if (!url) return console.log("[duang] proxy: direct");
   setGlobalDispatcher(new ProxyAgent(url));
-  log(`proxy: ${url}`);
+  console.log(`[duang] proxy: ${url}`);
 }
