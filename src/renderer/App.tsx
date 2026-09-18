@@ -23,11 +23,7 @@ export default function App() {
   const { agents, agentId, states, sessions, conversation: c } = view;
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
-  const busy =
-    (c?.sends ?? 0) > 0 ||
-    c?.busySince !== undefined ||
-    c?.state?.status === "running" ||
-    c?.state?.status === "compacting";
+  const busy = view.busy;
   const sessionRows = rows(sessions, c?.session, view.runningSessions);
 
   useEffect(() => {

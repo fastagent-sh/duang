@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   addAgent,
   createAgentIn,
+  credentialRefusal,
   listAgents,
   MissingModelError,
   NoAgentError,
@@ -54,7 +55,7 @@ function requireSession(session: string): void {
   if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
 }
 
-type Stream = { senderId: number; agentId: string; close: () => void };
+type Stream = { senderId: number; agentId: string; close: () => void; end: (reason: string) => void };
 // The renderer retains background subscriptions only while their turns are running.
 const streams = new Map<string, Stream>();
 function stopStream(key: string): void {
@@ -65,8 +66,13 @@ function stopStream(key: string): void {
 function stopWindowStreams(senderId: number): void {
   for (const [key, stream] of streams) if (stream.senderId === senderId) stopStream(key);
 }
-function stopAgentStreams(agentId: string): void {
-  for (const [key, stream] of streams) if (stream.agentId === agentId) stopStream(key);
+/** Cutting an agent's subscriptions is invisible to the renderer unless each one says why it ended. */
+function stopAgentStreams(agentId: string, reason: string): void {
+  for (const [key, stream] of streams)
+    if (stream.agentId === agentId) {
+      stream.end(reason);
+      stopStream(key);
+    }
 }
 
 function register(): void {
@@ -91,11 +97,11 @@ function register(): void {
       throw new Error("Choose an available model");
     if (session !== undefined) requireSession(session);
     await setAgentModel(await requireAgent(id), model, session);
-    stopAgentStreams(id);
+    stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
   });
   ipcMain.handle("agent:remove", async (_e, id: string) => {
     await removeAgent(id);
-    stopAgentStreams(id);
+    stopAgentStreams(id, "The agent was removed");
   });
   ipcMain.handle("agent:commands", async (_e, id: string) =>
     (await openAgent(await requireAgent(id))).control.commands(),
@@ -114,13 +120,14 @@ function register(): void {
     requireSession(session);
     const key = `${e.sender.id}/${subscription}`;
     stopStream(key);
-    const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {} };
+    const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {}, end: () => {} };
     streams.set(key, slot);
     const forward = (event: SessionEvent) => {
       if (!e.sender.isDestroyed() && streams.get(key) === slot) {
         e.sender.send("session:event", { agentId: id, session, subscription, event });
       }
     };
+    slot.end = (reason: string) => forward({ type: "stream_failed", timestamp: Date.now(), data: { reason } });
     try {
       const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
       if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
@@ -130,11 +137,16 @@ function register(): void {
         void iterator.return?.().catch((error) => console.error("session close:", error));
       };
       void (async () => {
+        // Both endings leave the renderer deaf: FastAgent closing its subscriber looks like a normal
+        // `done`, and a silent one would keep the conversation running on screen forever.
+        let reason = "The conversation's event stream ended";
         try {
           for (let next = await iterator.next(); !next.done; next = await iterator.next()) forward(next.value);
         } catch (error) {
-          forward({ type: "stream_failed", timestamp: Date.now(), data: { reason: String(error) } });
+          reason = String(error);
         }
+        slot.end(reason);
+        if (streams.get(key) === slot) streams.delete(key);
       })();
       await stream.ready;
       return { entries: await bound.entries(), state: await bound.state() };
@@ -146,9 +158,12 @@ function register(): void {
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
-    return withAgentRun(await requireAgent(id), ({ agent, control }) =>
-      send(agent, control.sessions.get(session), text),
-    );
+    return withAgentRun(await requireAgent(id), async (opened) => {
+      const bound = opened.control.sessions.get(session);
+      const refusal = await credentialRefusal(opened, (await bound.state()).model);
+      if (refusal) return { ok: false, error: { code: "credentials_unavailable", message: refusal, retryable: false } };
+      return send(opened.agent, bound, text);
+    });
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
     requireSession(session);

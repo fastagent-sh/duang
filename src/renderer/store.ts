@@ -26,14 +26,25 @@ export interface View {
   loading: boolean;
   error?: string;
   conversation?: Conversation;
+  /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
+  busy: boolean;
   runningAgents: string[];
   runningSessions: string[];
 }
-const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
+const busy = (c: Conversation) =>
+  c.sends > 0 || c.busySince !== undefined || c.state?.status === "running" || c.state?.status === "compacting";
 
 /** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
 export function createStore(api: DuangApi) {
-  let view: View = { agents: [], states: {}, sessions: [], loading: false, runningAgents: [], runningSessions: [] };
+  let view: View = {
+    agents: [],
+    states: {},
+    sessions: [],
+    loading: false,
+    busy: false,
+    runningAgents: [],
+    runningSessions: [],
+  };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
   const drafts = new Map<string, string>();
@@ -43,12 +54,17 @@ export function createStore(api: DuangApi) {
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
     const running = [...conversations.values()].filter(busy);
+    view.busy = !!view.conversation && busy(view.conversation);
     view.runningAgents = [...new Set(running.map((c) => c.agentId))];
     view.runningSessions = running.filter((c) => c.agentId === view.agentId).map((c) => c.session);
     for (const listener of listeners) listener();
   };
   const note = (error: unknown, c = view.conversation) => {
-    const text = error instanceof Error ? error.message : String(error);
+    // Electron wraps a rejected handler as "Error invoking remote method 'x': Error: <what main said>".
+    const text = (error instanceof Error ? error.message : String(error)).replace(
+      /^Error invoking remote method '[^']*': (Error: )?/,
+      "",
+    );
     if (c) {
       c.items = [...c.items, { kind: "note", text }];
       publish();
@@ -166,6 +182,9 @@ export function createStore(api: DuangApi) {
     } else if (event.type === "stream_failed") {
       c.error = String(data.reason);
       c.busySince = undefined;
+      // The subscription is gone, so nothing will report the end of a run this view can no longer
+      // hear. Retry re-opens and re-reads the runtime's real state.
+      c.state = { ...state, status: "idle", activeRunId: undefined };
     }
     c.items = apply(c.items, event);
   }

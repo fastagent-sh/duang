@@ -187,7 +187,11 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   const current = store.getSnapshot().conversation!;
   emit(old, "message_delta", { delta: "stale" });
   assert.deepEqual(current.items, []);
+  emit(current, "run_started");
+  assert.equal(store.getSnapshot().busy, true);
+  // A dead subscription reports nothing further, so the run controls must not wait for `run_settled`.
   emit(current, "stream_failed", { reason: "stream disconnected" });
+  assert.equal(store.getSnapshot().busy, false);
   store.setDraft("keep me");
   await store.send();
   assert.equal(current.draft, "keep me");

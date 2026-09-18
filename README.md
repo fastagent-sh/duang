@@ -182,7 +182,9 @@ existing row, and removing an agent never deletes the directory or conversation 
 
 Credentials come from whichever global store has the provider: FastAgent's own
 (`~/.fastagent/.secrets/auth.json`), then pi's (`~/.pi/agent/auth.json`). Only providers that are
-actually logged in appear in the picker. Behind a proxy, the system setting is picked up
+actually logged in appear in the picker. Known gap: an agent's runtime reads one of those files at a
+time, so a conversation left on a model from the other store refuses to send and says to pick that
+model for the conversation, which reopens the agent against the right file. Behind a proxy, the system setting is picked up
 automatically — Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
 
 ## Week 1 implementation and acceptance status
