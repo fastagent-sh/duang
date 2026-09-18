@@ -46,7 +46,11 @@ export default function App() {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
   const composer = <Composer view={view} store={store} />;
-  const error = c?.error ?? (agentState !== "broken" && agentState !== "missing_model" ? view.error : undefined);
+  // States whose own panel already explains the setup problem and offers the fix. Repeating the
+  // runtime's prose above them contradicts it: a plain project is told to run `fastagent init`
+  // while duang is offering to scaffold it.
+  const owned = agentState === "broken" || agentState === "missing_model" || agentState === "no_agent";
+  const error = c?.error ?? (owned ? undefined : view.error);
 
   return (
     <div className="flex h-full">

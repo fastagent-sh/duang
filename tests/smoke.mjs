@@ -206,6 +206,10 @@ if (!process.versions.electron) {
       await import("../out/main/index.js");
       await loaded;
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
+      assert.ok(
+        !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
+        "the scaffold offer must not be contradicted by the runtime's `run fastagent init` error",
+      );
       await click("Create agent here");
       await until("document.querySelector('dialog[open]') !== null", "first model picker opens automatically");
       await chooseModel("openai/gpt-4o-mini");
