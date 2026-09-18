@@ -33,6 +33,10 @@ export default function App() {
   useEffect(() => {
     setPicking(agentState === "missing_model");
   }, [agentId, agentState]);
+  // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
+  useEffect(() => {
+    if (picking) void store.loadModels();
+  }, [picking, store]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
@@ -67,7 +71,16 @@ export default function App() {
     <Composer
       agentId={agentId}
       context={agent ? home(agent.dir) : undefined}
-      model={c?.state?.model ?? view.model ?? agent?.model}
+      // What the conversation will RUN with, else the agent's own default. Nothing else may answer
+      // this: a chip that names a model the turn will not use is the failure worth avoiding.
+      model={c?.state?.model ?? view.model}
+      needsModel={agentState === "missing_model"}
+      models={view.models}
+      modelsError={view.modelsError}
+      onLoadModels={() => void store.loadModels()}
+      commands={view.commands}
+      commandsError={view.commandsError}
+      onNeedCommands={store.loadCommands}
       picking={picking}
       onPicking={setPicking}
       onPickModel={(model) => {

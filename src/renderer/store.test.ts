@@ -253,3 +253,78 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
   store.dispose();
 });
+
+test("the picker rereads models on every open, and a stale answer never lands", async () => {
+  const { api, store } = harness();
+  let listed = 0;
+  api.listModels = async () => {
+    listed++;
+    return { specs: ["provider/model"], authPath: "/tmp/auth.json" };
+  };
+  await store.load();
+
+  await store.loadModels();
+  assert.deepEqual(store.getSnapshot().models, { specs: ["provider/model"], authPath: "/tmp/auth.json" });
+  await store.loadModels();
+  assert.equal(listed, 2, "a login while duang runs must show up without a restart");
+
+  api.listModels = async () => {
+    throw new Error("corrupt auth file");
+  };
+  await store.loadModels();
+  assert.equal(store.getSnapshot().modelsError, "Error: corrupt auth file");
+  assert.equal(store.getSnapshot().models, undefined, "a failed read must not show stale models as current");
+
+  // A slow first read must not overwrite what the reopened picker already showed.
+  const slow = deferred<{ specs: string[]; authPath: string }>();
+  api.listModels = () => slow.promise;
+  const pending = store.loadModels();
+  api.listModels = async () => ({ specs: ["provider/current"], authPath: "/tmp/auth.json" });
+  await store.loadModels();
+  slow.resolve({ specs: ["provider/stale"], authPath: "/tmp/old.json" });
+  await pending;
+  assert.deepEqual(store.getSnapshot().models?.specs, ["provider/current"]);
+  store.dispose();
+});
+
+test("command names load once per agent, retry after a failure, and never cross agents", async () => {
+  const { api, store } = harness();
+  const commandCalls: string[] = [];
+  api.listCommands = async (agentId) => {
+    commandCalls.push(agentId);
+    return [{ name: "plan", description: "", source: "definition" }];
+  };
+  await store.load();
+
+  await store.loadCommands();
+  await store.loadCommands();
+  assert.deepEqual(commandCalls, ["a"], "the names are fetched once for this agent");
+  assert.equal(store.getSnapshot().commands[0]?.name, "plan");
+
+  await store.selectAgent("b");
+  assert.deepEqual(store.getSnapshot().commands, [], "another agent has its own definition");
+  api.listCommands = async (agentId) => {
+    commandCalls.push(agentId);
+    throw new Error("definition unreadable");
+  };
+  await store.loadCommands();
+  assert.equal(store.getSnapshot().commandsError, "Error: definition unreadable");
+  api.listCommands = async (agentId) => {
+    commandCalls.push(agentId);
+    return [{ name: "review", description: "", source: "definition" }];
+  };
+  await store.loadCommands();
+  assert.equal(store.getSnapshot().commands[0]?.name, "review", "a failed load must not lock the agent out");
+  assert.deepEqual(commandCalls, ["a", "b", "b"]);
+
+  // Switching away mid-flight: the late answer belongs to an agent nobody is looking at.
+  const slow = deferred<{ name: string; description: string; source: string }[]>();
+  await store.selectAgent("a");
+  api.listCommands = () => slow.promise as ReturnType<DuangApi["listCommands"]>;
+  const pending = store.loadCommands();
+  await store.selectAgent("b");
+  slow.resolve([{ name: "from-a", description: "", source: "definition" }]);
+  await pending;
+  assert.deepEqual(store.getSnapshot().commands, [], "an answer for the agent we left must not be shown");
+  store.dispose();
+});
