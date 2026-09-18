@@ -12,6 +12,7 @@ import {
   removeAgent,
   setAgentModel,
   withAgentRun,
+  workingAgents,
   type AgentRow,
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
@@ -207,4 +208,31 @@ void app
   });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+/**
+ * Closing a window leaves runs alone — they live here, not in the renderer. Quitting ends them, and
+ * nothing resumes them afterwards, so it is the one moment worth interrupting.
+ *
+ * Not covered by an automated check: this is a native modal on the quit path, which the Electron
+ * smoke test cannot answer without hanging. Verified by hand — quit during a run warns, Cancel keeps
+ * the run going, Quit anyway exits; quitting while idle is unchanged.
+ */
+let quitting = false;
+app.on("before-quit", (event) => {
+  if (quitting || workingAgents().length === 0) return;
+  event.preventDefault();
+  const quit = dialog.showMessageBoxSync({
+    type: "warning",
+    buttons: ["Quit anyway", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: "An agent is still working.",
+    detail:
+      "Quitting interrupts the run, and nothing resumes it afterwards. Work its tools already finished is not undone.",
+  });
+  if (quit === 0) {
+    quitting = true;
+    app.quit();
+  }
 });

@@ -25,7 +25,8 @@ below. Setup errors replace the conversation area. The model picker floats above
 ## Agents
 
 The rail shows initials; the list header shows the real name and a revealable directory path.
-The model is shown on the composer chip. A pulsing rail dot identifies an agent with a running turn.
+The model is shown on the composer chip. A pulsing rail dot identifies an agent with a running turn; every dot also names its state in words,
+so the colour is a shortcut rather than the only telling.
 
 Setup has four states, and the rail dot says which:
 
@@ -88,7 +89,12 @@ A send refused before admission returns to the draft and does not appear as a de
 ## Window and quit
 
 Closing a window does not stop a running turn — the runtime lives in the main process. Quitting with
-active work warns that execution will be interrupted. Nothing resumes a run automatically afterwards.
+active work warns that execution will be interrupted, and can be cancelled. Nothing resumes a run
+automatically afterwards.
+
+Stopping, and being interrupted by a quit, end the *run*. They do not undo what its tools already
+did: a file written or a command executed stays that way, and a tool that cannot be cancelled runs
+to its own end. The stop warning says so rather than implying a rollback.
 
 ## Keyboard
 

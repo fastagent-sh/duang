@@ -263,7 +263,14 @@ if (!process.versions.electron) {
 
       hold = true;
       await message("Hold this turn so I can stop it.");
-      await until("document.querySelector('button[title=\"Stop (Esc)\"]') !== null", "active stop control");
+      await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "active stop control");
+      // State and consequences in words, not only in colour.
+      assert.match(
+        await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').title"),
+        /not undone/,
+      );
+      assert.match(await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').title"), /\nWorking$/);
+      assert.match(await evaluate("document.querySelector('aside').innerText"), /working/, "state is readable, not hovered");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "background run keeps going");
       const refused = await evaluate("window.duang.setModel('smoke', 'openai/gpt-4.1')");
@@ -276,8 +283,8 @@ if (!process.versions.electron) {
       const deletion = await evaluate(`window.duang.deleteSession('smoke', ${JSON.stringify(firstSession)})`);
       assert.equal(deletion.ok, false, "a refused delete must not unsubscribe the running conversation");
       await click("Read hello.txt and answer.");
-      await until("document.querySelector('button[title=\"Stop (Esc)\"]') !== null", "return to active run");
-      await evaluate("document.querySelector('button[title=\"Stop (Esc)\"]').click()");
+      await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "return to active run");
+      await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').click()");
       await until("document.body.innerText.includes('run aborted')", "abort is a settled transcript outcome");
       await until("document.querySelector('button[title^=\"Send\"]') !== null", "composer leaves running state");
 

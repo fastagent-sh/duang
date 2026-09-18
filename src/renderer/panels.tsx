@@ -18,6 +18,14 @@ const dot: Record<AgentState, string> = {
   broken: "bg-danger",
 };
 
+/** The dot's colour in words: hover and assistive technology must not have to read the palette. */
+const says: Record<AgentState, string> = {
+  ready: "Ready",
+  missing_model: "Needs a model",
+  no_agent: "No agent in this directory yet",
+  broken: "Broken",
+};
+
 export function Rail({
   agents,
   agentId,
@@ -44,7 +52,7 @@ export function Rail({
             aria-label={agent.name}
             aria-pressed={selected}
             onClick={() => onSelect(agent.id)}
-            title={`${agent.name}\n${agent.dir}`}
+            title={`${agent.name}\n${agent.dir}\n${running.includes(agent.id) ? "Working" : says[state ?? "ready"]}`}
             className={`no-drag relative size-9 rounded-card text-[11px] font-medium uppercase transition-colors ${
               selected
                 ? "bg-accent/15 text-accent ring-1 ring-accent/60"
@@ -54,7 +62,7 @@ export function Rail({
             {agent.name.slice(0, 2)}
             {(running.includes(agent.id) || (state && state !== "ready")) && (
               <span
-                aria-label={running.includes(agent.id) ? "Running" : state}
+                aria-label={running.includes(agent.id) ? "Working" : says[state!]}
                 className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-bg ${running.includes(agent.id) ? "bg-accent animate-pulse" : dot[state!]}`}
               />
             )}
@@ -76,6 +84,8 @@ export function ConversationList({
   agent,
   rows,
   session,
+  state,
+  working,
   disabled,
   onOpen,
   onNew,
@@ -86,6 +96,8 @@ export function ConversationList({
   agent?: AgentRow;
   rows: Row[];
   session?: string;
+  state?: AgentState;
+  working: boolean;
   disabled: boolean;
   onOpen: (session: string) => void;
   onNew: () => void;
@@ -97,7 +109,14 @@ export function ConversationList({
     <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-black/10">
       {/* pl-6 clears the window controls, which overhang the rail into this column. */}
       <div className="h-10 shrink-0 flex items-center gap-2 pl-6 pr-2 drag">
-        <span className="truncate flex-1 font-medium">{agent?.name ?? ""}</span>
+        <span className="truncate font-medium">{agent?.name ?? ""}</span>
+        {/* The rail's dot is a colour; this is the same fact in words, where it is always readable. */}
+        {agent && (working || (state && state !== "ready")) && (
+          <span className={`truncate text-[11px] ${state === "broken" ? "text-danger" : "text-muted"}`}>
+            {working ? "working" : says[state!].toLowerCase()}
+          </span>
+        )}
+        <span className="flex-1" />
         {agent && !disabled && (
           <button
             onClick={onNew}
@@ -653,7 +672,9 @@ export function Composer({ view, store }: { view: View; store: Store }) {
         {busy ? (
           <button
             onClick={() => void store.abort()}
-            title="Stop (Esc)"
+            aria-label="Stop the run"
+            // Stopping ends the run, not its consequences; a tool that already wrote a file is done.
+            title="Stop (Esc) — work its tools already finished is not undone"
             className="ml-auto size-7 grid place-items-center rounded-card bg-danger/15 text-danger"
           >
             <Square size={13} />
