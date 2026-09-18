@@ -20,7 +20,7 @@ interface Conversation {
   runStarts: number;
   events: SessionEvent[];
 }
-interface View {
+export interface View {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
@@ -450,3 +450,5 @@ export function createStore(api: DuangApi) {
     },
   };
 }
+
+export type Store = ReturnType<typeof createStore>;
