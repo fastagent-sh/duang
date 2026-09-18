@@ -253,3 +253,40 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
   store.dispose();
 });
+
+test("the picker rereads models on every open, and command names load once per agent", async () => {
+  const { api, store } = harness();
+  let listed = 0;
+  api.listModels = async () => {
+    listed++;
+    return { specs: ["provider/model"], authPath: "/tmp/auth.json" };
+  };
+  const commandCalls: string[] = [];
+  api.listCommands = async (agentId) => {
+    commandCalls.push(agentId);
+    return [{ name: "plan", description: "", source: "definition" }];
+  };
+  await store.load();
+
+  await store.loadModels();
+  assert.deepEqual(store.getSnapshot().models, { specs: ["provider/model"], authPath: "/tmp/auth.json" });
+  await store.loadModels();
+  assert.equal(listed, 2, "a login while duang runs must show up without a restart");
+
+  api.listModels = async () => {
+    throw new Error("corrupt auth file");
+  };
+  await store.loadModels();
+  assert.equal(store.getSnapshot().modelsError, "Error: corrupt auth file");
+  assert.equal(store.getSnapshot().models, undefined, "a failed read must not show stale models as current");
+
+  await store.loadCommands();
+  await store.loadCommands();
+  assert.deepEqual(commandCalls, ["a"], "the names are fetched once for this agent");
+  assert.equal(store.getSnapshot().commands[0]?.name, "plan");
+  await store.selectAgent("b");
+  assert.deepEqual(store.getSnapshot().commands, [], "another agent has its own definition");
+  await store.loadCommands();
+  assert.deepEqual(commandCalls, ["a", "b"]);
+  store.dispose();
+});

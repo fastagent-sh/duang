@@ -1,4 +1,4 @@
-import type { SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
+import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, SessionFrame } from "../preload/index.ts";
 import { apply, echoUser, fromEntries, type Item } from "./transcript.ts";
 
@@ -28,6 +28,12 @@ interface View {
   model?: string;
   loading: boolean;
   error?: string;
+  /** The model picker's contents: undefined while loading, so the picker can say so. */
+  models?: { specs: string[]; authPath: string };
+  modelsError?: string;
+  /** The `/` completion list for the selected agent. */
+  commands: AgentCommand[];
+  commandsError?: string;
   conversation?: Conversation;
   /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
   busy: boolean;
@@ -45,6 +51,7 @@ export function createStore(api: DuangApi) {
     sessions: [],
     loading: false,
     busy: false,
+    commands: [],
     runningAgents: [],
     runningSessions: [],
   };
@@ -53,6 +60,8 @@ export function createStore(api: DuangApi) {
   const drafts = new Map<string, string>();
   let navigation = 0;
   let listRequest = 0;
+  let modelsRequest = 0;
+  let commandsFor: string | undefined;
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
@@ -149,7 +158,17 @@ export function createStore(api: DuangApi) {
     const request = ++navigation;
     ++listRequest;
     leave();
-    publish({ agentId: id, sessions: [], model: undefined, error: undefined, loading: true });
+    // The command names belong to the agent's definition, so they do not survive the switch.
+    commandsFor = undefined;
+    publish({
+      agentId: id,
+      sessions: [],
+      model: undefined,
+      error: undefined,
+      loading: true,
+      commands: [],
+      commandsError: undefined,
+    });
     try {
       const result = await api.openAgent(id);
       if (request !== navigation) return;
@@ -230,6 +249,29 @@ export function createStore(api: DuangApi) {
     load,
     selectAgent,
     open,
+    /** Read on every opening of the picker: a `fastagent login` while duang runs needs no restart. */
+    async loadModels() {
+      const request = ++modelsRequest;
+      publish({ models: undefined, modelsError: undefined });
+      try {
+        const models = await api.listModels();
+        if (request === modelsRequest) publish({ models });
+      } catch (error) {
+        if (request === modelsRequest) publish({ modelsError: String(error) });
+      }
+    },
+    /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
+    async loadCommands() {
+      const id = view.agentId;
+      if (!id || commandsFor === id) return;
+      commandsFor = id;
+      try {
+        const commands = await api.listCommands(id);
+        if (commandsFor === id) publish({ commands });
+      } catch (error) {
+        if (commandsFor === id) publish({ commandsError: String(error) });
+      }
+    },
     newConversation: () => open(crypto.randomUUID()),
     setDraft: (draft: string) => {
       if (view.conversation) {

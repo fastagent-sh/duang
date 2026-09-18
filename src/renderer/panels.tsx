@@ -3,13 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type { AgentCommand } from "@fastagent-sh/fastagent/session";
-import type { AgentRow, DuangApi } from "../preload/index.ts";
+import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import type { AgentState } from "./store.ts";
 
-const duang = (window as unknown as { duang: DuangApi }).duang;
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
@@ -260,18 +259,20 @@ export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate:
 /** The model list, floating above the composer chip that opened it. */
 function ModelPopover({
   current,
+  models,
+  error,
+  onRetry,
   onPick,
   onClose,
 }: {
   current?: string;
+  models?: { specs: string[]; authPath: string };
+  error?: string;
+  onRetry: () => void;
   onPick: (model: string) => void;
   onClose: () => void;
 }) {
-  const [models, setModels] = useState<string[]>();
-  const [authPath, setAuthPath] = useState<string>();
   const [filter, setFilter] = useState("");
-  const [error, setError] = useState<string>();
-  const [attempt, setAttempt] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => {
     // Close while still connected so Chromium can restore focus before React removes the dialog.
@@ -288,25 +289,7 @@ function ModelPopover({
     el.showModal();
     return () => el.close();
   }, []);
-  useEffect(() => {
-    let current = true;
-    setError(undefined);
-    void duang.listModels().then(
-      (list) => {
-        if (current) {
-          setModels(list.specs);
-          setAuthPath(list.authPath);
-        }
-      },
-      (failure) => {
-        if (current) setError(String(failure));
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [attempt]);
-  const matches = (models ?? []).filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 60);
+  const matches = (models?.specs ?? []).filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 60);
 
   return (
     <dialog
@@ -333,19 +316,19 @@ function ModelPopover({
       <button onClick={close} className="float-right p-1" aria-label="Close model picker">
         <X size={14} />
       </button>
-      {authPath && <p className="text-muted text-[11px] p-2 break-all">Credentials: {authPath}</p>}
+      {models && <p className="text-muted text-[11px] p-2 break-all">Credentials: {models.authPath}</p>}
       {error ? (
         <p role="alert" className="text-danger p-2">
           {error}{" "}
-          <button className="underline" onClick={() => setAttempt((n) => n + 1)}>
+          <button className="underline" onClick={onRetry}>
             Retry
           </button>
         </p>
-      ) : models?.length === 0 ? (
+      ) : models?.specs.length === 0 ? (
         <p className="text-muted text-[12px] p-2 leading-relaxed">
           No provider is configured. Use <span className="font-mono">fastagent login</span> with
           <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to the file above, then{" "}
-          <button className="underline" onClick={() => setAttempt((n) => n + 1)}>
+          <button className="underline" onClick={onRetry}>
             Retry
           </button>.
         </p>
@@ -517,6 +500,12 @@ export function Composer({
   agentId,
   context,
   model,
+  models,
+  modelsError,
+  onLoadModels,
+  commands,
+  commandsError,
+  onNeedCommands,
   picking,
   onPicking,
   onPickModel,
@@ -532,6 +521,12 @@ export function Composer({
   agentId?: string;
   context?: string;
   model?: string;
+  models?: { specs: string[]; authPath: string };
+  modelsError?: string;
+  onLoadModels: () => void;
+  commands: AgentCommand[];
+  commandsError?: string;
+  onNeedCommands: () => void;
   picking: boolean;
   onPicking: (open: boolean) => void;
   onPickModel: (model: string) => void;
@@ -551,36 +546,17 @@ export function Composer({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, parseFloat(getComputedStyle(el).lineHeight) * 8)}px`;
   }, [value]);
-  const [commands, setCommands] = useState<AgentCommand[]>([]);
   const [dismissed, setDismissed] = useState(false);
   const [cursor, setCursor] = useState(0);
-  const [commandError, setCommandError] = useState<string>();
-  const loadedFor = useRef<string>(undefined);
-  const currentAgent = useRef(agentId);
-  currentAgent.current = agentId;
 
   const query = completionQuery(value);
   const suggestions = query === undefined || dismissed ? [] : matches(commands, query);
   const chosen = suggestions[Math.min(cursor, suggestions.length - 1)];
 
-  // Loaded on the first `/`, per agent: the names are the definition's, and it is live.
+  // The first `/` is what asks for the names; the store decides they are fetched once per agent.
   useEffect(() => {
-    setCommands([]);
-    setCommandError(undefined);
-    loadedFor.current = undefined;
-  }, [agentId]);
-  useEffect(() => {
-    if (query === undefined || !agentId || disabled || loadedFor.current === agentId) return;
-    loadedFor.current = agentId;
-    void duang.listCommands(agentId).then(
-      (list) => {
-        if (currentAgent.current === agentId) setCommands(list);
-      },
-      (error) => {
-        if (currentAgent.current === agentId) setCommandError(String(error));
-      },
-    );
-  }, [query, agentId, disabled]);
+    if (query !== undefined && agentId && !disabled) onNeedCommands();
+  }, [query, agentId, disabled, onNeedCommands]);
   useEffect(() => {
     if (query === undefined) setDismissed(false);
     setCursor(0);
@@ -607,9 +583,9 @@ export function Composer({
         </div>
       )}
       {context && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{context}</div>}
-      {commandError && query !== undefined && (
+      {commandsError && query !== undefined && (
         <p role="alert" className="text-danger text-[11px]">
-          {commandError}
+          {commandsError}
         </p>
       )}
       <textarea
@@ -659,7 +635,14 @@ export function Composer({
             <ChevronDown size={12} />
           </button>
           {picking && agentId && !busy && !modelDisabled && (
-            <ModelPopover current={model} onPick={onPickModel} onClose={() => onPicking(false)} />
+            <ModelPopover
+              current={model}
+              models={models}
+              error={modelsError}
+              onRetry={onLoadModels}
+              onPick={onPickModel}
+              onClose={() => onPicking(false)}
+            />
           )}
         </div>
         {/* While a turn runs, the button that sent it is the button that stops it — stopping is where
