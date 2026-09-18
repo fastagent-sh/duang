@@ -205,9 +205,10 @@ Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatche
 
 Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
 and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
-not just test counts. The credential-routing regression has isolated coverage, and `test:live` now
-exercises the real path, but a passing live run is still unrecorded in
-[#5](https://github.com/fastagent-sh/duang/issues/5); product-policy decisions remain in
+not just test counts. `test:live` has now passed against real Codex and Anthropic accounts, including
+a conversation whose provider differs from the agent default; real OAuth *refresh* is still
+unverified, since the stored tokens were valid. Remaining work is tracked in
+[#5](https://github.com/fastagent-sh/duang/issues/5), and product-policy decisions in
 [#2](https://github.com/fastagent-sh/duang/issues/2).
 
 The current implementation covers: add or scaffold, choose a model, send, stream text and tools,
