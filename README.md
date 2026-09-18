@@ -206,8 +206,8 @@ Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatche
 Week 1 is **not accepted**. The [milestone](https://github.com/fastagent-sh/duang/milestone/1)
 and its [release gate](https://github.com/fastagent-sh/duang/issues/16) track workflow evidence,
 not just test counts. `test:live` has now passed against real Codex and Anthropic accounts, including
-a conversation whose provider differs from the agent default; real OAuth *refresh* is still
-unverified, since the stored tokens were valid. Remaining work is tracked in
+a conversation whose provider differs from the agent default, and a real OAuth refresh that rotated
+both tokens back into the same file. The remaining manual workflow checks are tracked in
 [#5](https://github.com/fastagent-sh/duang/issues/5), and product-policy decisions in
 [#2](https://github.com/fastagent-sh/duang/issues/2).
 
@@ -225,8 +225,8 @@ The smoke check uses isolated temporary credentials and files, exercises the rea
 preload, IPC and FastAgent runtime, and replaces provider HTTP. It covers both default and explicit
 credential paths, directory-configured models, UI provider switching, a Codex default with Anthropic
 history, missing/corrupt credentials, synthetic OAuth-refresh failure and recovery without restart.
-It does not test a real provider, successful OAuth rotation, Codex execution or proxy connectivity
-and spends no model credits.
+It does not test a real provider and spends no model credits; real providers, OAuth rotation, Codex
+execution and proxy connectivity are covered by `test:live` instead.
 
 Known client gaps: the composer shows the selected directory, not the resolved tool workspace;
 unsent drafts are cached by conversation but have no separate list entry after navigation;
