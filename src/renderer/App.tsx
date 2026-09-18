@@ -7,6 +7,7 @@ import {
   BrokenAgent,
   Composer,
   ConversationList,
+  Failure,
   home,
   NeedsAgent,
   NewConversation,
@@ -24,6 +25,20 @@ export default function App() {
   const [agentId, setAgentId] = useState<string>();
   const [states, setStates] = useState<Record<string, AgentState>>({});
   const [broken, setBroken] = useState<string>();
+  /** Storage failures reject in main and would otherwise die in an unhandled promise, leaving a
+   *  corrupt registry looking exactly like an empty one. Show the message, keep the app usable. */
+  const [failure, setFailure] = useState<string>();
+  const report = useCallback((error: unknown) => setFailure(error instanceof Error ? error.message : String(error)), []);
+  // Any `duang.*` call can reject now that main reports storage failures instead of swallowing them.
+  // One listener covers every call site, including the ones added later.
+  useEffect(() => {
+    const onRejection = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+      report(event.reason);
+    };
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => window.removeEventListener("unhandledrejection", onRejection);
+  }, [report]);
   const [picking, setPicking] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [session, setSession] = useState<string>();
@@ -122,6 +137,7 @@ export default function App() {
   );
 
   const addAgent = useCallback(async () => {
+    setFailure(undefined);
     const row = await duang.addAgent();
     if (!row) return;
     setAgents((list) => (list.some((a) => a.id === row.id) ? list : [...list, row]));
@@ -156,7 +172,14 @@ export default function App() {
     setDraft("");
     setItems((list) => echoUser(list, text));
     setBusySince(Date.now());
-    await duang.send(agentId, session, text);
+    try {
+      await duang.send(agentId, session, text);
+    } catch (error) {
+      // No run started, so no `run_settled` is coming: end the wait here, or the composer stays
+      // locked on "steer the run…" forever. Reporting stays with the global listener.
+      setBusySince(undefined);
+      throw error;
+    }
   }, [draft, agentId, session]);
 
   useEffect(() => {
@@ -173,6 +196,7 @@ export default function App() {
 
   async function removeAgent(id: string) {
     if (!confirm("Remove this agent from duang? The directory is not touched.")) return;
+    // Only forget the row once main says it is gone, or the sidebar would lie about the file.
     await duang.removeAgent(id);
     setAgents((list) => list.filter((a) => a.id !== id));
     setAgentId(undefined);
@@ -246,6 +270,8 @@ export default function App() {
             </span>
           )}
         </header>
+
+        {failure && <Failure message={failure} onDismiss={() => setFailure(undefined)} />}
 
         {!agentId ? (
           <NoAgents onAdd={() => void addAgent()} />

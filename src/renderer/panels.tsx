@@ -147,6 +147,20 @@ function Panel({ children }: { children: React.ReactNode }) {
   return <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">{children}</div>;
 }
 
+/** A main-process failure the person cannot act on from a panel: shown verbatim, dismissed by hand. */
+export function Failure({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="shrink-0 px-6 pt-3">
+      <div className="rounded-card border border-danger/40 bg-danger/5 p-3 text-danger text-[12px] whitespace-pre-wrap leading-relaxed flex gap-3">
+        <span className="flex-1">{message}</span>
+        <button onClick={onDismiss} className="text-muted hover:text-danger shrink-0" aria-label="Dismiss">
+          <X size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function NoAgents({ onAdd }: { onAdd: () => void }) {
   return (
     <Panel>
