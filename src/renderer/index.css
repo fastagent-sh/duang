@@ -28,6 +28,14 @@ body {
   font-size: 13px;
 }
 
+/* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
+   this background. Pointer focus stays silent; :focus-visible is the browser's own judgement of that. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* The one place the frameless title bar is paid for: the rail's top gap is draggable. */
 .drag {
   -webkit-app-region: drag;
