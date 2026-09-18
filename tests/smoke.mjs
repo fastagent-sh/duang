@@ -376,6 +376,13 @@ if (!process.versions.electron) {
       await until("document.querySelector('textarea').value === '/demo '", "Enter accepts the name, it does not send");
       await type("");
 
+      // An agent with no skills must say so; silence here reads as a broken composer.
+      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
+      await type("/");
+      await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
+      await type("");
+
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
       const registry = join(data, "agents.json");
       const savedRegistry = await readFile(registry, "utf8");

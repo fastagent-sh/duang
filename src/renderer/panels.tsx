@@ -592,6 +592,12 @@ export function Composer({ view, store }: { view: View; store: Store }) {
           {view.commandsError}
         </p>
       )}
+      {/* Pressing `/` on an agent with no skills used to do nothing at all, which reads as broken. */}
+      {query !== undefined && !view.commandsError && view.commands.length === 0 && agent && (
+        <p className="text-muted text-[11px]">
+          No commands — this agent has no skills in <span className="font-mono">{home(agent.dir)}/fastagent/skills</span>
+        </p>
+      )}
       <textarea
         ref={input}
         aria-label="Message"
