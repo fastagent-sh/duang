@@ -132,6 +132,23 @@ test("drafts stay with conversations; rejected sends preserve text and report th
   store.dispose();
 });
 
+test("an unsent conversation keeps a row, so leaving it is not discarding it", async () => {
+  const { store } = harness();
+  await store.load();
+  await store.open("unsent");
+  store.setDraft("typed but never sent");
+  await store.selectAgent("b");
+  assert.deepEqual(store.getSnapshot().draftSessions, [], "another agent's drafts stay out of this list");
+  await store.selectAgent("a");
+  assert.deepEqual(store.getSnapshot().draftSessions, ["unsent"]);
+  await store.open("unsent");
+  assert.equal(store.getSnapshot().conversation?.draft, "typed but never sent");
+  store.setDraft("");
+  await store.open("other");
+  assert.deepEqual(store.getSnapshot().draftSessions, [], "an emptied draft leaves no row behind");
+  store.dispose();
+});
+
 test("a failure is shown as the sentence main wrote, wherever it lands", async () => {
   const { api, store } = harness();
   await store.load();

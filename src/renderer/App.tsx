@@ -23,7 +23,7 @@ export default function App() {
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
-  const sessionRows = rows(sessions, c?.session, view.runningSessions);
+  const sessionRows = rows(sessions, c?.session, view.runningSessions, view.draftSessions);
 
   useEffect(() => {
     void store.load();

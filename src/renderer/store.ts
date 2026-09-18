@@ -44,6 +44,8 @@ export interface View {
   blocked?: string;
   runningAgents: string[];
   runningSessions: string[];
+  /** Selected agent's conversations holding unsent text, so a draft never becomes unreachable. */
+  draftSessions: string[];
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
@@ -83,6 +85,7 @@ export function createStore(api: DuangApi) {
     commands: [],
     runningAgents: [],
     runningSessions: [],
+    draftSessions: [],
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
@@ -109,6 +112,11 @@ export function createStore(api: DuangApi) {
     view.busy = !!view.conversation && busy(view.conversation);
     view.runningAgents = [...new Set(running.map((c) => c.agentId))];
     view.runningSessions = running.filter((c) => c.agentId === view.agentId).map((c) => c.session);
+    // A conversation the runtime has never heard of exists only while it is on screen. Without a row
+    // of its own, walking away from unsent text is the same as discarding it.
+    view.draftSessions = [...drafts]
+      .filter(([id, text]) => text.trim() && id.startsWith(`${view.agentId ?? ""}/`))
+      .map(([id]) => id.slice((view.agentId ?? "").length + 1));
     view.blocked = blockedBy(view);
     for (const listener of listeners) listener();
   };

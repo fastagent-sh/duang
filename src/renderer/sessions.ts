@@ -21,11 +21,16 @@ export function ago(ts: number, now: number = Date.now()): string {
   return days < 7 ? `${days}d ago` : new Date(ts).toLocaleDateString();
 }
 
-export function rows(summaries: SessionSummary[], selected?: string, running: string[] = []): Row[] {
+export function rows(
+  summaries: SessionSummary[],
+  selected?: string,
+  running: string[] = [],
+  drafts: string[] = [],
+): Row[] {
   const known = [...summaries]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map((s) => ({ session: s.session, label: s.name ?? s.preview ?? s.session, updatedAt: s.updatedAt }));
-  const local = [...new Set([...(selected ? [selected] : []), ...running])]
+  const local = [...new Set([...(selected ? [selected] : []), ...running, ...drafts])]
     .filter((session) => !known.some((row) => row.session === session))
     .map((session) => ({
       session,
