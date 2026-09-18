@@ -7,6 +7,7 @@ import {
   MissingModelError,
   NoAgentError,
   openAgent,
+  refuse,
   removeAgent,
   setAgentModel,
   withAgentRun,
@@ -45,6 +46,11 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+/**
+ * These throw on purpose: a renderer asking about an agent that is not in the registry, or naming an
+ * unaddressable session, is a bug in this app, not a choice the person can revisit. Refusals the
+ * person CAN act on are returned as values instead — see `refuse`.
+ */
 async function requireAgent(agentId: string): Promise<AgentRow> {
   const row = (await listAgents()).find((a) => a.id === agentId);
   if (!row) throw new Error(`unknown agent ${agentId}`);
@@ -98,15 +104,20 @@ function register(): void {
   });
   ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
-    if (typeof model !== "string" || !(await credentials()).specs.includes(model))
-      throw new Error("Choose an available model");
+    if (typeof model !== "string") throw new Error("Model must be a string");
     if (session !== undefined) requireSession(session);
-    await setAgentModel(await requireAgent(id), model, session);
-    stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
+    const row = await requireAgent(id);
+    // The picker only offers configured models, so a miss here means the file changed underneath it.
+    if (!(await credentials()).specs.includes(model))
+      return refuse("model_unavailable", `${model} is not in the configured credential file — pick another.`);
+    const result = await setAgentModel(row, model, session);
+    if (result.ok) stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
+    return result;
   });
   ipcMain.handle("agent:remove", async (_e, id: string) => {
-    await removeAgent(id);
-    stopAgentStreams(id, "The agent was removed");
+    const result = await removeAgent(id);
+    if (result.ok) stopAgentStreams(id, "The agent was removed");
+    return result;
   });
   ipcMain.handle("agent:commands", async (_e, id: string) =>
     (await openAgent(await requireAgent(id))).control.commands(),

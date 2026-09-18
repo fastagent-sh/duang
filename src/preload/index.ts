@@ -30,10 +30,14 @@ const api = {
   listAgents: (): Promise<AgentRow[]> => ipcRenderer.invoke("agents:list"),
   addAgent: (): Promise<AgentRow | undefined> => ipcRenderer.invoke("agents:add"),
   openAgent: (agentId: string): Promise<OpenResult> => ipcRenderer.invoke("agent:open", agentId),
-  /** Sets the agent's model, and moves the named conversation onto it straight away. */
-  setModel: (agentId: string, model: string, session?: string): Promise<void> =>
+  /**
+   * Sets the agent's model, and moves the named conversation onto it straight away. Refuses — as a
+   * value — while any of the agent's conversations is running, or if the model is not configured.
+   */
+  setModel: (agentId: string, model: string, session?: string): Promise<SessionResult> =>
     ipcRenderer.invoke("agent:setModel", agentId, model, session),
-  removeAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:remove", agentId),
+  /** Forgets duang's row. Refuses while a conversation is running; the directory is never touched. */
+  removeAgent: (agentId: string): Promise<SessionResult> => ipcRenderer.invoke("agent:remove", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
   scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
   /** The names this agent exposes — what the composer's `/` completion lists. */

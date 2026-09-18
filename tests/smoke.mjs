@@ -248,10 +248,11 @@ if (!process.versions.electron) {
       await until("document.querySelector('button[title=\"Stop (Esc)\"]') !== null", "active stop control");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "background run keeps going");
-      const refused = await evaluate("window.duang.setModel('smoke', 'openai/gpt-4.1').then(() => '', e => e.message)");
-      assert.match(
-        refused,
-        /conversation is running/,
+      const refused = await evaluate("window.duang.setModel('smoke', 'openai/gpt-4.1')");
+      assert.equal(refused.ok, false);
+      assert.equal(
+        refused.error.code,
+        "agent_busy",
         "a different conversation cannot strand a running agent by changing its model",
       );
       const deletion = await evaluate(`window.duang.deleteSession('smoke', ${JSON.stringify(firstSession)})`);

@@ -69,7 +69,8 @@ export function createStore(api: DuangApi) {
     for (const listener of listeners) listener();
   };
   const note = (error: unknown, c = view.conversation) => {
-    // Electron wraps a rejected handler as "Error invoking remote method 'x': Error: <what main said>".
+    // Only unexpected failures throw across IPC now, and Electron wraps those as
+    // "Error invoking remote method 'x': Error: <what main said>". Expected refusals arrive as values.
     const text = (error instanceof Error ? error.message : String(error)).replace(
       /^Error invoking remote method '[^']*': (Error: )?/,
       "",
@@ -253,7 +254,11 @@ export function createStore(api: DuangApi) {
       const request = navigation;
       publish({ loading: true });
       try {
-        await api.setModel(id, model, c?.session);
+        const result = await api.setModel(id, model, c?.session);
+        if (!result.ok) {
+          publish({ loading: false });
+          return note(result.error.message, c);
+        }
         publish({ agents: await api.listAgents() });
         if (request !== navigation) return;
         if (c) close(c);
@@ -290,7 +295,8 @@ export function createStore(api: DuangApi) {
       const id = view.agentId;
       if (!id) return;
       try {
-        await api.removeAgent(id);
+        const result = await api.removeAgent(id);
+        if (!result.ok) return note(result.error.message);
         for (const c of conversations.values()) if (c.agentId === id) close(c);
         publish({ agents: await api.listAgents() });
         if (view.agentId !== id) return;
