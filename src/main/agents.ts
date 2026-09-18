@@ -32,6 +32,9 @@ const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
 const changing = new Map<string, Promise<void>>();
 
+/** Agents with a turn in flight — what quitting would interrupt. A send holds this for its whole run. */
+export const workingAgents = (): string[] => [...sending.keys()];
+
 export class MissingModelError extends Error {}
 export class NoAgentError extends Error {}
 
