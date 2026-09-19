@@ -24,16 +24,17 @@ import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
+import { Badge, Button, dot, type Tone } from "./ui.tsx";
 import type { AgentState, Store, View } from "./store.ts";
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
 
-const dot: Record<AgentState, string> = {
-  ready: "bg-accent",
-  missing_model: "bg-amber-400",
-  no_agent: "bg-amber-400",
-  broken: "bg-danger",
+const tones: Record<AgentState, Tone> = {
+  ready: "accent",
+  missing_model: "warning",
+  no_agent: "warning",
+  broken: "danger",
 };
 
 /** The dot's colour in words: hover and assistive technology must not have to read the palette. */
@@ -81,19 +82,13 @@ export function Rail({
             {(running.includes(agent.id) || (state && state !== "ready")) && (
               <span
                 aria-label={running.includes(agent.id) ? "Working" : says[state!]}
-                className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-bg ${running.includes(agent.id) ? "bg-accent animate-pulse" : dot[state!]}`}
+                className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-bg ${running.includes(agent.id) ? "bg-accent animate-pulse" : dot[tones[state!]]}`}
               />
             )}
           </button>
         );
       })}
-      <button
-        onClick={onAdd}
-        className="no-drag size-9 rounded-card text-muted grid place-items-center hover:bg-hover hover:text-text"
-        title="Add agent directory"
-      >
-        <Plus size={16} />
-      </button>
+      <Button kind="ghost" onClick={onAdd} className="no-drag" title="Add agent directory" aria-label="Add agent directory" icon={<Plus size={16} />} />
     </nav>
   );
 }
@@ -130,31 +125,35 @@ export function ConversationList({
         <span className="truncate font-medium">{agent?.name ?? ""}</span>
         {/* The rail's dot is a colour; this is the same fact in words, where it is always readable. */}
         {agent && (working || (state && state !== "ready")) && (
-          <span className={`truncate text-[11px] ${state === "broken" ? "text-danger" : "text-muted"}`}>
-            {working ? "working" : says[state!].toLowerCase()}
-          </span>
+          <Badge tone={working ? "accent" : tones[state!]} pulse={working}>
+            <span className="truncate">{working ? "working" : says[state!].toLowerCase()}</span>
+          </Badge>
         )}
         <span className="flex-1" />
         {agent && !disabled && (
-          <button
+          <Button
+            kind="ghost"
+            size={28}
             onClick={onNew}
-            className="no-drag size-6 grid place-items-center rounded-card text-muted hover:bg-hover hover:text-text"
+            className="no-drag"
             title="New conversation (⌘N)"
-          >
-            <Plus size={15} />
-          </button>
+            aria-label="New conversation"
+            icon={<Plus size={15} />}
+          />
         )}
       </div>
 
       {agent && (
-        <button
+        <Button
+          kind="ghost"
+          size={28}
           onClick={onReveal}
           title={agent.dir}
-          className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-hover hover:text-text"
+          icon={<FolderOpen size={12} />}
+          className="mx-3 mb-2 !justify-start font-mono text-[11px]"
         >
-          <FolderOpen size={12} />
           <span className="truncate">{home(agent.dir)}</span>
-        </button>
+        </Button>
       )}
 
       <div className="flex-1 overflow-y-auto min-h-0 px-1.5 pb-2 space-y-0.5">
@@ -174,22 +173,26 @@ export function ConversationList({
                 {row.updatedAt !== undefined && <div className="text-muted text-[11px]">{ago(row.updatedAt)}</div>}
               </button>
               {!row.fresh && (
-                <button
+                <Button
+                  kind="danger"
+                  size={28}
                   onClick={() => onDelete(row.session)}
                   title="Delete conversation"
-                  className="absolute right-1.5 top-1.5 grid opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 size-5 place-items-center rounded text-muted hover:text-danger"
-                >
-                  <Trash size={13} />
-                </button>
+                  aria-label="Delete conversation"
+                  icon={<Trash size={13} />}
+                  className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                />
               )}
             </div>
           );
         })}
       </div>
+      {/* Sitting in the sidebar all day, this one asks before it looks dangerous: quiet until the
+          pointer is on it. */}
       {agent && (
-        <button onClick={onRemove} className="m-3 text-left text-[11px] text-muted hover:text-danger">
+        <Button kind="ghost" size={28} onClick={onRemove} className="m-3 self-start text-[11px] hover:text-danger">
           Remove agent…
-        </button>
+        </Button>
       )}
     </aside>
   );
@@ -207,12 +210,9 @@ export function NoAgents({ onAdd }: { onAdd: () => void }) {
         <p className="text-muted leading-relaxed">
           duang runs the agents you already have — and later puts them online.
         </p>
-        <button
-          onClick={onAdd}
-          className="rounded-card bg-accent/15 text-accent ring-1 ring-accent/50 px-3 py-1.5 hover:bg-accent/25"
-        >
+        <Button kind="primary" onClick={onAdd}>
           Add an agent directory
-        </button>
+        </Button>
         <p className="text-muted text-[11px]">
           No agent yet? Run <span className="font-mono">fastagent init</span> in a project.
         </p>
@@ -235,10 +235,12 @@ export function UnreadableRegistry({ onReveal, onRetry }: { onReveal: () => void
           conversations are untouched, and the file is left exactly as it is.
         </p>
         <div className="flex gap-2 justify-center">
-          <Action icon={<FolderOpen size={13} />} label="Reveal agents.json" onClick={onReveal} />
-          <button onClick={onRetry} className="underline">
+          <Button icon={<FolderOpen size={14} />} onClick={onReveal}>
+            Reveal agents.json
+          </Button>
+          <Button kind="ghost" onClick={onRetry}>
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     </Panel>
@@ -263,25 +265,18 @@ export function BrokenAgent({
           {message}
         </div>
         <div className="flex gap-2">
-          <Action icon={<X size={13} />} label="Remove agent" onClick={onRemove} />
-          <Action icon={<FolderOpen size={13} />} label="Reveal in Finder" onClick={onReveal} />
-          <button onClick={onRetry} className="underline">
+          <Button kind="danger" icon={<X size={14} />} onClick={onRemove}>
+            Remove agent
+          </Button>
+          <Button icon={<FolderOpen size={14} />} onClick={onReveal}>
+            Reveal in Finder
+          </Button>
+          <Button kind="ghost" onClick={onRetry}>
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     </Panel>
-  );
-}
-
-function Action({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-card border border-stroke px-3 py-1.5 flex items-center gap-1.5 hover:bg-hover"
-    >
-      {icon} {label}
-    </button>
   );
 }
 
@@ -302,13 +297,12 @@ export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate:
           <span className="font-mono">fastagent init</span> instead.
         </p>
         <div className="flex gap-2">
-          <button
-            onClick={onCreate}
-            className="rounded-card bg-accent/15 text-accent ring-1 ring-accent/50 px-3 py-1.5 hover:bg-accent/25"
-          >
+          <Button kind="primary" onClick={onCreate}>
             Create agent here
-          </button>
-          <Action icon={<X size={13} />} label="Remove" onClick={onRemove} />
+          </Button>
+          <Button kind="danger" icon={<X size={14} />} onClick={onRemove}>
+            Remove
+          </Button>
         </div>
       </div>
     </Panel>
@@ -372,27 +366,34 @@ function ModelPopover({
         )
           close();
       }}
-      className="fixed m-0 top-auto right-auto w-80 overflow-y-auto rounded-card bg-surface text-text ring-1 ring-stroke shadow-2xl p-2 backdrop:bg-transparent"
+      className="popover fixed m-0 top-auto right-auto w-80 overflow-y-auto text-text backdrop:bg-transparent"
     >
-      <button onClick={close} className="float-right p-1" aria-label="Close model picker">
-        <X size={14} />
-      </button>
+      <Button
+        kind="ghost"
+        size={28}
+        onClick={close}
+        className="float-right"
+        aria-label="Close model picker"
+        icon={<X size={14} />}
+      />
       {models && <p className="text-muted text-[11px] p-2 break-all">Credentials: {models.authPath}</p>}
       {error ? (
-        <p role="alert" className="text-danger p-2">
-          {error}{" "}
-          <button className="underline" onClick={onRetry}>
+        <div role="alert" className="text-danger p-2 space-y-2">
+          <p>{error}</p>
+          <Button kind="ghost" size={28} onClick={onRetry}>
             Retry
-          </button>
-        </p>
+          </Button>
+        </div>
       ) : models?.specs.length === 0 ? (
-        <p className="text-muted text-[12px] p-2 leading-relaxed">
-          No provider is configured. Use <span className="font-mono">fastagent login</span> with
-          <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to the file above, then{" "}
-          <button className="underline" onClick={onRetry}>
+        <div className="text-muted text-[12px] p-2 leading-relaxed space-y-2">
+          <p>
+            No provider is configured. Use <span className="font-mono">fastagent login</span> with
+            <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to the file above, then retry.
+          </p>
+          <Button kind="ghost" size={28} onClick={onRetry}>
             Retry
-          </button>.
-        </p>
+          </Button>
+        </div>
       ) : (
         <>
           <input
@@ -401,7 +402,7 @@ function ModelPopover({
             onChange={(e) => setFilter(e.target.value)}
             aria-label="Filter models"
             placeholder="filter models"
-            className="w-full bg-bg rounded-card px-2.5 py-1.5 mb-1.5 text-[12px] outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
+            className="w-full h-8 bg-bg rounded-card px-2.5 mb-1.5 text-[12px] outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
           />
           <div className="max-h-64 overflow-y-auto">
             {!models && (
@@ -418,7 +419,7 @@ function ModelPopover({
                   void store.pickModel(model);
                 }}
                 className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-hover ${
-                  model === current ? "text-accent" : ""
+                  model === current ? "bg-accent-weak text-accent" : ""
                 }`}
               >
                 {model}
@@ -456,10 +457,9 @@ function Working({ since }: { since: number }) {
     return () => clearInterval(timer);
   }, []);
   return (
-    <div className="flex items-center gap-2 text-muted text-[12px]">
-      <span className="size-1.5 rounded-full bg-accent animate-pulse" />
+    <Badge tone="accent" pulse>
       working… {Math.max(0, Math.round((now - since) / 1000))}s
-    </div>
+    </Badge>
   );
 }
 
@@ -566,11 +566,11 @@ const toolIcons: Record<string, typeof Terminal> = {
 };
 
 /** One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9. */
-function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; className: string } {
-  if (item.status === "interrupted") return { word: "stopped", className: "text-muted" };
-  if (item.isError) return { word: "failed", className: "text-danger" };
-  if (item.status === "running") return { word: "running", className: "text-accent" };
-  return { word: "done", className: "text-success" };
+function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone: Tone } {
+  if (item.status === "interrupted") return { word: "stopped", tone: "muted" };
+  if (item.isError) return { word: "failed", tone: "danger" };
+  if (item.status === "running") return { word: "running", tone: "accent" };
+  return { word: "done", tone: "success" };
 }
 
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
@@ -584,7 +584,9 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
         <Icon size={14} className="shrink-0 text-muted" />
         <span className="font-mono truncate">{summary || item.name}</span>
         {/* The state belongs next to the command it describes, not at the far edge of the row. */}
-        <span className={`shrink-0 text-[11px] ${state.className}`}>{state.word}</span>
+        <Badge tone={state.tone} pulse={item.status === "running"}>
+          {state.word}
+        </Badge>
       </summary>
       <div className="px-3 pb-2.5 pt-0.5 space-y-2 text-[11.5px] font-mono">
         {summary !== stringify(item.args) && (
@@ -630,6 +632,11 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";
   const modelDisabled = view.loading || !!c?.loading || state === "broken" || state === "no_agent";
+  /** Why the model cannot be changed right now, or false when it can. */
+  const modelReason =
+    (!agentId && "Select an agent first") ||
+    (busy && "Stop the turn to change the model") ||
+    (modelDisabled && "This agent is not ready");
   const value = c?.draft ?? "";
   const disabled = !!view.blocked;
 
@@ -666,26 +673,26 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   }, [query]);
 
   return (
-    <div className="relative rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 pt-2.5 pb-2">
+    <div className="relative rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 py-2.5">
       {suggestions.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-2 w-96 max-h-64 overflow-y-auto rounded-card bg-surface ring-1 ring-stroke shadow-2xl p-1 z-20">
+        <div className="popover absolute bottom-full left-0 mb-2 w-96 max-h-64 overflow-y-auto z-20">
           {suggestions.map((command, index) => (
             <button
               key={command.name}
               onMouseEnter={() => setCursor(index)}
               onClick={() => store.setDraft(complete(command.name))}
               className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
-                command === chosen ? "bg-hover" : ""
+                command === chosen ? "bg-accent-weak text-accent" : ""
               }`}
             >
               <span className="font-mono text-[12px]">/{command.name}</span>
-              <span className="truncate text-[11px] text-muted">{command.description}</span>
+              <span className="truncate text-[11px] text-muted flex-1">{command.description}</span>
               <span className="ml-auto text-[10px] text-muted">{command.source}</span>
             </button>
           ))}
         </div>
       )}
-      {agent && <div className="text-[11px] font-mono text-muted mb-1.5 truncate">{home(agent.dir)}</div>}
+      {agent && <div className="text-[11px] font-mono text-muted mb-2 truncate">{home(agent.dir)}</div>}
       {view.commandsError && query !== undefined && (
         <p role="alert" className="text-danger text-[11px]">
           {view.commandsError}
@@ -728,21 +735,21 @@ export function Composer({ view, store }: { view: View; store: Store }) {
         }}
         placeholder={view.blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
         disabled={disabled}
-        className="w-full min-h-10 resize-none bg-transparent leading-5 outline-none placeholder:text-muted disabled:opacity-60"
+        className="w-full min-h-10 resize-none bg-transparent leading-5 outline-none placeholder:text-muted disabled:opacity-40"
       />
-      <div className="flex items-center gap-2 mt-1">
+      <div className="flex items-center gap-2 mt-2">
         <div className="relative">
-          <button
+          <Button
+            kind="ghost"
+            size={28}
             onClick={() => setPicking(!picking)}
-            disabled={!agentId || busy || modelDisabled}
-            title={busy ? "Stop the turn to change the model" : "Model for this agent"}
-            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-hover disabled:opacity-50 ${
-              !model && needsModel ? "text-amber-400" : "text-muted"
-            }`}
+            disabled={modelReason}
+            title="Model for this agent"
+            className={`font-mono text-[11px] ${!model && needsModel ? "text-warning" : ""}`}
           >
             {model ?? (needsModel ? "pick a model" : "reading model…")}
             <CaretDown size={12} />
-          </button>
+          </Button>
           {picking && agentId && !busy && !modelDisabled && (
             <ModelPopover view={view} store={store} current={model} onClose={() => setPicking(false)} />
           )}
@@ -755,20 +762,21 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             aria-label="Stop the run"
             // Stopping ends the run, not its consequences; a tool that already wrote a file is done.
             title="Stop (Esc) — work its tools already finished is not undone"
-            className="ml-auto size-7 grid place-items-center rounded-card bg-danger/15 text-danger"
+            className="ml-auto size-7 grid place-items-center rounded-card bg-danger text-accent-fg hover:bg-danger/85"
           >
-            <Stop size={13} />
+            <Stop size={13} weight="fill" />
           </button>
         ) : (
-          <button
+          <Button
+            kind="primary"
+            size={28}
             onClick={() => void store.send()}
-            disabled={disabled || value.trim() === ""}
+            disabled={view.blocked || (value.trim() === "" && "Type a message first")}
             aria-label="Send"
             title="Send (⏎) · newline (⇧⏎)"
-            className="ml-auto size-7 grid place-items-center rounded-card bg-accent/15 text-accent disabled:opacity-30 disabled:text-muted"
-          >
-            <ArrowUp size={15} />
-          </button>
+            className="ml-auto"
+            icon={<ArrowUp size={15} />}
+          />
         )}
       </div>
     </div>

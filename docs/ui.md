@@ -210,6 +210,27 @@ current selection and destructive actions, so weight rather than colour marks em
 carries a label or `aria-label`; icon-only controls exist only where the symbol is universal (send,
 stop, close).
 
+## 6b. Controls
+
+Four kinds of button and no fifth. `primary` is filled accent and appears at most once on a screen —
+the one thing to do here. `secondary` is an outline for an alternative. `ghost` is an action inside a
+row, a header or the composer. `danger` deletes or removes; a destructive button that lives on screen
+all day (Remove agent) stays quiet and only turns red under the pointer.
+
+Two heights: 28 inside rows and dense bars, 32 standing on its own. Icon-only is square at the same
+height, and only where the symbol is universal (§6).
+
+**A disabled control says why.** The `disabled` prop takes the reason rather than a boolean, so a
+control cannot be greyed out silently: it dims to 40%, keeps its shape, and shows the reason on
+hover. "Type a message first", "Stop the turn to change the model".
+
+A state is a badge: a dot or icon, then the word, in the state's colour — never colour alone (§11),
+and it pulses only while the state is still happening.
+
+Popovers share one surface — `surface`, radius 14, hairline, the only shadow in the app — even
+though the model list is a modal dialog that takes focus and the slash completion list deliberately
+does not. Both highlight the current item with `accent-weak`.
+
 ## 7. Space, radius, elevation
 
 - Spacing scale: 4, 8, 12, 16, 24, 32.
