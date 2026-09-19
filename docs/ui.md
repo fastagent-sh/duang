@@ -224,6 +224,10 @@ height, and only where the symbol is universal (§6).
 control cannot be greyed out silently: it dims to 40%, keeps its shape, and shows the reason on
 hover. "Type a message first", "Stop the turn to change the model".
 
+`npm run shots` writes the sheet of every control in both colour modes to
+`out/shots/components-{dark,light}.png`, from the same build as the app; `#gallery` opens it in a
+running window. It is how "what do we have" gets answered by looking.
+
 A state is a badge: a dot or icon, then the word, in the state's colour — never colour alone (§11),
 and it pulses only while the state is still happening.
 
