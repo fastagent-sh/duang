@@ -90,10 +90,9 @@ straight off disk. Absent for cloud agents, because there is nothing of yours to
 
 ## Visual direction and stack
 
-Dark-first, dense, keyboard-first, near-monochrome with one accent — the dev-tool register of
-Raycast and Linear, not a consumer chat app. Eight tokens in oklch (`bg`, `surface`, `stroke`,
-`text`, `muted`, `accent`, `danger`, `radius`), Inter plus a mono. No design system until there is
-enough UI to systematise.
+The design system is [docs/ui.md](ui.md): a messaging register on the outside and a developer tool
+where the content demands it, violet accent, light and dark, Inter paired with PingFang SC, Phosphor
+icons. This section covers only the stack those choices are built on.
 
 Two rendering dependencies, no component library:
 
@@ -103,7 +102,7 @@ Two rendering dependencies, no component library:
 
 The model picker uses Chromium's native `<dialog>` for focus trapping, Escape and focus restoration,
 positioned above the composer chip. Add Base UI only when a required overlay exceeds those native
-behaviors. Plus `lucide-react` for icons. No shadcn: it generates files you then maintain, in a generic SaaS
+behaviors. Plus `@phosphor-icons/react` for icons. No shadcn: it generates files you then maintain, in a generic SaaS
 register we would spend the whole project overriding. (MonoCode reached the same conclusion — its
 dependency list has no component library at all.)
 
