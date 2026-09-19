@@ -124,6 +124,10 @@ Listing an agent that is not open loads its conversations, which boots that agen
 way opening it would — FastAgent owns the session list and duang will not keep a second copy of
 where sessions live.
 
+Selection is the accent, never a grey — grey is what a row looks like under the pointer. The open
+agent takes the tint (`accent-weak`, name in `accent`) and its open conversation takes the fill, so
+the two levels read as one family without shouting at each other.
+
 **One flat list, no card per agent.** Full-width rows, a hairline that starts where the text does,
 the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,
 and the reason shows up as soon as two agents are listed — a card per agent turns the column into a

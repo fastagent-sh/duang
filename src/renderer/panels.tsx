@@ -122,13 +122,18 @@ export function Sidebar({
                   aria-current={selected ? "true" : undefined}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
+                  // Selection is the accent, not a grey: grey is what a row looks like under the
+                  // pointer. The agent gets the tint and its open conversation the fill, so the two
+                  // levels do not shout at each other.
                   className={`flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors ${
-                    selected ? "bg-hover" : "hover:bg-hover"
+                    selected ? "bg-accent-weak" : "hover:bg-hover"
                   }`}
                 >
                   <Avatar name={agent.name} working={working} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
+                    <span className={`block truncate text-[13.5px] font-semibold ${selected ? "text-accent" : ""}`}>
+                      {agent.name}
+                    </span>
                     <span className="block truncate text-[11px] font-mono text-muted">{home(agent.dir)}</span>
                   </span>
                   {/* Idle and ready is the state worth saying nothing about (§9). */}
