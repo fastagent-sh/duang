@@ -86,7 +86,7 @@ export function Sidebar({
       {/* The window controls overhang this card's top-left. The row is tall enough to hold them
           with air around it, and the wordmark is centred in the column rather than pushed along by
           them — Telegram's header, which has the same problem. */}
-      <div className="relative h-14 shrink-0 flex items-center px-2 drag">
+      <div className="relative h-12 shrink-0 flex items-center px-2 drag">
         <span className="absolute left-1/2 -translate-x-1/2 font-medium tracking-[-0.01em]">
           duang<span className="text-accent">·</span>
         </span>

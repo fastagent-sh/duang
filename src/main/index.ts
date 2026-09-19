@@ -28,6 +28,10 @@ function createWindow(): BrowserWindow {
     minWidth: 800,
     minHeight: 540,
     titleBarStyle: "hiddenInset",
+    // Roughly macOS's own inset, a little tighter to the top than centring them in the sidebar's
+    // header row would put them: with the panel starting 8 below the window edge, centring reads as
+    // a gap above the buttons rather than as alignment.
+    trafficLightPosition: { x: 18, y: 18 },
     vibrancy: "sidebar",
     backgroundColor: "#00000000",
     webPreferences: {

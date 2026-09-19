@@ -158,23 +158,28 @@ display is gone comes back on an attached one.
 
 ## 4. Colour
 
-oklch, two modes, following the system. The neutral ramp carries a trace of the accent hue (285) so
-violet reads as part of the family rather than applied on top.
+oklch, two modes, following the system. The neutral ramp is measured from Telegram's macOS dark
+theme — small steps, almost no chroma — with one change of relationship: the transcript's canvas is
+the darkest layer and every panel sits above it, so a panel reads as lifted rather than as a hole.
+The ramp keeps a trace of the accent hue (285) so violet belongs to the family rather than sitting
+on top of a grey app.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `bg` | `oklch(0.16 0.01 285)` | `oklch(0.98 0.004 285)` | content layer background |
-| `surface` | `oklch(0.20 0.012 285)` | `oklch(1 0 0)` | bubbles, cards, popovers |
-| `surface-2` | `oklch(0.24 0.014 285)` | `oklch(0.96 0.005 285)` | hover, pressed, nested cards |
-| `stroke` | `oklch(0.30 0.012 285)` | `oklch(0.90 0.006 285)` | hairlines, card borders |
+| `bg` | `oklch(0.225 0.004 285)` | `oklch(0.955 0.003 285)` | the transcript, and the canvas panels sit on |
+| `surface` | `oklch(0.27 0.005 285)` | `oklch(1 0 0)` | bubbles, cards, popovers, composer |
+| `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.995 0.001 285)` | the sidebar panel |
+| `surface-2` | `oklch(0.315 0.006 285)` | `oklch(0.93 0.004 285)` | hover, pressed, nested cards |
+| `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.89 0.005 285)` | hairlines, card borders |
 | `text` | `oklch(0.95 0.005 285)` | `oklch(0.22 0.01 285)` | body |
 | `muted` | `oklch(0.68 0.01 285)` | `oklch(0.50 0.01 285)` | metadata, timestamps |
 | `accent` | `oklch(0.72 0.16 295)` | `oklch(0.55 0.19 295)` | selection, primary action, focus |
 | `accent-weak` | `accent / 15%` | `accent / 12%` | selected row, user bubble |
-| `accent-fg` | `oklch(0.99 0 0)` | `oklch(0.99 0 0)` | text on a filled accent surface |
+| `accent-fg` | `oklch(0.16 0.01 285)` | `oklch(1 0 0)` | text on a filled accent surface |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
 | `warning` | `oklch(0.78 0.13 75)` | `oklch(0.58 0.13 75)` | needs a model, no agent yet |
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
+| `danger-fg` | `oklch(0.16 0.01 285)` | `oklch(1 0 0)` | text on a filled danger surface (Stop) |
 
 Every interactive role is defined as a set, not derived at the call site — Telegram's palette does
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
