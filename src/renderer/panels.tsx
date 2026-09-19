@@ -1,5 +1,5 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
-import { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   CaretDown,
@@ -496,15 +496,10 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
 }
 
 /**
- * Fenced code is ours (see code.tsx). `pre` passes its child through so our component owns the whole
- * frame, but it must keep marking that child as a block — that flag is the only thing telling a
- * fence apart from an inline span.
+ * Only `code` is overridden. Streamdown's own `pre` is what marks a child as a fenced block, so
+ * replacing it — as an earlier version did — turns every code block into an inline span.
  */
-const markdownComponents = {
-  code: MarkdownCode,
-  pre: ({ children }: { children?: React.ReactNode }) =>
-    isValidElement(children) ? cloneElement(children as React.ReactElement<{ "data-block"?: string }>, { "data-block": "true" }) : children,
-};
+const markdownComponents = { code: MarkdownCode };
 /** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 

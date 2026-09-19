@@ -40,6 +40,8 @@ Three things follow from it:
 
 Run \`bun run i18n:check\` before committing; it compares the twelve message files.`;
 
+const chunk = (text, size) => text.match(new RegExp(`[\\s\\S]{1,${size}}`, "g")) ?? [];
+
 if (!process.versions.electron) {
   const root = mkdtempSync(join(tmpdir(), "duang-shot-"));
   try {
@@ -89,7 +91,9 @@ if (!process.versions.electron) {
       const events = [
         { type: "response.created", response: { id: `resp_${requests}` } },
         { type: "response.output_item.added", output_index: 0, item: { ...item, ...(tool ? { arguments: "" } : { content: [] }) } },
-        ...(tool ? [] : [{ type: "response.output_text.delta", output_index: 0, delta: ANSWER }]),
+        // Chunked on purpose: a fence is unclosed for most of the stream, which is where the
+        // renderer's block detection actually gets tested.
+        ...(tool ? [] : chunk(ANSWER, 40).map((delta) => ({ type: "response.output_text.delta", output_index: 0, delta }))),
         { type: "response.output_item.done", output_index: 0, item },
         { type: "response.completed", response: { id: `resp_${requests}`, status: "completed", output: [item], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } },
       ];

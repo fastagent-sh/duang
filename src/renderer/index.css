@@ -84,11 +84,14 @@ pre,
   font-variant-numeric: tabular-nums;
 }
 
-/* Shiki writes the light colour inline and the dark one as a custom property on the same token. */
-@media (prefers-color-scheme: dark) {
-  pre code span {
-    color: var(--shiki-dark, inherit);
-  }
+/* Shiki resolves its dual themes with light-dark(), which needs the document to declare both. The
+   code surface is ours, so its own background is dropped. */
+:root {
+  color-scheme: light dark;
+}
+.shiki,
+.shiki span {
+  background: transparent !important;
 }
 
 /* CJK glyphs fill their em box, so the same size needs more leading than Latin to read evenly. */
