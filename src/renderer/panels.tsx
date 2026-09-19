@@ -57,10 +57,12 @@ export function Sidebar({
   agentId,
   states,
   running,
-  rows,
+  rowsFor,
   session,
+  expanded,
   disabled,
   onSelect,
+  onToggle,
   onAdd,
   onOpen,
   onNew,
@@ -70,19 +72,17 @@ export function Sidebar({
   agentId?: string;
   states: Record<string, AgentState>;
   running: string[];
-  rows: Row[];
+  rowsFor: (agentId: string) => Row[];
   session?: string;
+  expanded: string[];
   disabled: boolean;
   onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
   onAdd: () => void;
-  onOpen: (session: string) => void;
+  onOpen: (agentId: string, session: string) => void;
   onNew: () => void;
   onDelete: (session: string) => void;
 }) {
-  // Folding is a view preference, not state anyone else needs: clicking the open agent again puts
-  // its topics away without closing the conversation you are reading.
-  const [folded, setFolded] = useState<string[]>([]);
-  const open = agentId !== undefined && !folded.includes(agentId);
   return (
     <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
       {/* The window controls overhang this card's top-left. The row is tall enough to hold them
@@ -104,78 +104,78 @@ export function Sidebar({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0 px-2 pb-2 space-y-1.5">
+      {/* One flat list, the way every chat client draws a roster: full-width rows, a hairline that
+          starts where the text does, and no card around anything. Cards per agent made an open one
+          look heavy and made the list read as a stack of panels. */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         {agents.map((agent) => {
           const selected = agent.id === agentId;
-          const expanded = selected && open;
+          const open = expanded.includes(agent.id);
           const state = states[agent.id] ?? "ready";
           const working = running.includes(agent.id);
+          const conversations = open ? rowsFor(agent.id) : [];
           return (
-            /* The open agent and its conversations are one card. Indentation alone left the two
-               kinds of row reading as one list; a container says which topics belong to whom. */
-            /* surface-2 rather than surface: the group has to stand out from the sidebar it sits
-               in, and `surface` is a hair away from it in both modes. */
-            <div key={agent.id} className={`rounded-card p-1 ${selected ? "bg-surface-2" : ""}`}>
-              <button
-                aria-label={agent.name}
-                aria-current={selected ? "true" : undefined}
-                aria-expanded={selected ? expanded : undefined}
-                onClick={() => {
-                  if (selected) setFolded((ids) => (open ? [...ids, agent.id] : ids.filter((id) => id !== agent.id)));
-                  else {
-                    setFolded((ids) => ids.filter((id) => id !== agent.id));
-                    onSelect(agent.id);
-                  }
-                }}
-                title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
-                className={`flex w-full items-center gap-3 rounded-card px-2 py-2 text-left transition-colors ${
-                  selected ? "" : "hover:bg-hover"
-                }`}
-              >
-                <Avatar name={agent.name} working={working} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
-                  <span className="block truncate text-[11px] font-mono text-muted">{home(agent.dir)}</span>
-                </span>
-                {/* Idle and ready is the state worth saying nothing about (§9). */}
-                {(working || state !== "ready") &&
-                  (working ? (
-                    <Badge tone="accent" pulse className="min-w-0">
-                      <span className="truncate">working</span>
-                    </Badge>
-                  ) : (
-                    <span aria-label={says[state]} className={`size-2 shrink-0 rounded-full ${dot[tones[state]]}`} />
-                  ))}
-                {selected && (
-                  <CaretDown
-                    size={12}
-                    className={`shrink-0 text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
-                  />
-                )}
-              </button>
-              {expanded && (
-                <div className="mt-1 space-y-0.5 border-t border-stroke pt-1.5">
-                  {rows.map((row) => (
+            <div key={agent.id}>
+              <div className="relative">
+                <button
+                  aria-label={agent.name}
+                  aria-current={selected ? "true" : undefined}
+                  onClick={() => onSelect(agent.id)}
+                  title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
+                  className={`flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors ${
+                    selected ? "bg-hover" : "hover:bg-hover"
+                  }`}
+                >
+                  <Avatar name={agent.name} working={working} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
+                    <span className="block truncate text-[11px] font-mono text-muted">{home(agent.dir)}</span>
+                  </span>
+                  {/* Idle and ready is the state worth saying nothing about (§9). */}
+                  {(working || state !== "ready") &&
+                    (working ? (
+                      <Badge tone="accent" pulse className="min-w-0">
+                        <span className="truncate">working</span>
+                      </Badge>
+                    ) : (
+                      <span aria-label={says[state]} className={`size-2 shrink-0 rounded-full ${dot[tones[state]]}`} />
+                    ))}
+                </button>
+                {/* Opening an agent and looking at its conversations are two different questions, so
+                    they are two different controls. Any number of agents can be open at once. */}
+                <Button
+                  kind="ghost"
+                  size={28}
+                  onClick={() => onToggle(agent.id)}
+                  aria-label={`${open ? "Hide" : "Show"} conversations of ${agent.name}`}
+                  aria-expanded={open}
+                  title={open ? "Hide conversations" : "Show conversations"}
+                  icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2"
+                />
+              </div>
+
+              {open && (
+                <div className="pb-1">
+                  {conversations.map((row) => (
                     <div key={row.session} className="group relative">
-                      {/* One line, time trailing: a topic is lighter than the agent that owns it,
-                          and the difference has to be visible without reading. */}
                       <button
-                        onClick={() => onOpen(row.session)}
-                        disabled={disabled}
-                        aria-current={row.session === session ? "page" : undefined}
-                        // Selected is a filled row, not a tint: Telegram's chat list does this, and it
-                        // is what makes the list feel answered rather than shaded.
-                        className={`flex w-full items-baseline gap-2 rounded-card px-2.5 py-2 text-left transition-colors ${
-                          row.session === session ? "bg-accent text-accent-fg" : "hover:bg-hover"
+                        onClick={() => onOpen(agent.id, row.session)}
+                        disabled={disabled && selected}
+                        aria-current={selected && row.session === session ? "page" : undefined}
+                        className={`flex w-full items-baseline gap-2 py-1.5 pr-3 pl-[54px] text-left transition-colors ${
+                          selected && row.session === session ? "bg-accent text-accent-fg" : "hover:bg-hover"
                         }`}
                       >
-                        <span className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""}`}>
+                        <span
+                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""}`}
+                        >
                           {row.label}
                         </span>
                         {row.updatedAt !== undefined && (
                           <span
                             className={`shrink-0 text-[10px] group-hover:invisible ${
-                              row.session === session ? "opacity-70" : "text-muted"
+                              selected && row.session === session ? "opacity-70" : "text-muted"
                             }`}
                           >
                             {ago(row.updatedAt)}
@@ -190,30 +190,31 @@ export function Sidebar({
                           title="Delete conversation"
                           aria-label="Delete conversation"
                           icon={<Trash size={13} />}
-                          className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                         />
                       )}
                     </div>
                   ))}
-                  {!disabled && (
+                  {selected && !disabled && (
                     <Button
                       kind="ghost"
                       size={28}
                       onClick={onNew}
                       title="New conversation (⌘N)"
                       icon={<Plus size={14} />}
-                      className="mt-0.5 w-full justify-start!"
+                      className="w-full justify-start! pl-[54px]!"
                     >
                       New conversation
                     </Button>
                   )}
                 </div>
               )}
+              {/* The separator starts where the text does, as it does in Telegram and WeChat. */}
+              <div className="ml-[54px] h-px bg-stroke last:hidden" />
             </div>
           );
         })}
       </div>
-
     </aside>
   );
 }

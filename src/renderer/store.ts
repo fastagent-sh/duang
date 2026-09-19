@@ -62,7 +62,8 @@ export interface View {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
-  sessions: SessionSummary[];
+  /** Conversations per agent: the sidebar can show more than the open agent's. */
+  sessions: Record<string, SessionSummary[]>;
   model?: string;
   loading: boolean;
   error?: string;
@@ -117,7 +118,7 @@ export function createStore(api: DuangApi) {
   let view: View = {
     agents: [],
     states: {},
-    sessions: [],
+    sessions: {},
     loading: false,
     busy: false,
     commands: [],
@@ -193,7 +194,7 @@ export function createStore(api: DuangApi) {
       const result = await api.openAgent(id);
       if (id !== view.agentId || request !== listRequest) return;
       if (!result.ok) throw new Error(result.message);
-      publish({ sessions: result.sessions, model: result.model });
+      publish({ sessions: { ...view.sessions, [id]: result.sessions }, model: result.model });
     } catch (error) {
       if (id === view.agentId && request === listRequest) note(error);
     }
@@ -251,7 +252,6 @@ export function createStore(api: DuangApi) {
     commandsFor = undefined;
     publish({
       agentId: id,
-      sessions: [],
       model: undefined,
       error: undefined,
       loading: true,
@@ -269,7 +269,7 @@ export function createStore(api: DuangApi) {
       publish({
         loading: false,
         model: result.model,
-        sessions: result.sessions,
+        sessions: { ...view.sessions, [id]: result.sessions },
         states: { ...view.states, [id]: "ready" },
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
@@ -347,6 +347,21 @@ export function createStore(api: DuangApi) {
     },
     load,
     selectAgent,
+    /**
+     * Conversations for an agent the sidebar expanded but did not open. This boots that agent's
+     * runtime, the same as opening it would: FastAgent owns the session list, and duang will not
+     * keep a second copy of where sessions live.
+     */
+    async listSessions(id: string) {
+      if (view.sessions[id]) return;
+      try {
+        const result = await api.openAgent(id);
+        if (!result.ok) return publish({ states: { ...view.states, [id]: result.code === "failed" ? "broken" : result.code } });
+        publish({ sessions: { ...view.sessions, [id]: result.sessions }, states: { ...view.states, [id]: "ready" } });
+      } catch (error) {
+        note(error);
+      }
+    },
     open,
     /** Read on every opening of the picker: a `fastagent login` while duang runs needs no restart. */
     async loadModels() {
@@ -448,7 +463,8 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         if (view.agentId !== id) return;
         ++navigation;
-        publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: [] });
+        const { [id]: _gone, ...rest } = view.sessions;
+        publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: rest });
         if (view.agents[0]) await selectAgent(view.agents[0].id);
       } catch (error) {
         note(error);

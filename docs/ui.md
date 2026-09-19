@@ -114,15 +114,22 @@ tint, which is the same list's other trick: a selection that answers rather than
 the directory is what identifies an agent, and the conversations are listed directly below it
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
-**Clicking the agent you are already on folds its conversations away**, and clicking again brings
-them back; the conversation you are reading stays open either way. Folding is a view preference, so
-it lives in the sidebar and is not remembered across launches.
+**Opening an agent and listing its conversations are two questions, so they are two controls.**
+The row opens the agent; the caret at its trailing edge shows or hides its conversations. Any number
+of agents can be listed at once, and folding one never closes the conversation being read. Opening
+an agent lists it too, because you have to see where you are. Which rows are open is a view
+preference: it lives in the sidebar and is not remembered across launches.
 
-**An agent and its conversations are one card.** The open agent's row and its topics share a
-surface with a hairline between them; every other agent is a plain row on the sidebar. Indentation
-alone was not enough — the two kinds of row read as one list, and which topics belonged to whom had
-to be worked out rather than seen. A conversation row is one line, the relative time trailing and
-replaced by Delete on hover, so a topic is visibly lighter than the agent that owns it.
+Listing an agent that is not open loads its conversations, which boots that agent's runtime the same
+way opening it would — FastAgent owns the session list and duang will not keep a second copy of
+where sessions live.
+
+**One flat list, no card per agent.** Full-width rows, a hairline that starts where the text does,
+the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,
+and the reason shows up as soon as two agents are listed — a card per agent turns the column into a
+stack of panels and makes an open agent look heavy. A conversation row is one line indented to the
+agent's text, with the relative time trailing and Delete in its place on hover, so a topic is
+visibly lighter than the agent that owns it.
 
 **The selected agent's conversations are listed under it**, including one that is running and one
 holding unsent text, because fact 4 makes "what is alive right now" the question the sidebar exists

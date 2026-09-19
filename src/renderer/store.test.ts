@@ -279,7 +279,7 @@ test("settlement in another agent cannot invalidate the visible agent's list ref
     sessions: [{ session: "b-saved", preview: "B's turn", createdAt: 0, updatedAt: 1, messageCount: 2 }],
   });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(store.getSnapshot().sessions[0]?.session, "b-saved");
+  assert.equal(store.getSnapshot().sessions["b"]?.[0]?.session, "b-saved");
   store.dispose();
 });
 

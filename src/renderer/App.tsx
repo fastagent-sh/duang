@@ -23,7 +23,13 @@ export default function App() {
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
-  const sessionRows = rows(sessions, c?.session, view.runningSessions, view.draftSessions);
+  // Only the open agent has running and drafted conversations worth marking; another agent's list
+  // is just its history.
+  const rowsFor = (id: string) =>
+    id === agentId
+      ? rows(sessions[id] ?? [], c?.session, view.runningSessions, view.draftSessions)
+      : rows(sessions[id] ?? []);
+  const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
     void store.load();
@@ -45,6 +51,13 @@ export default function App() {
 
   // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
   // with the draft, and messages must end above it rather than behind it.
+  // Which agents show their conversations. Selecting one opens it, because you have to see where
+  // you are; the caret adds and removes any other.
+  const [expanded, setExpanded] = useState<string[]>([]);
+  useEffect(() => {
+    if (agentId) setExpanded((ids) => (ids.includes(agentId) ? ids : [...ids, agentId]));
+  }, [agentId]);
+
   const composerBox = useRef<HTMLDivElement>(null);
   const [composerHeight, setComposerHeight] = useState(96);
   useLayoutEffect(() => {
@@ -77,12 +90,21 @@ export default function App() {
         agentId={agentId}
         states={states}
         running={view.runningAgents}
-        rows={sessionRows}
+        rowsFor={rowsFor}
         session={c?.session}
+        expanded={expanded}
         disabled={agentState !== "ready" || view.loading}
         onSelect={(id) => void store.selectAgent(id)}
+        onToggle={(id) => {
+          setExpanded((ids) => (ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id]));
+          void store.listSessions(id);
+        }}
         onAdd={() => void store.addAgent()}
-        onOpen={(id) => void store.open(id)}
+        onOpen={(agent, id) => {
+          // Clicking a conversation of another agent means going there.
+          if (agent !== agentId) void store.selectAgent(agent).then(() => store.open(id));
+          else void store.open(id);
+        }}
         onNew={() => void store.newConversation()}
         onDelete={(id) => {
           if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(id);

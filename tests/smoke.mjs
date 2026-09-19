@@ -389,11 +389,11 @@ if (!process.versions.electron) {
       // An agent with no skills must say so; silence here reads as a broken composer.
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
       await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
-      // Clicking the agent you are already on folds its conversations away without closing the one
-      // you are reading; clicking again brings the list back.
-      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      // Opening an agent and looking at its conversations are separate controls: the caret folds
+      // the list without closing the conversation being read.
+      await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
       await until(
-        "document.querySelector('button[aria-label=\"Smoke\"]').getAttribute('aria-expanded') === 'false'",
+        "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
         "the agent folds",
       );
       assert.ok(
@@ -401,10 +401,23 @@ if (!process.versions.electron) {
         "a folded agent hides its conversations",
       );
       assert.match(await evaluate("document.body.innerText"), /Smoke answer/, "folding does not close the transcript");
-      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Smoke\"]').click()");
       await until(
         "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
         "the agent unfolds again",
+      );
+      // Expanding is per agent, so more than one roster can be open while a third is being read.
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const aside = document.querySelector('aside').innerText;
+          return {
+            smoke: aside.includes('Read hello.txt and answer.'),
+            configured: aside.includes('Use the configured model with the selected credentials.'),
+            reading: document.body.innerText.includes('Smoke answer'),
+          };
+        })()`),
+        { smoke: true, configured: true, reading: true },
+        "two agents list their conversations at once, and neither changes the transcript",
       );
       await type("/");
       await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
