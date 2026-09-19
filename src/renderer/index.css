@@ -23,6 +23,9 @@
   --color-success: oklch(0.72 0.14 150);
   --color-warning: oklch(0.78 0.13 75);
   --color-danger: oklch(0.68 0.17 25);
+  /* Text on a filled danger surface (Stop). Same reasoning as accent-fg: the dark mode's red is
+     light, so its foreground is dark. */
+  --color-danger-fg: oklch(0.16 0.01 285);
 
   --radius-badge: 6px;
   --radius-card: 10px;
@@ -62,6 +65,7 @@
     --color-success: oklch(0.5 0.14 150);
     --color-warning: oklch(0.58 0.13 75);
     --color-danger: oklch(0.52 0.19 25);
+    --color-danger-fg: oklch(1 0 0);
   }
 }
 

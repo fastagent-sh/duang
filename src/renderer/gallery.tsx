@@ -2,18 +2,33 @@
  * Every control the app owns, on one page, so "what do we have and what does it look like" is
  * answered by looking rather than by reading docs/ui.md.
  *
- * Shown at `#gallery`; `npm run shots` captures it in both colour modes. Not part of the app, and
- * deliberately not a component framework: it renders the real components with fixed props.
+ * Shown at `#gallery`; `npm run shots` captures it in both colour modes. Not a component framework:
+ * the sections marked `real` render the components from `ui.tsx` and `code.tsx` with fixed props,
+ * and the ones marked `sketch` are copies of markup that still lives in `panels.tsx` — they show
+ * the intended look and will not follow a change made there.
  */
 import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { CodeBlock } from "./code.tsx";
 
-function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  note,
+  sketch,
+  children,
+}: {
+  title: string;
+  note?: string;
+  sketch?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="font-medium">{title}</h2>
+        <h2 className="font-medium flex items-center gap-2">
+          {title}
+          {sketch && <Badge tone="muted">sketch, not a component</Badge>}
+        </h2>
         {note && <p className="text-muted text-[11px]">{note}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
@@ -29,10 +44,16 @@ export default function Gallery() {
           <h1 className="text-[20px] font-medium">
             duang<span className="text-accent">·</span> components
           </h1>
-          <p className="text-muted text-[12px]">docs/ui.md §6b. Everything here is the component the app uses.</p>
+          <p className="text-muted text-[12px]">
+            docs/ui.md §6b. Unmarked sections are the real components; marked ones are copies of
+            markup that still lives in panels.tsx.
+          </p>
         </header>
 
-        <Section title="Buttons — kinds" note="primary at most once per screen; danger deletes or removes">
+        <Section
+          title="Buttons — kinds"
+          note="primary at most once per screen; danger is quiet until the pointer is on it"
+        >
           <Button kind="primary">Create agent here</Button>
           <Button>Reveal in Finder</Button>
           <Button kind="ghost">Retry</Button>
@@ -52,7 +73,7 @@ export default function Gallery() {
 
         <Section title="Buttons — disabled" note="the prop takes the reason, so nothing greys out silently">
           <Button kind="primary" size={28} icon={<ArrowUp size={15} />} disabled="Type a message first" />
-          <Button kind="ghost" size={28} disabled="Stop the turn to change the model" className="font-mono text-[11px]">
+          <Button kind="ghost" size={28} disabled="Stop the turn to change the model" className="font-mono">
             anthropic/claude-sonnet-5
           </Button>
           <Button disabled="This agent is not ready">Reveal in Finder</Button>
@@ -81,7 +102,7 @@ export default function Gallery() {
           <div className="popover px-3 h-8 grid place-items-center text-[12px]">popover</div>
         </Section>
 
-        <Section title="Conversation rows" note="selected is a surface, not a border">
+        <Section title="Conversation rows" note="selected is a surface, not a border" sketch>
           <div className="w-64 space-y-0.5">
             <div className="rounded-card bg-surface px-2 py-1.5">
               <div className="truncate">Explain the ListingResult component</div>
@@ -97,7 +118,7 @@ export default function Gallery() {
           </div>
         </Section>
 
-        <Section title="Transcript pieces">
+        <Section title="Transcript pieces" note="the code block is real; the rest is markup from panels.tsx" sketch>
           <div className="w-full space-y-4">
             <div className="flex justify-end">
               <div className="max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2">
@@ -120,14 +141,9 @@ export default function Gallery() {
           </div>
         </Section>
 
-        <Section title="Icon-only, where the symbol is universal">
+        <Section title="Icon-only, where the symbol is universal" note="loud fills the kind — Stop has to be found instantly">
           <Button size={28} kind="primary" icon={<ArrowUp size={15} />} aria-label="Send" />
-          <button
-            aria-label="Stop"
-            className="size-7 grid place-items-center rounded-card bg-danger text-accent-fg"
-          >
-            <Stop size={13} weight="fill" />
-          </button>
+          <Button size={28} kind="danger" loud icon={<Stop size={13} weight="fill" />} aria-label="Stop" />
           <Button size={28} kind="ghost" icon={<X size={14} />} aria-label="Close" />
         </Section>
       </div>

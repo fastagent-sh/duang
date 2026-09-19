@@ -1,6 +1,11 @@
 /**
- * The control vocabulary: docs/ui.md §6, §7 and §9 as code, so a button's kind is chosen rather
+ * The control vocabulary: docs/ui.md §6b, §7 and §9 as code, so a button's kind is chosen rather
  * than spelled out in class names at each call site.
+ *
+ * Nothing here takes a class that a call site then has to fight. Tailwind utilities all have the
+ * same specificity and the later rule in the generated sheet wins, regardless of the order they are
+ * written in `class`, so anything a call site might want to change — the text size, whether danger
+ * is loud or quiet — is decided by a prop here instead.
  */
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
@@ -8,23 +13,33 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
  * Four kinds, two heights, and no third option.
  *
  * `primary` at most once per screen — the one thing to do here. `secondary` outlines an alternative,
- * `ghost` is an action inside a row or a header, `danger` deletes or removes.
+ * `ghost` is an action inside a row or a header, `danger` deletes or removes and is quiet until the
+ * pointer is on it, because these sit on screen all day. `loud` fills a kind instead of tinting it,
+ * and exists for the one control that must be found instantly: Stop.
+ *
+ * Size decides the text size too (28 → 11px, 32 → 12px): a call site that passes its own would be
+ * overridden by this one anyway.
  *
  * A disabled control is a question nobody answered, so `disabled` takes the answer: pass the reason
- * and the button goes dim and says it on hover. Nothing can be disabled silently.
+ * and the button dims and carries it. It stays focusable and says so with `aria-disabled` rather
+ * than the native attribute, because a natively disabled button cannot be reached by keyboard, and
+ * a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is dropped here instead.
  */
 export function Button({
   kind = "secondary",
   size = 32,
+  loud,
   icon,
   disabled,
   title,
+  onClick,
   children,
   className = "",
   ...rest
 }: {
   kind?: "primary" | "secondary" | "ghost" | "danger";
   size?: 28 | 32;
+  loud?: boolean;
   icon?: ReactNode;
   disabled?: string | false;
   children?: ReactNode;
@@ -35,21 +50,21 @@ export function Button({
     primary: ["bg-accent text-accent-fg", "hover:bg-accent/85"],
     secondary: ["border border-stroke", "hover:bg-hover"],
     ghost: ["text-muted", "hover:bg-hover hover:text-text"],
-    danger: ["text-danger", "hover:bg-danger/12"],
+    danger: ["text-muted", "hover:bg-danger/12 hover:text-danger"],
   };
-  const box = children
-    ? `${size === 28 ? "h-7 px-2.5" : "h-8 px-3"} gap-1.5`
-    : size === 28
-      ? "size-7"
-      : "size-8";
+  const filled = { primary: "bg-accent text-accent-fg", danger: "bg-danger text-danger-fg" };
+  const [rest_, hover] = loud && kind in filled ? [filled[kind as "primary" | "danger"], ""] : kinds[kind];
+  const box = children ? `${size === 28 ? "h-7 px-2.5" : "h-8 px-3"} gap-1.5` : size === 28 ? "size-7" : "size-8";
   return (
     <button
       {...rest}
-      disabled={!!disabled}
+      type="button"
+      aria-disabled={disabled ? true : undefined}
+      onClick={disabled ? undefined : onClick}
       title={disabled || title}
-      className={`inline-flex shrink-0 items-center justify-center rounded-card text-[12px] transition-colors ${box} ${
-        kinds[kind][0]
-      } ${disabled ? "opacity-40" : kinds[kind][1]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-card transition-colors ${
+        size === 28 ? "text-[11px]" : "text-[12px]"
+      } ${box} ${rest_} ${disabled ? "opacity-40 cursor-default" : hover} ${className}`}
     >
       {icon}
       {children}
@@ -79,21 +94,26 @@ const words: Record<Tone, string> = {
 /**
  * A state, said in a colour and in words at once — never colour alone (§11). The mark is a dot
  * unless an icon carries more, and `pulse` is for a state that is still happening.
+ *
+ * A badge shrinks like any other text. Beside something that must stay readable — a long command in
+ * a tool row — the call site pins it with `shrink-0`.
  */
 export function Badge({
   tone,
   icon,
   pulse,
+  className = "",
   children,
 }: {
   tone: Tone;
   icon?: ReactNode;
   pulse?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 text-[11px] ${words[tone]}`}>
-      {icon ?? <span className={`size-1.5 rounded-full ${dot[tone]} ${pulse ? "animate-pulse" : ""}`} />}
+    <span className={`inline-flex items-center gap-1.5 text-[11px] ${words[tone]} ${className}`}>
+      {icon ?? <span className={`size-1.5 shrink-0 rounded-full ${dot[tone]} ${pulse ? "animate-pulse" : ""}`} />}
       {children}
     </span>
   );

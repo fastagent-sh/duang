@@ -123,9 +123,11 @@ export function ConversationList({
       {/* pl-6 clears the window controls, which overhang the rail into this column. */}
       <div className="h-10 shrink-0 flex items-center gap-2 pl-6 pr-2 drag">
         <span className="truncate font-medium">{agent?.name ?? ""}</span>
-        {/* The rail's dot is a colour; this is the same fact in words, where it is always readable. */}
+        {/* The rail's dot is a colour; this is the same fact in words, where it is always readable.
+            The longest state sentence is wider than this column, so the badge gives way before the
+            agent's own name does. */}
         {agent && (working || (state && state !== "ready")) && (
-          <Badge tone={working ? "accent" : tones[state!]} pulse={working}>
+          <Badge tone={working ? "accent" : tones[state!]} pulse={working} className="min-w-0">
             <span className="truncate">{working ? "working" : says[state!].toLowerCase()}</span>
           </Badge>
         )}
@@ -150,7 +152,7 @@ export function ConversationList({
           onClick={onReveal}
           title={agent.dir}
           icon={<FolderOpen size={12} />}
-          className="mx-3 mb-2 !justify-start font-mono text-[11px]"
+          className="mx-3 mb-2 justify-start! font-mono"
         >
           <span className="truncate">{home(agent.dir)}</span>
         </Button>
@@ -190,7 +192,7 @@ export function ConversationList({
       {/* Sitting in the sidebar all day, this one asks before it looks dangerous: quiet until the
           pointer is on it. */}
       {agent && (
-        <Button kind="ghost" size={28} onClick={onRemove} className="m-3 self-start text-[11px] hover:text-danger">
+        <Button kind="danger" size={28} onClick={onRemove} className="m-3 self-start">
           Remove agent…
         </Button>
       )}
@@ -583,7 +585,7 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
         <Icon size={14} className="shrink-0 text-muted" />
         <span className="font-mono truncate">{summary || item.name}</span>
         {/* The state belongs next to the command it describes, not at the far edge of the row. */}
-        <Badge tone={state.tone} pulse={item.status === "running"}>
+        <Badge tone={state.tone} pulse={item.status === "running"} className="shrink-0">
           {state.word}
         </Badge>
       </summary>
@@ -744,7 +746,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             onClick={() => setPicking(!picking)}
             disabled={modelReason}
             title="Model for this agent"
-            className={`font-mono text-[11px] ${!model && needsModel ? "text-warning" : ""}`}
+            className={`font-mono ${!model && needsModel ? "text-warning" : ""}`}
           >
             {model ?? (needsModel ? "pick a model" : "reading model…")}
             <CaretDown size={12} />
@@ -756,15 +758,17 @@ export function Composer({ view, store }: { view: View; store: Store }) {
         {/* While a turn runs, the button that sent it is the button that stops it — stopping is where
             the eye already is, not in a corner of the window. */}
         {busy ? (
-          <button
+          <Button
+            kind="danger"
+            loud
+            size={28}
             onClick={() => void store.abort()}
             aria-label="Stop the run"
             // Stopping ends the run, not its consequences; a tool that already wrote a file is done.
             title="Stop (Esc) — work its tools already finished is not undone"
-            className="ml-auto size-7 grid place-items-center rounded-card bg-danger text-accent-fg hover:bg-danger/85"
-          >
-            <Stop size={13} weight="fill" />
-          </button>
+            className="ml-auto"
+            icon={<Stop size={13} weight="fill" />}
+          />
         ) : (
           <Button
             kind="primary"

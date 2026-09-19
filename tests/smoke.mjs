@@ -429,7 +429,14 @@ if (!process.versions.electron) {
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
       await type("   \n  ");
-      assert.equal(await evaluate("document.querySelector('button[aria-label=\"Send\"]').disabled"), true);
+      // Disabled and still reachable, carrying the reason: a keyboard user gets it too.
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const send = document.querySelector('button[aria-label="Send"]');
+          return { blocked: send.getAttribute('aria-disabled'), why: send.title, reachable: send.disabled === false };
+        })()`),
+        { blocked: "true", why: "Type a message first", reachable: true },
+      );
       await type(Array.from({ length: 12 }, (_, i) => `line ${i}`).join("\n"));
       assert.ok(
         await evaluate(`(() => {
