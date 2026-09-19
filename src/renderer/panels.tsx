@@ -436,7 +436,7 @@ function ModelPopover({
 export function NewConversation({ agentName, children }: { agentName: string; children: React.ReactNode }) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
-      <div className="column -mt-16">
+      <div className="composer-column -mt-16">
         <h1 className="text-[22px] font-medium mb-5">What should we work on in {agentName}?</h1>
         {children}
       </div>

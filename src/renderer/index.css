@@ -68,12 +68,19 @@ body,
   height: 100%;
 }
 
-/* The reading column. One width for the transcript, the composer and the empty state, so nothing
-   shifts sideways between them. Wide enough for code and Chinese prose, capped so a maximised window
-   does not stretch a line past reading length. */
+/* The reading column: what the agent produces needs room for code and Chinese prose, capped so a
+   maximised window does not stretch a line past reading length. */
 .column {
   width: 100%;
   max-width: 920px;
+  margin-inline: auto;
+}
+
+/* The composer is an input, not a reading surface. A text field as wide as the transcript looks like
+   a form; it keeps its own, narrower measure. */
+.composer-column {
+  width: 100%;
+  max-width: 768px;
   margin-inline: auto;
 }
 

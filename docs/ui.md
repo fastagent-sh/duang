@@ -223,8 +223,8 @@ sparse, and their job is to be findable when you scroll back: *what did I ask fo
 change it?* A bubble is a good anchor precisely because it is small and visually distinct.
 
 **What the agent produces is a document.** Left aligned, no bubble, full markdown, in one reading
-column: the width of the pane up to 920, centred. The transcript, the composer and the empty state
-share that column, so nothing shifts sideways between them. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
+column: the width of the pane up to 920, centred. The composer keeps its own narrower measure (768),
+because a text field as wide as the transcript reads as a form rather than a place to type. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
 fragments a record that needs to be scanned, and gives up the width its content needs. Products that
 bubble both sides keep the heavy work somewhere else — a separate workspace panel — so what remains
 in the transcript really is chat. Ours is the work.
