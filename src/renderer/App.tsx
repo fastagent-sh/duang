@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
@@ -42,6 +42,18 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [store, agentState, busy, view.loading]);
+
+  // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
+  // with the draft, and messages must end above it rather than behind it.
+  const composerBox = useRef<HTMLDivElement>(null);
+  const [composerHeight, setComposerHeight] = useState(96);
+  useLayoutEffect(() => {
+    const el = composerBox.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setComposerHeight(entry!.contentRect.height));
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
 
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
@@ -131,11 +143,18 @@ export default function App() {
         ) : !c || c.items.length === 0 ? (
           <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
         ) : (
-          <Transcript key={c.subscription} items={c.items} busySince={c.busySince} />
+          <Transcript key={c.subscription} items={c.items} busySince={c.busySince} bottomGap={composerHeight + 32} />
         )}
         {agentId && agentState === "ready" && c && c.items.length > 0 && (
-          <div className="shrink-0 px-6 pb-5 pt-2">
-            <div className="composer-column">{composer}</div>
+          // Floating, not stacked: the transcript runs the full height of the pane and passes
+          // beneath this, which is what keeps the bottom of the window from reading as a seam.
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
+            {/* The composer is narrower than the reading column, so text would slide past on both
+                sides of it. The canvas fades in underneath instead. */}
+            <div className="absolute inset-x-0 bottom-0 -z-10 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
+            <div ref={composerBox} className="composer-column pointer-events-auto">
+              {composer}
+            </div>
           </div>
         )}
       </main>

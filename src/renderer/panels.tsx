@@ -501,7 +501,16 @@ function Working({ since }: { since: number }) {
   );
 }
 
-export function Transcript({ items, busySince }: { items: Item[]; busySince?: number }) {
+export function Transcript({
+  items,
+  busySince,
+  bottomGap,
+}: {
+  items: Item[];
+  busySince?: number;
+  /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
+  bottomGap: number;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
 
@@ -522,7 +531,8 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
         follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
       // pt clears the floating header; the first message starts below it, not behind it.
-      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5"
+      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
+      style={{ paddingBottom: bottomGap }}
     >
       <div className="column space-y-6">
         {items.map((item, index) => (
