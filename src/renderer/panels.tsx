@@ -115,7 +115,9 @@ export function Sidebar({
           return (
             /* The open agent and its conversations are one card. Indentation alone left the two
                kinds of row reading as one list; a container says which topics belong to whom. */
-            <div key={agent.id} className={`group/agent relative rounded-card p-1 ${selected ? "bg-surface" : ""}`}>
+            /* surface-2 rather than surface: the group has to stand out from the sidebar it sits
+               in, and `surface` is a hair away from it in both modes. */
+            <div key={agent.id} className={`group/agent relative rounded-card p-1 ${selected ? "bg-surface-2" : ""}`}>
               <button
                 aria-label={agent.name}
                 aria-current={selected ? "true" : undefined}

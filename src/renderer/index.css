@@ -54,12 +54,13 @@
  */
 @media (prefers-color-scheme: light) {
   :root {
-    /* Same relationship the other way up: the canvas is the darkest of the light values, panels are
-       white on top of it. */
-    --color-bg: oklch(0.955 0.003 285);
-    --color-surface: oklch(1 0 0);
+    /* Light mode follows macOS, not the dark set mirrored: content is white and the sidebar is the
+       grey one. Finder, Mail and WeChat all read this way, and a white sidebar against grey content
+       looks like the window is inside out. Cards sit slightly grey on the white. */
+    --color-bg: oklch(0.99 0.001 285);
+    --color-surface: oklch(0.965 0.003 285);
     --color-surface-2: oklch(0.93 0.004 285);
-    --color-sidebar: oklch(0.995 0.001 285);
+    --color-sidebar: oklch(0.955 0.003 285);
     --color-hover: oklch(0 0 0 / 5%);
     --color-stroke: oklch(0.89 0.005 285);
     --color-text: oklch(0.22 0.01 285);

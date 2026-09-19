@@ -177,14 +177,16 @@ display is gone comes back on an attached one.
 oklch, two modes, following the system. The neutral ramp is measured from Telegram's macOS dark
 theme — small steps, almost no chroma — with one change of relationship: the transcript's canvas is
 the darkest layer and every panel sits above it, so a panel reads as lifted rather than as a hole.
+Light mode is not that set mirrored. It follows macOS — content white, sidebar grey, as in Finder,
+Mail and WeChat — because a white sidebar against grey content reads as a window turned inside out.
 The ramp keeps a trace of the accent hue (285) so violet belongs to the family rather than sitting
 on top of a grey app.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `bg` | `oklch(0.225 0.004 285)` | `oklch(0.955 0.003 285)` | the transcript, and the canvas panels sit on |
-| `surface` | `oklch(0.27 0.005 285)` | `oklch(1 0 0)` | bubbles, cards, popovers, composer |
-| `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.995 0.001 285)` | the sidebar panel |
+| `bg` | `oklch(0.225 0.004 285)` | `oklch(0.99 0.001 285)` | the transcript, and the canvas panels sit on |
+| `surface` | `oklch(0.27 0.005 285)` | `oklch(0.965 0.003 285)` | bubbles, cards, popovers, composer |
+| `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.955 0.003 285)` | the sidebar panel |
 | `surface-2` | `oklch(0.315 0.006 285)` | `oklch(0.93 0.004 285)` | hover, pressed, nested cards |
 | `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.89 0.005 285)` | hairlines, card borders |
 | `text` | `oklch(0.95 0.005 285)` | `oklch(0.22 0.01 285)` | body |
