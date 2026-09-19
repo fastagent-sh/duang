@@ -17,14 +17,14 @@ import {
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
 import { useSystemProxy } from "./proxy.ts";
+import { rememberBounds, savedBounds } from "./window-state.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1180,
-    height: 780,
+    ...savedBounds(),
     minWidth: 800,
     minHeight: 540,
     titleBarStyle: "hiddenInset",
@@ -37,6 +37,7 @@ function createWindow(): BrowserWindow {
       sandbox: false,
     },
   });
+  rememberBounds(win);
   // Model-generated links must never navigate a privileged renderer to another origin.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => event.preventDefault());

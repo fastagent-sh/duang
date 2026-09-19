@@ -141,6 +141,11 @@ Not included: pinning, hiding, archiving, folders. They belong to rosters of fif
 of five they are management work invented for its own sake. Add one when a real list stops being
 readable.
 
+The window opens at 1280 by 840 — the sidebar plus the reading column and its padding, so a fresh
+install starts at the width the transcript was drawn for — and reopens wherever it was left. Size and
+position are navigation memory like the selected agent: written best effort, and a window whose
+display is gone comes back on an attached one.
+
 ## 4. Colour
 
 oklch, two modes, following the system. The neutral ramp carries a trace of the accent hue (285) so
