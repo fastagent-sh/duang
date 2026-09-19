@@ -1,17 +1,61 @@
 @import "tailwindcss";
 @source "../../node_modules/streamdown/dist/*.js";
 
+/*
+ * Tokens per docs/ui.md. Every interactive role is a set — a component picks `bg-hover`, it never
+ * computes a hover colour from a base. The neutral ramp carries a trace of the accent hue so violet
+ * reads as part of the family rather than applied on top.
+ */
 @theme {
-  --color-bg: oklch(0.17 0.008 260);
-  --color-surface: oklch(0.21 0.009 260);
-  --color-stroke: oklch(0.32 0.01 260);
-  --color-text: oklch(0.93 0.004 260);
-  --color-muted: oklch(0.66 0.008 260);
-  --color-accent: oklch(0.72 0.14 215);
+  --color-bg: oklch(0.16 0.01 285);
+  --color-surface: oklch(0.2 0.012 285);
+  --color-surface-2: oklch(0.24 0.014 285);
+  --color-sidebar: oklch(0 0 0 / 20%);
+  --color-hover: oklch(1 0 0 / 6%);
+  --color-stroke: oklch(0.3 0.012 285);
+  --color-text: oklch(0.95 0.005 285);
+  --color-muted: oklch(0.68 0.01 285);
+  --color-accent: oklch(0.72 0.16 295);
+  --color-accent-weak: oklch(0.72 0.16 295 / 15%);
+  --color-accent-fg: oklch(0.99 0 0);
+  --color-success: oklch(0.72 0.14 150);
+  --color-warning: oklch(0.78 0.13 75);
   --color-danger: oklch(0.68 0.17 25);
+
+  --radius-badge: 6px;
   --radius-card: 10px;
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: "SF Mono", ui-monospace, monospace;
+  --radius-float: 14px;
+
+  --font-sans: Inter, "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
+
+  --ease-ui: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Light mode is the same roles at different values, not a different design. The accent has to get
+ * darker and more saturated here, or it turns grey on white.
+ *
+ * Plain custom properties, NOT a second `@theme`: Tailwind hoists `@theme` out of media queries, so
+ * nesting one here silently made light the only theme. Utilities read `var(--color-*)` at runtime,
+ * which is exactly what this overrides.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: oklch(0.98 0.004 285);
+    --color-surface: oklch(1 0 0);
+    --color-surface-2: oklch(0.96 0.005 285);
+    --color-sidebar: oklch(1 0 0 / 35%);
+    --color-hover: oklch(0 0 0 / 5%);
+    --color-stroke: oklch(0.9 0.006 285);
+    --color-text: oklch(0.22 0.01 285);
+    --color-muted: oklch(0.5 0.01 285);
+    --color-accent: oklch(0.55 0.19 295);
+    --color-accent-weak: oklch(0.55 0.19 295 / 12%);
+    --color-success: oklch(0.5 0.14 150);
+    --color-warning: oklch(0.58 0.13 75);
+    --color-danger: oklch(0.52 0.19 25);
+  }
 }
 
 html,
@@ -26,6 +70,12 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 13px;
+}
+
+/* CJK glyphs fill their em box, so the same size needs more leading than Latin to read evenly. */
+:lang(zh),
+:lang(ja) {
+  line-height: 1.75;
 }
 
 /* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
@@ -93,12 +143,12 @@ summary:focus-visible,
 .md code {
   font-family: var(--font-mono);
   font-size: 0.92em;
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   border-radius: 4px;
   padding: 0.1em 0.3em;
 }
 .md pre {
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   border: 1px solid var(--color-stroke);
   border-radius: var(--radius-card);
   padding: 0.7em 0.8em;

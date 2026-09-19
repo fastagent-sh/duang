@@ -1,6 +1,6 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Square, Trash2, X } from "lucide-react";
+import { ArrowUp, CaretDown, CaretRight, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
 import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
@@ -42,7 +42,7 @@ export function Rail({
   onAdd: () => void;
 }) {
   return (
-    <nav className="w-14 shrink-0 flex flex-col items-center gap-1.5 pt-10 pb-3 bg-black/20 drag">
+    <nav className="w-14 shrink-0 flex flex-col items-center gap-1.5 pt-10 pb-3 bg-sidebar drag">
       {agents.map((agent) => {
         const selected = agent.id === agentId;
         const state = states[agent.id];
@@ -56,7 +56,7 @@ export function Rail({
             className={`no-drag relative size-9 rounded-card text-[11px] font-medium uppercase transition-colors ${
               selected
                 ? "bg-accent/15 text-accent ring-1 ring-accent/60"
-                : "text-muted hover:bg-white/5 hover:text-text"
+                : "text-muted hover:bg-hover hover:text-text"
             }`}
           >
             {agent.name.slice(0, 2)}
@@ -71,7 +71,7 @@ export function Rail({
       })}
       <button
         onClick={onAdd}
-        className="no-drag size-9 rounded-card text-muted grid place-items-center hover:bg-white/5 hover:text-text"
+        className="no-drag size-9 rounded-card text-muted grid place-items-center hover:bg-hover hover:text-text"
         title="Add agent directory"
       >
         <Plus size={16} />
@@ -106,7 +106,7 @@ export function ConversationList({
   onRemove: () => void;
 }) {
   return (
-    <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-black/10">
+    <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-sidebar">
       {/* pl-6 clears the window controls, which overhang the rail into this column. */}
       <div className="h-10 shrink-0 flex items-center gap-2 pl-6 pr-2 drag">
         <span className="truncate font-medium">{agent?.name ?? ""}</span>
@@ -120,7 +120,7 @@ export function ConversationList({
         {agent && !disabled && (
           <button
             onClick={onNew}
-            className="no-drag size-6 grid place-items-center rounded-card text-muted hover:bg-white/5 hover:text-text"
+            className="no-drag size-6 grid place-items-center rounded-card text-muted hover:bg-hover hover:text-text"
             title="New conversation (⌘N)"
           >
             <Plus size={15} />
@@ -132,7 +132,7 @@ export function ConversationList({
         <button
           onClick={onReveal}
           title={agent.dir}
-          className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-white/5 hover:text-text"
+          className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-hover hover:text-text"
         >
           <FolderOpen size={12} />
           <span className="truncate">{home(agent.dir)}</span>
@@ -149,7 +149,7 @@ export function ConversationList({
                 disabled={disabled}
                 aria-current={selected ? "page" : undefined}
                 className={`block w-full text-left rounded-card px-2 py-1.5 transition-colors ${
-                  selected ? "bg-surface" : "hover:bg-white/5"
+                  selected ? "bg-surface" : "hover:bg-hover"
                 }`}
               >
                 <div className={`truncate pr-5 ${row.fresh ? "text-muted italic" : ""}`}>{row.label}</div>
@@ -161,7 +161,7 @@ export function ConversationList({
                   title="Delete conversation"
                   className="absolute right-1.5 top-1.5 grid opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 size-5 place-items-center rounded text-muted hover:text-danger"
                 >
-                  <Trash2 size={13} />
+                  <Trash size={13} />
                 </button>
               )}
             </div>
@@ -260,7 +260,7 @@ function Action({ icon, label, onClick }: { icon: React.ReactNode; label: string
   return (
     <button
       onClick={onClick}
-      className="rounded-card border border-stroke px-3 py-1.5 flex items-center gap-1.5 hover:bg-white/5"
+      className="rounded-card border border-stroke px-3 py-1.5 flex items-center gap-1.5 hover:bg-hover"
     >
       {icon} {label}
     </button>
@@ -399,7 +399,7 @@ function ModelPopover({
                   onClose();
                   void store.pickModel(model);
                 }}
-                className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
+                className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-hover ${
                   model === current ? "text-accent" : ""
                 }`}
               >
@@ -513,7 +513,7 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   return (
     <details className="group rounded-card bg-surface/60 ring-1 ring-stroke/60">
       <summary className="cursor-default select-none flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-mono">
-        <ChevronRight size={12} className="text-muted transition-transform group-open:rotate-90" />
+        <CaretRight size={12} className="text-muted transition-transform group-open:rotate-90" />
         <span className={item.isError ? "text-danger" : "text-text"}>{item.name}</span>
         {summary && <span className="text-muted truncate">{summary}</span>}
         <span className="ml-auto text-muted">{item.isError ? "failed" : running ? "running…" : item.status}</span>
@@ -595,7 +595,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
               onMouseEnter={() => setCursor(index)}
               onClick={() => store.setDraft(complete(command.name))}
               className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
-                command === chosen ? "bg-white/5" : ""
+                command === chosen ? "bg-hover" : ""
               }`}
             >
               <span className="font-mono text-[12px]">/{command.name}</span>
@@ -656,12 +656,12 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             onClick={() => setPicking(!picking)}
             disabled={!agentId || busy || modelDisabled}
             title={busy ? "Stop the turn to change the model" : "Model for this agent"}
-            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 disabled:opacity-50 ${
+            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-hover disabled:opacity-50 ${
               !model && needsModel ? "text-amber-400" : "text-muted"
             }`}
           >
             {model ?? (needsModel ? "pick a model" : "reading model…")}
-            <ChevronDown size={12} />
+            <CaretDown size={12} />
           </button>
           {picking && agentId && !busy && !modelDisabled && (
             <ModelPopover view={view} store={store} current={model} onClose={() => setPicking(false)} />
@@ -677,7 +677,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             title="Stop (Esc) — work its tools already finished is not undone"
             className="ml-auto size-7 grid place-items-center rounded-card bg-danger/15 text-danger"
           >
-            <Square size={13} />
+            <Stop size={13} />
           </button>
         ) : (
           <button
