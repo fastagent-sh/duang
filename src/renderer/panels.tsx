@@ -1,7 +1,25 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, ChevronRight, FolderOpen, Plus, Square, Trash2, X } from "lucide-react";
+import {
+  ArrowUp,
+  CaretDown,
+  CaretRight,
+  FilePlus,
+  FileText,
+  FolderOpen,
+  Globe,
+  Info,
+  MagnifyingGlass,
+  PencilSimple,
+  Plus,
+  Stop,
+  Terminal,
+  Trash,
+  WarningCircle,
+  X,
+} from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
+import { MarkdownCode } from "./code.tsx";
 import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
@@ -42,7 +60,7 @@ export function Rail({
   onAdd: () => void;
 }) {
   return (
-    <nav className="w-14 shrink-0 flex flex-col items-center gap-1.5 pt-10 pb-3 bg-black/20 drag">
+    <nav className="w-14 shrink-0 flex flex-col items-center gap-1.5 pt-10 pb-3 bg-sidebar drag">
       {agents.map((agent) => {
         const selected = agent.id === agentId;
         const state = states[agent.id];
@@ -56,7 +74,7 @@ export function Rail({
             className={`no-drag relative size-9 rounded-card text-[11px] font-medium uppercase transition-colors ${
               selected
                 ? "bg-accent/15 text-accent ring-1 ring-accent/60"
-                : "text-muted hover:bg-white/5 hover:text-text"
+                : "text-muted hover:bg-hover hover:text-text"
             }`}
           >
             {agent.name.slice(0, 2)}
@@ -71,7 +89,7 @@ export function Rail({
       })}
       <button
         onClick={onAdd}
-        className="no-drag size-9 rounded-card text-muted grid place-items-center hover:bg-white/5 hover:text-text"
+        className="no-drag size-9 rounded-card text-muted grid place-items-center hover:bg-hover hover:text-text"
         title="Add agent directory"
       >
         <Plus size={16} />
@@ -106,7 +124,7 @@ export function ConversationList({
   onRemove: () => void;
 }) {
   return (
-    <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-black/10">
+    <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-sidebar">
       {/* pl-6 clears the window controls, which overhang the rail into this column. */}
       <div className="h-10 shrink-0 flex items-center gap-2 pl-6 pr-2 drag">
         <span className="truncate font-medium">{agent?.name ?? ""}</span>
@@ -120,7 +138,7 @@ export function ConversationList({
         {agent && !disabled && (
           <button
             onClick={onNew}
-            className="no-drag size-6 grid place-items-center rounded-card text-muted hover:bg-white/5 hover:text-text"
+            className="no-drag size-6 grid place-items-center rounded-card text-muted hover:bg-hover hover:text-text"
             title="New conversation (⌘N)"
           >
             <Plus size={15} />
@@ -132,7 +150,7 @@ export function ConversationList({
         <button
           onClick={onReveal}
           title={agent.dir}
-          className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-white/5 hover:text-text"
+          className="mx-3 mb-2 flex items-center gap-1.5 rounded-card px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-hover hover:text-text"
         >
           <FolderOpen size={12} />
           <span className="truncate">{home(agent.dir)}</span>
@@ -149,7 +167,7 @@ export function ConversationList({
                 disabled={disabled}
                 aria-current={selected ? "page" : undefined}
                 className={`block w-full text-left rounded-card px-2 py-1.5 transition-colors ${
-                  selected ? "bg-surface" : "hover:bg-white/5"
+                  selected ? "bg-surface" : "hover:bg-hover"
                 }`}
               >
                 <div className={`truncate pr-5 ${row.fresh ? "text-muted italic" : ""}`}>{row.label}</div>
@@ -161,7 +179,7 @@ export function ConversationList({
                   title="Delete conversation"
                   className="absolute right-1.5 top-1.5 grid opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 size-5 place-items-center rounded text-muted hover:text-danger"
                 >
-                  <Trash2 size={13} />
+                  <Trash size={13} />
                 </button>
               )}
             </div>
@@ -260,7 +278,7 @@ function Action({ icon, label, onClick }: { icon: React.ReactNode; label: string
   return (
     <button
       onClick={onClick}
-      className="rounded-card border border-stroke px-3 py-1.5 flex items-center gap-1.5 hover:bg-white/5"
+      className="rounded-card border border-stroke px-3 py-1.5 flex items-center gap-1.5 hover:bg-hover"
     >
       {icon} {label}
     </button>
@@ -399,7 +417,7 @@ function ModelPopover({
                   onClose();
                   void store.pickModel(model);
                 }}
-                className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-white/5 ${
+                className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-hover ${
                   model === current ? "text-accent" : ""
                 }`}
               >
@@ -418,7 +436,7 @@ function ModelPopover({
 export function NewConversation({ agentName, children }: { agentName: string; children: React.ReactNode }) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
-      <div className="w-full max-w-3xl -mt-16">
+      <div className="composer-column -mt-16">
         <h1 className="text-[22px] font-medium mb-5">What should we work on in {agentName}?</h1>
         {children}
       </div>
@@ -467,7 +485,7 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
       }}
       className="flex-1 min-h-0 overflow-y-auto px-6 py-5"
     >
-      <div className="max-w-3xl mx-auto space-y-4">
+      <div className="column space-y-6">
         {items.map((item, index) => (
           <Message key={index} item={item} />
         ))}
@@ -477,12 +495,22 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
   );
 }
 
+/**
+ * Only `code` is overridden. Streamdown's own `pre` is what marks a child as a fenced block, so
+ * replacing it — as an earlier version did — turns every code block into an inline span.
+ */
+const markdownComponents = { code: MarkdownCode };
+/** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
+const markdownControls = { table: { download: false } };
+
 function Message({ item }: { item: Item }) {
   switch (item.kind) {
     case "user":
+      // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
+      // the transcript that is small and instantly recognisable.
       return (
         <div className="flex justify-end">
-          <div className="max-w-[80%] rounded-card bg-accent/12 ring-1 ring-accent/25 px-3 py-2 whitespace-pre-wrap">
+          <div className="max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 leading-relaxed whitespace-pre-wrap">
             {item.text}
           </div>
         </div>
@@ -490,39 +518,89 @@ function Message({ item }: { item: Item }) {
     case "assistant":
       return (
         <div className="md leading-relaxed">
-          <Streamdown>{item.text}</Streamdown>
+          <Streamdown components={markdownComponents} controls={markdownControls}>
+            {item.text}
+          </Streamdown>
         </div>
       );
     case "thinking":
       return (
-        <details className="text-muted text-[12px]">
-          <summary className="cursor-default select-none italic">thinking</summary>
-          <div className="mt-1 whitespace-pre-wrap border-l border-stroke pl-3">{item.text}</div>
+        <details className="group text-muted text-[12px]">
+          <summary className="cursor-default select-none flex items-center gap-1.5">
+            <CaretRight size={11} className="transition-transform group-open:rotate-90" />
+            thinking
+          </summary>
+          <div className="mt-1.5 ml-[5px] whitespace-pre-wrap border-l border-stroke pl-3 leading-relaxed">
+            {item.text}
+          </div>
         </details>
       );
     case "note":
-      return <div className="text-danger text-[11px] font-mono">{item.text}</div>;
+      // A fact about the session, not something anyone said: centred, quiet, and only red when it
+      // is genuinely a failure.
+      return (
+        <div
+          className={`flex items-center justify-center gap-1.5 text-[11px] ${
+            item.tone === "error" ? "text-danger" : "text-muted"
+          }`}
+        >
+          {item.tone === "error" ? <WarningCircle size={12} /> : <Info size={12} />}
+          <span className="font-mono">{item.text}</span>
+        </div>
+      );
     case "tool":
       return <Tool item={item} />;
   }
 }
 
+/** The icon says what kind of work it is before the command is read. */
+const toolIcons: Record<string, typeof Terminal> = {
+  bash: Terminal,
+  read: FileText,
+  write: FilePlus,
+  edit: PencilSimple,
+  grep: MagnifyingGlass,
+  find: MagnifyingGlass,
+  ls: FolderOpen,
+  fetch: Globe,
+};
+
+/** One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9. */
+function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; className: string } {
+  if (item.status === "interrupted") return { word: "stopped", className: "text-muted" };
+  if (item.isError) return { word: "failed", className: "text-danger" };
+  if (item.status === "running") return { word: "running", className: "text-accent" };
+  return { word: "done", className: "text-success" };
+}
+
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
-  const running = item.status === "running";
   const summary = firstArg(item.args);
+  const state = toolState(item);
+  const Icon = toolIcons[item.name] ?? Terminal;
   return (
-    <details className="group rounded-card bg-surface/60 ring-1 ring-stroke/60">
-      <summary className="cursor-default select-none flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-mono">
-        <ChevronRight size={12} className="text-muted transition-transform group-open:rotate-90" />
-        <span className={item.isError ? "text-danger" : "text-text"}>{item.name}</span>
-        {summary && <span className="text-muted truncate">{summary}</span>}
-        <span className="ml-auto text-muted">{item.isError ? "failed" : running ? "running…" : item.status}</span>
+    <details className="group rounded-card bg-surface overflow-hidden">
+      <summary className="cursor-default select-none flex items-center gap-2 px-3 h-7 text-[12px]">
+        <CaretRight size={11} className="shrink-0 text-muted transition-transform group-open:rotate-90" />
+        <Icon size={14} className="shrink-0 text-muted" />
+        <span className="font-mono truncate">{summary || item.name}</span>
+        {/* The state belongs next to the command it describes, not at the far edge of the row. */}
+        <span className={`shrink-0 text-[11px] ${state.className}`}>{state.word}</span>
       </summary>
-      <pre className="px-2.5 pb-2.5 text-[11px] font-mono text-muted whitespace-pre-wrap break-all">
-        {JSON.stringify({ args: item.args, result: item.result }, null, 2)}
-      </pre>
+      <div className="px-3 pb-2.5 pt-0.5 space-y-2 text-[11.5px] font-mono">
+        {summary !== stringify(item.args) && (
+          <pre className="whitespace-pre-wrap break-all text-muted">{stringify(item.args)}</pre>
+        )}
+        {item.result !== undefined && (
+          <pre className="whitespace-pre-wrap break-all max-h-64 overflow-y-auto">{stringify(item.result)}</pre>
+        )}
+      </div>
     </details>
   );
+}
+
+/** Tool payloads are JSON, except when the runtime already handed us a string. */
+function stringify(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
 /** A tool call's most telling argument — the path, command or query, not the whole object. */
@@ -531,7 +609,9 @@ function firstArg(args: unknown): string {
   if (!args || typeof args !== "object") return "";
   const values = Object.values(args as Record<string, unknown>).filter((v) => typeof v === "string") as string[];
   const text = values[0] ?? "";
-  return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+  // A path's meaning is at its end, a command's at its start: keep the tail when it looks like one.
+  if (text.length <= 72) return text;
+  return text.startsWith("/") ? `…${text.slice(-71)}` : `${text.slice(0, 71)}…`;
 }
 
 /**
@@ -595,7 +675,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
               onMouseEnter={() => setCursor(index)}
               onClick={() => store.setDraft(complete(command.name))}
               className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
-                command === chosen ? "bg-white/5" : ""
+                command === chosen ? "bg-hover" : ""
               }`}
             >
               <span className="font-mono text-[12px]">/{command.name}</span>
@@ -656,12 +736,12 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             onClick={() => setPicking(!picking)}
             disabled={!agentId || busy || modelDisabled}
             title={busy ? "Stop the turn to change the model" : "Model for this agent"}
-            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-white/5 disabled:opacity-50 ${
+            className={`flex items-center gap-1 rounded-card px-2 py-1 text-[11px] font-mono hover:bg-hover disabled:opacity-50 ${
               !model && needsModel ? "text-amber-400" : "text-muted"
             }`}
           >
             {model ?? (needsModel ? "pick a model" : "reading model…")}
-            <ChevronDown size={12} />
+            <CaretDown size={12} />
           </button>
           {picking && agentId && !busy && !modelDisabled && (
             <ModelPopover view={view} store={store} current={model} onClose={() => setPicking(false)} />
@@ -677,7 +757,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             title="Stop (Esc) — work its tools already finished is not undone"
             className="ml-auto size-7 grid place-items-center rounded-card bg-danger/15 text-danger"
           >
-            <Square size={13} />
+            <Stop size={13} />
           </button>
         ) : (
           <button

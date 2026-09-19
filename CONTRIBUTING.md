@@ -61,12 +61,21 @@ git switch -c fix/<focused-change>
 # Make and verify the change.
 npm test && npm run build
 git push -u origin HEAD
-gh pr create --base main --assignee @me
+gh pr create --base main --assignee @me --milestone '<milestone of the issue>' \
+  --body 'Closes #<issue>
+
+<final behavior, verification, known limitations>'
 ```
 
-Drop `--assignee @me` if you lack push access. Branch-prefix automation adds the PR's intent label;
-CODEOWNERS requests maintainers. An unknown branch prefix needs a manual label. Automation and
-review routing take effect after these files land on the default branch.
+Fill the PR sidebar before asking for review: assignee (yourself), intent label, and the same
+milestone as the issue it closes when that issue has an open one — omit `--milestone` otherwise
+instead of inventing one. `Closes #N` in the body populates Development; a PR that only does part of
+an issue writes `Part of #N` and leaves Development empty rather than closing work that is not done.
+Fix an existing PR with `gh pr edit <n> --add-assignee @me --add-label <label> --milestone <title>`.
+Leave Projects alone; the repo does not use project boards. Drop `--assignee @me` if you lack push
+access. Branch-prefix automation adds the PR's intent label; CODEOWNERS requests maintainers. An
+unknown branch prefix needs a manual label. Automation and review routing take effect after these
+files land on the default branch.
 
 PR titles use `type(scope): summary`. The final PR title/body become the squash commit message:
 explain final behavior, necessary rationale and known limitations, not intermediate attempts.

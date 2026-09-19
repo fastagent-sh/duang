@@ -1,17 +1,65 @@
 @import "tailwindcss";
 @source "../../node_modules/streamdown/dist/*.js";
 
+/*
+ * Tokens per docs/ui.md. Every interactive role is a set — a component picks `bg-hover`, it never
+ * computes a hover colour from a base. The neutral ramp carries a trace of the accent hue so violet
+ * reads as part of the family rather than applied on top.
+ */
 @theme {
-  --color-bg: oklch(0.17 0.008 260);
-  --color-surface: oklch(0.21 0.009 260);
-  --color-stroke: oklch(0.32 0.01 260);
-  --color-text: oklch(0.93 0.004 260);
-  --color-muted: oklch(0.66 0.008 260);
-  --color-accent: oklch(0.72 0.14 215);
+  --color-bg: oklch(0.16 0.01 285);
+  --color-surface: oklch(0.2 0.012 285);
+  --color-surface-2: oklch(0.24 0.014 285);
+  --color-sidebar: oklch(0 0 0 / 20%);
+  --color-hover: oklch(1 0 0 / 6%);
+  --color-stroke: oklch(0.3 0.012 285);
+  --color-text: oklch(0.95 0.005 285);
+  --color-muted: oklch(0.68 0.01 285);
+  --color-accent: oklch(0.72 0.16 295);
+  --color-accent-weak: oklch(0.72 0.16 295 / 15%);
+  --color-accent-fg: oklch(0.99 0 0);
+  --color-success: oklch(0.72 0.14 150);
+  --color-warning: oklch(0.78 0.13 75);
   --color-danger: oklch(0.68 0.17 25);
+
+  --radius-badge: 6px;
   --radius-card: 10px;
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: "SF Mono", ui-monospace, monospace;
+  --radius-float: 14px;
+
+  /* The system face, paired with the system's own CJK face: this window wears native materials
+     (vibrancy, hiddenInset), and a web font beside them reads as a page rather than an app. */
+  --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
+     what terminal output actually contains. The rest are fallbacks for machines without it. */
+  --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
+
+  --ease-ui: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Light mode is the same roles at different values, not a different design. The accent has to get
+ * darker and more saturated here, or it turns grey on white.
+ *
+ * Plain custom properties, NOT a second `@theme`: Tailwind hoists `@theme` out of media queries, so
+ * nesting one here silently made light the only theme. Utilities read `var(--color-*)` at runtime,
+ * which is exactly what this overrides.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: oklch(0.98 0.004 285);
+    --color-surface: oklch(1 0 0);
+    --color-surface-2: oklch(0.96 0.005 285);
+    --color-sidebar: oklch(1 0 0 / 35%);
+    --color-hover: oklch(0 0 0 / 5%);
+    --color-stroke: oklch(0.9 0.006 285);
+    --color-text: oklch(0.22 0.01 285);
+    --color-muted: oklch(0.5 0.01 285);
+    --color-accent: oklch(0.55 0.19 295);
+    --color-accent-weak: oklch(0.55 0.19 295 / 12%);
+    --color-success: oklch(0.5 0.14 150);
+    --color-warning: oklch(0.58 0.13 75);
+    --color-danger: oklch(0.52 0.19 25);
+  }
 }
 
 html,
@@ -20,12 +68,52 @@ body,
   height: 100%;
 }
 
+/* The reading column: what the agent produces needs room for code and Chinese prose, capped so a
+   maximised window does not stretch a line past reading length. */
+.column {
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
+}
+
+/* The composer is an input, not a reading surface. A text field as wide as the transcript looks like
+   a form; it keeps its own, narrower measure. */
+.composer-column {
+  width: 100%;
+  max-width: 768px;
+  margin-inline: auto;
+}
+
 body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 13px;
+}
+
+/* Code and command output keep the ligatures the mono family ships with, and tabular figures so
+   columns of numbers in tool output line up. */
+code,
+pre,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shiki resolves its dual themes with light-dark(), which needs the document to declare both. The
+   code surface is ours, so its own background is dropped. */
+:root {
+  color-scheme: light dark;
+}
+.shiki,
+.shiki span {
+  background: transparent !important;
+}
+
+/* CJK glyphs fill their em box, so the same size needs more leading than Latin to read evenly. */
+:lang(zh),
+:lang(ja) {
+  line-height: 1.75;
 }
 
 /* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
@@ -62,6 +150,57 @@ summary:focus-visible,
   background: transparent;
 }
 
+/*
+ * The agent's output. Streamdown ships shadcn-flavoured class names (`bg-muted`, `border-border`)
+ * that our palette deliberately does not define, so its own look lands half-applied. It does mark
+ * every element with `data-streamdown`, which is the seam we style through — our tokens win, and our
+ * vocabulary stays ours.
+ *
+ * The register is Codex's: a quiet container, almost no chrome, controls only where an action
+ * exists.
+ */
+[data-streamdown="table-wrapper"] {
+  border: 0;
+  border-radius: var(--radius-float);
+  background: var(--color-surface);
+  padding: 6px;
+  gap: 0;
+  margin: 14px 0;
+}
+[data-streamdown="table-wrapper"] > div {
+  border: 0;
+  background: transparent;
+}
+[data-streamdown="table-header"] {
+  background: var(--color-surface-2);
+}
+[data-streamdown="table-header-cell"],
+[data-streamdown="table-cell"] {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--color-stroke);
+}
+[data-streamdown="list-item"] {
+  padding: 1px 0;
+}
+[data-streamdown="blockquote"] {
+  border-left: 2px solid var(--color-stroke);
+  padding-left: 12px;
+  color: var(--color-muted);
+  font-style: normal;
+}
+[data-streamdown="link"] {
+  color: var(--color-accent);
+}
+[data-streamdown^="heading-"] {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+}
+[data-streamdown="horizontal-rule"] {
+  border-color: var(--color-stroke);
+}
+
 /* Markdown from the model. Streamdown emits plain elements; these are their house rules. */
 .md > * + * {
   margin-top: 0.6em;
@@ -84,29 +223,14 @@ summary:focus-visible,
   list-style: decimal;
 }
 .md li + li {
-  margin-top: 0.25em;
+  margin-top: 0.15em;
+}
+.md li p {
+  display: inline;
 }
 .md a {
   color: var(--color-accent);
   text-decoration: underline;
-}
-.md code {
-  font-family: var(--font-mono);
-  font-size: 0.92em;
-  background: var(--color-surface);
-  border-radius: 4px;
-  padding: 0.1em 0.3em;
-}
-.md pre {
-  background: var(--color-surface);
-  border: 1px solid var(--color-stroke);
-  border-radius: var(--radius-card);
-  padding: 0.7em 0.8em;
-  overflow-x: auto;
-}
-.md pre code {
-  background: transparent;
-  padding: 0;
 }
 .md blockquote {
   border-left: 2px solid var(--color-stroke);

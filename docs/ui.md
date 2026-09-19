@@ -141,6 +141,11 @@ Not included: pinning, hiding, archiving, folders. They belong to rosters of fif
 of five they are management work invented for its own sake. Add one when a real list stops being
 readable.
 
+The window opens at 1280 by 840 — the sidebar plus the reading column and its padding, so a fresh
+install starts at the width the transcript was drawn for — and reopens wherever it was left. Size and
+position are navigation memory like the selected agent: written best effort, and a window whose
+display is gone comes back on an attached one.
+
 ## 4. Colour
 
 oklch, two modes, following the system. The neutral ramp carries a trace of the accent hue (285) so
@@ -222,8 +227,9 @@ drawn differently on purpose.
 sparse, and their job is to be findable when you scroll back: *what did I ask for, and when did I
 change it?* A bubble is a good anchor precisely because it is small and visually distinct.
 
-**What the agent produces is a document.** Left aligned, no bubble, one reading column of 720 (or the
-full width minus 48 when the window is narrower than 1000), full markdown. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
+**What the agent produces is a document.** Left aligned, no bubble, full markdown, in one reading
+column: the width of the pane up to 920, centred. The composer keeps its own narrower measure (768),
+because a text field as wide as the transcript reads as a form rather than a place to type. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
 fragments a record that needs to be scanned, and gives up the width its content needs. Products that
 bubble both sides keep the heavy work somewhere else — a separate workspace panel — so what remains
 in the transcript really is chat. Ours is the work.

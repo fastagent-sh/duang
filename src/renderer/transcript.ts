@@ -13,7 +13,12 @@ export type Item =
       isError?: boolean;
       status: "running" | "done" | "interrupted";
     }
-  | { kind: "note"; text: string };
+  /**
+   * A fact about the session rather than something anyone said. `tone` decides whether it reads as
+   * a quiet line or as a failure — stopping a run is not an error, and colouring it like one was
+   * the transcript telling the person they broke something.
+   */
+  | { kind: "note"; tone: "info" | "error"; text: string };
 
 /**
  * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
@@ -119,13 +124,18 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         return item;
       });
       if (data.status === "completed") return items;
+      const stopped = data.status === "aborted";
       // An aborted run carries the abort machinery's own words ("This operation was aborted",
       // "Request aborted"). The person pressed Stop; that is the whole explanation. Only a FAILED
       // run has a reason they could not already know, so only that one keeps its message.
-      const error = data.status === "aborted" ? undefined : (data.error as { message?: string } | undefined);
+      const error = stopped ? undefined : (data.error as { message?: string } | undefined);
       return [
         ...items,
-        { kind: "note", text: `run ${String(data.status)}${error?.message ? `: ${error.message}` : ""}` },
+        {
+          kind: "note",
+          tone: stopped ? "info" : "error",
+          text: `run ${String(data.status)}${error?.message ? `: ${error.message}` : ""}`,
+        },
       ];
     }
     case "retry_scheduled":
@@ -133,11 +143,12 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         ...items,
         {
           kind: "note",
+          tone: "error",
           text: `retrying ${String(data.attempt)}/${String(data.maxAttempts)}: ${String(data.error ?? "")}`,
         },
       ];
     case "serving_error":
-      return [...items, { kind: "note", text: String(data.message) }];
+      return [...items, { kind: "note", tone: "error", text: String(data.message) }];
     default:
       return items;
   }

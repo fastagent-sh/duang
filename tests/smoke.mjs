@@ -241,7 +241,8 @@ if (!process.versions.electron) {
       );
       await until("document.querySelector('details')?.innerText.includes('done')", "tool trace finishes");
       assert.equal(requests, 2, "a real read tool ran between two model requests");
-      const transcript = await evaluate("document.querySelector('details pre').textContent");
+      // The card now separates arguments from result, so read the whole card rather than its first block.
+      const transcript = await evaluate("document.querySelector('details').textContent");
       assert.match(transcript, /Hello from the workspace/);
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "model picker reopens");

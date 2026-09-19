@@ -175,7 +175,7 @@ export function createStore(api: DuangApi) {
   const note = (error: unknown, c = view.conversation) => {
     const text = message(error);
     if (c) {
-      c.items = [...c.items, { kind: "note", text }];
+      c.items = [...c.items, { kind: "note", tone: "error", text }];
       publish();
     } else publish({ error: text });
   };

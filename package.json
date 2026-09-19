@@ -10,10 +10,14 @@
     "preview": "electron-vite preview",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
     "test:smoke": "npm run build && node tests/smoke.mjs",
-    "test:live": "npm run build && node tests/live.mjs"
+    "test:live": "npm run build && node tests/live.mjs",
+    "shots": "npm run build && node tests/shot.mjs"
   },
   "dependencies": {
     "@fastagent-sh/fastagent": "file:../fastagent",
+    "@phosphor-icons/react": "^2.1.10",
+    "react-shiki": "^0.11.1",
+    "shiki": "^4.4.3",
     "streamdown": "^2.6.0",
     "undici": "^7.18.1"
   },
@@ -24,7 +28,6 @@
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^44.4.1",
     "electron-vite": "^5.0.0",
-    "lucide-react": "^1.46.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwindcss": "^4.1.0",
