@@ -116,13 +116,13 @@ export function Sidebar({
                 aria-current={selected ? "true" : undefined}
                 onClick={() => onSelect(agent.id)}
                 title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
-                className={`flex w-full items-center gap-2.5 rounded-card px-2 py-2 text-left transition-colors ${
+                className={`flex w-full items-center gap-3 rounded-card px-2 py-2 text-left transition-colors ${
                   selected ? "" : "hover:bg-hover"
                 }`}
               >
                 <Avatar name={agent.name} working={working} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{agent.name}</span>
+                  <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
                   <span className="block truncate text-[11px] font-mono text-muted">{home(agent.dir)}</span>
                 </span>
                 {/* Idle and ready is the state worth saying nothing about (§9). */}
@@ -146,15 +146,21 @@ export function Sidebar({
                         onClick={() => onOpen(row.session)}
                         disabled={disabled}
                         aria-current={row.session === session ? "page" : undefined}
+                        // Selected is a filled row, not a tint: Telegram's chat list does this, and it
+                        // is what makes the list feel answered rather than shaded.
                         className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-2 pl-2 text-left transition-colors ${
-                          row.session === session ? "bg-accent-weak text-accent" : "hover:bg-hover"
+                          row.session === session ? "bg-accent text-accent-fg" : "hover:bg-hover"
                         }`}
                       >
                         <span className={`min-w-0 flex-1 truncate text-[12px] ${row.fresh ? "text-muted italic" : ""}`}>
                           {row.label}
                         </span>
                         {row.updatedAt !== undefined && (
-                          <span className="shrink-0 text-[10px] text-muted group-hover:invisible">
+                          <span
+                            className={`shrink-0 text-[10px] group-hover:invisible ${
+                              row.session === session ? "opacity-70" : "text-muted"
+                            }`}
+                          >
                             {ago(row.updatedAt)}
                           </span>
                         )}

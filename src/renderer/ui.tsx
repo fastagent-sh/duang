@@ -83,21 +83,24 @@ export function Button({
 const HUES = [285, 150, 25, 235, 95, 330, 55] as const;
 const ORDER = [0, 4, 1, 6, 3, 5, 2] as const;
 
-export function Avatar({ name, size = 32, working }: { name: string; size?: number; working?: boolean }) {
+export function Avatar({ name, size = 40, working }: { name: string; size?: number; working?: boolean }) {
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)!) % 9973;
   const hue = HUES[ORDER[hash % ORDER.length]!]!;
   return (
     <span
       aria-hidden
-      className={`grid shrink-0 place-items-center rounded-card font-medium uppercase text-white ${
-        working ? "ring-2 ring-accent ring-offset-2 ring-offset-sidebar animate-pulse" : ""
+      className={`grid shrink-0 place-items-center font-semibold uppercase text-white ${
+        working ? "ring-2 ring-accent ring-offset-2 ring-offset-surface animate-pulse" : ""
       }`}
       style={{
         width: size,
         height: size,
+        // A rounded square, not a circle: squares are programs. The gradient is Telegram's, and it
+        // is most of why their avatars look alive rather than printed.
+        borderRadius: Math.round(size * 0.32),
         fontSize: Math.round(size * 0.34),
-        backgroundColor: `oklch(0.55 0.1 ${hue})`,
+        backgroundImage: `linear-gradient(145deg, oklch(0.64 0.12 ${hue}), oklch(0.46 0.11 ${hue + 12}))`,
       }}
     >
       {name.slice(0, 2)}

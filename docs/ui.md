@@ -107,8 +107,10 @@ has to move when they arrive.
 **Sidebar rows are agents, not conversations** — one row each, with the current conversation's
 preview on the second line. An agent with a single conversation shows nothing more than a contact row.
 
-Geometry, holding Telegram's proportions at a tool's density: agent row 48 tall, avatar 32 as a
-rounded square, text at x=54. The second line is the workspace directory, not a message preview:
+Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40 as a
+rounded square with a two-stop gradient in its hue — flat tiles look printed, and the gradient is
+most of why Telegram's list feels alive. The open conversation is a filled accent row rather than a
+tint, which is the same list's other trick: a selection that answers rather than shades. The second line is the workspace directory, not a message preview:
 the directory is what identifies an agent, and the conversations are listed directly below it
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
