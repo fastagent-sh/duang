@@ -114,6 +114,10 @@ tint, which is the same list's other trick: a selection that answers rather than
 the directory is what identifies an agent, and the conversations are listed directly below it
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
+**Clicking the agent you are already on folds its conversations away**, and clicking again brings
+them back; the conversation you are reading stays open either way. Folding is a view preference, so
+it lives in the sidebar and is not remembered across launches.
+
 **An agent and its conversations are one card.** The open agent's row and its topics share a
 surface with a hairline between them; every other agent is a plain row on the sidebar. Indentation
 alone was not enough — the two kinds of row read as one list, and which topics belonged to whom had

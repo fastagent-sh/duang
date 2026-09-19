@@ -81,6 +81,10 @@ export function Sidebar({
   onDelete: (session: string) => void;
   onRemove: () => void;
 }) {
+  // Folding is a view preference, not state anyone else needs: clicking the open agent again puts
+  // its topics away without closing the conversation you are reading.
+  const [folded, setFolded] = useState<string[]>([]);
+  const open = agentId !== undefined && !folded.includes(agentId);
   return (
     <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
       {/* The window controls overhang this card's top-left. The row is tall enough to hold them
@@ -105,19 +109,27 @@ export function Sidebar({
       <div className="flex-1 overflow-y-auto min-h-0 px-2 pb-2 space-y-1.5">
         {agents.map((agent) => {
           const selected = agent.id === agentId;
+          const expanded = selected && open;
           const state = states[agent.id] ?? "ready";
           const working = running.includes(agent.id);
           return (
             /* The open agent and its conversations are one card. Indentation alone left the two
                kinds of row reading as one list; a container says which topics belong to whom. */
-            <div key={agent.id} className={selected ? "rounded-card bg-surface p-1" : ""}>
+            <div key={agent.id} className={expanded ? "rounded-card bg-surface p-1" : ""}>
               <button
                 aria-label={agent.name}
                 aria-current={selected ? "true" : undefined}
-                onClick={() => onSelect(agent.id)}
+                aria-expanded={selected ? expanded : undefined}
+                onClick={() => {
+                  if (selected) setFolded((ids) => (open ? [...ids, agent.id] : ids.filter((id) => id !== agent.id)));
+                  else {
+                    setFolded((ids) => ids.filter((id) => id !== agent.id));
+                    onSelect(agent.id);
+                  }
+                }}
                 title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
                 className={`flex w-full items-center gap-3 rounded-card px-2 py-2 text-left transition-colors ${
-                  selected ? "" : "hover:bg-hover"
+                  expanded ? "" : "hover:bg-hover"
                 }`}
               >
                 <Avatar name={agent.name} working={working} />
@@ -134,9 +146,15 @@ export function Sidebar({
                   ) : (
                     <span aria-label={says[state]} className={`size-2 shrink-0 rounded-full ${dot[tones[state]]}`} />
                   ))}
+                {selected && (
+                  <CaretDown
+                    size={12}
+                    className={`shrink-0 text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
+                  />
+                )}
               </button>
 
-              {selected && (
+              {expanded && (
                 <div className="mt-1 border-t border-stroke pt-1">
                   {rows.map((row) => (
                     <div key={row.session} className="group relative">

@@ -389,6 +389,23 @@ if (!process.versions.electron) {
       // An agent with no skills must say so; silence here reads as a broken composer.
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
       await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
+      // Clicking the agent you are already on folds its conversations away without closing the one
+      // you are reading; clicking again brings the list back.
+      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      await until(
+        "document.querySelector('button[aria-label=\"Smoke\"]').getAttribute('aria-expanded') === 'false'",
+        "the agent folds",
+      );
+      assert.ok(
+        !(await evaluate("document.querySelector('aside').innerText")).includes("Read hello.txt and answer."),
+        "a folded agent hides its conversations",
+      );
+      assert.match(await evaluate("document.body.innerText"), /Smoke answer/, "folding does not close the transcript");
+      await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
+      await until(
+        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
+        "the agent unfolds again",
+      );
       await type("/");
       await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
       await type("");
