@@ -112,6 +112,12 @@ rounded square, text at x=54. The second line is the workspace directory, not a 
 the directory is what identifies an agent, and the conversations are listed directly below it
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
+**An agent and its conversations are one card.** The open agent's row and its topics share a
+surface with a hairline between them; every other agent is a plain row on the sidebar. Indentation
+alone was not enough — the two kinds of row read as one list, and which topics belonged to whom had
+to be worked out rather than seen. A conversation row is one line, the relative time trailing and
+replaced by Delete on hover, so a topic is visibly lighter than the agent that owns it.
+
 **The selected agent's conversations are listed under it**, including one that is running and one
 holding unsent text, because fact 4 makes "what is alive right now" the question the sidebar exists
 to answer. *Implemented today:* only the selected agent's, because duang loads sessions for the agent

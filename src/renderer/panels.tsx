@@ -102,20 +102,22 @@ export function Sidebar({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0 px-2 pb-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto min-h-0 px-2 pb-2 space-y-1.5">
         {agents.map((agent) => {
           const selected = agent.id === agentId;
           const state = states[agent.id] ?? "ready";
           const working = running.includes(agent.id);
           return (
-            <div key={agent.id}>
+            /* The open agent and its conversations are one card. Indentation alone left the two
+               kinds of row reading as one list; a container says which topics belong to whom. */
+            <div key={agent.id} className={selected ? "rounded-card bg-surface p-1" : ""}>
               <button
                 aria-label={agent.name}
                 aria-current={selected ? "true" : undefined}
                 onClick={() => onSelect(agent.id)}
                 title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
                 className={`flex w-full items-center gap-2.5 rounded-card px-2 py-2 text-left transition-colors ${
-                  selected ? "bg-surface" : "hover:bg-hover"
+                  selected ? "" : "hover:bg-hover"
                 }`}
               >
                 <Avatar name={agent.name} working={working} />
@@ -135,22 +137,26 @@ export function Sidebar({
               </button>
 
               {selected && (
-                <div className="mt-0.5 mb-1 pl-3">
+                <div className="mt-1 border-t border-stroke pt-1">
                   {rows.map((row) => (
                     <div key={row.session} className="group relative">
+                      {/* One line, time trailing: a topic is lighter than the agent that owns it,
+                          and the difference has to be visible without reading. */}
                       <button
                         onClick={() => onOpen(row.session)}
                         disabled={disabled}
                         aria-current={row.session === session ? "page" : undefined}
-                        className={`block w-full rounded-card px-2 py-1.5 text-left transition-colors ${
-                          row.session === session ? "bg-accent-weak" : "hover:bg-hover"
+                        className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-2 pl-2 text-left transition-colors ${
+                          row.session === session ? "bg-accent-weak text-accent" : "hover:bg-hover"
                         }`}
                       >
-                        <span className={`block truncate pr-5 text-[12px] ${row.fresh ? "text-muted italic" : ""}`}>
+                        <span className={`min-w-0 flex-1 truncate text-[12px] ${row.fresh ? "text-muted italic" : ""}`}>
                           {row.label}
                         </span>
                         {row.updatedAt !== undefined && (
-                          <span className="block text-[11px] text-muted">{ago(row.updatedAt)}</span>
+                          <span className="shrink-0 text-[10px] text-muted group-hover:invisible">
+                            {ago(row.updatedAt)}
+                          </span>
                         )}
                       </button>
                       {!row.fresh && (
@@ -161,7 +167,7 @@ export function Sidebar({
                           title="Delete conversation"
                           aria-label="Delete conversation"
                           icon={<Trash size={13} />}
-                          className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                          className="absolute right-0.5 top-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                         />
                       )}
                     </div>
