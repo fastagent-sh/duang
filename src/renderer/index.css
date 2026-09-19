@@ -68,6 +68,15 @@ body,
   height: 100%;
 }
 
+/* The reading column. One width for the transcript, the composer and the empty state, so nothing
+   shifts sideways between them. Wide enough for code and Chinese prose, capped so a maximised window
+   does not stretch a line past reading length. */
+.column {
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
+}
+
 body {
   margin: 0;
   background: var(--color-bg);

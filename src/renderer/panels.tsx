@@ -436,7 +436,7 @@ function ModelPopover({
 export function NewConversation({ agentName, children }: { agentName: string; children: React.ReactNode }) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
-      <div className="w-full max-w-3xl -mt-16">
+      <div className="column -mt-16">
         <h1 className="text-[22px] font-medium mb-5">What should we work on in {agentName}?</h1>
         {children}
       </div>
@@ -485,7 +485,7 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
       }}
       className="flex-1 min-h-0 overflow-y-auto px-6 py-5"
     >
-      <div className="max-w-[720px] mx-auto space-y-6">
+      <div className="column space-y-6">
         {items.map((item, index) => (
           <Message key={index} item={item} />
         ))}

@@ -134,7 +134,7 @@ export default function App() {
         )}
         {agentId && agentState === "ready" && c && c.items.length > 0 && (
           <div className="shrink-0 px-6 pb-5 pt-2">
-            <div className="max-w-3xl mx-auto">{composer}</div>
+            <div className="column">{composer}</div>
           </div>
         )}
       </main>
