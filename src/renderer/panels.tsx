@@ -231,6 +231,7 @@ export function Sidebar({
  * scrolled away rather than deleted.
  */
 export function ConversationHeader({
+  agent,
   title,
   dir,
   working,
@@ -238,6 +239,7 @@ export function ConversationHeader({
   queued,
   onReveal,
 }: {
+  agent: string;
   title: string;
   dir?: string;
   working: boolean;
@@ -246,7 +248,9 @@ export function ConversationHeader({
   onReveal: () => void;
 }) {
   return (
-    <div className="absolute inset-x-4 top-2 z-10 flex items-center gap-3 rounded-float bg-surface/75 px-3 py-1.5 ring-1 ring-stroke backdrop-blur-xl drag">
+    <div className="absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl drag">
+      {/* The same tile as in the sidebar: whose work this is should not need reading. */}
+      <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
         <div className="truncate">{title}</div>
         {dir && (

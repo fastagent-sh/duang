@@ -113,6 +113,7 @@ export default function App() {
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
         {agent && (
           <ConversationHeader
+            agent={agent.name}
             title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
             dir={agent.dir}
             working={view.runningAgents.includes(agent.id)}
