@@ -166,6 +166,7 @@ npm run dev     # Electron + Vite
 npm test        # registry, routing, selection, drafts, transcript and command regressions
 npm run test:smoke  # real Electron + IPC + FastAgent, with a fake model HTTP response
 DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine's credential file
+npm run shots       # screenshots of the real window in both colour modes, into out/shots/
 ```
 
 `test:live` is the only check that proves authentication end to end: it makes unfaked Codex and

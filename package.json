@@ -10,7 +10,8 @@
     "preview": "electron-vite preview",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
     "test:smoke": "npm run build && node tests/smoke.mjs",
-    "test:live": "npm run build && node tests/live.mjs"
+    "test:live": "npm run build && node tests/live.mjs",
+    "shots": "npm run build && node tests/shot.mjs"
   },
   "dependencies": {
     "@fastagent-sh/fastagent": "file:../fastagent",

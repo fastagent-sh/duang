@@ -1,5 +1,5 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
-import { useEffect, useRef, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   CaretDown,
@@ -19,7 +19,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
-import { highlightPlugin } from "./highlight.ts";
+import { MarkdownCode } from "./code.tsx";
 import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
@@ -495,9 +495,18 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
   );
 }
 
-const markdownPlugins = { code: highlightPlugin };
-/** Copy is an action worth offering; downloading a snippet to a file is not, in a chat transcript. */
-const markdownControls = { code: { copy: true, download: false }, table: { download: false } };
+/**
+ * Fenced code is ours (see code.tsx). `pre` passes its child through so our component owns the whole
+ * frame, but it must keep marking that child as a block — that flag is the only thing telling a
+ * fence apart from an inline span.
+ */
+const markdownComponents = {
+  code: MarkdownCode,
+  pre: ({ children }: { children?: React.ReactNode }) =>
+    isValidElement(children) ? cloneElement(children as React.ReactElement<{ "data-block"?: string }>, { "data-block": "true" }) : children,
+};
+/** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
+const markdownControls = { table: { download: false } };
 
 function Message({ item }: { item: Item }) {
   switch (item.kind) {
@@ -514,12 +523,7 @@ function Message({ item }: { item: Item }) {
     case "assistant":
       return (
         <div className="md leading-relaxed">
-          <Streamdown
-            plugins={markdownPlugins}
-            controls={markdownControls}
-            lineNumbers={false}
-            codeBlockMaxHeight={320}
-          >
+          <Streamdown components={markdownComponents} controls={markdownControls}>
             {item.text}
           </Streamdown>
         </div>
@@ -579,15 +583,15 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   const state = toolState(item);
   const Icon = toolIcons[item.name] ?? Terminal;
   return (
-    <details className="group rounded-card ring-1 ring-stroke bg-surface overflow-hidden">
-      <summary className="cursor-default select-none flex items-center gap-2 px-3 h-8 text-[12px]">
+    <details className="group rounded-card bg-surface overflow-hidden">
+      <summary className="cursor-default select-none flex items-center gap-2 px-3 h-7 text-[12px]">
         <CaretRight size={11} className="shrink-0 text-muted transition-transform group-open:rotate-90" />
         <Icon size={14} className="shrink-0 text-muted" />
         <span className="font-mono truncate">{summary || item.name}</span>
         {/* The state belongs next to the command it describes, not at the far edge of the row. */}
         <span className={`shrink-0 text-[11px] ${state.className}`}>{state.word}</span>
       </summary>
-      <div className="border-t border-stroke px-3 py-2 space-y-2 text-[11.5px] font-mono">
+      <div className="px-3 pb-2.5 pt-0.5 space-y-2 text-[11.5px] font-mono">
         {summary !== stringify(item.args) && (
           <pre className="whitespace-pre-wrap break-all text-muted">{stringify(item.args)}</pre>
         )}
@@ -610,7 +614,9 @@ function firstArg(args: unknown): string {
   if (!args || typeof args !== "object") return "";
   const values = Object.values(args as Record<string, unknown>).filter((v) => typeof v === "string") as string[];
   const text = values[0] ?? "";
-  return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+  // A path's meaning is at its end, a command's at its start: keep the tail when it looks like one.
+  if (text.length <= 72) return text;
+  return text.startsWith("/") ? `…${text.slice(-71)}` : `${text.slice(0, 71)}…`;
 }
 
 /**
