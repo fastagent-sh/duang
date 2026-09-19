@@ -3,9 +3,9 @@
  *
  * Same isolation as the smoke check — a temporary agent, temporary credentials, a fake model
  * response — but it asserts nothing. It drives one conversation that contains every shape the
- * transcript has to draw, then writes `out/shots/{dark,light}.png`.
+ * transcript has to draw, then writes `out/shots/{app,components}-{dark,light}.png`.
  *
- *   npm run shots && open out/shots/dark.png
+ *   npm run shots && open out/shots/app-dark.png
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -132,14 +132,30 @@ if (!process.versions.electron) {
     await until("document.querySelector('pre code span') !== null", "highlighting");
 
     await mkdir(fileURLToPath(new URL("../out/shots", import.meta.url)), { recursive: true });
-    for (const theme of ["dark", "light"]) {
-      nativeTheme.themeSource = theme;
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      const image = await win.webContents.capturePage();
-      const path = fileURLToPath(new URL(`../out/shots/${theme}.png`, import.meta.url));
-      await writeFile(path, image.toPNG());
-      console.log(path);
-    }
+    const capture = async (name) => {
+      for (const theme of ["dark", "light"]) {
+        nativeTheme.themeSource = theme;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const image = await win.webContents.capturePage();
+        const path = fileURLToPath(new URL(`../out/shots/${name}-${theme}.png`, import.meta.url));
+        await writeFile(path, image.toPNG());
+        console.log(path);
+      }
+    };
+    await capture("app");
+
+    // The component sheet, in the same window and the same build as the app it documents.
+    // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.
+    win.setSize(1180, 2000);
+    // Changing only the fragment is an in-page navigation — the document, and the hash the app read
+    // at startup, stay as they were. The reload is what makes it a real load.
+    await win.loadURL(`${win.webContents.getURL().split("#")[0]}#gallery`);
+    const reloaded = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+    win.webContents.reload();
+    await reloaded;
+    await until("document.body.innerText.includes('components')", "the gallery");
+    await until("document.querySelector('pre code span') !== null", "gallery highlighting");
+    await capture("components");
   }
 
   run()

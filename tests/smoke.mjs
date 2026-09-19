@@ -404,6 +404,8 @@ if (!process.versions.electron) {
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "picker for its empty state");
       assert.equal(await evaluate("document.querySelector('dialog').getAttribute('aria-label')"), "Choose a model");
+      // Opening the list is asking to type in it: showModal() would otherwise leave focus on Close.
+      assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), "Filter models");
       await evaluate(`(() => {
         const input = document.querySelector('dialog input');
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'no-such-model');
@@ -427,7 +429,14 @@ if (!process.versions.electron) {
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
       await type("   \n  ");
-      assert.equal(await evaluate("document.querySelector('button[aria-label=\"Send\"]').disabled"), true);
+      // Disabled and still reachable, carrying the reason: a keyboard user gets it too.
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const send = document.querySelector('button[aria-label="Send"]');
+          return { blocked: send.getAttribute('aria-disabled'), why: send.title, reachable: send.disabled === false };
+        })()`),
+        { blocked: "true", why: "Type a message first", reachable: true },
+      );
       await type(Array.from({ length: 12 }, (_, i) => `line ${i}`).join("\n"));
       assert.ok(
         await evaluate(`(() => {

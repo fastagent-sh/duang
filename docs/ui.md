@@ -210,6 +210,41 @@ current selection and destructive actions, so weight rather than colour marks em
 carries a label or `aria-label`; icon-only controls exist only where the symbol is universal (send,
 stop, close).
 
+## 6b. Controls
+
+Four kinds of button and no fifth. `primary` is filled accent and appears at most once on a screen —
+the one thing to do here. `secondary` is an outline for an alternative. `ghost` is an action inside a
+row, a header or the composer. `danger` deletes or removes, and stays quiet until the pointer is on
+it, because these sit on screen all day. `loud` fills a kind instead of tinting it, for the one
+control that must be found instantly: Stop.
+
+Two heights: 28 inside rows and dense bars, 32 standing on its own. Icon-only is square at the same
+height, and only where the symbol is universal (§6). Height also decides text size (11px and 12px):
+Tailwind utilities all have the same specificity, so a size a call site passes would be decided by
+the generated sheet's order rather than by intent. Nothing a call site can pass may contradict the
+component; what varies is a prop.
+
+**A disabled control says why.** The `disabled` prop takes the reason rather than a boolean, so a
+control cannot be greyed out silently: it dims to 40%, keeps its shape, and carries the reason.
+"Type a message first", "Stop the turn to change the model". It is disabled with `aria-disabled`
+rather than the native attribute and stays focusable, because a natively disabled button cannot be
+reached by keyboard and a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is
+dropped by the component.
+
+`npm run shots` writes the sheet of every control in both colour modes to
+`out/shots/components-{dark,light}.png`, from the same build as the app; loading the window at
+`#gallery` opens it. It is how "what do we have" gets answered by looking. Sections it marks as
+sketches are copies of markup that still lives in `panels.tsx` and will not follow a change there —
+only the unmarked ones are the components themselves. The hash is read once at load and is not a
+live switch, so a `#gallery` link in an answer cannot unmount a running app.
+
+A state is a badge: a dot or icon, then the word, in the state's colour — never colour alone (§11),
+and it pulses only while the state is still happening.
+
+Popovers share one surface — `surface`, radius 14, hairline, the only shadow in the app — even
+though the model list is a modal dialog that takes focus and the slash completion list deliberately
+does not. Both highlight the current item with `accent-weak`.
+
 ## 7. Space, radius, elevation
 
 - Spacing scale: 4, 8, 12, 16, 24, 32.
