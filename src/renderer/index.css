@@ -26,8 +26,12 @@
   --radius-card: 10px;
   --radius-float: 14px;
 
-  --font-sans: Inter, "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
+  /* The system face, paired with the system's own CJK face: this window wears native materials
+     (vibrancy, hiddenInset), and a web font beside them reads as a page rather than an app. */
+  --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
+     what terminal output actually contains. The rest are fallbacks for machines without it. */
+  --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
 
   --ease-ui: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -72,6 +76,14 @@ body {
   font-size: 13px;
 }
 
+/* Code and command output keep the ligatures the mono family ships with, and tabular figures so
+   columns of numbers in tool output line up. */
+code,
+pre,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
 /* CJK glyphs fill their em box, so the same size needs more leading than Latin to read evenly. */
 :lang(zh),
 :lang(ja) {
@@ -110,6 +122,98 @@ summary:focus-visible,
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/*
+ * The agent's output. Streamdown ships shadcn-flavoured class names (`bg-muted`, `border-border`)
+ * that our palette deliberately does not define, so its own look lands half-applied. It does mark
+ * every element with `data-streamdown`, which is the seam we style through — our tokens win, and our
+ * vocabulary stays ours.
+ *
+ * The register is Codex's: a quiet container, almost no chrome, controls only where an action
+ * exists.
+ */
+[data-streamdown="code-block"] {
+  margin: 12px 0;
+  border: 1px solid var(--color-stroke);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: 0;
+  overflow: hidden;
+}
+[data-streamdown="code-block-header"] {
+  height: 30px;
+  padding: 0 10px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-bottom: 1px solid var(--color-stroke);
+}
+[data-streamdown="code-block-header"] span {
+  margin: 0;
+}
+[data-streamdown="code-block-actions"] {
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  margin-right: 4px;
+}
+[data-streamdown="code-block"] pre {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: transparent;
+}
+[data-streamdown="code-block"] code {
+  font-family: var(--font-mono);
+  background: transparent;
+  padding: 0;
+}
+[data-streamdown="inline-code"] {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--color-surface-2);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+[data-streamdown="table-wrapper"] {
+  border: 1px solid var(--color-stroke);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: 0;
+  gap: 0;
+}
+[data-streamdown="table-wrapper"] > div {
+  border: 0;
+  background: transparent;
+}
+[data-streamdown="table-header"] {
+  background: var(--color-surface-2);
+}
+[data-streamdown="table-header-cell"],
+[data-streamdown="table-cell"] {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--color-stroke);
+}
+[data-streamdown="blockquote"] {
+  border-left: 2px solid var(--color-stroke);
+  padding-left: 12px;
+  color: var(--color-muted);
+  font-style: normal;
+}
+[data-streamdown="link"] {
+  color: var(--color-accent);
+}
+[data-streamdown^="heading-"] {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+}
+[data-streamdown="horizontal-rule"] {
+  border-color: var(--color-stroke);
 }
 
 /* Markdown from the model. Streamdown emits plain elements; these are their house rules. */

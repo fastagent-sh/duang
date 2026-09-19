@@ -1,7 +1,25 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CaretDown, CaretRight, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
+import {
+  ArrowUp,
+  CaretDown,
+  CaretRight,
+  FilePlus,
+  FileText,
+  FolderOpen,
+  Globe,
+  Info,
+  MagnifyingGlass,
+  PencilSimple,
+  Plus,
+  Stop,
+  Terminal,
+  Trash,
+  WarningCircle,
+  X,
+} from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
+import { highlightPlugin } from "./highlight.ts";
 import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
@@ -467,7 +485,7 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
       }}
       className="flex-1 min-h-0 overflow-y-auto px-6 py-5"
     >
-      <div className="max-w-3xl mx-auto space-y-4">
+      <div className="max-w-[720px] mx-auto space-y-6">
         {items.map((item, index) => (
           <Message key={index} item={item} />
         ))}
@@ -477,12 +495,18 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
   );
 }
 
+const markdownPlugins = { code: highlightPlugin };
+/** Copy is an action worth offering; downloading a snippet to a file is not, in a chat transcript. */
+const markdownControls = { code: { copy: true, download: false }, table: { download: false } };
+
 function Message({ item }: { item: Item }) {
   switch (item.kind) {
     case "user":
+      // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
+      // the transcript that is small and instantly recognisable.
       return (
         <div className="flex justify-end">
-          <div className="max-w-[80%] rounded-card bg-accent/12 ring-1 ring-accent/25 px-3 py-2 whitespace-pre-wrap">
+          <div className="max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 leading-relaxed whitespace-pre-wrap">
             {item.text}
           </div>
         </div>
@@ -490,39 +514,94 @@ function Message({ item }: { item: Item }) {
     case "assistant":
       return (
         <div className="md leading-relaxed">
-          <Streamdown>{item.text}</Streamdown>
+          <Streamdown
+            plugins={markdownPlugins}
+            controls={markdownControls}
+            lineNumbers={false}
+            codeBlockMaxHeight={320}
+          >
+            {item.text}
+          </Streamdown>
         </div>
       );
     case "thinking":
       return (
-        <details className="text-muted text-[12px]">
-          <summary className="cursor-default select-none italic">thinking</summary>
-          <div className="mt-1 whitespace-pre-wrap border-l border-stroke pl-3">{item.text}</div>
+        <details className="group text-muted text-[12px]">
+          <summary className="cursor-default select-none flex items-center gap-1.5">
+            <CaretRight size={11} className="transition-transform group-open:rotate-90" />
+            thinking
+          </summary>
+          <div className="mt-1.5 ml-[5px] whitespace-pre-wrap border-l border-stroke pl-3 leading-relaxed">
+            {item.text}
+          </div>
         </details>
       );
     case "note":
-      return <div className="text-danger text-[11px] font-mono">{item.text}</div>;
+      // A fact about the session, not something anyone said: centred, quiet, and only red when it
+      // is genuinely a failure.
+      return (
+        <div
+          className={`flex items-center justify-center gap-1.5 text-[11px] ${
+            item.tone === "error" ? "text-danger" : "text-muted"
+          }`}
+        >
+          {item.tone === "error" ? <WarningCircle size={12} /> : <Info size={12} />}
+          <span className="font-mono">{item.text}</span>
+        </div>
+      );
     case "tool":
       return <Tool item={item} />;
   }
 }
 
+/** The icon says what kind of work it is before the command is read. */
+const toolIcons: Record<string, typeof Terminal> = {
+  bash: Terminal,
+  read: FileText,
+  write: FilePlus,
+  edit: PencilSimple,
+  grep: MagnifyingGlass,
+  find: MagnifyingGlass,
+  ls: FolderOpen,
+  fetch: Globe,
+};
+
+/** One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9. */
+function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; className: string } {
+  if (item.status === "interrupted") return { word: "stopped", className: "text-muted" };
+  if (item.isError) return { word: "failed", className: "text-danger" };
+  if (item.status === "running") return { word: "running", className: "text-accent" };
+  return { word: "done", className: "text-success" };
+}
+
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
-  const running = item.status === "running";
   const summary = firstArg(item.args);
+  const state = toolState(item);
+  const Icon = toolIcons[item.name] ?? Terminal;
   return (
-    <details className="group rounded-card bg-surface/60 ring-1 ring-stroke/60">
-      <summary className="cursor-default select-none flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-mono">
-        <CaretRight size={12} className="text-muted transition-transform group-open:rotate-90" />
-        <span className={item.isError ? "text-danger" : "text-text"}>{item.name}</span>
-        {summary && <span className="text-muted truncate">{summary}</span>}
-        <span className="ml-auto text-muted">{item.isError ? "failed" : running ? "running…" : item.status}</span>
+    <details className="group rounded-card ring-1 ring-stroke bg-surface overflow-hidden">
+      <summary className="cursor-default select-none flex items-center gap-2 px-3 h-8 text-[12px]">
+        <CaretRight size={11} className="shrink-0 text-muted transition-transform group-open:rotate-90" />
+        <Icon size={14} className="shrink-0 text-muted" />
+        <span className="font-mono truncate">{summary || item.name}</span>
+        {/* The state belongs next to the command it describes, not at the far edge of the row. */}
+        <span className={`shrink-0 text-[11px] ${state.className}`}>{state.word}</span>
       </summary>
-      <pre className="px-2.5 pb-2.5 text-[11px] font-mono text-muted whitespace-pre-wrap break-all">
-        {JSON.stringify({ args: item.args, result: item.result }, null, 2)}
-      </pre>
+      <div className="border-t border-stroke px-3 py-2 space-y-2 text-[11.5px] font-mono">
+        {summary !== stringify(item.args) && (
+          <pre className="whitespace-pre-wrap break-all text-muted">{stringify(item.args)}</pre>
+        )}
+        {item.result !== undefined && (
+          <pre className="whitespace-pre-wrap break-all max-h-64 overflow-y-auto">{stringify(item.result)}</pre>
+        )}
+      </div>
     </details>
   );
+}
+
+/** Tool payloads are JSON, except when the runtime already handed us a string. */
+function stringify(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
 /** A tool call's most telling argument — the path, command or query, not the whole object. */

@@ -39,7 +39,7 @@ test("a tool result lands on the call it belongs to", () => {
 test("only a failed run leaves a note", () => {
   assert.equal(apply([], event("run_settled", { status: "completed" })).length, 0);
   const failed = apply([], event("run_settled", { status: "failed", error: { message: "boom" } }));
-  assert.deepEqual(failed, [{ kind: "note", text: "run failed: boom" }]);
+  assert.deepEqual(failed, [{ kind: "note", tone: "error", text: "run failed: boom" }]);
 });
 
 test("unknown event types change nothing", () => {
@@ -87,7 +87,7 @@ test("tool progress is a snapshot, not completion; settlement closes unfinished 
   assert.equal((items[0] as Extract<Item, { kind: "tool" }>).status, "interrupted");
   assert.ok(items.every((item) => (item.kind === "thinking" || item.kind === "assistant" ? !item.open : true)));
   // Stopping is the person's own action: the abort machinery's wording adds nothing they can use.
-  assert.deepEqual(items.at(-1), { kind: "note", text: "run aborted" });
+  assert.deepEqual(items.at(-1), { kind: "note", tone: "info", text: "run aborted" });
 });
 
 test("history follows the active leaf instead of flattening sibling branches", () => {
@@ -106,9 +106,9 @@ test("history follows the active leaf instead of flattening sibling branches", (
 
 test("retry and serving failures preserve the runtime's original message", () => {
   assert.deepEqual(apply([], event("retry_scheduled", { attempt: 1, maxAttempts: 3, error: "429 quota" })), [
-    { kind: "note", text: "retrying 1/3: 429 quota" },
+    { kind: "note", tone: "error", text: "retrying 1/3: 429 quota" },
   ]);
   assert.deepEqual(apply([], event("serving_error", { message: "disk is full" })), [
-    { kind: "note", text: "disk is full" },
+    { kind: "note", tone: "error", text: "disk is full" },
   ]);
 });
