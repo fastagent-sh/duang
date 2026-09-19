@@ -5,11 +5,11 @@ import { rows } from "./sessions.ts";
 import {
   BrokenAgent,
   Composer,
-  ConversationList,
+  ConversationHeader,
   NeedsAgent,
   NewConversation,
   NoAgents,
-  Rail,
+  Sidebar,
   Transcript,
   UnreadableRegistry,
 } from "./panels.tsx";
@@ -53,46 +53,47 @@ export default function App() {
   const owned = agentState === "broken" || agentState === "missing_model" || agentState === "no_agent";
   const error = c?.error ?? (owned ? undefined : view.error);
 
+  const usage = c?.state?.usage;
+  const pending = c?.state?.pending;
+
   return (
-    <div className="flex h-full">
-      <Rail
+    // Panels float on the window's canvas rather than filling it edge to edge: the gap is what makes
+    // the sidebar read as a surface of its own.
+    <div className="flex h-full gap-2 p-2">
+      <Sidebar
         agents={agents}
         agentId={agentId}
         states={states}
         running={view.runningAgents}
-        onSelect={(id) => void store.selectAgent(id)}
-        onAdd={() => void store.addAgent()}
-      />
-      <ConversationList
-        agent={agent}
         rows={sessionRows}
         session={c?.session}
-        state={agentState}
-        working={!!agentId && view.runningAgents.includes(agentId)}
         disabled={agentState !== "ready" || view.loading}
+        onSelect={(id) => void store.selectAgent(id)}
+        onAdd={() => void store.addAgent()}
         onOpen={(id) => void store.open(id)}
         onNew={() => void store.newConversation()}
-        onReveal={() => void store.reveal()}
         onRemove={remove}
         onDelete={(id) => {
           if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(id);
         }}
       />
-      <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="h-10 shrink-0 flex items-center px-5 gap-3 drag">
-          <span className="truncate">{sessionRows.find((row) => row.session === c?.session)?.label ?? ""}</span>
-          {c?.state?.usage?.contextTokens !== undefined && !!c.state.usage.contextWindow && (
-            <span className="text-muted text-[11px]">
-              {Math.round((c.state.usage.contextTokens / c.state.usage.contextWindow) * 100)}% context
-            </span>
-          )}
-          {!!c?.state?.pending && c.state.pending.steering + c.state.pending.followUp > 0 && (
-            <span className="text-muted text-[11px]">{c.state.pending.steering + c.state.pending.followUp} queued</span>
-          )}
-
-        </header>
+      <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
+        {agent && (
+          <ConversationHeader
+            title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
+            dir={agent.dir}
+            working={view.runningAgents.includes(agent.id)}
+            context={
+              usage?.contextTokens !== undefined && usage.contextWindow
+                ? Math.round((usage.contextTokens / usage.contextWindow) * 100)
+                : undefined
+            }
+            queued={pending ? pending.steering + pending.followUp : undefined}
+            onReveal={() => void store.reveal()}
+          />
+        )}
         {error ? (
-          <div role="alert" className="px-6 py-2 text-danger whitespace-pre-wrap break-words">
+          <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
             {error}{" "}
             <button className="underline" onClick={() => void store.retry()}>
               Retry
@@ -102,7 +103,7 @@ export default function App() {
           // An ended subscription is not a failure: the conversation is intact, this view stopped
           // listening. Say it in the calm voice and offer the one action that fixes it.
           c?.ended && (
-            <div role="status" className="px-6 py-2 text-muted whitespace-pre-wrap break-words">
+            <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
               {c.ended}{" "}
               <button className="underline" onClick={() => void store.retry()}>
                 Reconnect

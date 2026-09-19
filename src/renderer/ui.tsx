@@ -72,6 +72,39 @@ export function Button({
   );
 }
 
+/**
+ * An agent's tile: a rounded square, because circles are people and squares are programs (§12).
+ * The colour is the name's, so the same agent is the same tile everywhere — hues are walked in a
+ * shuffled order, Telegram's trick for keeping neighbours in a list distinguishable.
+ *
+ * Presence is the ring around it, never a change to the tile: an agent looks like the same agent
+ * whether it is busy or idle.
+ */
+const HUES = [285, 150, 25, 235, 95, 330, 55] as const;
+const ORDER = [0, 4, 1, 6, 3, 5, 2] as const;
+
+export function Avatar({ name, size = 32, working }: { name: string; size?: number; working?: boolean }) {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)!) % 9973;
+  const hue = HUES[ORDER[hash % ORDER.length]!]!;
+  return (
+    <span
+      aria-hidden
+      className={`grid shrink-0 place-items-center rounded-card font-medium uppercase text-white ${
+        working ? "ring-2 ring-accent ring-offset-2 ring-offset-sidebar animate-pulse" : ""
+      }`}
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.34),
+        backgroundColor: `oklch(0.55 0.1 ${hue})`,
+      }}
+    >
+      {name.slice(0, 2)}
+    </span>
+  );
+}
+
 export type Tone = "accent" | "success" | "warning" | "danger" | "muted";
 
 /** The dot alone, for the one place a badge does not fit: the rail's corner mark. */

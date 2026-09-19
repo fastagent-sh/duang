@@ -107,15 +107,17 @@ has to move when they arrive.
 **Sidebar rows are agents, not conversations** — one row each, with the current conversation's
 preview on the second line. An agent with a single conversation shows nothing more than a contact row.
 
-Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40, both
-insets 8, text at x=56; name and preview on two lines, relative time top right in `muted`. A nested
-conversation row is 32 tall, has no avatar, and starts at x=56 so it aligns with the text above it;
-its state sits at the trailing edge. Nothing about a nested row repeats what the agent row said.
+Geometry, holding Telegram's proportions at a tool's density: agent row 48 tall, avatar 32 as a
+rounded square, text at x=54. The second line is the workspace directory, not a message preview:
+the directory is what identifies an agent, and the conversations are listed directly below it
+anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
-**Running conversations are always listed under their agent**, expanded or not, because fact 4 makes
-"what is alive right now" the question the sidebar exists to answer. A conversation holding unsent
-text is listed for the same reason. Everything else folds behind `⌄ 2 more`, which expands in place
-into indented rows with title, relative time and state.
+**The selected agent's conversations are listed under it**, including one that is running and one
+holding unsent text, because fact 4 makes "what is alive right now" the question the sidebar exists
+to answer. *Implemented today:* only the selected agent's, because duang loads sessions for the agent
+it has open; another agent's running work shows on its own row as a breathing ring and the word
+`working`, not as the conversation's name. Listing other agents' conversations means loading their
+sessions, which is a change to what the main process keeps, not a change to this column.
 
 **Presence is told at two levels, because the sidebar has two questions to answer.** The avatar
 carries the agent's own presence: while any of its conversations is working, a slow accent ring
@@ -130,6 +132,14 @@ What the avatar does not do is act. Products where the avatar performs a lifecyc
 waiting, celebrating — have one conversation per agent, an expressive character to animate, and a
 consumer's relationship with it. Ours is two letters on a tile representing a directory; a breathing
 ring is presence, a performance would be costume.
+
+**Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
+rather than a column filling them, and the conversation's header floats over the transcript as a
+translucent bar instead of a full-width strip cutting the page in two. This is Telegram's desktop
+composition, and its premise holds here: chrome that hovers keeps the content beneath it continuous.
+What does not carry over is putting the transcript itself on a decorative canvas — theirs is bubbles
+over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
+the chrome floats, with the transcript padded so nothing important sits under the header.
 
 Reserved, in arrival order: a `local | cloud` segmented control in the sidebar header (week 3), a
 pinned **Activity** row above the roster (week 4), and the right panel (week 2) holding the file

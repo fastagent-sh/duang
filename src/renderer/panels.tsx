@@ -24,7 +24,7 @@ import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
-import { Badge, Button, dot, type Tone } from "./ui.tsx";
+import { Avatar, Badge, Button, dot, type Tone } from "./ui.tsx";
 import type { AgentState, Store, View } from "./store.ts";
 
 /** A path as a person writes it. */
@@ -45,154 +45,147 @@ const says: Record<AgentState, string> = {
   broken: "Broken",
 };
 
-export function Rail({
+/**
+ * One column: who you work with, and what you were talking about with the one you are on.
+ *
+ * Agents are rows rather than a strip of tiles, because a name and its state need words. Only the
+ * selected agent shows its conversations; the rest stay folded, which is the honest shape of the
+ * data anyway — duang loads sessions for the agent it has open.
+ */
+export function Sidebar({
   agents,
   agentId,
   states,
   running,
+  rows,
+  session,
+  disabled,
   onSelect,
   onAdd,
+  onOpen,
+  onNew,
+  onDelete,
+  onRemove,
 }: {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
   running: string[];
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <nav className="w-14 shrink-0 flex flex-col items-center gap-1.5 pt-10 pb-3 bg-sidebar drag">
-      {agents.map((agent) => {
-        const selected = agent.id === agentId;
-        const state = states[agent.id];
-        return (
-          <button
-            key={agent.id}
-            aria-label={agent.name}
-            aria-pressed={selected}
-            onClick={() => onSelect(agent.id)}
-            title={`${agent.name}\n${agent.dir}\n${running.includes(agent.id) ? "Working" : says[state ?? "ready"]}`}
-            className={`no-drag relative size-9 rounded-card text-[11px] font-medium uppercase transition-colors ${
-              selected
-                ? "bg-accent/15 text-accent ring-1 ring-accent/60"
-                : "text-muted hover:bg-hover hover:text-text"
-            }`}
-          >
-            {agent.name.slice(0, 2)}
-            {(running.includes(agent.id) || (state && state !== "ready")) && (
-              <span
-                aria-label={running.includes(agent.id) ? "Working" : says[state!]}
-                className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-bg ${running.includes(agent.id) ? "bg-accent animate-pulse" : dot[tones[state!]]}`}
-              />
-            )}
-          </button>
-        );
-      })}
-      <Button kind="ghost" onClick={onAdd} className="no-drag" title="Add agent directory" aria-label="Add agent directory" icon={<Plus size={16} />} />
-    </nav>
-  );
-}
-
-export function ConversationList({
-  agent,
-  rows,
-  session,
-  state,
-  working,
-  disabled,
-  onOpen,
-  onNew,
-  onDelete,
-  onReveal,
-  onRemove,
-}: {
-  agent?: AgentRow;
   rows: Row[];
   session?: string;
-  state?: AgentState;
-  working: boolean;
   disabled: boolean;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
   onOpen: (session: string) => void;
   onNew: () => void;
   onDelete: (session: string) => void;
-  onReveal: () => void;
   onRemove: () => void;
 }) {
   return (
-    <aside className="w-64 shrink-0 border-r border-stroke flex flex-col min-h-0 bg-sidebar">
-      {/* pl-6 clears the window controls, which overhang the rail into this column. */}
-      <div className="h-10 shrink-0 flex items-center gap-2 pl-6 pr-2 drag">
-        <span className="truncate font-medium">{agent?.name ?? ""}</span>
-        {/* The rail's dot is a colour; this is the same fact in words, where it is always readable.
-            The longest state sentence is wider than this column, so the badge gives way before the
-            agent's own name does. */}
-        {agent && (working || (state && state !== "ready")) && (
-          <Badge tone={working ? "accent" : tones[state!]} pulse={working} className="min-w-0">
-            <span className="truncate">{working ? "working" : says[state!].toLowerCase()}</span>
-          </Badge>
-        )}
+    <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
+      {/* The window controls overhang this card, so the first row starts to the right of them. */}
+      <div className="h-11 shrink-0 flex items-center gap-2 pl-[76px] pr-2 drag">
+        <span className="font-medium tracking-[-0.01em]">
+          duang<span className="text-accent">·</span>
+        </span>
         <span className="flex-1" />
-        {agent && !disabled && (
-          <Button
-            kind="ghost"
-            size={28}
-            onClick={onNew}
-            className="no-drag"
-            title="New conversation (⌘N)"
-            aria-label="New conversation"
-            icon={<Plus size={15} />}
-          />
-        )}
-      </div>
-
-      {agent && (
         <Button
           kind="ghost"
           size={28}
-          onClick={onReveal}
-          title={agent.dir}
-          icon={<FolderOpen size={12} />}
-          className="mx-3 mb-2 justify-start! font-mono"
-        >
-          <span className="truncate">{home(agent.dir)}</span>
-        </Button>
-      )}
+          onClick={onAdd}
+          className="no-drag"
+          title="Add agent directory"
+          aria-label="Add agent directory"
+          icon={<Plus size={16} />}
+        />
+      </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0 px-1.5 pb-2 space-y-0.5">
-        {rows.map((row) => {
-          const selected = row.session === session;
+      <div className="flex-1 overflow-y-auto min-h-0 px-2 pb-2 space-y-0.5">
+        {agents.map((agent) => {
+          const selected = agent.id === agentId;
+          const state = states[agent.id] ?? "ready";
+          const working = running.includes(agent.id);
           return (
-            <div key={row.session} className="group relative">
+            <div key={agent.id}>
               <button
-                onClick={() => onOpen(row.session)}
-                disabled={disabled}
-                aria-current={selected ? "page" : undefined}
-                className={`block w-full text-left rounded-card px-2 py-1.5 transition-colors ${
+                aria-label={agent.name}
+                aria-current={selected ? "true" : undefined}
+                onClick={() => onSelect(agent.id)}
+                title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
+                className={`flex w-full items-center gap-2.5 rounded-card px-2 py-2 text-left transition-colors ${
                   selected ? "bg-surface" : "hover:bg-hover"
                 }`}
               >
-                <div className={`truncate pr-5 ${row.fresh ? "text-muted italic" : ""}`}>{row.label}</div>
-                {row.updatedAt !== undefined && <div className="text-muted text-[11px]">{ago(row.updatedAt)}</div>}
+                <Avatar name={agent.name} working={working} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{agent.name}</span>
+                  <span className="block truncate text-[11px] font-mono text-muted">{home(agent.dir)}</span>
+                </span>
+                {/* Idle and ready is the state worth saying nothing about (§9). */}
+                {(working || state !== "ready") &&
+                  (working ? (
+                    <Badge tone="accent" pulse className="min-w-0">
+                      <span className="truncate">working</span>
+                    </Badge>
+                  ) : (
+                    <span aria-label={says[state]} className={`size-2 shrink-0 rounded-full ${dot[tones[state]]}`} />
+                  ))}
               </button>
-              {!row.fresh && (
-                <Button
-                  kind="danger"
-                  size={28}
-                  onClick={() => onDelete(row.session)}
-                  title="Delete conversation"
-                  aria-label="Delete conversation"
-                  icon={<Trash size={13} />}
-                  className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-                />
+
+              {selected && (
+                <div className="mt-0.5 mb-1 pl-3">
+                  {rows.map((row) => (
+                    <div key={row.session} className="group relative">
+                      <button
+                        onClick={() => onOpen(row.session)}
+                        disabled={disabled}
+                        aria-current={row.session === session ? "page" : undefined}
+                        className={`block w-full rounded-card px-2 py-1.5 text-left transition-colors ${
+                          row.session === session ? "bg-accent-weak" : "hover:bg-hover"
+                        }`}
+                      >
+                        <span className={`block truncate pr-5 text-[12px] ${row.fresh ? "text-muted italic" : ""}`}>
+                          {row.label}
+                        </span>
+                        {row.updatedAt !== undefined && (
+                          <span className="block text-[11px] text-muted">{ago(row.updatedAt)}</span>
+                        )}
+                      </button>
+                      {!row.fresh && (
+                        <Button
+                          kind="danger"
+                          size={28}
+                          onClick={() => onDelete(row.session)}
+                          title="Delete conversation"
+                          aria-label="Delete conversation"
+                          icon={<Trash size={13} />}
+                          className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {!disabled && (
+                    <Button
+                      kind="ghost"
+                      size={28}
+                      onClick={onNew}
+                      title="New conversation (⌘N)"
+                      icon={<Plus size={14} />}
+                      className="w-full justify-start!"
+                    >
+                      New conversation
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           );
         })}
       </div>
-      {/* Sitting in the sidebar all day, this one asks before it looks dangerous: quiet until the
-          pointer is on it. */}
-      {agent && (
-        <Button kind="danger" size={28} onClick={onRemove} className="m-3 self-start">
+
+      {/* Quiet until the pointer is on it: this sits in the sidebar all day. */}
+      {agentId && (
+        <Button kind="danger" size={28} onClick={onRemove} className="m-2 self-start">
           Remove agent…
         </Button>
       )}
@@ -200,9 +193,51 @@ export function ConversationList({
   );
 }
 
+/**
+ * What you are looking at, floating over it: the conversation, the workspace it runs in, and
+ * whatever the turn costs. It hovers rather than sits in a bar because the transcript is the page,
+ * and a full-width bar would cut it in two. Translucent, so text passing underneath reads as
+ * scrolled away rather than deleted.
+ */
+export function ConversationHeader({
+  title,
+  dir,
+  working,
+  context,
+  queued,
+  onReveal,
+}: {
+  title: string;
+  dir?: string;
+  working: boolean;
+  context?: number;
+  queued?: number;
+  onReveal: () => void;
+}) {
+  return (
+    <div className="absolute inset-x-4 top-2 z-10 flex items-center gap-3 rounded-float bg-surface/75 px-3 py-1.5 ring-1 ring-stroke backdrop-blur-xl drag">
+      <div className="min-w-0 flex-1">
+        <div className="truncate">{title}</div>
+        {dir && (
+          <button
+            onClick={onReveal}
+            title={dir}
+            className="no-drag block max-w-full truncate text-left font-mono text-[11px] text-muted hover:text-text"
+          >
+            {home(dir)}
+          </button>
+        )}
+      </div>
+      {working && <Badge tone="accent" pulse>working</Badge>}
+      {context !== undefined && <span className="shrink-0 text-[11px] text-muted">{context}% context</span>}
+      {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
+    </div>
+  );
+}
+
 /** Whatever replaces the transcript sits in the transcript's box, so the composer never moves. */
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">{children}</div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5">{children}</div>;
 }
 
 export function NoAgents({ onAdd }: { onAdd: () => void }) {
@@ -484,7 +519,8 @@ export function Transcript({ items, busySince }: { items: Item[]; busySince?: nu
         const el = e.currentTarget;
         follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
-      className="flex-1 min-h-0 overflow-y-auto px-6 py-5"
+      // pt clears the floating header; the first message starts below it, not behind it.
+      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5"
     >
       <div className="column space-y-6">
         {items.map((item, index) => (
@@ -693,7 +729,6 @@ export function Composer({ view, store }: { view: View; store: Store }) {
           ))}
         </div>
       )}
-      {agent && <div className="text-[11px] font-mono text-muted mb-2 truncate">{home(agent.dir)}</div>}
       {view.commandsError && query !== undefined && (
         <p role="alert" className="text-danger text-[11px]">
           {view.commandsError}
