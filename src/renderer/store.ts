@@ -437,8 +437,8 @@ export function createStore(api: DuangApi) {
         note(error);
       }
     },
-    /** The sidebar can remove an agent other than the open one, so the target is named. */
-    async removeAgent(id = view.agentId) {
+    async removeAgent() {
+      const id = view.agentId;
       if (!id) return;
       try {
         const result = await api.removeAgent(id);

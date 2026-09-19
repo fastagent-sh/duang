@@ -65,7 +65,6 @@ export function Sidebar({
   onOpen,
   onNew,
   onDelete,
-  onRemove,
 }: {
   agents: AgentRow[];
   agentId?: string;
@@ -79,7 +78,6 @@ export function Sidebar({
   onOpen: (session: string) => void;
   onNew: () => void;
   onDelete: (session: string) => void;
-  onRemove: (agentId: string) => void;
 }) {
   // Folding is a view preference, not state anyone else needs: clicking the open agent again puts
   // its topics away without closing the conversation you are reading.
@@ -117,7 +115,7 @@ export function Sidebar({
                kinds of row reading as one list; a container says which topics belong to whom. */
             /* surface-2 rather than surface: the group has to stand out from the sidebar it sits
                in, and `surface` is a hair away from it in both modes. */
-            <div key={agent.id} className={`group/agent relative rounded-card p-1 ${selected ? "bg-surface-2" : ""}`}>
+            <div key={agent.id} className={`rounded-card p-1 ${selected ? "bg-surface-2" : ""}`}>
               <button
                 aria-label={agent.name}
                 aria-current={selected ? "true" : undefined}
@@ -151,24 +149,10 @@ export function Sidebar({
                 {selected && (
                   <CaretDown
                     size={12}
-                    className={`shrink-0 text-muted transition-transform group-hover/agent:invisible ${
-                      expanded ? "" : "-rotate-90"
-                    }`}
+                    className={`shrink-0 text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
                   />
                 )}
               </button>
-              {/* Removing an agent belongs to the agent's own row, the way deleting a conversation
-                  belongs to its row — not to a link parked at the bottom of the column. */}
-              <Button
-                kind="danger"
-                size={28}
-                onClick={() => onRemove(agent.id)}
-                title="Remove agent from duang"
-                aria-label={`Remove ${agent.name}`}
-                icon={<X size={14} />}
-                className="absolute right-1.5 top-2.5 opacity-0 group-hover/agent:opacity-100 group-focus-within/agent:opacity-100 focus-visible:opacity-100"
-              />
-
               {expanded && (
                 <div className="mt-1 border-t border-stroke pt-1">
                   {rows.map((row) => (

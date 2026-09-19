@@ -159,9 +159,10 @@ tree, diffs and discovered settings. That panel is a **reader**: the files are o
 already open in the person's editor, so duang shows them and stays out of the way instead of building
 a workspace to operate.
 
-Removing an agent is an action on that agent's row — a quiet control that appears under the pointer
-or on focus, the same place and the same manner as deleting a conversation. A link parked at the
-bottom of the column belonged to nothing in particular.
+Removing an agent is not offered by the sidebar at all. A control on the row sat next to the fold
+caret, where one slip removes an agent, and a link at the bottom of the column belonged to nothing
+in particular. Removal lives where the problem is explained — the panel for a broken agent or a
+directory with no agent in it — until there is a menu to put it in.
 
 Not included: pinning, hiding, archiving, folders. They belong to rosters of fifty agents; on a list
 of five they are management work invented for its own sake. Add one when a real list stops being

@@ -413,10 +413,11 @@ if (!process.versions.electron) {
       // A registered directory that no longer exists breaks only its own agent, and stays removable.
       await evaluate("document.querySelector('button[aria-label=\"Gone\"]').click()");
       await until("document.body.innerText.includes('moved-away')", "the missing directory is named");
-      // Removal lives on the agent's own row now, not in a link at the bottom of the column.
-      assert.ok(
-        await evaluate("document.querySelector('button[aria-label=\"Remove Gone\"]') !== null"),
-        "a directory that no longer exists stays removable from its row",
+      // Removal is offered by the panel that explains the problem, not by the sidebar row.
+      assert.match(
+        await evaluate("document.body.innerText"),
+        /Remove/,
+        "a directory that no longer exists stays removable",
       );
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
       await until("document.body.innerText.includes('Smoke answer')", "the other agents are unaffected");
