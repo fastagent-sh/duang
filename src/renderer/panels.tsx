@@ -154,7 +154,7 @@ export function Sidebar({
                 )}
               </button>
               {expanded && (
-                <div className="mt-1 border-t border-stroke pt-1">
+                <div className="mt-1 space-y-0.5 border-t border-stroke pt-1.5">
                   {rows.map((row) => (
                     <div key={row.session} className="group relative">
                       {/* One line, time trailing: a topic is lighter than the agent that owns it,
@@ -165,11 +165,11 @@ export function Sidebar({
                         aria-current={row.session === session ? "page" : undefined}
                         // Selected is a filled row, not a tint: Telegram's chat list does this, and it
                         // is what makes the list feel answered rather than shaded.
-                        className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-2 pl-2 text-left transition-colors ${
+                        className={`flex w-full items-baseline gap-2 rounded-card px-2.5 py-2 text-left transition-colors ${
                           row.session === session ? "bg-accent text-accent-fg" : "hover:bg-hover"
                         }`}
                       >
-                        <span className={`min-w-0 flex-1 truncate text-[12px] ${row.fresh ? "text-muted italic" : ""}`}>
+                        <span className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""}`}>
                           {row.label}
                         </span>
                         {row.updatedAt !== undefined && (
@@ -190,7 +190,7 @@ export function Sidebar({
                           title="Delete conversation"
                           aria-label="Delete conversation"
                           icon={<Trash size={13} />}
-                          className="absolute right-0.5 top-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                          className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                         />
                       )}
                     </div>
@@ -202,7 +202,7 @@ export function Sidebar({
                       onClick={onNew}
                       title="New conversation (⌘N)"
                       icon={<Plus size={14} />}
-                      className="w-full justify-start!"
+                      className="mt-0.5 w-full justify-start!"
                     >
                       New conversation
                     </Button>
