@@ -338,6 +338,9 @@ function ModelPopover({
     el.style.bottom = `${window.innerHeight - anchor.top + 8}px`;
     el.style.maxHeight = `${Math.max(100, anchor.top - 16)}px`;
     el.showModal();
+    // showModal() moves focus itself, after React has honoured autoFocus, so it lands on the close
+    // button. Typing is what this list is for; the filter gets the caret.
+    el.querySelector("input")?.focus();
     return () => el.close();
   }, []);
   const matches = (models?.specs ?? []).filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 60);
@@ -368,15 +371,11 @@ function ModelPopover({
       }}
       className="popover fixed m-0 top-auto right-auto w-80 overflow-y-auto text-text backdrop:bg-transparent"
     >
-      <Button
-        kind="ghost"
-        size={28}
-        onClick={close}
-        className="float-right"
-        aria-label="Close model picker"
-        icon={<X size={14} />}
-      />
-      {models && <p className="text-muted text-[11px] p-2 break-all">Credentials: {models.authPath}</p>}
+      {/* The path is long and the close button is small: a row, not a float, or the two overlap. */}
+      <div className="flex items-start gap-1 pl-2 pt-1">
+        {models && <p className="flex-1 text-muted text-[11px] break-all">Credentials: {models.authPath}</p>}
+        <Button kind="ghost" size={28} onClick={close} aria-label="Close model picker" icon={<X size={14} />} />
+      </div>
       {error ? (
         <div role="alert" className="text-danger p-2 space-y-2">
           <p>{error}</p>

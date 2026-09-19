@@ -404,6 +404,8 @@ if (!process.versions.electron) {
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "picker for its empty state");
       assert.equal(await evaluate("document.querySelector('dialog').getAttribute('aria-label')"), "Choose a model");
+      // Opening the list is asking to type in it: showModal() would otherwise leave focus on Close.
+      assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), "Filter models");
       await evaluate(`(() => {
         const input = document.querySelector('dialog input');
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'no-such-model');
