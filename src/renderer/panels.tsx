@@ -83,9 +83,11 @@ export function Sidebar({
 }) {
   return (
     <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
-      {/* The window controls overhang this card, so the first row starts to the right of them. */}
-      <div className="h-11 shrink-0 flex items-center gap-2 pl-[76px] pr-2 drag">
-        <span className="font-medium tracking-[-0.01em]">
+      {/* The window controls overhang this card's top-left. The row is tall enough to hold them
+          with air around it, and the wordmark is centred in the column rather than pushed along by
+          them — Telegram's header, which has the same problem. */}
+      <div className="relative h-14 shrink-0 flex items-center px-2 drag">
+        <span className="absolute left-1/2 -translate-x-1/2 font-medium tracking-[-0.01em]">
           duang<span className="text-accent">·</span>
         </span>
         <span className="flex-1" />
