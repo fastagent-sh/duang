@@ -55,8 +55,8 @@ export default function App() {
     return () => observer.disconnect();
   });
 
-  const remove = () => {
-    if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
+  const remove = (id?: string) => {
+    if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent(id);
   };
   const composer = <Composer view={view} store={store} />;
   // States whose own panel already explains the setup problem and offers the fix. Repeating the
@@ -84,7 +84,7 @@ export default function App() {
         onAdd={() => void store.addAgent()}
         onOpen={(id) => void store.open(id)}
         onNew={() => void store.newConversation()}
-        onRemove={remove}
+        onRemove={(id) => remove(id)}
         onDelete={(id) => {
           if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(id);
         }}
