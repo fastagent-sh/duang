@@ -62,8 +62,22 @@ made it work there, and whether that premise holds here.
   and hide* — their premise is a roster of up to 50 Bots; ours is the few agents you actually have.
 - **Claude Code desktop** — parallel sessions stay visible and are filterable by state, because
   parallel work is the normal case for a coding agent. Same premise as our fact 4.
-- **Telegram** — the row rhythm of a contact list: avatar, name, one line of what happened, relative
-  time. Refused: the assumption that a contact has exactly one thread.
+- **Telegram** (tdesktop, macOS and Web are all open source, so these are measured values rather than
+  impressions) — the row rhythm of a contact list, and two techniques worth copying outright:
+  - *Row geometry.* `dialogs.style`: row 62px, padding 10/8, avatar 46px, name at x=68 y=10, preview
+    at x=68 y=34, unread badge 19px tall in 12px bold, date 13px. The relationship that matters is
+    avatar ≈ ¾ of row height, and text inset = avatar inset + avatar + 12. §3 keeps the relationship
+    at a tool's density rather than copying the numbers.
+  - *Avatar colours.* `empty_userpic.cpp` picks from eight fixed colours by `order[id % 7]` with
+    `order = [0, 7, 4, 1, 6, 3, 5]` — a deliberately shuffled table so that adjacent ids do not get
+    adjacent hues. We take the shuffle, not the palette: Telegram's tiles are saturated pastels
+    against a neutral UI, and ours sit beside a violet accent, so they stay low in chroma.
+  - *Token naming.* `colors.palette` defines every role as a set — `windowBg`, `windowBgOver`,
+    `windowBgRipple`, `windowFg`, `windowSubTextFg`, `windowBgActive`, `windowFgActive` — instead of
+    letting components derive hover and active states themselves. §4 adopts that discipline.
+  Refused: the assumption that a contact has exactly one thread; ripple on row press, which is a
+  Material gesture that no macOS app makes; and ordering the list by unread first, since an agent's
+  list is ordered by what is happening now.
 - **Carbon, HPE design systems, WCAG 1.4.1** — the status rules in §9.
 - **macOS 26** — glass only in the navigation layer, sidebars to the window edge, native materials
   over simulated ones.
@@ -92,6 +106,11 @@ has to move when they arrive.
 
 **Sidebar rows are agents, not conversations** — one row each, with the current conversation's
 preview on the second line. An agent with a single conversation shows nothing more than a contact row.
+
+Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40, both
+insets 8, text at x=56; name and preview on two lines, relative time top right in `muted`. A nested
+conversation row is 32 tall, has no avatar, and starts at x=56 so it aligns with the text above it;
+its state sits at the trailing edge. Nothing about a nested row repeats what the agent row said.
 
 **Running conversations are always listed under their agent**, expanded or not, because fact 4 makes
 "what is alive right now" the question the sidebar exists to answer. A conversation holding unsent
@@ -137,13 +156,22 @@ violet reads as part of the family rather than applied on top.
 | `muted` | `oklch(0.68 0.01 285)` | `oklch(0.50 0.01 285)` | metadata, timestamps |
 | `accent` | `oklch(0.72 0.16 295)` | `oklch(0.55 0.19 295)` | selection, primary action, focus |
 | `accent-weak` | `accent / 15%` | `accent / 12%` | selected row, user bubble |
+| `accent-fg` | `oklch(0.99 0 0)` | `oklch(0.99 0 0)` | text on a filled accent surface |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
 | `warning` | `oklch(0.78 0.13 75)` | `oklch(0.58 0.13 75)` | needs a model, no agent yet |
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
 
+Every interactive role is defined as a set, not derived at the call site — Telegram's palette does
+this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
+`accent-fg`. A component picks a role; it never computes a hover colour itself.
+
 The sidebar has no background colour of its own: it is `vibrancy: "sidebar"` over the window, with
 rows drawn in `accent-weak` when selected. Light mode needs the darker, more saturated accent, or it
 turns grey on white.
+
+Avatar tiles use eight fixed low-chroma hues, chosen by `order[hash % 7]` with
+`order = [0, 7, 4, 1, 6, 3, 5]`. The shuffle is Telegram's and it exists so that agents registered
+one after another do not come out looking alike.
 
 ## 5. Typography
 
@@ -215,6 +243,9 @@ Everything else follows from those two:
   on settle.
 - **Turn spacing** is 24 within a turn and 32 between turns. Long output needs the rhythm more than
   a dense list does.
+- **A date separator** — one centred muted line — appears where a conversation crosses a day. Reading
+  yesterday's run is the normal case here, and without it a background conversation reads as if it
+  all happened at once. Telegram has had this since the beginning for the same reason.
 
 ## 9. Status
 
