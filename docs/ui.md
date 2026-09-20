@@ -127,10 +127,10 @@ Listing an agent that is not open loads its conversations, which boots that agen
 way opening it would — FastAgent owns the session list and duang will not keep a second copy of
 where sessions live.
 
-Selection is the accent, never a grey — grey is what a row looks like under the pointer. There is
-one filled mark in the column and it belongs to the conversation on screen, because that is what is
-actually being read; the open agent is the container around it and is marked by its name in
-`accent` alone. Two fills in one column turn a parent into a competitor for the thing it holds.
+Selection is the accent, never a grey — grey is what a row looks like under the pointer. The open
+agent is the filled row and the conversation on screen is tinted underneath it: the column marks
+the group you are working in first, and the topic inside it second. Weight follows the hierarchy of
+the list, not the size of the thing selected.
 
 **One flat list, no card per agent.** Full-width rows, a hairline that starts where the text does,
 the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,

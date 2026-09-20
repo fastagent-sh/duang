@@ -125,17 +125,18 @@ export function Sidebar({
                   aria-current={selected ? "true" : undefined}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
-                  // One filled mark in the column, and it belongs to the conversation on screen.
-                  // The open agent is a container, so it is marked by its name alone — a second
-                  // fill here would make the parent shout over the thing actually being read.
-                  className="flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors hover:bg-hover"
+                  // The open agent is the filled row and its conversations are tinted underneath:
+                  // the group you are working in is what the column marks first.
+                  className={`flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors ${
+                    selected ? "bg-accent text-accent-fg" : "hover:bg-hover"
+                  }`}
                 >
                   <Avatar name={agent.name} working={working} />
                   <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-[13.5px] font-semibold ${selected ? "text-accent" : ""}`}>
-                      {agent.name}
+                    <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
+                    <span className={`block truncate text-[11px] font-mono ${selected ? "opacity-75" : "text-muted"}`}>
+                      {home(agent.dir)}
                     </span>
-                    <span className="block truncate text-[11px] font-mono text-muted">{home(agent.dir)}</span>
                   </span>
                   {/* Idle and ready is the state worth saying nothing about (§9). */}
                   {(working || state !== "ready") &&
@@ -157,7 +158,7 @@ export function Sidebar({
                   aria-expanded={open}
                   title={open ? "Hide conversations" : "Show conversations"}
                   icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2"
+                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 ${selected ? "text-accent-fg hover:bg-accent-fg/15 hover:text-accent-fg" : ""}`}
                 />
               </div>
 
@@ -175,7 +176,7 @@ export function Sidebar({
                         disabled={disabled && selected}
                         aria-current={selected && row.session === session ? "page" : undefined}
                         className={`flex w-full items-baseline gap-2 py-1.5 pr-3 pl-[54px] text-left transition-colors ${
-                          selected && row.session === session ? "bg-accent text-accent-fg" : "hover:bg-hover"
+                          selected && row.session === session ? "bg-accent-weak text-accent" : "hover:bg-hover"
                         }`}
                       >
                         <span
@@ -186,7 +187,7 @@ export function Sidebar({
                         {row.updatedAt !== undefined && (
                           <span
                             className={`shrink-0 text-[10px] group-hover:invisible ${
-                              selected && row.session === session ? "opacity-70" : "text-muted"
+                              selected && row.session === session ? "text-accent opacity-75" : "text-muted"
                             }`}
                           >
                             {ago(row.updatedAt)}
