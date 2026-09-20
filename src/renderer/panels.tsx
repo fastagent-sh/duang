@@ -125,12 +125,10 @@ export function Sidebar({
                   aria-current={selected ? "true" : undefined}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
-                  // Selection is the accent, not a grey: grey is what a row looks like under the
-                  // pointer. The agent gets the tint and its open conversation the fill, so the two
-                  // levels do not shout at each other.
-                  className={`flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors ${
-                    selected ? "bg-accent-weak" : "hover:bg-hover"
-                  }`}
+                  // One filled mark in the column, and it belongs to the conversation on screen.
+                  // The open agent is a container, so it is marked by its name alone — a second
+                  // fill here would make the parent shout over the thing actually being read.
+                  className="flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors hover:bg-hover"
                 >
                   <Avatar name={agent.name} working={working} />
                   <span className="min-w-0 flex-1">
