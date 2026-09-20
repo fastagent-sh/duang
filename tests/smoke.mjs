@@ -389,6 +389,41 @@ if (!process.versions.electron) {
       // An agent with no skills must say so; silence here reads as a broken composer.
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
       await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
+      // Opening an agent and looking at its conversations are separate controls: the caret folds
+      // the list without closing the conversation being read.
+      await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
+      await until(
+        "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
+        "the agent folds",
+      );
+      assert.ok(
+        !(await evaluate("document.querySelector('aside').innerText")).includes("Read hello.txt and answer."),
+        "a folded agent hides its conversations",
+      );
+      assert.match(await evaluate("document.body.innerText"), /Smoke answer/, "folding does not close the transcript");
+      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Smoke\"]').click()");
+      await until(
+        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
+        "the agent unfolds again",
+      );
+      // Expanding is per agent, so more than one roster can be open while a third is being read.
+      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Configured\"]')?.click()");
+      await until(
+        "document.querySelector('aside').innerText.includes('Use the configured model')",
+        "a second agent lists its conversations without being opened",
+      );
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const aside = document.querySelector('aside').innerText;
+          return {
+            smoke: aside.includes('Read hello.txt and answer.'),
+            configured: aside.includes('Use the configured model with the selected credentials.'),
+            reading: document.body.innerText.includes('Smoke answer'),
+          };
+        })()`),
+        { smoke: true, configured: true, reading: true },
+        "two agents list their conversations at once, and neither changes the transcript",
+      );
       await type("/");
       await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
       await type("");
@@ -396,7 +431,14 @@ if (!process.versions.electron) {
       // A registered directory that no longer exists breaks only its own agent, and stays removable.
       await evaluate("document.querySelector('button[aria-label=\"Gone\"]').click()");
       await until("document.body.innerText.includes('moved-away')", "the missing directory is named");
-      assert.match(await evaluate("document.body.innerText"), /Remove agent/);
+      // Removal is offered by the panel that explains the problem, not by the sidebar row, so look
+      // for the button rather than for the word anywhere on screen.
+      assert.ok(
+        await evaluate(
+          "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
+        ),
+        "a directory that no longer exists stays removable from the panel that explains it",
+      );
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
       await until("document.body.innerText.includes('Smoke answer')", "the other agents are unaffected");
 
@@ -416,15 +458,18 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "picker closes again");
 
-      // Delete is reachable by keyboard, not only by hovering the row.
-      assert.equal(
+      // Delete is reachable by keyboard, and it hides again when the focus that revealed it leaves:
+      // the row keeps focus after a click, which used to keep the control on screen.
+      assert.deepEqual(
         await evaluate(`(() => {
-          const row = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
-          row.focus();
-          return getComputedStyle(row).opacity;
+          const del = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
+          del.focus();
+          const focused = getComputedStyle(del).opacity;
+          del.closest('.group').querySelector('button').focus();
+          return { focused, afterRowFocus: getComputedStyle(del).opacity };
         })()`),
-        "1",
-        "a focused delete control is visible",
+        { focused: "1", afterRowFocus: "0" },
+        "delete follows its own focus, not the row's",
       );
 
       // Whitespace is not a message, and the composer stops growing at eight lines.

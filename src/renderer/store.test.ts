@@ -279,7 +279,7 @@ test("settlement in another agent cannot invalidate the visible agent's list ref
     sessions: [{ session: "b-saved", preview: "B's turn", createdAt: 0, updatedAt: 1, messageCount: 2 }],
   });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(store.getSnapshot().sessions[0]?.session, "b-saved");
+  assert.equal(store.getSnapshot().sessions["b"]?.[0]?.session, "b-saved");
   store.dispose();
 });
 
@@ -290,7 +290,7 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   const refusal = { ok: false as const, error: { code: "busy", message: "runtime refused", retryable: true } };
   api.deleteSession = async () => refusal;
   api.abort = async () => refusal;
-  await store.deleteSession(old.session);
+  await store.deleteSession(old.agentId, old.session);
   assert.equal(store.getSnapshot().conversation, old);
   await store.abort();
   assert.ok(old.items.some((item) => item.kind === "note" && item.text === "runtime refused"));
@@ -431,5 +431,69 @@ test("command names load once per agent, retry after a failure, and never cross 
   slow.resolve([{ name: "from-a", description: "", source: "definition" }]);
   await pending;
   assert.deepEqual(store.getSnapshot().commands, [], "an answer for the agent we left must not be shown");
+  store.dispose();
+});
+
+test("the sidebar acts on the agent it names: deleting, listing and opening another agent's conversation", async () => {
+  const { api, store, opens } = harness();
+  const deletes: string[][] = [];
+  api.deleteSession = async (agentId, session) => {
+    deletes.push([agentId, session]);
+    return { ok: true };
+  };
+  api.openAgent = async (id) => (id === "b" ? listed("b-1") : ready);
+  await store.load();
+  assert.equal(store.getSnapshot().agentId, "a");
+
+  // Expanding B lists its conversations without opening it.
+  await store.listSessions("b");
+  assert.deepEqual(
+    store.getSnapshot().sessions["b"]?.map((s) => s.session),
+    ["b-1"],
+  );
+  assert.equal(store.getSnapshot().agentId, "a", "listing is not opening");
+
+  // Deleting from B's row must reach B, not whichever agent happens to be open, and the row has to
+  // leave B's list even though B is not the agent on screen.
+  await store.deleteSession("b", "b-1");
+  assert.deepEqual(deletes, [["b", "b-1"]]);
+  assert.deepEqual(store.getSnapshot().sessions["b"], [], "the deleted conversation leaves the list");
+  assert.equal(store.getSnapshot().conversation?.agentId, "a", "A's conversation is untouched");
+
+  // Clicking a conversation of another agent is one navigation that lands on that conversation.
+  api.openAgent = async (id) => (id === "b" ? listed("b-2") : ready);
+  await store.selectAgent("b", "b-2");
+  assert.equal(store.getSnapshot().conversation?.agentId, "b");
+  assert.equal(store.getSnapshot().conversation?.session, "b-2");
+  assert.ok(opens.includes("b-2"));
+  store.dispose();
+});
+
+test("an agent whose list cannot be read says why, on its own row", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const openConversation = store.getSnapshot().conversation!;
+  api.openAgent = async (id) =>
+    id === "b" ? { ok: false, code: "failed", message: "runtime would not start" } : ready;
+
+  await store.listSessions("b");
+  assert.equal(store.getSnapshot().sessionsError["b"], "runtime would not start");
+  // Expanding must not touch shared agent state: that drives the main panel, and folding then
+  // expanding the open agent would otherwise declare the window broken with nothing to show.
+  assert.equal(store.getSnapshot().states.b, undefined);
+  assert.equal(
+    openConversation.items.filter((item) => item.kind === "note").length,
+    0,
+    "another agent's failure never lands in the transcript being read",
+  );
+
+  // Asking again after the cause is fixed clears it, rather than caching the first answer forever.
+  api.openAgent = async () => listed("b-1");
+  await store.listSessions("b");
+  assert.equal(store.getSnapshot().sessionsError["b"], undefined);
+  assert.deepEqual(
+    store.getSnapshot().sessions["b"]?.map((s) => s.session),
+    ["b-1"],
+  );
   store.dispose();
 });

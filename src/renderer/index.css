@@ -7,12 +7,15 @@
  * reads as part of the family rather than applied on top.
  */
 @theme {
-  --color-bg: oklch(0.16 0.01 285);
-  --color-surface: oklch(0.2 0.012 285);
-  --color-surface-2: oklch(0.24 0.014 285);
-  --color-sidebar: oklch(0 0 0 / 20%);
+  /* The transcript is the canvas and the canvas is the darkest layer; every panel sits above it.
+     Measured from Telegram's macOS dark theme, which reads calm because the steps are small and
+     nearly neutral — a trace of the accent hue keeps violet in the family. */
+  --color-bg: oklch(0.225 0.004 285);
+  --color-surface: oklch(0.27 0.005 285);
+  --color-surface-2: oklch(0.315 0.006 285);
+  --color-sidebar: oklch(0.285 0.005 285);
   --color-hover: oklch(1 0 0 / 6%);
-  --color-stroke: oklch(0.3 0.012 285);
+  --color-stroke: oklch(0.36 0.006 285);
   --color-text: oklch(0.95 0.005 285);
   --color-muted: oklch(0.68 0.01 285);
   --color-accent: oklch(0.72 0.16 295);
@@ -31,8 +34,8 @@
   --radius-card: 10px;
   --radius-float: 14px;
 
-  /* The system face, paired with the system's own CJK face: this window wears native materials
-     (vibrancy, hiddenInset), and a web font beside them reads as a page rather than an app. */
+  /* The system face, paired with the system's own CJK face: this is a native window with a hidden
+     title bar, and a web font beside it reads as a page rather than an app. */
   --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
   /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
      what terminal output actually contains. The rest are fallbacks for machines without it. */
@@ -51,12 +54,15 @@
  */
 @media (prefers-color-scheme: light) {
   :root {
-    --color-bg: oklch(0.98 0.004 285);
-    --color-surface: oklch(1 0 0);
-    --color-surface-2: oklch(0.96 0.005 285);
-    --color-sidebar: oklch(1 0 0 / 35%);
+    /* Light mode follows macOS, not the dark set mirrored: content is white and the sidebar is the
+       grey one. Finder, Mail and WeChat all read this way, and a white sidebar against grey content
+       looks like the window is inside out. Cards sit slightly grey on the white. */
+    --color-bg: oklch(0.99 0.001 285);
+    --color-surface: oklch(0.965 0.003 285);
+    --color-surface-2: oklch(0.93 0.004 285);
+    --color-sidebar: oklch(0.955 0.003 285);
     --color-hover: oklch(0 0 0 / 5%);
-    --color-stroke: oklch(0.9 0.006 285);
+    --color-stroke: oklch(0.89 0.005 285);
     --color-text: oklch(0.22 0.01 285);
     --color-muted: oklch(0.5 0.01 285);
     --color-accent: oklch(0.55 0.19 295);

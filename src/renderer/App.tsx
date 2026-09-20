@@ -1,15 +1,15 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
 import {
   BrokenAgent,
   Composer,
-  ConversationList,
+  ConversationHeader,
   NeedsAgent,
   NewConversation,
   NoAgents,
-  Rail,
+  Sidebar,
   Transcript,
   UnreadableRegistry,
 } from "./panels.tsx";
@@ -23,7 +23,13 @@ export default function App() {
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
-  const sessionRows = rows(sessions, c?.session, view.runningSessions, view.draftSessions);
+  // Only the open agent has running and drafted conversations worth marking; another agent's list
+  // is just its history.
+  const rowsFor = (id: string) =>
+    id === agentId
+      ? rows(sessions[id] ?? [], c?.session, view.runningSessions, view.draftSessions)
+      : rows(sessions[id] ?? []);
+  const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
     void store.load();
@@ -43,6 +49,25 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [store, agentState, busy, view.loading]);
 
+  // Which agents show their conversations. Selecting one opens it, because you have to see where
+  // you are; the caret adds and removes any other.
+  const [expanded, setExpanded] = useState<string[]>([]);
+  useEffect(() => {
+    if (agentId) setExpanded((ids) => (ids.includes(agentId) ? ids : [...ids, agentId]));
+  }, [agentId]);
+
+  // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
+  // with the draft, and messages must end above it rather than behind it. The ref is stable, or
+  // every streamed delta would tear down and rebuild the observer.
+  const [composerHeight, setComposerHeight] = useState(96);
+  const observer = useRef<ResizeObserver>(undefined);
+  const composerBox = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    if (!el) return;
+    observer.current = new ResizeObserver(([entry]) => setComposerHeight(entry!.contentRect.height));
+    observer.current.observe(el);
+  }, []);
+
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
@@ -53,46 +78,66 @@ export default function App() {
   const owned = agentState === "broken" || agentState === "missing_model" || agentState === "no_agent";
   const error = c?.error ?? (owned ? undefined : view.error);
 
+  const usage = c?.state?.usage;
+  const pending = c?.state?.pending;
+
   return (
-    <div className="flex h-full">
-      <Rail
+    // Panels float on the window's canvas rather than filling it edge to edge: the gap is what makes
+    // the sidebar read as a surface of its own.
+    <div className="flex h-full gap-2 p-2">
+      <Sidebar
         agents={agents}
         agentId={agentId}
         states={states}
         running={view.runningAgents}
-        onSelect={(id) => void store.selectAgent(id)}
-        onAdd={() => void store.addAgent()}
-      />
-      <ConversationList
-        agent={agent}
-        rows={sessionRows}
+        rowsFor={rowsFor}
         session={c?.session}
-        state={agentState}
-        working={!!agentId && view.runningAgents.includes(agentId)}
+        expanded={expanded}
+        errors={view.sessionsError}
         disabled={agentState !== "ready" || view.loading}
-        onOpen={(id) => void store.open(id)}
+        onSelect={(id) => {
+          // Clicking the row opens the agent and shows what it has been doing; clicking the agent
+          // you are already on puts that list away. The caret does the same for any other agent,
+          // which is the part the row cannot express.
+          if (id === agentId) setExpanded((ids) => (ids.includes(id) ? ids.filter((o) => o !== id) : [...ids, id]));
+          else void store.selectAgent(id);
+        }}
+        onToggle={(id) => {
+          const showing = !expanded.includes(id);
+          setExpanded((ids) => (showing ? [...ids, id] : ids.filter((other) => other !== id)));
+          // Reading a list is what needs the runtime; putting it away does not.
+          if (showing) void store.listSessions(id);
+        }}
+        onAdd={() => void store.addAgent()}
+        onOpen={(agent, id) => {
+          // Going to another agent's conversation is one navigation, not a switch followed by an
+          // open: the second one would land wherever the selection had moved to by then.
+          if (agent !== agentId) void store.selectAgent(agent, id);
+          else void store.open(id);
+        }}
         onNew={() => void store.newConversation()}
-        onReveal={() => void store.reveal()}
-        onRemove={remove}
-        onDelete={(id) => {
-          if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(id);
+        onDelete={(agent, id) => {
+          if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent, id);
         }}
       />
-      <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="h-10 shrink-0 flex items-center px-5 gap-3 drag">
-          <span className="truncate">{sessionRows.find((row) => row.session === c?.session)?.label ?? ""}</span>
-          {c?.state?.usage?.contextTokens !== undefined && !!c.state.usage.contextWindow && (
-            <span className="text-muted text-[11px]">
-              {Math.round((c.state.usage.contextTokens / c.state.usage.contextWindow) * 100)}% context
-            </span>
-          )}
-          {!!c?.state?.pending && c.state.pending.steering + c.state.pending.followUp > 0 && (
-            <span className="text-muted text-[11px]">{c.state.pending.steering + c.state.pending.followUp} queued</span>
-          )}
-
-        </header>
+      <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
+        {agent && (
+          <ConversationHeader
+            agent={agent.name}
+            title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
+            dir={agent.dir}
+            working={view.runningAgents.includes(agent.id)}
+            context={
+              usage?.contextTokens !== undefined && usage.contextWindow
+                ? Math.round((usage.contextTokens / usage.contextWindow) * 100)
+                : undefined
+            }
+            queued={pending ? pending.steering + pending.followUp : undefined}
+            onReveal={() => void store.reveal()}
+          />
+        )}
         {error ? (
-          <div role="alert" className="px-6 py-2 text-danger whitespace-pre-wrap break-words">
+          <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
             {error}{" "}
             <button className="underline" onClick={() => void store.retry()}>
               Retry
@@ -102,7 +147,7 @@ export default function App() {
           // An ended subscription is not a failure: the conversation is intact, this view stopped
           // listening. Say it in the calm voice and offer the one action that fixes it.
           c?.ended && (
-            <div role="status" className="px-6 py-2 text-muted whitespace-pre-wrap break-words">
+            <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
               {c.ended}{" "}
               <button className="underline" onClick={() => void store.retry()}>
                 Reconnect
@@ -130,11 +175,18 @@ export default function App() {
         ) : !c || c.items.length === 0 ? (
           <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
         ) : (
-          <Transcript key={c.subscription} items={c.items} busySince={c.busySince} />
+          <Transcript key={c.subscription} items={c.items} busySince={c.busySince} bottomGap={composerHeight + 32} />
         )}
         {agentId && agentState === "ready" && c && c.items.length > 0 && (
-          <div className="shrink-0 px-6 pb-5 pt-2">
-            <div className="composer-column">{composer}</div>
+          // Floating, not stacked: the transcript runs the full height of the pane and passes
+          // beneath this, which is what keeps the bottom of the window from reading as a seam.
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
+            {/* The composer is narrower than the reading column, so text would slide past on both
+                sides of it. The canvas fades in underneath instead. */}
+            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
+            <div ref={composerBox} className="composer-column pointer-events-auto">
+              {composer}
+            </div>
           </div>
         )}
       </main>

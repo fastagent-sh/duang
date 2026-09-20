@@ -107,15 +107,48 @@ has to move when they arrive.
 **Sidebar rows are agents, not conversations** — one row each, with the current conversation's
 preview on the second line. An agent with a single conversation shows nothing more than a contact row.
 
-Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40, both
-insets 8, text at x=56; name and preview on two lines, relative time top right in `muted`. A nested
-conversation row is 32 tall, has no avatar, and starts at x=56 so it aligns with the text above it;
-its state sits at the trailing edge. Nothing about a nested row repeats what the agent row said.
+Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40 as a
+rounded square with a two-stop gradient in its hue — flat tiles look printed, and the gradient is
+most of why Telegram's list feels alive. The open conversation is a filled accent row rather than a
+tint, which is the same list's other trick: a selection that answers rather than shades. The second line is the workspace directory, not a message preview:
+the directory is what identifies an agent, and the conversations are listed directly below it
+anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
-**Running conversations are always listed under their agent**, expanded or not, because fact 4 makes
-"what is alive right now" the question the sidebar exists to answer. A conversation holding unsent
-text is listed for the same reason. Everything else folds behind `⌄ 2 more`, which expands in place
-into indented rows with title, relative time and state.
+**Opening an agent and listing its conversations are two questions, so they are two controls.**
+The row opens the agent and shows what it has been doing; clicking the agent you are already on
+puts that list away again. The caret at the row's trailing edge does the same for any agent, which
+is the part the row cannot express — it is how a second agent's conversations appear without
+leaving the one you are reading. Any number
+of agents can be listed at once, and folding one never closes the conversation being read. Opening
+an agent lists it too, because you have to see where you are. Which rows are open is a view
+preference: it lives in the sidebar and is not remembered across launches.
+
+Listing an agent that is not open loads its conversations, which boots that agent's runtime the same
+way opening it would — FastAgent owns the session list and duang will not keep a second copy of
+where sessions live.
+
+Selection is the accent, never a grey — grey is what a row looks like under the pointer. The open
+agent is the filled row and the conversation on screen is tinted underneath it: the column marks
+the group you are working in first, and the topic inside it second. Weight follows the hierarchy of
+the list, not the size of the thing selected.
+
+**One flat list, no card per agent.** Full-width rows, a hairline that starts where the text does,
+the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,
+and the reason shows up as soon as two agents are listed — a card per agent turns the column into a
+stack of panels and makes an open agent look heavy. A conversation row is one line indented to the
+agent's text, with the relative time trailing and Delete in its place on hover, so a topic is
+visibly lighter than the agent that owns it.
+
+**An expanded agent lists its conversations**, including one that is running and one holding unsent
+text, because fact 4 makes "what is alive right now" the question the sidebar exists to answer. Only
+the open agent marks which of them is running or drafted; another agent's list is its history, and
+its live work shows on its own row as a breathing ring and the word `working`.
+
+A list that cannot be read says why on that agent's row, and only there: expanding never changes
+what the main panel believes about an agent, so folding and expanding the one you are reading cannot
+declare the window broken. An empty agent and an agent whose runtime
+would not start are not the same answer, and the failure belongs to the agent that was expanded —
+never to the transcript being read.
 
 **Presence is told at two levels, because the sidebar has two questions to answer.** The avatar
 carries the agent's own presence: while any of its conversations is working, a slow accent ring
@@ -131,11 +164,24 @@ waiting, celebrating — have one conversation per agent, an expressive characte
 consumer's relationship with it. Ours is two letters on a tile representing a directory; a breathing
 ring is presence, a performance would be costume.
 
+**Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
+rather than a column filling them, and the conversation's header floats over the transcript as a
+translucent bar instead of a full-width strip cutting the page in two. This is Telegram's desktop
+composition, and its premise holds here: chrome that hovers keeps the content beneath it continuous.
+What does not carry over is putting the transcript itself on a decorative canvas — theirs is bubbles
+over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
+the chrome floats, with the transcript padded so nothing important sits under the header.
+
 Reserved, in arrival order: a `local | cloud` segmented control in the sidebar header (week 3), a
 pinned **Activity** row above the roster (week 4), and the right panel (week 2) holding the file
 tree, diffs and discovered settings. That panel is a **reader**: the files are on this machine and
 already open in the person's editor, so duang shows them and stays out of the way instead of building
 a workspace to operate.
+
+Removing an agent is not offered by the sidebar at all. A control on the row sat next to the fold
+caret, where one slip removes an agent, and a link at the bottom of the column belonged to nothing
+in particular. Removal lives where the problem is explained — the panel for a broken agent or a
+directory with no agent in it — until there is a menu to put it in.
 
 Not included: pinning, hiding, archiving, folders. They belong to rosters of fifty agents; on a list
 of five they are management work invented for its own sake. Add one when a real list stops being
@@ -148,23 +194,30 @@ display is gone comes back on an attached one.
 
 ## 4. Colour
 
-oklch, two modes, following the system. The neutral ramp carries a trace of the accent hue (285) so
-violet reads as part of the family rather than applied on top.
+oklch, two modes, following the system. The neutral ramp is measured from Telegram's macOS dark
+theme — small steps, almost no chroma — with one change of relationship: the transcript's canvas is
+the darkest layer and every panel sits above it, so a panel reads as lifted rather than as a hole.
+Light mode is not that set mirrored. It follows macOS — content white, sidebar grey, as in Finder,
+Mail and WeChat — because a white sidebar against grey content reads as a window turned inside out.
+The ramp keeps a trace of the accent hue (285) so violet belongs to the family rather than sitting
+on top of a grey app.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `bg` | `oklch(0.16 0.01 285)` | `oklch(0.98 0.004 285)` | content layer background |
-| `surface` | `oklch(0.20 0.012 285)` | `oklch(1 0 0)` | bubbles, cards, popovers |
-| `surface-2` | `oklch(0.24 0.014 285)` | `oklch(0.96 0.005 285)` | hover, pressed, nested cards |
-| `stroke` | `oklch(0.30 0.012 285)` | `oklch(0.90 0.006 285)` | hairlines, card borders |
+| `bg` | `oklch(0.225 0.004 285)` | `oklch(0.99 0.001 285)` | the transcript, and the canvas panels sit on |
+| `surface` | `oklch(0.27 0.005 285)` | `oklch(0.965 0.003 285)` | bubbles, cards, popovers, composer |
+| `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.955 0.003 285)` | the sidebar panel |
+| `surface-2` | `oklch(0.315 0.006 285)` | `oklch(0.93 0.004 285)` | hover, pressed, nested cards |
+| `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.89 0.005 285)` | hairlines, card borders |
 | `text` | `oklch(0.95 0.005 285)` | `oklch(0.22 0.01 285)` | body |
 | `muted` | `oklch(0.68 0.01 285)` | `oklch(0.50 0.01 285)` | metadata, timestamps |
 | `accent` | `oklch(0.72 0.16 295)` | `oklch(0.55 0.19 295)` | selection, primary action, focus |
 | `accent-weak` | `accent / 15%` | `accent / 12%` | selected row, user bubble |
-| `accent-fg` | `oklch(0.99 0 0)` | `oklch(0.99 0 0)` | text on a filled accent surface |
+| `accent-fg` | `oklch(0.16 0.01 285)` | `oklch(1 0 0)` | text on a filled accent surface |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
 | `warning` | `oklch(0.78 0.13 75)` | `oklch(0.58 0.13 75)` | needs a model, no agent yet |
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
+| `danger-fg` | `oklch(0.16 0.01 285)` | `oklch(1 0 0)` | text on a filled danger surface (Stop) |
 
 Every interactive role is defined as a set, not derived at the call site — Telegram's palette does
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /

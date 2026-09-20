@@ -62,7 +62,10 @@ export interface View {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
-  sessions: SessionSummary[];
+  /** Conversations per agent: the sidebar can show more than the open agent's. */
+  sessions: Record<string, SessionSummary[]>;
+  /** Why an expanded agent has no list, per agent. An empty list and a failed one are not the same. */
+  sessionsError: Record<string, string>;
   model?: string;
   loading: boolean;
   error?: string;
@@ -117,7 +120,8 @@ export function createStore(api: DuangApi) {
   let view: View = {
     agents: [],
     states: {},
-    sessions: [],
+    sessions: {},
+    sessionsError: {},
     loading: false,
     busy: false,
     commands: [],
@@ -135,6 +139,8 @@ export function createStore(api: DuangApi) {
   let lastAgent = stored?.agentId;
   let navigation = 0;
   let listRequest = 0;
+  /** One request number per agent: a slow expand must not overwrite a newer answer for that agent. */
+  const listRequests = new Map<string, number>();
   let modelsRequest = 0;
   let commandsFor: string | undefined;
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
@@ -193,7 +199,7 @@ export function createStore(api: DuangApi) {
       const result = await api.openAgent(id);
       if (id !== view.agentId || request !== listRequest) return;
       if (!result.ok) throw new Error(result.message);
-      publish({ sessions: result.sessions, model: result.model });
+      publish({ sessions: { ...view.sessions, [id]: result.sessions }, model: result.model });
     } catch (error) {
       if (id === view.agentId && request === listRequest) note(error);
     }
@@ -243,7 +249,7 @@ export function createStore(api: DuangApi) {
     }
   }
 
-  async function selectAgent(id: string) {
+  async function selectAgent(id: string, session?: string) {
     const request = ++navigation;
     ++listRequest;
     leave();
@@ -251,7 +257,6 @@ export function createStore(api: DuangApi) {
     commandsFor = undefined;
     publish({
       agentId: id,
-      sessions: [],
       model: undefined,
       error: undefined,
       loading: true,
@@ -269,7 +274,7 @@ export function createStore(api: DuangApi) {
       publish({
         loading: false,
         model: result.model,
-        sessions: result.sessions,
+        sessions: { ...view.sessions, [id]: result.sessions },
         states: { ...view.states, [id]: "ready" },
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
@@ -284,7 +289,10 @@ export function createStore(api: DuangApi) {
           drafts.get(key(id, previous))?.trim())
           ? previous
           : undefined;
-      await open(revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
+      // `session` names the conversation the click was about. It is opened here, inside the same
+      // navigation guard, rather than chained after this call — a `.then(open)` outside would land
+      // on whichever agent the selection had moved to by the time the runtime finished starting.
+      await open(session ?? revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
@@ -347,6 +355,31 @@ export function createStore(api: DuangApi) {
     },
     load,
     selectAgent,
+    /**
+     * Conversations for an agent the sidebar expanded but did not open. This boots that agent's
+     * runtime, the same as opening it would: FastAgent owns the session list, and duang will not
+     * keep a second copy of where sessions live.
+     *
+     * A failure belongs to the agent that was expanded, never to the transcript being read, so it
+     * is published against that agent and the sidebar says it there. It deliberately does not touch
+     * `states`: that drives the main panel, and a fold-and-expand of the open agent would otherwise
+     * put the window into "this agent is broken" with no message to show for it.
+     */
+    async listSessions(id: string) {
+      const request = (listRequests.get(id) ?? 0) + 1;
+      listRequests.set(id, request);
+      const settle = (patch: Partial<View>) => {
+        if (listRequests.get(id) === request) publish(patch);
+      };
+      try {
+        const result = await api.openAgent(id);
+        if (!result.ok) return settle({ sessionsError: { ...view.sessionsError, [id]: result.message } });
+        const { [id]: _cleared, ...errors } = view.sessionsError;
+        settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors });
+      } catch (error) {
+        settle({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
+      }
+    },
     open,
     /** Read on every opening of the picker: a `fastagent login` while duang runs needs no restart. */
     async loadModels() {
@@ -448,21 +481,26 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         if (view.agentId !== id) return;
         ++navigation;
-        publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: [] });
+        const { [id]: _gone, ...rest } = view.sessions;
+        publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: rest });
         if (view.agents[0]) await selectAgent(view.agents[0].id);
       } catch (error) {
         note(error);
       }
     },
-    async deleteSession(session: string) {
-      const id = view.agentId;
-      if (!id) return;
+    /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */
+    async deleteSession(id: string, session: string) {
       try {
         const result = await api.deleteSession(id, session);
         if (!result.ok) throw new Error(result.error.message);
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
+        // The runtime confirmed the deletion, so the row goes whether or not this agent is the one
+        // on screen — refreshList only ever looks at the open agent's list.
+        publish({
+          sessions: { ...view.sessions, [id]: (view.sessions[id] ?? []).filter((s) => s.session !== session) },
+        });
         if (id !== view.agentId) return;
         if (view.conversation?.session === session) await open(crypto.randomUUID());
         await refreshList(id);
