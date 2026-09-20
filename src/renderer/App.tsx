@@ -94,7 +94,13 @@ export default function App() {
         session={c?.session}
         expanded={expanded}
         disabled={agentState !== "ready" || view.loading}
-        onSelect={(id) => void store.selectAgent(id)}
+        onSelect={(id) => {
+          // Clicking the row opens the agent and shows what it has been doing; clicking the agent
+          // you are already on puts that list away. The caret does the same for any other agent,
+          // which is the part the row cannot express.
+          if (id === agentId) setExpanded((ids) => (ids.includes(id) ? ids.filter((o) => o !== id) : [...ids, id]));
+          else void store.selectAgent(id);
+        }}
         onToggle={(id) => {
           setExpanded((ids) => (ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id]));
           void store.listSessions(id);

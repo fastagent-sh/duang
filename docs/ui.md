@@ -115,7 +115,10 @@ the directory is what identifies an agent, and the conversations are listed dire
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
 **Opening an agent and listing its conversations are two questions, so they are two controls.**
-The row opens the agent; the caret at its trailing edge shows or hides its conversations. Any number
+The row opens the agent and shows what it has been doing; clicking the agent you are already on
+puts that list away again. The caret at the row's trailing edge does the same for any agent, which
+is the part the row cannot express — it is how a second agent's conversations appear without
+leaving the one you are reading. Any number
 of agents can be listed at once, and folding one never closes the conversation being read. Opening
 an agent lists it too, because you have to see where you are. Which rows are open is a view
 preference: it lives in the sidebar and is not remembered across launches.

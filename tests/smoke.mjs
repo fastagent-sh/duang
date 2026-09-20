@@ -407,6 +407,11 @@ if (!process.versions.electron) {
         "the agent unfolds again",
       );
       // Expanding is per agent, so more than one roster can be open while a third is being read.
+      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Configured\"]')?.click()");
+      await until(
+        "document.querySelector('aside').innerText.includes('Use the configured model')",
+        "a second agent lists its conversations without being opened",
+      );
       assert.deepEqual(
         await evaluate(`(() => {
           const aside = document.querySelector('aside').innerText;
