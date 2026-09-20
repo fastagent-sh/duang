@@ -46,11 +46,11 @@ const says: Record<AgentState, string> = {
 };
 
 /**
- * One column: who you work with, and what you were talking about with the one you are on.
+ * One column: who you work with, and what each of them has been talking about.
  *
- * Agents are rows rather than a strip of tiles, because a name and its state need words. Only the
- * selected agent shows its conversations; the rest stay folded, which is the honest shape of the
- * data anyway — duang loads sessions for the agent it has open.
+ * Agents are rows rather than a strip of tiles, because a name and its state need words. Any number
+ * of agents can list their conversations at once; expanding one that is not open asks the store for
+ * its list, which boots that agent's runtime exactly as opening it would.
  */
 export function Sidebar({
   agents,
@@ -60,6 +60,7 @@ export function Sidebar({
   rowsFor,
   session,
   expanded,
+  errors,
   disabled,
   onSelect,
   onToggle,
@@ -75,13 +76,15 @@ export function Sidebar({
   rowsFor: (agentId: string) => Row[];
   session?: string;
   expanded: string[];
+  /** Why an expanded agent has no list. An empty list and a failed one must not look alike. */
+  errors: Record<string, string>;
   disabled: boolean;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onAdd: () => void;
   onOpen: (agentId: string, session: string) => void;
   onNew: () => void;
-  onDelete: (session: string) => void;
+  onDelete: (agentId: string, session: string) => void;
 }) {
   return (
     <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
@@ -162,6 +165,11 @@ export function Sidebar({
 
               {open && (
                 <div className="pb-1">
+                  {errors[agent.id] && (
+                    <p role="alert" className="px-3 pb-1 pl-[54px] text-[11px] text-danger">
+                      {errors[agent.id]}
+                    </p>
+                  )}
                   {conversations.map((row) => (
                     <div key={row.session} className="group relative">
                       <button
@@ -191,7 +199,7 @@ export function Sidebar({
                         <Button
                           kind="danger"
                           size={28}
-                          onClick={() => onDelete(row.session)}
+                          onClick={() => onDelete(agent.id, row.session)}
                           title="Delete conversation"
                           aria-label="Delete conversation"
                           icon={<Trash size={13} />}
@@ -217,8 +225,10 @@ export function Sidebar({
                   )}
                 </div>
               )}
-              {/* The separator starts where the text does, as it does in Telegram and WeChat. */}
-              <div className="ml-[54px] h-px bg-stroke last:hidden" />
+              {/* The separator starts where the text does, as it does in Telegram and WeChat. It
+                  divides agents, so the last row has none — `last:hidden` hid every one of them,
+                  because each is the last child of its own agent. */}
+              {agent.id !== agents.at(-1)?.id && <div className="ml-[54px] h-px bg-stroke" />}
             </div>
           );
         })}
@@ -251,16 +261,19 @@ export function ConversationHeader({
   onReveal: () => void;
 }) {
   return (
-    <div className="absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl drag">
+    // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
+    // only what you can actually grab or click takes the pointer back.
+    <div className="pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
       {/* The same tile as in the sidebar: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
-        <div className="truncate">{title}</div>
+        {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
+        <div className="pointer-events-auto truncate drag">{title}</div>
         {dir && (
           <button
             onClick={onReveal}
             title={dir}
-            className="no-drag block max-w-full truncate text-left font-mono text-[11px] text-muted hover:text-text"
+            className="pointer-events-auto block max-w-full truncate text-left font-mono text-[11px] text-muted hover:text-text"
           >
             {home(dir)}
           </button>

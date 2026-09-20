@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
@@ -58,15 +58,14 @@ export default function App() {
     if (agentId) setExpanded((ids) => (ids.includes(agentId) ? ids : [...ids, agentId]));
   }, [agentId]);
 
-  const composerBox = useRef<HTMLDivElement>(null);
   const [composerHeight, setComposerHeight] = useState(96);
-  useLayoutEffect(() => {
-    const el = composerBox.current;
+  const observer = useRef<ResizeObserver>(undefined);
+  const composerBox = (el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
     if (!el) return;
-    const observer = new ResizeObserver(([entry]) => setComposerHeight(entry!.contentRect.height));
-    observer.observe(el);
-    return () => observer.disconnect();
-  });
+    observer.current = new ResizeObserver(([entry]) => setComposerHeight(entry!.contentRect.height));
+    observer.current.observe(el);
+  };
 
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
@@ -93,6 +92,7 @@ export default function App() {
         rowsFor={rowsFor}
         session={c?.session}
         expanded={expanded}
+        errors={view.sessionsError}
         disabled={agentState !== "ready" || view.loading}
         onSelect={(id) => {
           // Clicking the row opens the agent and shows what it has been doing; clicking the agent
@@ -102,18 +102,21 @@ export default function App() {
           else void store.selectAgent(id);
         }}
         onToggle={(id) => {
-          setExpanded((ids) => (ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id]));
-          void store.listSessions(id);
+          const showing = !expanded.includes(id);
+          setExpanded((ids) => (showing ? [...ids, id] : ids.filter((other) => other !== id)));
+          // Reading a list is what needs the runtime; putting it away does not.
+          if (showing) void store.listSessions(id);
         }}
         onAdd={() => void store.addAgent()}
         onOpen={(agent, id) => {
-          // Clicking a conversation of another agent means going there.
-          if (agent !== agentId) void store.selectAgent(agent).then(() => store.open(id));
+          // Going to another agent's conversation is one navigation, not a switch followed by an
+          // open: the second one would land wherever the selection had moved to by then.
+          if (agent !== agentId) void store.selectAgent(agent, id);
           else void store.open(id);
         }}
         onNew={() => void store.newConversation()}
-        onDelete={(id) => {
-          if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(id);
+        onDelete={(agent, id) => {
+          if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent, id);
         }}
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
@@ -179,7 +182,7 @@ export default function App() {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
             {/* The composer is narrower than the reading column, so text would slide past on both
                 sides of it. The canvas fades in underneath instead. */}
-            <div className="absolute inset-x-0 bottom-0 -z-10 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
             <div ref={composerBox} className="composer-column pointer-events-auto">
               {composer}
             </div>

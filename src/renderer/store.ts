@@ -64,6 +64,8 @@ export interface View {
   states: Record<string, AgentState>;
   /** Conversations per agent: the sidebar can show more than the open agent's. */
   sessions: Record<string, SessionSummary[]>;
+  /** Why an expanded agent has no list, per agent. An empty list and a failed one are not the same. */
+  sessionsError: Record<string, string>;
   model?: string;
   loading: boolean;
   error?: string;
@@ -119,6 +121,7 @@ export function createStore(api: DuangApi) {
     agents: [],
     states: {},
     sessions: {},
+    sessionsError: {},
     loading: false,
     busy: false,
     commands: [],
@@ -244,7 +247,7 @@ export function createStore(api: DuangApi) {
     }
   }
 
-  async function selectAgent(id: string) {
+  async function selectAgent(id: string, session?: string) {
     const request = ++navigation;
     ++listRequest;
     leave();
@@ -284,7 +287,10 @@ export function createStore(api: DuangApi) {
           drafts.get(key(id, previous))?.trim())
           ? previous
           : undefined;
-      await open(revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
+      // `session` names the conversation the click was about. It is opened here, inside the same
+      // navigation guard, rather than chained after this call — a `.then(open)` outside would land
+      // on whichever agent the selection had moved to by the time the runtime finished starting.
+      await open(session ?? revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
@@ -351,15 +357,28 @@ export function createStore(api: DuangApi) {
      * Conversations for an agent the sidebar expanded but did not open. This boots that agent's
      * runtime, the same as opening it would: FastAgent owns the session list, and duang will not
      * keep a second copy of where sessions live.
+     *
+     * A failure belongs to the agent that was expanded, never to the transcript being read, so it
+     * is published against that agent and the sidebar says it there.
      */
     async listSessions(id: string) {
-      if (view.sessions[id]) return;
       try {
         const result = await api.openAgent(id);
-        if (!result.ok) return publish({ states: { ...view.states, [id]: result.code === "failed" ? "broken" : result.code } });
-        publish({ sessions: { ...view.sessions, [id]: result.sessions }, states: { ...view.states, [id]: "ready" } });
+        if (!result.ok) {
+          const state: AgentState = result.code === "failed" ? "broken" : result.code;
+          return publish({
+            states: { ...view.states, [id]: state },
+            sessionsError: { ...view.sessionsError, [id]: result.message },
+          });
+        }
+        const { [id]: _cleared, ...errors } = view.sessionsError;
+        publish({
+          sessions: { ...view.sessions, [id]: result.sessions },
+          states: { ...view.states, [id]: "ready" },
+          sessionsError: errors,
+        });
       } catch (error) {
-        note(error);
+        publish({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
       }
     },
     open,
@@ -470,9 +489,8 @@ export function createStore(api: DuangApi) {
         note(error);
       }
     },
-    async deleteSession(session: string) {
-      const id = view.agentId;
-      if (!id) return;
+    /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */
+    async deleteSession(id: string, session: string) {
       try {
         const result = await api.deleteSession(id, session);
         if (!result.ok) throw new Error(result.error.message);

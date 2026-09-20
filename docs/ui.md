@@ -138,12 +138,14 @@ stack of panels and makes an open agent look heavy. A conversation row is one li
 agent's text, with the relative time trailing and Delete in its place on hover, so a topic is
 visibly lighter than the agent that owns it.
 
-**The selected agent's conversations are listed under it**, including one that is running and one
-holding unsent text, because fact 4 makes "what is alive right now" the question the sidebar exists
-to answer. *Implemented today:* only the selected agent's, because duang loads sessions for the agent
-it has open; another agent's running work shows on its own row as a breathing ring and the word
-`working`, not as the conversation's name. Listing other agents' conversations means loading their
-sessions, which is a change to what the main process keeps, not a change to this column.
+**An expanded agent lists its conversations**, including one that is running and one holding unsent
+text, because fact 4 makes "what is alive right now" the question the sidebar exists to answer. Only
+the open agent marks which of them is running or drafted; another agent's list is its history, and
+its live work shows on its own row as a breathing ring and the word `working`.
+
+A list that cannot be read says why on that agent's row. An empty agent and an agent whose runtime
+would not start are not the same answer, and the failure belongs to the agent that was expanded —
+never to the transcript being read.
 
 **Presence is told at two levels, because the sidebar has two questions to answer.** The avatar
 carries the agent's own presence: while any of its conversations is working, a slow accent ring
