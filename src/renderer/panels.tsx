@@ -195,7 +195,10 @@ export function Sidebar({
                           title="Delete conversation"
                           aria-label="Delete conversation"
                           icon={<Trash size={13} />}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                          // Its own focus, not the group's: clicking a conversation leaves focus on
+                          // the row, and group-focus-within left the delete showing after the
+                          // pointer had moved on.
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
                         />
                       )}
                     </div>

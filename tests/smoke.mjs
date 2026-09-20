@@ -451,15 +451,18 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "picker closes again");
 
-      // Delete is reachable by keyboard, not only by hovering the row.
-      assert.equal(
+      // Delete is reachable by keyboard, and it hides again when the focus that revealed it leaves:
+      // the row keeps focus after a click, which used to keep the control on screen.
+      assert.deepEqual(
         await evaluate(`(() => {
-          const row = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
-          row.focus();
-          return getComputedStyle(row).opacity;
+          const del = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
+          del.focus();
+          const focused = getComputedStyle(del).opacity;
+          del.closest('.group').querySelector('button').focus();
+          return { focused, afterRowFocus: getComputedStyle(del).opacity };
         })()`),
-        "1",
-        "a focused delete control is visible",
+        { focused: "1", afterRowFocus: "0" },
+        "delete follows its own focus, not the row's",
       );
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
