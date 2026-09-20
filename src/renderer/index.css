@@ -34,8 +34,8 @@
   --radius-card: 10px;
   --radius-float: 14px;
 
-  /* The system face, paired with the system's own CJK face: this window wears native materials
-     (vibrancy, hiddenInset), and a web font beside them reads as a page rather than an app. */
+  /* The system face, paired with the system's own CJK face: this is a native window with a hidden
+     title bar, and a web font beside it reads as a page rather than an app. */
   --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
   /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
      what terminal output actually contains. The rest are fallbacks for machines without it. */

@@ -143,7 +143,9 @@ text, because fact 4 makes "what is alive right now" the question the sidebar ex
 the open agent marks which of them is running or drafted; another agent's list is its history, and
 its live work shows on its own row as a breathing ring and the word `working`.
 
-A list that cannot be read says why on that agent's row. An empty agent and an agent whose runtime
+A list that cannot be read says why on that agent's row, and only there: expanding never changes
+what the main panel believes about an agent, so folding and expanding the one you are reading cannot
+declare the window broken. An empty agent and an agent whose runtime
 would not start are not the same answer, and the failure belongs to the agent that was expanded —
 never to the transcript being read.
 

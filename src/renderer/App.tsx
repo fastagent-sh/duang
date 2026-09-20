@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
@@ -49,8 +49,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [store, agentState, busy, view.loading]);
 
-  // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
-  // with the draft, and messages must end above it rather than behind it.
   // Which agents show their conversations. Selecting one opens it, because you have to see where
   // you are; the caret adds and removes any other.
   const [expanded, setExpanded] = useState<string[]>([]);
@@ -58,14 +56,17 @@ export default function App() {
     if (agentId) setExpanded((ids) => (ids.includes(agentId) ? ids : [...ids, agentId]));
   }, [agentId]);
 
+  // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
+  // with the draft, and messages must end above it rather than behind it. The ref is stable, or
+  // every streamed delta would tear down and rebuild the observer.
   const [composerHeight, setComposerHeight] = useState(96);
   const observer = useRef<ResizeObserver>(undefined);
-  const composerBox = (el: HTMLDivElement | null) => {
+  const composerBox = useCallback((el: HTMLDivElement | null) => {
     observer.current?.disconnect();
     if (!el) return;
     observer.current = new ResizeObserver(([entry]) => setComposerHeight(entry!.contentRect.height));
     observer.current.observe(el);
-  };
+  }, []);
 
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();

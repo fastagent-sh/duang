@@ -139,6 +139,8 @@ export function createStore(api: DuangApi) {
   let lastAgent = stored?.agentId;
   let navigation = 0;
   let listRequest = 0;
+  /** One request number per agent: a slow expand must not overwrite a newer answer for that agent. */
+  const listRequests = new Map<string, number>();
   let modelsRequest = 0;
   let commandsFor: string | undefined;
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
@@ -359,26 +361,23 @@ export function createStore(api: DuangApi) {
      * keep a second copy of where sessions live.
      *
      * A failure belongs to the agent that was expanded, never to the transcript being read, so it
-     * is published against that agent and the sidebar says it there.
+     * is published against that agent and the sidebar says it there. It deliberately does not touch
+     * `states`: that drives the main panel, and a fold-and-expand of the open agent would otherwise
+     * put the window into "this agent is broken" with no message to show for it.
      */
     async listSessions(id: string) {
+      const request = (listRequests.get(id) ?? 0) + 1;
+      listRequests.set(id, request);
+      const settle = (patch: Partial<View>) => {
+        if (listRequests.get(id) === request) publish(patch);
+      };
       try {
         const result = await api.openAgent(id);
-        if (!result.ok) {
-          const state: AgentState = result.code === "failed" ? "broken" : result.code;
-          return publish({
-            states: { ...view.states, [id]: state },
-            sessionsError: { ...view.sessionsError, [id]: result.message },
-          });
-        }
+        if (!result.ok) return settle({ sessionsError: { ...view.sessionsError, [id]: result.message } });
         const { [id]: _cleared, ...errors } = view.sessionsError;
-        publish({
-          sessions: { ...view.sessions, [id]: result.sessions },
-          states: { ...view.states, [id]: "ready" },
-          sessionsError: errors,
-        });
+        settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors });
       } catch (error) {
-        publish({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
+        settle({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
       }
     },
     open,
@@ -497,6 +496,11 @@ export function createStore(api: DuangApi) {
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
+        // The runtime confirmed the deletion, so the row goes whether or not this agent is the one
+        // on screen — refreshList only ever looks at the open agent's list.
+        publish({
+          sessions: { ...view.sessions, [id]: (view.sessions[id] ?? []).filter((s) => s.session !== session) },
+        });
         if (id !== view.agentId) return;
         if (view.conversation?.session === session) await open(crypto.randomUUID());
         await refreshList(id);

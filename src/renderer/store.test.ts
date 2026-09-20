@@ -453,16 +453,19 @@ test("the sidebar acts on the agent it names: deleting, listing and opening anot
   );
   assert.equal(store.getSnapshot().agentId, "a", "listing is not opening");
 
-  // Deleting from B's row must reach B, not whichever agent happens to be open.
+  // Deleting from B's row must reach B, not whichever agent happens to be open, and the row has to
+  // leave B's list even though B is not the agent on screen.
   await store.deleteSession("b", "b-1");
   assert.deepEqual(deletes, [["b", "b-1"]]);
+  assert.deepEqual(store.getSnapshot().sessions["b"], [], "the deleted conversation leaves the list");
   assert.equal(store.getSnapshot().conversation?.agentId, "a", "A's conversation is untouched");
 
   // Clicking a conversation of another agent is one navigation that lands on that conversation.
-  await store.selectAgent("b", "b-1");
+  api.openAgent = async (id) => (id === "b" ? listed("b-2") : ready);
+  await store.selectAgent("b", "b-2");
   assert.equal(store.getSnapshot().conversation?.agentId, "b");
-  assert.equal(store.getSnapshot().conversation?.session, "b-1");
-  assert.ok(opens.includes("b-1"));
+  assert.equal(store.getSnapshot().conversation?.session, "b-2");
+  assert.ok(opens.includes("b-2"));
   store.dispose();
 });
 
@@ -475,7 +478,9 @@ test("an agent whose list cannot be read says why, on its own row", async () => 
 
   await store.listSessions("b");
   assert.equal(store.getSnapshot().sessionsError["b"], "runtime would not start");
-  assert.equal(store.getSnapshot().states.b, "broken");
+  // Expanding must not touch shared agent state: that drives the main panel, and folding then
+  // expanding the open agent would otherwise declare the window broken with nothing to show.
+  assert.equal(store.getSnapshot().states.b, undefined);
   assert.equal(
     openConversation.items.filter((item) => item.kind === "note").length,
     0,

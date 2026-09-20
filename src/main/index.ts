@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import {
   addAgent,
@@ -32,8 +32,10 @@ function createWindow(): BrowserWindow {
     // header row would put them: with the panel starting 8 below the window edge, centring reads as
     // a gap above the buttons rather than as alignment.
     trafficLightPosition: { x: 18, y: 18 },
-    vibrancy: "sidebar",
-    backgroundColor: "#00000000",
+    // No vibrancy: every surface in this window is opaque (docs/ui.md §4), so a transparent window
+    // over a native material had nothing to show through it and only cost a translucent first
+    // paint. The background matches the canvas the renderer paints, so launching does not flash.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1b1b1d" : "#fcfcfc",
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.mjs"),
       contextIsolation: true,
