@@ -178,7 +178,7 @@ test("a restart reopens the agent and conversation the window was left on", asyn
     third.api.openAgent = async () => listed("kept");
     await third.store.load();
     assert.equal(third.store.getSnapshot().conversation?.draft, "typed before quitting");
-    assert.deepEqual(third.store.getSnapshot().draftSessions, ["kept"]);
+    assert.deepEqual(third.store.getSnapshot().unsent["b"] ?? [], ["kept"]);
     third.store.setDraft("");
     third.store.dispose();
 
@@ -186,7 +186,7 @@ test("a restart reopens the agent and conversation the window was left on", asyn
     fourth.api.openAgent = async () => listed("kept");
     await fourth.store.load();
     assert.equal(fourth.store.getSnapshot().conversation?.draft, "");
-    assert.deepEqual(fourth.store.getSnapshot().draftSessions, []);
+    assert.deepEqual(fourth.store.getSnapshot().unsent["b"] ?? [], []);
     fourth.store.dispose();
   } finally {
     Reflect.deleteProperty(globalThis, "localStorage");
@@ -199,14 +199,15 @@ test("an unsent conversation keeps a row, so leaving it is not discarding it", a
   await store.open("unsent");
   store.setDraft("typed but never sent");
   await store.selectAgent("b");
-  assert.deepEqual(store.getSnapshot().draftSessions, [], "another agent's drafts stay out of this list");
+  // Per agent, so switching away does not hide it: it belongs to A's list, not to whatever is open.
+  assert.deepEqual(store.getSnapshot().unsent, { a: ["unsent"] });
   await store.selectAgent("a");
-  assert.deepEqual(store.getSnapshot().draftSessions, ["unsent"]);
+  assert.deepEqual(store.getSnapshot().unsent["a"] ?? [], ["unsent"]);
   assert.equal(store.getSnapshot().conversation?.session, "unsent", "returning lands where you left");
   assert.equal(store.getSnapshot().conversation?.draft, "typed but never sent");
   store.setDraft("");
   await store.open("other");
-  assert.deepEqual(store.getSnapshot().draftSessions, [], "an emptied draft leaves no row behind");
+  assert.deepEqual(store.getSnapshot().unsent["a"] ?? [], [], "an emptied draft leaves no row behind");
   store.dispose();
 });
 
@@ -243,8 +244,7 @@ test("background turns retain their stream and transcript, then release it after
   emit(c, "queue_changed", { steering: 1, followUp: 0 });
   assert.equal(c.state?.pending.steering, 1);
   await store.newConversation();
-  assert.deepEqual(store.getSnapshot().runningAgents, ["a"]);
-  assert.deepEqual(store.getSnapshot().runningSessions, [c.session]);
+  assert.deepEqual(store.getSnapshot().running["a"] ?? [], [c.session], "the running conversation is named under its agent");
   assert.equal(closed.includes(c.subscription), false);
   emit(c, "message_delta", { channel: "text", delta: "background answer" });
   const count = opens.length;
@@ -494,6 +494,31 @@ test("an agent whose list cannot be read says why, on its own row", async () => 
   assert.deepEqual(
     store.getSnapshot().sessions["b"]?.map((s) => s.session),
     ["b-1"],
+  );
+  store.dispose();
+});
+
+test("a refusal and a failure are different answers in the transcript", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  api.setModel = async () => ({
+    ok: false,
+    error: { code: "model_unavailable", message: "gpt-9 is not in the configured credential file", retryable: false },
+  });
+  api.abort = async () => ({ ok: false, error: { code: "failed", message: "the runtime crashed", retryable: true } });
+
+  // Nothing ran, so this is refused: the model is unchanged and the person's text is still theirs.
+  await store.pickModel("provider/gpt-9");
+  // A request that did run and broke is a failure.
+  await store.abort();
+
+  assert.deepEqual(
+    c.items.filter((item) => item.kind === "note").map((item) => [item.tone, item.text]),
+    [
+      ["warning", "gpt-9 is not in the configured credential file"],
+      ["error", "the runtime crashed"],
+    ],
   );
   store.dispose();
 });

@@ -87,7 +87,7 @@ test("tool progress is a snapshot, not completion; settlement closes unfinished 
   assert.equal((items[0] as Extract<Item, { kind: "tool" }>).status, "interrupted");
   assert.ok(items.every((item) => (item.kind === "thinking" || item.kind === "assistant" ? !item.open : true)));
   // Stopping is the person's own action: the abort machinery's wording adds nothing they can use.
-  assert.deepEqual(items.at(-1), { kind: "note", tone: "info", text: "run aborted" });
+  assert.deepEqual(items.at(-1), { kind: "note", tone: "info", text: "run stopped" });
 });
 
 test("history follows the active leaf instead of flattening sibling branches", () => {

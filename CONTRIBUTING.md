@@ -104,8 +104,9 @@ For changes to local agent workflows, verify the relevant cases:
 
 Automated tests must use isolated fixtures and fake model responses. Never stage a developer's
 `auth.json`, OAuth refresh token, model key or private transcript in Actions, test artifacts or
-issue/PR evidence. Real-provider and proxy checks require separate, explicit authorization and
-must be reported separately from mocked checks. No cloud or paid live-test workflow is configured.
+issue/PR evidence. Real-provider and proxy checks run locally against the developer's own
+credentials and must be reported separately from mocked checks. No cloud or paid live-test workflow
+is configured.
 
 ## Review and merge policy
 

@@ -110,8 +110,7 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
 
 export type Tone = "accent" | "success" | "warning" | "danger" | "muted";
 
-/** The dot alone, for the one place a badge does not fit: the rail's corner mark. */
-export const dot: Record<Tone, string> = {
+const dot: Record<Tone, string> = {
   accent: "bg-accent",
   success: "bg-success",
   warning: "bg-warning",

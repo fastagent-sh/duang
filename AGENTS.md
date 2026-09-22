@@ -25,8 +25,8 @@ verification of existing code, not a rewrite. Resolve conflicting product polici
   async results attached to their originating agent, conversation and subscription.
 - Preserve data-integrity protections and original errors. Never turn corrupt/unreadable state into
   an empty list, hide failure as a fallback, or automatically replay accepted tool work.
-- No real credentials, private sessions or project contents in tests, logs, commits or artifacts.
-  Live provider calls and OAuth refresh tests need explicit authorization and isolated credentials.
+- No real credentials, private sessions or project contents in commits, CI or shared artifacts.
+  Local real-provider and OAuth checks are fine; report them separately from mocked results.
 - Keep Week 1 local. No placeholder cloud UI, agent editor, permission-prompt system, files/diffs or
   advanced session controls without the corresponding product requirement/milestone.
 

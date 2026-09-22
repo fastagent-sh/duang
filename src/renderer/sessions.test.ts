@@ -43,3 +43,16 @@ test("an unsettled first turn remains selectable after starting another conversa
   assert.equal(list[1]?.label, "Running conversation");
   assert.equal(rows([], "running", ["running"]).length, 1);
 });
+
+test("a row says whether it is running or holding unsent text", () => {
+  const list = rows([summary("live", 9, { preview: "deploy" }), summary("idle", 8, { preview: "notes" })], undefined, [
+    "live",
+  ], ["idle"]);
+  assert.deepEqual(
+    list.map((row) => [row.session, row.running ?? false, row.draft ?? false]),
+    [
+      ["live", true, false],
+      ["idle", false, true],
+    ],
+  );
+});

@@ -26,9 +26,7 @@ export default function App() {
   // Only the open agent has running and drafted conversations worth marking; another agent's list
   // is just its history.
   const rowsFor = (id: string) =>
-    id === agentId
-      ? rows(sessions[id] ?? [], c?.session, view.runningSessions, view.draftSessions)
-      : rows(sessions[id] ?? []);
+    rows(sessions[id] ?? [], id === agentId ? c?.session : undefined, view.running[id], view.unsent[id]);
   const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
@@ -89,7 +87,7 @@ export default function App() {
         agents={agents}
         agentId={agentId}
         states={states}
-        running={view.runningAgents}
+        running={view.running}
         rowsFor={rowsFor}
         session={c?.session}
         expanded={expanded}
@@ -126,7 +124,7 @@ export default function App() {
             agent={agent.name}
             title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
             dir={agent.dir}
-            working={view.runningAgents.includes(agent.id)}
+            working={!!view.running[agent.id]?.length}
             context={
               usage?.contextTokens !== undefined && usage.contextWindow
                 ? Math.round((usage.contextTokens / usage.contextWindow) * 100)

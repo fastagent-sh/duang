@@ -288,7 +288,7 @@ if (!process.versions.electron) {
       await click("Read hello.txt and answer.");
       await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "return to active run");
       await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').click()");
-      await until("document.body.innerText.includes('run aborted')", "abort is a settled transcript outcome");
+      await until("document.body.innerText.includes('run stopped')", "stopping is a settled transcript outcome");
       await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "composer leaves running state");
 
       // Persisted registry and history survive reloading the renderer.

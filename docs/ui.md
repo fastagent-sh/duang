@@ -368,8 +368,17 @@ the tool for the person's decision.
 
 **Presence is layered, never duplicated.** The avatar answers *is this agent busy at all* with a
 breathing ring, the agent row says it in words (`working`, `2 working`), and the conversation rows
-answer *which one* with a dot and the state word. Each level adds information the one above cannot
-give; none of them repeats the other, and none of them is colour alone.
+answer *which one* with a pulsing dot and the word. Each level adds information the one above cannot
+give; none of them repeats the other, and none of them is colour alone. A conversation holding
+unsent text says `unsent` in the same place, because that is also work that is not finished.
+
+The tier-1 states reach the sidebar as words too: an agent that is `broken`, `needs a model` or has
+`no agent yet` says so on its row. A coloured dot on its own was colour doing the work, readable
+only through a tooltip.
+
+In the transcript, a refusal is drawn with the word `refused` beside main's own sentence, which goes
+in verbatim. The tone carries the distinction the words make: nothing ran, so the message is still
+the person's to edit.
 
 ## 10. Motion
 
