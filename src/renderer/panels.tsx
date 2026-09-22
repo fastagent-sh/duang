@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   CaretDown,
+  Check,
+  Copy,
   CaretRight,
   FilePlus,
   FileText,
@@ -21,11 +23,25 @@ import {
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
 import type { AgentRow } from "../preload/index.ts";
-import type { Item } from "./transcript.ts";
+import { lines, type Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
 import type { AgentState, Store, View } from "./store.ts";
+
+/** Clock time, for the end of a message: the day is the separator's job, not every line's. */
+const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+/** A day as a separator says it: today and yesterday by name, anything older by date. */
+function day(at: number): string {
+  const date = new Date(at);
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const days = Math.round((midnight.getTime() - new Date(date).setHours(0, 0, 0, 0)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: days > 300 ? "numeric" : undefined });
+}
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
@@ -613,11 +629,28 @@ export function Transcript({
       className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
       style={{ paddingBottom: bottomGap }}
     >
-      <div className="column space-y-6">
-        {items.map((item, index) => (
-          <Message key={index} item={item} />
-        ))}
-        {busySince !== undefined && !streaming && <Working since={busySince} />}
+      <div className="column">
+        {lines(items).map((line, index) =>
+          line.kind === "day" ? (
+            // Reading yesterday's run is the normal case here; without this the whole conversation
+            // reads as one sitting.
+            <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
+              <span className="h-px flex-1 bg-stroke" />
+              {day(line.at)}
+              <span className="h-px flex-1 bg-stroke" />
+            </div>
+          ) : (
+            // 24 within a turn, 32 where a new one starts (§8): long output needs the rhythm.
+            <div key={index} className={line.kind === "user" && index > 0 ? "pt-8" : "pt-6 first:pt-0"}>
+              <Message item={line} />
+            </div>
+          ),
+        )}
+        {busySince !== undefined && !streaming && (
+          <div className="pt-6">
+            <Working since={busySince} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -637,18 +670,33 @@ function Message({ item }: { item: Item }) {
       // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
       // the transcript that is small and instantly recognisable.
       return (
-        <div className="flex justify-end">
-          <div className="max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 leading-relaxed whitespace-pre-wrap">
+        <div className="flex flex-col items-end gap-1">
+          <div
+            className={`max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 leading-relaxed whitespace-pre-wrap ${
+              item.steered ? "border-r-2 border-accent" : ""
+            }`}
+          >
             {item.text}
+          </div>
+          {/* After the fact nothing else distinguishes a message that joined a run from one that
+              started it (§8). */}
+          <div className="flex items-center gap-2 text-[10px] text-muted">
+            {item.steered && <span className="text-accent">joined the run</span>}
+            {item.at !== undefined && <span>{clock(item.at)}</span>}
           </div>
         </div>
       );
     case "assistant":
       return (
-        <div className="md leading-relaxed">
-          <Streamdown components={markdownComponents} controls={markdownControls}>
-            {item.text}
-          </Streamdown>
+        <div className="group/msg">
+          <div className="md leading-relaxed">
+            <Streamdown components={markdownComponents} controls={markdownControls}>
+              {item.text}
+            </Streamdown>
+            {/* Token arrival is the animation; the cursor only says "still writing" (§8, §10). */}
+            {item.open && <span className="ml-0.5 animate-pulse text-accent">▍</span>}
+          </div>
+          {!item.open && <Footer text={item.text} at={item.at} />}
         </div>
       );
     case "thinking":
@@ -684,6 +732,35 @@ function Message({ item }: { item: Item }) {
     case "tool":
       return <Tool item={item} />;
   }
+}
+
+/**
+ * What an agent's answer ends with: when it landed, and a way to take it somewhere else. Nothing
+ * else — a rating has nowhere to go, and branching and editing are not features here.
+ */
+function Footer({ text, at }: { text: string; at?: number }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return (
+    <div className="mt-2 flex items-center gap-1 text-[10px] text-muted">
+      {at !== undefined && <span className="tabular-nums">{clock(at)}</span>}
+      <Button
+        kind="ghost"
+        size={28}
+        aria-label={copied ? "Copied" : "Copy message"}
+        title="Copy this answer"
+        icon={copied ? <Check size={13} /> : <Copy size={13} />}
+        className="opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100"
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+            timer.current = window.setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+      />
+    </div>
+  );
 }
 
 /** The icon says what kind of work it is before the command is read. */

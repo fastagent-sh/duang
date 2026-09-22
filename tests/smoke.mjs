@@ -252,6 +252,16 @@ if (!process.versions.electron) {
         "tool trace finishes",
       );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
+      // A settled answer ends with when it landed and a way to take it elsewhere.
+      assert.ok(
+        await evaluate(`(() => {
+          const copy = document.querySelector('main button[aria-label="Copy message"]');
+          // A character class, not \\d: a template literal eats the escape and the regex stops matching.
+          return !!copy && /[0-9]{1,2}:[0-9]{2}/.test(copy.parentElement.textContent);
+        })()`),
+        "an answer is followed by its time and a copy control",
+      );
+
       // The card now separates arguments from result, so read the whole card rather than its first block.
       const transcript = await evaluate("document.querySelector('details').textContent");
       assert.match(transcript, /Hello from the workspace/);
