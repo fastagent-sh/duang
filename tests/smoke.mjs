@@ -566,6 +566,39 @@ if (!process.versions.electron) {
         "Right opens it again",
       );
 
+      // Naming a conversation: F2 on the focused row, and FastAgent is what reports the new label.
+      await evaluate(`(() => {
+        // A conversation row, not an agent row: renaming is a conversation's own action.
+        const row = [...document.querySelectorAll('aside > div + div button')].find(
+          (b) => !b.getAttribute('aria-label') && b.textContent.includes('Read hello.txt and answer.'),
+        );
+        if (!row) throw new Error('Missing the conversation row');
+        row.focus();
+      })()`);
+      await press("F2");
+      await until("document.querySelector('aside input[aria-label=\"Conversation name\"]') !== null", "rename opens");
+      await evaluate(`(() => {
+        const input = document.querySelector('aside input[aria-label="Conversation name"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'The i18n check');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`);
+      await until(
+        "document.querySelector('aside').innerText.includes('The i18n check')",
+        "the runtime reports the name it was given",
+      );
+      assert.ok(
+        !(await evaluate("document.querySelector('aside').innerText")).includes("Read hello.txt and answer."),
+        "a named conversation stops falling back to its first message",
+      );
+
+      // A way back to the live turn: the control exists exactly while the tail is not being followed.
+      assert.equal(
+        await evaluate("document.querySelector('button[aria-label=\"Back to the latest\"]') === null"),
+        true,
+        "nothing to offer while the transcript is at the bottom",
+      );
+
       // The delete control follows its own focus: the row keeps focus after a click, which used to
       // keep the control on screen. Reaching it by keyboard is the Delete key's job (§11), not the
       // tab order's. Opacity is read after the transition settles, not during it.

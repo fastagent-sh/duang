@@ -525,6 +525,20 @@ export function createStore(api: DuangApi) {
         note(error);
       }
     },
+    /**
+     * Names a conversation, in FastAgent, which owns the label. The list is re-read afterwards
+     * rather than patched locally: the summary that matters is the one the runtime reports.
+     */
+    async renameSession(id: string, session: string, name: string) {
+      try {
+        const result = await api.renameSession(id, session, name);
+        if (!result.ok) return note(result.error.message, conversations.get(key(id, session)), "warning");
+        const listed = await api.openAgent(id);
+        if (listed.ok) publish({ sessions: { ...view.sessions, [id]: listed.sessions } });
+      } catch (error) {
+        note(error, conversations.get(key(id, session)));
+      }
+    },
     /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */
     async deleteSession(id: string, session: string) {
       try {

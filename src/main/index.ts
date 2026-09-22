@@ -143,6 +143,13 @@ function register(): void {
     app.setBadgeCount(count);
   });
 
+  ipcMain.handle("session:rename", async (_e, id: string, session: string, name: string) => {
+    requireSession(session);
+    if (typeof name !== "string" || !name.trim()) throw new Error("A conversation name cannot be empty");
+    const { control } = await openAgent(await requireAgent(id));
+    // FastAgent owns the label: `update({ name })` is what `sessions.list()` then reports.
+    return control.sessions.get(session).update({ name: name.trim() });
+  });
   ipcMain.handle("session:delete", async (_e, id: string, session: string) => {
     requireSession(session);
     const { control } = await openAgent(await requireAgent(id));

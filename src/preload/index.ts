@@ -53,6 +53,12 @@ const api = {
    * were away" belongs: the sidebar can only say it while duang is the window you are in.
    */
   setUnseenCount: (count: number): Promise<void> => ipcRenderer.invoke("app:unseen", count),
+  /**
+   * Names a conversation. Until this is called a list row falls back to the first message, which is
+   * why a conversation whose subject moved on keeps the sentence it started with.
+   */
+  renameSession: (agentId: string, session: string, name: string): Promise<SessionResult> =>
+    ipcRenderer.invoke("session:rename", agentId, session, name),
   deleteSession: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:delete", agentId, session),
   openSession: (

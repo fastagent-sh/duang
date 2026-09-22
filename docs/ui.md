@@ -335,7 +335,16 @@ Everything else follows from those two:
   started one. *Only in the live view:* the fact is recorded when the message is sent, and FastAgent's
   session entries carry the text without saying a run was in flight, so a reopened conversation shows
   the bubble without the label. Deriving it would mean keeping a second record of the transcript,
-  which this app does not do.
+  which this app does not do; making it durable is asked for upstream in
+  [fastagent#595](https://github.com/fastagent-sh/fastagent/issues/595).
+- **A conversation is named, or it borrows its first message.** FastAgent owns the label
+  (`update({ name })`), and until something sets it a row falls back to the opening sentence — which
+  is why a conversation whose subject moved on keeps the sentence it started with. Renaming happens
+  in place on the row: F2 from the keyboard, double click from the pointer, Enter to keep, Escape to
+  drop. duang does not invent a name from the model's output: that spends a request nobody asked for.
+- **A way back to the live turn.** Scrolling up stops the tail from following, and that is exactly
+  when a control appears above the composer to take you back to the bottom. It exists only while
+  that is true, so a transcript at the bottom carries nothing extra.
 - **Streaming** trails a block cursor `▍`, which says "still writing" without a spinner and vanishes
   on settle.
 - **A settled answer ends with when it landed and a way to copy it**, and nothing else. Runs are

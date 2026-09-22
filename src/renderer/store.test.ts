@@ -39,6 +39,7 @@ function harness() {
     revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
     setUnseenCount: async () => {},
+    renameSession: async () => ({ ok: true }),
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {
       opens.push(session);
@@ -584,6 +585,37 @@ test("a message sent into a running turn is marked as having joined it", async (
     c.items.filter((item) => item.kind === "user").at(-1)?.steered,
     false,
     "compacting is not a run to join",
+  );
+  store.dispose();
+});
+
+test("a renamed conversation takes the label the runtime reports, and a refusal stays in its own transcript", async () => {
+  const { api, store } = harness();
+  const renames: string[][] = [];
+  api.renameSession = async (agentId, session, name) => {
+    renames.push([agentId, session, name]);
+    return { ok: true };
+  };
+  api.openAgent = async () => listed("s1");
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+
+  api.openAgent = async () =>
+    ({
+      ok: true,
+      model: "provider/model",
+      sessions: [{ session: "s1", name: "The i18n check", updatedAt: 6, createdAt: 0, messageCount: 2 }],
+    }) as never;
+  await store.renameSession("a", "s1", "The i18n check");
+  assert.deepEqual(renames, [["a", "s1", "The i18n check"]]);
+  assert.equal(store.getSnapshot().sessions["a"]?.[0]?.name, "The i18n check", "the list is re-read, not patched");
+
+  // A refused rename is a refusal: nothing ran, and it belongs to that conversation's transcript.
+  api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
+  await store.renameSession("a", "s1", "Another name");
+  assert.deepEqual(
+    c.items.filter((item) => item.kind === "note").map((item) => [item.tone, item.text]),
+    [["warning", "session is busy"]],
   );
   store.dispose();
 });

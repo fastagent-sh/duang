@@ -1,6 +1,7 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowDown,
   ArrowUp,
   CaretDown,
   Check,
@@ -51,6 +52,39 @@ const says: Record<AgentState, string> = {
 };
 
 /**
+ * A conversation's row while it is being named. FastAgent owns the label (`update({ name })`); until
+ * something sets it, a row falls back to the first message, which is why a conversation whose
+ * subject moved on keeps the sentence it started with.
+ */
+function RenameRow({
+  label,
+  onCommit,
+  onCancel,
+}: {
+  label: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(label);
+  return (
+    <input
+      autoFocus
+      aria-label="Conversation name"
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(event) => {
+        // The roster's arrows and Delete belong to rows, not to a text field.
+        event.stopPropagation();
+        if (event.key === "Enter") onCommit(value);
+        if (event.key === "Escape") onCancel();
+      }}
+      className="my-0.5 block w-[calc(100%-60px)] ml-[54px] rounded-card bg-bg px-2 py-1 text-[12.5px] outline-none ring-1 ring-accent/60"
+    />
+  );
+}
+
+/**
  * One column: who you work with, and what each of them has been talking about.
  *
  * Agents are rows rather than a strip of tiles, because a name and its state need words. Any number
@@ -74,6 +108,7 @@ export function Sidebar({
   onOpen,
   onNew,
   onDelete,
+  onRename,
 }: {
   agents: AgentRow[];
   agentId?: string;
@@ -94,6 +129,7 @@ export function Sidebar({
   onOpen: (agentId: string, session: string) => void;
   onNew: () => void;
   onDelete: (agentId: string, session: string) => void;
+  onRename: (agentId: string, session: string, name: string) => void;
 }) {
   /**
    * One tab stop for the whole column (§11, WAI-ARIA APG): Tab reaches the list, arrows move inside
@@ -141,6 +177,8 @@ export function Sidebar({
    * and the list stops being reachable without a fresh Tab. The neighbour it left behind is focused
    * once it exists (APG's rule for deleting inside a list).
    */
+  /** The conversation being renamed in place, if any. FastAgent owns the name; this is the edit. */
+  const [renaming, setRenaming] = useState<{ agent: string; session: string; label: string }>();
   const restore = useRef<string>(undefined);
   useEffect(() => {
     const key = restore.current;
@@ -170,6 +208,13 @@ export function Sidebar({
       if (open === (event.key === "ArrowRight")) return;
       event.preventDefault();
       return onToggle(row.agent);
+    }
+    // F2 is what a list uses for rename on every desktop; the row has no room for a button and the
+    // roster has no tab stops to spend on one.
+    if (event.key === "F2" && row.session && !row.fresh) {
+      event.preventDefault();
+      const label = rowsFor(row.agent).find((r) => r.session === row.session)?.label ?? "";
+      return setRenaming({ agent: row.agent, session: row.session, label });
     }
     // Same condition as the button: a conversation the runtime has never heard of has no delete
     // control, and asking main to delete it earns a confirmation followed by an error.
@@ -286,7 +331,21 @@ export function Sidebar({
                       {errors[agent.id]}
                     </p>
                   )}
-                  {conversations.map((row) => (
+                  {conversations.map((row) =>
+                    renaming?.agent === agent.id && renaming.session === row.session ? (
+                      <RenameRow
+                        key={row.session}
+                        label={renaming.label}
+                        onCancel={() => {
+                          setRenaming(undefined);
+                          buttons.current.get(`conv:${agent.id}/${row.session}`)?.focus();
+                        }}
+                        onCommit={(name) => {
+                          setRenaming(undefined);
+                          if (name.trim() && name.trim() !== renaming.label) onRename(agent.id, row.session, name);
+                        }}
+                      />
+                    ) : (
                     <div key={row.session} className="group relative">
                       <button
                         ref={(el) => {
@@ -296,6 +355,7 @@ export function Sidebar({
                         tabIndex={active === `conv:${agent.id}/${row.session}` ? 0 : -1}
                         onFocus={() => setReached(`conv:${agent.id}/${row.session}`)}
                         onClick={() => onOpen(agent.id, row.session)}
+                        onDoubleClick={() => !row.fresh && setRenaming({ agent: agent.id, session: row.session, label: row.label })}
                         disabled={disabled && selected}
                         aria-current={selected && row.session === session ? "page" : undefined}
                         className={`flex w-full items-baseline gap-2 py-1.5 pr-3 pl-[54px] text-left transition-colors ${
@@ -347,7 +407,8 @@ export function Sidebar({
                         />
                       )}
                     </div>
-                  ))}
+                    ),
+                  )}
                   {selected && !disabled && (
                     <Button
                       kind="ghost"
@@ -705,6 +766,9 @@ export function Transcript({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
+  // Scrolling up during a long run stops the tail following, and the only way back was to scroll:
+  // the control appears exactly while that is true.
+  const [away, setAway] = useState(false);
 
   // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
   const last = items.at(-1);
@@ -716,6 +780,25 @@ export function Transcript({
   }, [items, busySince, streaming]);
 
   return (
+    <div className="relative flex-1 min-h-0 flex flex-col">
+      {away && (
+        <Button
+          kind="secondary"
+          size={32}
+          onClick={() => {
+            const el = box.current;
+            if (!el) return;
+            follow.current = true;
+            setAway(false);
+            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+          }}
+          aria-label="Back to the latest"
+          title="Back to the latest"
+          icon={<ArrowDown size={16} />}
+          className="absolute right-6 z-10 bg-surface shadow-lg"
+          style={{ bottom: bottomGap - 8 }}
+        />
+      )}
     <div
       ref={box}
       // A focusable region, so the transcript can be read and scrolled from the keyboard (§11).
@@ -726,6 +809,7 @@ export function Transcript({
       onScroll={(e) => {
         const el = e.currentTarget;
         follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+        setAway(!follow.current);
       }}
       // pt clears the floating header; the first message starts below it, not behind it.
       className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
@@ -754,6 +838,7 @@ export function Transcript({
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }
