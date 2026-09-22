@@ -203,6 +203,15 @@ if (!process.versions.electron) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
     }
+    /** Conversations are listed only when asked for now, so a test that needs them asks first. */
+    async function listConversations(name) {
+      const caret = `document.querySelector('button[aria-label="Show conversations of ${name}"]')`;
+      if (await evaluate(`${caret} !== null`)) await evaluate(`${caret}.click()`);
+      await until(
+        `document.querySelector('button[aria-label="Hide conversations of ${name}"]') !== null`,
+        `${name}'s conversations are listed`,
+      );
+    }
     async function message(text) {
       await evaluate(`(() => {
     const input = document.querySelector('textarea');
@@ -279,6 +288,7 @@ if (!process.versions.electron) {
       assert.ok(firstSession);
 
       // Reopen through the actual UI and verify runtime-owned history, not the optimistic echo.
+      await listConversations("Smoke");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "new conversation");
       await click("Read hello.txt and answer.");
@@ -445,6 +455,7 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
       // Opening an agent and looking at its conversations are separate controls: the caret folds
       // the list without closing the conversation being read.
+      await listConversations("Smoke");
       await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
       await until(
         "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
@@ -522,6 +533,7 @@ if (!process.versions.electron) {
 
       // Folding the open agent with the caret — the keyboard has not moved, so the row the keyboard
       // started on is simply gone. The list still has to have exactly one way in, or Tab skips it.
+      await listConversations("Smoke");
       await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
       await until(
         "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",

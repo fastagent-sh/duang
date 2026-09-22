@@ -115,8 +115,10 @@ the directory is what identifies an agent, and the conversations are listed dire
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
 **Opening an agent and listing its conversations are two questions, so they are two controls.**
-The row opens the agent and shows what it has been doing; clicking the agent you are already on
-puts that list away again. The caret at the row's trailing edge does the same for any agent, which
+The row opens the agent, which is enough to put its latest conversation on screen; clicking the
+agent you are already on lists its conversations, and clicking again puts the list away. Nothing
+unfolds by itself — opening an agent already answers "what was I doing here", and unfolding the
+roster on top of that answers a question nobody asked. The caret at the row's trailing edge does the same for any agent, which
 is the part the row cannot express — it is how a second agent's conversations appear without
 leaving the one you are reading. Any number
 of agents can be listed at once, and folding one never closes the conversation being read. Opening
@@ -450,6 +452,37 @@ what they lose is a place in the tab order.
 
 **The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
 Chromium gives a scroll container the arrow keys once it has focus.
+
+## 11b. Keys
+
+The whole list, so it lives in one place instead of being read out of the handlers.
+
+| Key | Where | Does |
+|---|---|---|
+| `⌘N` | anywhere | New conversation in the open agent |
+| `Esc` | anywhere | Stop the running turn (a popover takes it first) |
+| `Tab` | anywhere | Sidebar → transcript → composer |
+| `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
+| `Home` `End` | roster | First and last row |
+| `→` `←` | roster, on an agent | Show and hide its conversations |
+| `Enter` `Space` | roster | Open the row |
+| `Shift+F10`, `Menu` | roster, on a conversation | Its menu: `Rename…`, `Delete Conversation` |
+| `Delete` `Backspace` | roster, on a conversation | Delete it, after confirming |
+| `Enter` | renaming a conversation | Keep the name |
+| `Esc` | renaming a conversation | Drop it |
+| `Enter` | composer | Send |
+| `⇧Enter` | composer | Newline |
+| `/` | composer | Command completion |
+| `↓` `↑` | composer, list open | Move through the completions |
+| `Enter` `Tab` | composer, list open | Accept the name rather than send — a bare `/name` is never a message |
+| `Esc` | composer, list open | Dismiss the completions |
+| `Esc` | model picker | Close it and return focus to the chip that opened it |
+| arrows, `PageUp` `PageDown` | transcript, focused | Scroll, from Chromium |
+
+An IME composing text keeps `Enter`: sending there would cut a word in half.
+
+Deliberately absent: `F2` for rename, which is the Windows convention (see §8), and a global search
+key, which `⌘K` is reserved for in week 3.
 
 ## 12. Brand
 
