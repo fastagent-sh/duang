@@ -566,16 +566,15 @@ if (!process.versions.electron) {
         "Right opens it again",
       );
 
-      // Naming a conversation: F2 on the focused row, and FastAgent is what reports the new label.
+      // Naming a conversation. The menu that carries Rename is native, so the test drives what the
+      // menu would: a double click on the row, which is the other way in.
       await evaluate(`(() => {
-        // A conversation row, not an agent row: renaming is a conversation's own action.
         const row = [...document.querySelectorAll('aside > div + div button')].find(
           (b) => !b.getAttribute('aria-label') && b.textContent.includes('Read hello.txt and answer.'),
         );
         if (!row) throw new Error('Missing the conversation row');
-        row.focus();
+        row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       })()`);
-      await press("F2");
       await until("document.querySelector('aside input[aria-label=\"Conversation name\"]') !== null", "rename opens");
       await evaluate(`(() => {
         const input = document.querySelector('aside input[aria-label="Conversation name"]');

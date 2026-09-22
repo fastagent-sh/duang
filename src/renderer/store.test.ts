@@ -39,6 +39,7 @@ function harness() {
     revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
     setUnseenCount: async () => {},
+    conversationMenu: async () => undefined,
     renameSession: async () => ({ ok: true }),
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {

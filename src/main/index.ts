@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import {
   addAgent,
@@ -143,6 +143,21 @@ function register(): void {
     app.setBadgeCount(count);
   });
 
+  /**
+   * The conversation row's context menu, which is macOS's own place for Rename: a native menu, so
+   * it looks like the system's and not like one of our popovers. Chromium raises `contextmenu` for
+   * Shift+F10 and the Menu key too, so this is the keyboard path as well.
+   */
+  ipcMain.handle("session:menu", async (event, canRename: boolean) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    return new Promise<string | undefined>((resolve) => {
+      const menu = Menu.buildFromTemplate([
+        ...(canRename ? [{ label: "Rename…", click: () => resolve("rename") }] : []),
+        { label: "Delete Conversation", click: () => resolve("delete") },
+      ]);
+      menu.popup({ window: win, callback: () => resolve(undefined) });
+    });
+  });
   ipcMain.handle("session:rename", async (_e, id: string, session: string, name: string) => {
     requireSession(session);
     if (typeof name !== "string" || !name.trim()) throw new Error("A conversation name cannot be empty");

@@ -109,6 +109,7 @@ export function Sidebar({
   onNew,
   onDelete,
   onRename,
+  onMenu,
 }: {
   agents: AgentRow[];
   agentId?: string;
@@ -130,6 +131,8 @@ export function Sidebar({
   onNew: () => void;
   onDelete: (agentId: string, session: string) => void;
   onRename: (agentId: string, session: string, name: string) => void;
+  /** Raises the row's own menu — Rename lives there, which is where macOS keeps it. */
+  onMenu: (canRename: boolean) => Promise<"rename" | "delete" | undefined>;
 }) {
   /**
    * One tab stop for the whole column (§11, WAI-ARIA APG): Tab reaches the list, arrows move inside
@@ -208,13 +211,6 @@ export function Sidebar({
       if (open === (event.key === "ArrowRight")) return;
       event.preventDefault();
       return onToggle(row.agent);
-    }
-    // F2 is what a list uses for rename on every desktop; the row has no room for a button and the
-    // roster has no tab stops to spend on one.
-    if (event.key === "F2" && row.session && !row.fresh) {
-      event.preventDefault();
-      const label = rowsFor(row.agent).find((r) => r.session === row.session)?.label ?? "";
-      return setRenaming({ agent: row.agent, session: row.session, label });
     }
     // Same condition as the button: a conversation the runtime has never heard of has no delete
     // control, and asking main to delete it earns a confirmation followed by an error.
@@ -355,7 +351,17 @@ export function Sidebar({
                         tabIndex={active === `conv:${agent.id}/${row.session}` ? 0 : -1}
                         onFocus={() => setReached(`conv:${agent.id}/${row.session}`)}
                         onClick={() => onOpen(agent.id, row.session)}
+                        // Single click already opens, so double click is free for renaming the way
+                        // Notes and Safari's bookmarks do it.
                         onDoubleClick={() => !row.fresh && setRenaming({ agent: agent.id, session: row.session, label: row.label })}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          void onMenu(!row.fresh).then((chosen) => {
+                            if (chosen === "rename")
+                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
+                            if (chosen === "delete") onDelete(agent.id, row.session);
+                          });
+                        }}
                         disabled={disabled && selected}
                         aria-current={selected && row.session === session ? "page" : undefined}
                         className={`flex w-full items-baseline gap-2 py-1.5 pr-3 pl-[54px] text-left transition-colors ${

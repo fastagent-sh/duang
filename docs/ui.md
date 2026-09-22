@@ -340,8 +340,13 @@ Everything else follows from those two:
 - **A conversation is named, or it borrows its first message.** FastAgent owns the label
   (`update({ name })`), and until something sets it a row falls back to the opening sentence — which
   is why a conversation whose subject moved on keeps the sentence it started with. Renaming happens
-  in place on the row: F2 from the keyboard, double click from the pointer, Enter to keep, Escape to
-  drop. duang does not invent a name from the model's output: that spends a request nobody asked for.
+  in place on the row, reached the way macOS reaches it: the row's context menu carries `Rename…`,
+  and a double click on the row does it directly — single click already opens, so the double is
+  free, which is how Notes' folders and Safari's bookmarks work. Enter keeps the name, Escape drops
+  it, an empty name is not a rename. The menu is a native one, so it looks like the system's and not
+  like one of our popovers, and Chromium raises it for Shift+F10 and the Menu key too, which is the
+  keyboard path. No F2: that is the Windows convention. duang does not invent a name from the
+  model's output either — that spends a request nobody asked for.
 - **A way back to the live turn.** Scrolling up stops the tail from following, and that is exactly
   when a control appears above the composer to take you back to the bottom. It exists only while
   that is true, so a transcript at the bottom carries nothing extra.

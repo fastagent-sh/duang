@@ -54,6 +54,12 @@ const api = {
    */
   setUnseenCount: (count: number): Promise<void> => ipcRenderer.invoke("app:unseen", count),
   /**
+   * Opens the conversation row's context menu and resolves with what was chosen, or undefined if
+   * the menu was dismissed. Native, because Rename belongs in the system's own menu on macOS.
+   */
+  conversationMenu: (canRename: boolean): Promise<"rename" | "delete" | undefined> =>
+    ipcRenderer.invoke("session:menu", canRename),
+  /**
    * Names a conversation. Until this is called a list row falls back to the first message, which is
    * why a conversation whose subject moved on keeps the sentence it started with.
    */

@@ -128,6 +128,7 @@ export default function App() {
         }}
         onNew={() => void store.newConversation()}
         onRename={(agent, id, name) => void store.renameSession(agent, id, name)}
+        onMenu={(canRename) => duang.conversationMenu(canRename)}
         onDelete={(agent, id) => {
           if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent, id);
         }}
