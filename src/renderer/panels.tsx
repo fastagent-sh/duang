@@ -316,7 +316,8 @@ export function Sidebar({
                   aria-label={`${open ? "Hide" : "Show"} conversations of ${agent.name}`}
                   title={open ? "Hide conversations" : "Show conversations"}
                   icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
-                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 ${selected ? "text-accent-fg hover:bg-accent-fg/15 hover:text-accent-fg" : ""}`}
+                  onAccent={selected}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2"
                 />
               </div>
 
