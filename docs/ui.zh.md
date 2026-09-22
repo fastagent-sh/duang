@@ -197,11 +197,13 @@ transcript 是一份两侧极不对等的工作记录（事实 3 和 5），所�
 |---|---|---|
 | **需要决策** | broken、needs a model、no agent yet、failed、stopped、refused | 永远有文字，加图标或形状。颜色是第三重信号，绝不单独出现。 |
 | **只需安心** | working、thinking、running | 头像上的呼吸光环、会话行上的脉冲点与状态词、transcript 里的已耗时。阅读流中不插句子。 |
-| **无事可做** | ready、completed | 什么都不显示。 |
+| **无事可做** | ready、done（已看过） | 什么都不显示。成功的工具卡不带任何徽章——一条 trace 里十张卡有九张写着 `done`，真正失败的那张就是这样被淹没的。 |
 
 全局一套词，同一状况不许在这里叫 `working`、在那里叫 `running`：
 
-`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `refused` · `needs a model` · `no agent yet` · `broken`
+`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `refused` · `unsent` · `needs a model` · `no agent yet` · `broken`
+
+`unsent` 是正式进入词表，而不是词表的例外：存有没人发出去的文字的会话属于未完成的工作，而词表里没有别的词能表达这一点。`done` 仍留在词表里，是为了这个词本身——当某处必须给"完成的工具"一个称呼时（比如 tooltip）用它——但第三档规定它不出现在屏幕上。
 
 `refused` 与 `failed` 刻意分开：被拒的发送从未运行，文字仍归你编辑；失败的运行已经跑过，副作用可能已经存在。
 

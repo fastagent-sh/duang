@@ -239,7 +239,15 @@ if (!process.versions.electron) {
         "document.body.innerText.includes('Smoke answer') && !document.body.innerText.includes('working…')",
         "stream settles",
       );
-      await until("document.querySelector('details')?.innerText.includes('done')", "tool trace finishes");
+      // A tool that worked says nothing (§9, third tier): the card is finished when its result is
+      // in and the running badge is gone.
+      await until(
+        `(() => {
+          const card = document.querySelector('details');
+          return card && card.textContent.includes('Hello from the workspace') && !card.textContent.includes('running');
+        })()`,
+        "tool trace finishes",
+      );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
       // The card now separates arguments from result, so read the whole card rather than its first block.
       const transcript = await evaluate("document.querySelector('details').textContent");
@@ -433,10 +441,8 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('moved-away')", "the missing directory is named");
       // Removal is offered by the panel that explains the problem, not by the sidebar row, so look
       // for the button rather than for the word anywhere on screen.
-      assert.ok(
-        await evaluate(
-          "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
-        ),
+      await until(
+        "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
         "a directory that no longer exists stays removable from the panel that explains it",
       );
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");

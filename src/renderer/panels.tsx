@@ -57,6 +57,7 @@ export function Sidebar({
   agentId,
   states,
   running,
+  unseen,
   rowsFor,
   session,
   expanded,
@@ -74,6 +75,8 @@ export function Sidebar({
   states: Record<string, AgentState>;
   /** Running conversations per agent: the count is what makes `2 working` possible. */
   running: Record<string, string[]>;
+  /** Outcomes nobody has looked at yet, per agent. The reason to come back to this window. */
+  unseen: Record<string, Record<string, "done" | "failed">>;
   rowsFor: (agentId: string) => Row[];
   session?: string;
   expanded: string[];
@@ -117,6 +120,8 @@ export function Sidebar({
           const open = expanded.includes(agent.id);
           const state = states[agent.id] ?? "ready";
           const busy = running[agent.id]?.length ?? 0;
+          const waiting = Object.values(unseen[agent.id] ?? {});
+          const failures = waiting.filter((outcome) => outcome === "failed").length;
           const conversations = open ? rowsFor(agent.id) : [];
           return (
             <div key={agent.id}>
@@ -145,6 +150,17 @@ export function Sidebar({
                   {busy > 0 ? (
                     <Badge tone="accent" pulse className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}>
                       <span className="truncate">{busy > 1 ? `${busy} working` : "working"}</span>
+                    </Badge>
+                  ) : waiting.length > 0 ? (
+                    // What landed while you were away, summed on the agent row and spent when the
+                    // conversation is opened. Failures are what the count is for, so they win.
+                    <Badge
+                      tone={failures ? "danger" : "success"}
+                      className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}
+                    >
+                      <span className="truncate">
+                        {failures ? `${failures} failed` : `${waiting.length} done`}
+                      </span>
                     </Badge>
                   ) : (
                     state !== "ready" && (
@@ -196,6 +212,8 @@ export function Sidebar({
                           <Badge tone="accent" pulse>
                             working
                           </Badge>
+                        ) : row.unseen ? (
+                          <Badge tone={row.unseen === "failed" ? "danger" : "success"}>{row.unseen}</Badge>
                         ) : row.draft ? (
                           <span className="shrink-0 text-[10px] text-muted italic">unsent</span>
                         ) : (
@@ -683,12 +701,18 @@ const toolIcons: Record<string, typeof Terminal> = {
   fetch: Globe,
 };
 
-/** One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9. */
-function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone: Tone } {
+/**
+ * One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9.
+ *
+ * A tool that simply worked says nothing: the third tier of §9 is "nothing to do, show nothing",
+ * and a trace where nine cards in ten wear a green `done` is exactly how the one that failed gets
+ * lost. Absence is unambiguous here because every other outcome, including still running, is named.
+ */
+function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone: Tone } | undefined {
   if (item.status === "interrupted") return { word: "stopped", tone: "muted" };
   if (item.isError) return { word: "failed", tone: "danger" };
   if (item.status === "running") return { word: "running", tone: "accent" };
-  return { word: "done", tone: "success" };
+  return undefined;
 }
 
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
@@ -702,9 +726,11 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
         <Icon size={14} className="shrink-0 text-muted" />
         <span className="font-mono truncate">{summary || item.name}</span>
         {/* The state belongs next to the command it describes, not at the far edge of the row. */}
-        <Badge tone={state.tone} pulse={item.status === "running"} className="shrink-0">
-          {state.word}
-        </Badge>
+        {state && (
+          <Badge tone={state.tone} pulse={item.status === "running"} className="shrink-0">
+            {state.word}
+          </Badge>
+        )}
       </summary>
       <div className="px-3 pb-2.5 pt-0.5 space-y-2 text-[11.5px] font-mono">
         {summary !== stringify(item.args) && (

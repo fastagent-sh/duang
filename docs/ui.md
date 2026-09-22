@@ -352,13 +352,29 @@ away, so "is it still working" must be answerable from the sidebar without openi
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
 | **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar, a pulsing dot and the word on the conversation row, elapsed time in the transcript. No sentence in the reading flow. |
-| **Nothing to do** | ready, completed | Show nothing. |
+| **Nothing to do** | ready, done *(already seen)* | Show nothing. A tool that worked wears no badge; a trace where nine cards in ten say `done` is how the one that failed gets lost. |
 
 One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
 another:
 
-`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `refused` · `needs a model` ·
-`no agent yet` · `broken`
+`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `refused` · `unsent` ·
+`needs a model` · `no agent yet` · `broken`
+
+`unsent` earns its place in the list rather than being an exception to it: a conversation holding
+text nobody sent is unfinished work, and no other word in the list says that. `done` stays in the
+vocabulary for the word's own sake — it is what a finished tool is called when something has to name
+it, such as a tooltip — while the third tier keeps it off the screen.
+
+**An outcome you were not there for is a decision, not reassurance.** Runs are long and fact 4 says
+you come back to them, so a run that settles while you are reading something else leaves a mark: the
+conversation row says `done` or `failed`, and the agent row sums them (`2 done`, `1 failed`, with
+failures winning the summary). Opening the conversation spends the mark, the way an unread count is
+spent by reading — its whole purpose is to disappear. A run you stopped yourself leaves nothing,
+because you already know. The mark lives in memory: it is a fact about this window's attention, and
+the transcript stays the only durable record of what happened.
+
+This is also why `done` can be both tiers. Unseen, it is the reason to come back; once looked at, it
+is the state with nothing left to do, and it goes quiet.
 
 `refused` and `failed` stay separate on purpose: a refused send never ran, so the text is still the
 person's to edit; a failed run did run, and its effects may already exist.

@@ -11,6 +11,8 @@ export interface Row {
   running?: boolean;
   /** Unsent text is waiting here. Listed for the same reason a running one is: it is not finished. */
   draft?: boolean;
+  /** An outcome that landed while the person was elsewhere, and has not been looked at yet. */
+  unseen?: "done" | "failed";
 }
 
 /** A timestamp as a list row wants it: coarse on purpose, because an exact clock time is noise here. */
@@ -30,11 +32,13 @@ export function rows(
   selected?: string,
   running: string[] = [],
   drafts: string[] = [],
+  unseen: Record<string, "done" | "failed"> = {},
 ): Row[] {
   const mark = <T extends { session: string }>(row: T) => ({
     ...row,
     ...(running.includes(row.session) ? { running: true } : {}),
     ...(drafts.includes(row.session) ? { draft: true } : {}),
+    ...(unseen[row.session] ? { unseen: unseen[row.session] } : {}),
   });
   const known = [...summaries]
     .sort((a, b) => b.updatedAt - a.updatedAt)

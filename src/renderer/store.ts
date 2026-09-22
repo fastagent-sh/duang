@@ -88,6 +88,12 @@ export interface View {
   /** Selected agent's conversations holding unsent text, so a draft never becomes unreachable. */
   /** Conversations holding unsent text, per agent. */
   unsent: Record<string, string[]>;
+  /**
+   * Outcomes that landed while the person was not looking at that conversation, per agent. Fact 4:
+   * runs are long and you come back to them, so "what happened while I was away" is the sidebar's
+   * job. Opening the conversation clears it — like an unread mark, it exists to be spent.
+   */
+  unseen: Record<string, Record<string, "done" | "failed">>;
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 /** [agentId, session] pairs into one list per agent. */
@@ -135,6 +141,7 @@ export function createStore(api: DuangApi) {
     commands: [],
     running: {},
     unsent: {},
+    unseen: {},
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
@@ -143,6 +150,12 @@ export function createStore(api: DuangApi) {
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
   const lastOpened = new Map<string, string>(stored?.perAgent);
+  /**
+   * What finished while you were elsewhere, keyed `agentId/session`. In memory on purpose: it is a
+   * fact about this window's attention, not about the conversation, and the transcript stays the
+   * only durable record of what happened.
+   */
+  const unseen = new Map<string, "done" | "failed">();
   let lastAgent = stored?.agentId;
   let navigation = 0;
   let listRequest = 0;
@@ -172,6 +185,11 @@ export function createStore(api: DuangApi) {
     // holds its own draft, so read both here: this is the single view of what is unsent.
     const unsent = new Map(drafts);
     if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
+    view.unseen = {};
+    for (const [id, outcome] of unseen) {
+      const agentId = id.slice(0, id.indexOf("/"));
+      (view.unseen[agentId] ??= {})[id.slice(id.indexOf("/") + 1)] = outcome;
+    }
     const kept = [...unsent].filter(([, text]) => text.trim());
     view.unsent = group(kept.map(([id]) => [id.slice(0, id.indexOf("/")), id.slice(id.indexOf("/") + 1)]));
     const serialized = JSON.stringify(kept);
@@ -220,6 +238,8 @@ export function createStore(api: DuangApi) {
   async function open(session: string) {
     const agentId = view.agentId;
     if (!agentId) return;
+    // Looking at it is what spends the mark.
+    unseen.delete(key(agentId, session));
     lastOpened.set(agentId, session);
     lastAgent = agentId;
     writeStored(SELECTION_KEY, JSON.stringify({ agentId, perAgent: [...lastOpened] } satisfies Selection));
@@ -319,6 +339,10 @@ export function createStore(api: DuangApi) {
       c.state = { ...state, status: "running", activeRunId: event.runId };
     } else if (event.type === "run_settled") {
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: 0, followUp: 0 } };
+      // A run that ends while you are reading something else is the thing you came back for. A run
+      // you stopped yourself is not news.
+      if (c !== view.conversation && data.status !== "aborted")
+        unseen.set(key(c.agentId, c.session), data.status === "completed" ? "done" : "failed");
       void refreshList(c.agentId);
     } else if (event.type === "queue_changed") {
       c.state = { ...state, pending: data as unknown as SessionState["pending"] };

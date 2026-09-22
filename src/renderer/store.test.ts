@@ -522,3 +522,39 @@ test("a refusal and a failure are different answers in the transcript", async ()
   );
   store.dispose();
 });
+
+test("what finished while you were elsewhere is marked, and opening it spends the mark", async () => {
+  const { store, emit } = harness();
+  await store.load();
+  const background = store.getSnapshot().conversation!;
+  emit(background, "run_started");
+  await store.newConversation();
+  assert.notEqual(store.getSnapshot().conversation, background, "the run is now in the background");
+
+  emit(background, "run_settled", { status: "completed" });
+  assert.deepEqual(store.getSnapshot().unseen["a"], { [background.session]: "done" }, "an outcome you missed is kept");
+
+  await store.open(background.session);
+  assert.deepEqual(store.getSnapshot().unseen["a"] ?? {}, {}, "looking at it is what spends the mark");
+
+  // A failure you missed is kept as a failure; one you were watching needs no mark at all.
+  const other = store.getSnapshot().conversation!;
+  emit(other, "run_started");
+  emit(other, "run_settled", { status: "failed", error: { message: "boom" } });
+  assert.deepEqual(store.getSnapshot().unseen["a"] ?? {}, {}, "a run you watched settle is not news");
+
+  // A conversation nobody is watching is only kept alive while its turn is in flight, so the run
+  // has to start before walking away — which is also the only way to miss its outcome.
+  emit(other, "run_started");
+  await store.newConversation();
+  emit(other, "run_settled", { status: "failed", error: { message: "boom" } });
+  assert.deepEqual(store.getSnapshot().unseen["a"], { [other.session]: "failed" });
+
+  // Stopping a run yourself is a decision, not something to come back to.
+  const third = store.getSnapshot().conversation!;
+  emit(third, "run_started");
+  await store.open(other.session);
+  emit(third, "run_settled", { status: "aborted" });
+  assert.equal(store.getSnapshot().unseen["a"]?.[third.session], undefined, "a stop is not unseen news");
+  store.dispose();
+});
