@@ -1,8 +1,16 @@
 /** Fold session entries and live events into what the transcript shows. Pure, so it is testable. */
 import type { SessionEntry, SessionEvent } from "@fastagent-sh/fastagent/session";
 
-export type Item =
-  | { kind: "user"; text: string }
+/**
+ * When it happened. Required on every item, because both the day separators and the time under a
+ * message read it — the transcript is a record, and a record without times reads as one moment.
+ * Required rather than optional so a future producer that forgets it fails to compile, instead of
+ * silently dropping a day boundary.
+ */
+type At = { at: number };
+
+export type Item = At &
+  ({ kind: "user"; text: string; steered?: boolean }
   | { kind: "assistant" | "thinking"; text: string; open: boolean }
   | {
       kind: "tool";
@@ -18,7 +26,41 @@ export type Item =
    * a quiet line or as a failure — stopping a run is not an error, and colouring it like one was
    * the transcript telling the person they broke something.
    */
-  | { kind: "note"; tone: "info" | "warning" | "error"; text: string };
+  | { kind: "note"; tone: "info" | "warning" | "error"; text: string });
+
+/**
+ * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of
+ * days: read in January, a December conversation dated `Dec 25` looks like this year's.
+ */
+export function dayLabel(at: number, now: number = Date.now()): string {
+  const date = new Date(at);
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const days = Math.round((midnight.getTime() - new Date(at).setHours(0, 0, 0, 0)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
+}
+
+/** A day boundary in the reading flow: without it, yesterday's run reads as if it just happened. */
+export type Line = Item | { kind: "day"; at: number };
+
+/**
+ * Items with the day boundaries between them. Pure, and separate from rendering, because "when did
+ * this stop being the same day" is the only interesting part.
+ */
+export function lines(items: Item[]): Line[] {
+  const out: Line[] = [];
+  let day: string | undefined;
+  for (const item of items) {
+    const stamp = new Date(item.at).toDateString();
+    if (day !== undefined && stamp !== day) out.push({ kind: "day", at: item.at });
+    day = stamp;
+    out.push(item);
+  }
+  return out;
+}
 
 /**
  * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
@@ -52,10 +94,11 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
       toolName?: string;
       isError?: boolean;
     };
+    const at = entry.timestamp;
     if (entry.kind === "user") {
-      items.push({ kind: "user", text: data.text ?? "" });
+      items.push({ kind: "user", text: data.text ?? "", at });
     } else if (entry.kind === "assistant") {
-      if (data.text) items.push({ kind: "assistant", text: data.text, open: false });
+      if (data.text) items.push({ kind: "assistant", text: data.text, open: false, at });
       for (const call of data.toolCalls ?? []) {
         items.push({
           kind: "tool",
@@ -63,11 +106,13 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
           name: call.name ?? "tool",
           args: undefined,
           status: "interrupted",
+          at,
         });
       }
     } else if (entry.kind === "tool") {
       const index = items.findLastIndex((item) => item.kind === "tool" && item.id === data.toolCallId);
       const result: Item = {
+        at,
         kind: "tool",
         id: data.toolCallId ?? entry.id,
         name: data.toolName ?? "tool",
@@ -93,17 +138,29 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       if (last && last.kind === kind && last.open) {
         return [...items.slice(0, -1), { ...last, text: last.text + String(data.delta ?? "") }];
       }
-      return [...items, { kind, text: String(data.delta ?? ""), open: true }];
+      return [...items, { kind, text: String(data.delta ?? ""), open: true, at: event.timestamp }];
     }
     case "message_finished": {
+      // Stamped on settling, not on the first delta: an answer that streamed for five minutes would
+      // otherwise show one time live and another after a reopen, where history carries the time
+      // FastAgent wrote the entry.
       return items.map((item) =>
-        item.kind === "assistant" || item.kind === "thinking" ? { ...item, open: false } : item,
+        item.kind === "assistant" || item.kind === "thinking"
+          ? { ...item, open: false, at: event.timestamp }
+          : item,
       );
     }
     case "tool_started":
       return [
         ...items,
-        { kind: "tool", id: String(data.id), name: String(data.name), args: data.args, status: "running" },
+        {
+          kind: "tool",
+          id: String(data.id),
+          name: String(data.name),
+          args: data.args,
+          status: "running",
+          at: event.timestamp,
+        },
       ];
     case "tool_progress":
     case "tool_finished": {
@@ -133,6 +190,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         ...items,
         {
           kind: "note",
+          at: event.timestamp,
           tone: stopped ? "info" : "error",
           // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
           // `aborted`, and never `failed` — that word blames the run for their decision.
@@ -146,11 +204,12 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         {
           kind: "note",
           tone: "error",
+          at: event.timestamp,
           text: `retrying ${String(data.attempt)}/${String(data.maxAttempts)}: ${String(data.error ?? "")}`,
         },
       ];
     case "serving_error":
-      return [...items, { kind: "note", tone: "error", text: String(data.message) }];
+      return [...items, { kind: "note", tone: "error", text: String(data.message), at: event.timestamp }];
     default:
       return items;
   }

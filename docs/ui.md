@@ -332,9 +332,16 @@ Everything else follows from those two:
   facts about the session, not things anyone said.
 - **A steered message** keeps its bubble and adds an accent rule down its leading edge with the
   label `joined the run`, because after the fact nothing else distinguishes it from a message that
-  started one.
+  started one. *Only in the live view:* the fact is recorded when the message is sent, and FastAgent's
+  session entries carry the text without saying a run was in flight, so a reopened conversation shows
+  the bubble without the label. Deriving it would mean keeping a second record of the transcript,
+  which this app does not do.
 - **Streaming** trails a block cursor `▍`, which says "still writing" without a spinner and vanishes
   on settle.
+- **A settled answer ends with when it landed and a way to copy it**, and nothing else. Runs are
+  long and read later, so the time is part of the record; the copy control appears on hover. A
+  rating has nowhere to go here, and branching and editing are not features, so the row that other
+  clients fill with icons stays at two things.
 - **Turn spacing** is 24 within a turn and 32 between turns. Long output needs the rhythm more than
   a dense list does.
 - **A date separator** — one centred muted line — appears where a conversation crosses a day. Reading

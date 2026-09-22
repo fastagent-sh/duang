@@ -210,7 +210,7 @@ export function createStore(api: DuangApi) {
     if (c) {
       // main's sentence goes in verbatim; the tone is what says this was refused rather than failed,
       // and the transcript draws the word (§9).
-      c.items = [...c.items, { kind: "note", tone, text }];
+      c.items = [...c.items, { kind: "note", tone, text, at: Date.now() }];
       publish();
     } else publish({ error: text });
   };
@@ -553,7 +553,12 @@ export function createStore(api: DuangApi) {
       // choice the person can revisit. Dropping the message in silence is how that stays hidden.
       if (view.blocked) throw new Error(`Cannot send while ${view.blocked}`);
       c.draft = "";
-      c.items = [...c.items, { kind: "user", text }];
+      // Steering: this message joined a run that was already going. Afterwards nothing else
+      // distinguishes it from one that started a turn (§8), so the fact is recorded now.
+      // A run in flight, not `busy(c)`: that predicate also covers compaction, and a message sent
+      // while the context is being compacted starts a turn rather than joining one.
+      const joining = c.state?.status === "running" || c.sends > 0;
+      c.items = [...c.items, { kind: "user", text, at: Date.now(), steered: joining }];
       const echo = c.items.at(-1);
       const runStarts = c.runStarts;
       const restoreRejected = () => {
