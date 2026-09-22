@@ -510,6 +510,37 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "picker closes again");
 
+      // One tab stop for the roster, arrows inside it (§11): Tab lands on the open conversation,
+      // Up walks to its agent row, Left folds it, and the focus stays where the keyboard is.
+      const roster = await evaluate(`(() => {
+        const list = document.querySelector('aside [aria-label]')?.closest('aside');
+        const rows = [...list.querySelectorAll('button')].filter((b) => b.closest('aside > div + div'));
+        return { rows: rows.length, tabbable: rows.filter((b) => b.tabIndex === 0).length };
+      })()`);
+      assert.ok(roster.rows > 1, "there is more than one row to walk");
+      assert.equal(roster.tabbable, 1, "the roster is one tab stop, not one per row");
+      await evaluate("document.querySelector('aside > div + div button[tabindex=\"0\"]').focus()");
+      // Keys go one at a time: two in the same tick would be read against state React has not
+      // re-rendered yet, which is not how anyone types.
+      const press = (key) =>
+        evaluate(
+          `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
+        );
+      assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), null, "Tab lands on a row");
+      await press("ArrowUp");
+      await until(
+        "document.activeElement.getAttribute('aria-label') === 'Smoke'",
+        "Up reaches the agent row above the conversation",
+      );
+      // Left folds the agent, so the caret never has to be a tab stop.
+      await press("ArrowLeft");
+      await until("document.activeElement.getAttribute('aria-expanded') === 'false'", "Left folds the focused agent");
+      await press("ArrowRight");
+      await until(
+        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
+        "Right opens it again",
+      );
+
       // Delete is reachable by keyboard, and it hides again when the focus that revealed it leaves:
       // the row keeps focus after a click, which used to keep the control on screen.
       assert.deepEqual(

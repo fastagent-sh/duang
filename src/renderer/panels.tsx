@@ -95,6 +95,58 @@ export function Sidebar({
   onNew: () => void;
   onDelete: (agentId: string, session: string) => void;
 }) {
+  /**
+   * One tab stop for the whole column (§11, WAI-ARIA APG): Tab reaches the list, arrows move inside
+   * it. The row controls leave the tab order with it — a caret and a delete on every row would make
+   * Tab walk the roster three times — so the keys they stand for live on the row: Right and Left
+   * expand and collapse an agent, Delete removes a conversation.
+   */
+  const rowsOnScreen: { key: string; agent: string; session?: string }[] = [];
+  for (const agent of agents) {
+    rowsOnScreen.push({ key: `agent:${agent.id}`, agent: agent.id });
+    if (expanded.includes(agent.id)) {
+      for (const row of rowsFor(agent.id))
+        rowsOnScreen.push({ key: `conv:${agent.id}/${row.session}`, agent: agent.id, session: row.session });
+      // "New conversation" is a row in the list, so the arrows reach it too; anything left tabbable
+      // inside the list would make Tab walk the roster a second time.
+      if (agent.id === agentId && !disabled) rowsOnScreen.push({ key: `new:${agent.id}`, agent: agent.id });
+    }
+  }
+  const current = session && agentId ? `conv:${agentId}/${session}` : `agent:${agentId ?? ""}`;
+  const [reached, setReached] = useState<string>();
+  // The keyboard starts where the eye is: whatever is open, until the arrows move somewhere else.
+  const active = rowsOnScreen.some((row) => row.key === reached) ? reached : current;
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
+  const go = (key: string) => {
+    setReached(key);
+    buttons.current.get(key)?.focus();
+  };
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const index = rowsOnScreen.findIndex((row) => row.key === active);
+    const row = rowsOnScreen[index];
+    const step = (to: number) => {
+      const target = rowsOnScreen[Math.max(0, Math.min(rowsOnScreen.length - 1, to))];
+      if (target) {
+        event.preventDefault();
+        go(target.key);
+      }
+    };
+    if (event.key === "ArrowDown") return step(index + 1);
+    if (event.key === "ArrowUp") return step(index - 1);
+    if (event.key === "Home") return step(0);
+    if (event.key === "End") return step(rowsOnScreen.length - 1);
+    if (!row) return;
+    if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && !row.session) {
+      const open = expanded.includes(row.agent);
+      if (open === (event.key === "ArrowRight")) return;
+      event.preventDefault();
+      return onToggle(row.agent);
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && row.session) {
+      event.preventDefault();
+      return onDelete(row.agent, row.session);
+    }
+  };
   return (
     <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
       {/* The window controls overhang this card's top-left. The row is tall enough to hold them
@@ -119,7 +171,7 @@ export function Sidebar({
       {/* One flat list, the way every chat client draws a roster: full-width rows, a hairline that
           starts where the text does, and no card around anything. Cards per agent made an open one
           look heavy and made the list read as a stack of panels. */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0" onKeyDown={onKeyDown}>
         {agents.map((agent) => {
           const selected = agent.id === agentId;
           const open = expanded.includes(agent.id);
@@ -132,8 +184,15 @@ export function Sidebar({
             <div key={agent.id}>
               <div className="relative">
                 <button
+                  ref={(el) => {
+                    if (el) buttons.current.set(`agent:${agent.id}`, el);
+                    else buttons.current.delete(`agent:${agent.id}`);
+                  }}
+                  tabIndex={active === `agent:${agent.id}` ? 0 : -1}
                   aria-label={agent.name}
+                  aria-expanded={open}
                   aria-current={selected ? "true" : undefined}
+                  onFocus={() => setReached(`agent:${agent.id}`)}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
                   // The open agent is the filled row and its conversations are tinted underneath:
@@ -175,9 +234,9 @@ export function Sidebar({
                 <Button
                   kind="ghost"
                   size={28}
+                  tabIndex={-1}
                   onClick={() => onToggle(agent.id)}
                   aria-label={`${open ? "Hide" : "Show"} conversations of ${agent.name}`}
-                  aria-expanded={open}
                   title={open ? "Hide conversations" : "Show conversations"}
                   icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
                   className={`absolute right-1.5 top-1/2 -translate-y-1/2 ${selected ? "text-accent-fg hover:bg-accent-fg/15 hover:text-accent-fg" : ""}`}
@@ -194,6 +253,12 @@ export function Sidebar({
                   {conversations.map((row) => (
                     <div key={row.session} className="group relative">
                       <button
+                        ref={(el) => {
+                          if (el) buttons.current.set(`conv:${agent.id}/${row.session}`, el);
+                          else buttons.current.delete(`conv:${agent.id}/${row.session}`);
+                        }}
+                        tabIndex={active === `conv:${agent.id}/${row.session}` ? 0 : -1}
+                        onFocus={() => setReached(`conv:${agent.id}/${row.session}`)}
                         onClick={() => onOpen(agent.id, row.session)}
                         disabled={disabled && selected}
                         aria-current={selected && row.session === session ? "page" : undefined}
@@ -234,6 +299,7 @@ export function Sidebar({
                         <Button
                           kind="danger"
                           size={28}
+                          tabIndex={-1}
                           onClick={() => onDelete(agent.id, row.session)}
                           title="Delete conversation"
                           aria-label="Delete conversation"
@@ -250,6 +316,12 @@ export function Sidebar({
                     <Button
                       kind="ghost"
                       size={28}
+                      ref={(el) => {
+                        if (el) buttons.current.set(`new:${agent.id}`, el);
+                        else buttons.current.delete(`new:${agent.id}`);
+                      }}
+                      tabIndex={active === `new:${agent.id}` ? 0 : -1}
+                      onFocus={() => setReached(`new:${agent.id}`)}
                       onClick={onNew}
                       title="New conversation (⌘N)"
                       icon={<Plus size={14} />}
@@ -610,6 +682,11 @@ export function Transcript({
   return (
     <div
       ref={box}
+      // A focusable region, so the transcript can be read and scrolled from the keyboard (§11).
+      // Chromium gives a scroll container the arrow keys once it has focus; naming it is ours.
+      tabIndex={0}
+      role="region"
+      aria-label="Transcript"
       onScroll={(e) => {
         const el = e.currentTarget;
         follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;

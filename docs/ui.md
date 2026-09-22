@@ -417,10 +417,21 @@ transition on top of it produces jitter. Everything collapses to instant under
 ## 11. Accessibility
 
 Focus ring is `2px accent` at 2px offset, on `:focus-visible` only, and never on text fields, whose
-caret and container already say it. Body contrast stays at or above 4.5:1 in both modes. Tab moves
-between sidebar, conversation and composer; arrow keys move within each, with the sidebar as a
-listbox and one tab stop (WAI-ARIA APG). The transcript is a focusable region so it can be read and
-scrolled without a pointer. Status follows §9; no state is colour alone.
+caret and container already say it. Body contrast stays at or above 4.5:1 in both modes. Status
+follows §9; no state is colour alone.
+
+**The roster is one tab stop** (WAI-ARIA APG): Tab reaches it, arrows move inside it. Up and Down
+walk agents and their conversations as one list, Home and End jump to its ends, and Enter opens
+whatever the keyboard is on. The keyboard starts on what is open and stays where it was last moved.
+
+**A row's controls are keys, not tab stops.** A caret and a delete on every row would make Tab walk
+the roster three times over, so the row answers for them: Right and Left expand and collapse an
+agent, Delete removes the conversation the keyboard is on. `New conversation` is a row in the list
+for the same reason. The controls stay clickable and keep their labels for assistive technology;
+what they lose is a place in the tab order.
+
+**The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
+Chromium gives a scroll container the arrow keys once it has focus.
 
 ## 12. Brand
 
