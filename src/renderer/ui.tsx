@@ -7,7 +7,7 @@
  * written in `class`, so anything a call site might want to change — the text size, whether danger
  * is loud or quiet — is decided by a prop here instead.
  */
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 /**
  * Four kinds, two heights, and no third option.
@@ -35,8 +35,11 @@ export function Button({
   onClick,
   children,
   className = "",
+  ref,
   ...rest
 }: {
+  /** Forwarded so a roving tabindex can focus the control it has moved to (§11). */
+  ref?: Ref<HTMLButtonElement>;
   kind?: "primary" | "secondary" | "ghost" | "danger";
   size?: 28 | 32;
   loud?: boolean;
@@ -58,6 +61,7 @@ export function Button({
   return (
     <button
       {...rest}
+      ref={ref}
       type="button"
       aria-disabled={disabled ? true : undefined}
       onClick={disabled ? undefined : onClick}

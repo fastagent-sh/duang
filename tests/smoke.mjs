@@ -510,19 +510,75 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "picker closes again");
 
-      // Delete is reachable by keyboard, and it hides again when the focus that revealed it leaves:
-      // the row keeps focus after a click, which used to keep the control on screen.
-      assert.deepEqual(
-        await evaluate(`(() => {
-          const del = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
-          del.focus();
-          const focused = getComputedStyle(del).opacity;
-          del.closest('.group').querySelector('button').focus();
-          return { focused, afterRowFocus: getComputedStyle(del).opacity };
-        })()`),
-        { focused: "1", afterRowFocus: "0" },
-        "delete follows its own focus, not the row's",
+      // One tab stop for the roster, arrows inside it (§11).
+      const roster = () =>
+        evaluate(`(() => {
+          const rows = [...document.querySelectorAll('aside > div + div button')];
+          return { rows: rows.length, tabbable: rows.filter((b) => b.tabIndex === 0).length };
+        })()`);
+      const counted = await roster();
+      assert.ok(counted.rows > 1, "there is more than one row to walk");
+      assert.equal(counted.tabbable, 1, "the roster is one tab stop, not one per row");
+
+      // Folding the open agent with the caret — the keyboard has not moved, so the row the keyboard
+      // started on is simply gone. The list still has to have exactly one way in, or Tab skips it.
+      await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
+      await until(
+        "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
+        "the agent folds from its caret",
       );
+      assert.equal((await roster()).tabbable, 1, "a folded agent does not cost the roster its tab stop");
+      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Smoke\"]').click()");
+      await until(
+        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
+        "and opens again",
+      );
+
+      // A real Tab, from the control before the list: the point of a roving tabindex is that Tab
+      // can enter the roster at all.
+      await evaluate("document.querySelector('aside button[aria-label=\"Add agent directory\"]').focus()");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Tab" });
+      win.webContents.sendInputEvent({ type: "char", keyCode: "Tab" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
+      await until(
+        "document.activeElement.closest('aside > div + div') !== null",
+        "Tab enters the roster from outside it",
+      );
+
+      // Keys go one at a time: two in the same tick would be read against state React has not
+      // re-rendered yet, which is not how anyone types.
+      const press = (key) =>
+        evaluate(
+          `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
+        );
+      await evaluate("document.querySelector('aside > div + div button[tabindex=\"0\"]').focus()");
+      await press("ArrowUp");
+      await until(
+        "document.activeElement.getAttribute('aria-label') === 'Smoke'",
+        "Up reaches the agent row above the conversation",
+      );
+      // Left folds the agent, so the caret never has to be a tab stop.
+      await press("ArrowLeft");
+      await until("document.activeElement.getAttribute('aria-expanded') === 'false'", "Left folds the focused agent");
+      await press("ArrowRight");
+      await until(
+        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
+        "Right opens it again",
+      );
+
+      // The delete control follows its own focus: the row keeps focus after a click, which used to
+      // keep the control on screen. Reaching it by keyboard is the Delete key's job (§11), not the
+      // tab order's. Opacity is read after the transition settles, not during it.
+      const deleteOpacity = `(() => {
+        const del = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
+        return getComputedStyle(del).opacity;
+      })()`;
+      await evaluate("[...document.querySelectorAll('aside button[title=\"Delete conversation\"]')][0].focus()");
+      await until(`${deleteOpacity} === '1'`, "a focused delete control is visible");
+      await evaluate(
+        "[...document.querySelectorAll('aside button[title=\"Delete conversation\"]')][0].closest('.group').querySelector('button').focus()",
+      );
+      await until(`${deleteOpacity} === '0'`, "and hides again when the row takes the focus back");
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
       await type("   \n  ");
