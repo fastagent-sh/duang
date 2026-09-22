@@ -72,6 +72,12 @@ export default function App() {
     observer.current.observe(el);
   }, []);
 
+  // The dock carries the same count the sidebar does, for the times duang is not the window in front.
+  const unseenCount = Object.values(view.unseen).reduce((sum, byAgent) => sum + Object.keys(byAgent).length, 0);
+  useEffect(() => {
+    void duang.setUnseenCount(unseenCount);
+  }, [unseenCount]);
+
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };

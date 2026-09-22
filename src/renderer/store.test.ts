@@ -38,6 +38,7 @@ function harness() {
     revealAgent: async () => {},
     revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
+    setUnseenCount: async () => {},
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {
       opens.push(session);

@@ -82,6 +82,8 @@ if (!process.versions.electron) {
 
     let requests = 0;
     let hold = false;
+    /** When set, the model's answer waits for this: a run that finishes while you are elsewhere. */
+    let gate;
     let anthropicRequests = 0;
     globalThis.fetch = async (url, options = {}) => {
       const target = String(url instanceof Request ? url.url : url);
@@ -114,6 +116,7 @@ if (!process.versions.electron) {
           else options.signal?.addEventListener("abort", abort, { once: true });
         });
       }
+      if (gate) await gate;
       const tool = requests === 1;
       const item = tool
         ? {
@@ -298,6 +301,39 @@ if (!process.versions.electron) {
       await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').click()");
       await until("document.body.innerText.includes('run stopped')", "stopping is a settled transcript outcome");
       await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "composer leaves running state");
+
+      // A run that finishes while another conversation is on screen is the thing you came back for:
+      // the sidebar keeps a filled mark and the dock carries the count until it is looked at.
+      hold = false;
+      let release;
+      gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      await message("Answer while I look elsewhere.");
+      await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
+      await until("document.body.innerText.includes('What should we work on')", "left the running conversation");
+      release();
+      gate = undefined;
+      await until(
+        "document.querySelector('aside').innerText.includes('done')",
+        "an outcome nobody saw is marked in the sidebar",
+      );
+      assert.equal(electron.app.getBadgeCount(), 1, "and counted on the dock");
+      // The message went into the conversation that was already open, so find the row by the mark
+      // it is carrying rather than by a label.
+      await evaluate(`(() => {
+        // Conversation rows have no aria-label; the agent row above also ends with "1 done".
+        const row = [...document.querySelectorAll('aside button')].find(
+          (b) => !b.getAttribute('aria-label') && b.textContent.endsWith('done'),
+        );
+        if (!row) throw new Error('Missing the marked conversation row');
+        row.click();
+      })()`);
+      await until(
+        "!document.querySelector('aside').innerText.includes('done')",
+        "looking at it spends the mark",
+      );
+      assert.equal(electron.app.getBadgeCount(), 0, "and clears the dock");
 
       // Persisted registry and history survive reloading the renderer.
       win.webContents.reload();

@@ -24,7 +24,7 @@ import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
-import { Avatar, Badge, Button, type Tone } from "./ui.tsx";
+import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
 import type { AgentState, Store, View } from "./store.ts";
 
 /** A path as a person writes it. */
@@ -154,14 +154,9 @@ export function Sidebar({
                   ) : waiting.length > 0 ? (
                     // What landed while you were away, summed on the agent row and spent when the
                     // conversation is opened. Failures are what the count is for, so they win.
-                    <Badge
-                      tone={failures ? "danger" : "success"}
-                      className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}
-                    >
-                      <span className="truncate">
-                        {failures ? `${failures} failed` : `${waiting.length} done`}
-                      </span>
-                    </Badge>
+                    <Pill tone={failures ? "danger" : "accent"} onAccent={selected}>
+                      {failures ? `${failures} failed` : `${waiting.length} done`}
+                    </Pill>
                   ) : (
                     state !== "ready" && (
                       <Badge tone={tones[state]} className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}>
@@ -202,7 +197,9 @@ export function Sidebar({
                         }`}
                       >
                         <span
-                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""}`}
+                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""} ${
+                            row.unseen ? "font-semibold" : ""
+                          }`}
                         >
                           {row.label}
                         </span>
@@ -213,7 +210,7 @@ export function Sidebar({
                             working
                           </Badge>
                         ) : row.unseen ? (
-                          <Badge tone={row.unseen === "failed" ? "danger" : "success"}>{row.unseen}</Badge>
+                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"}>{row.unseen}</Pill>
                         ) : row.draft ? (
                           <span className="shrink-0 text-[10px] text-muted italic">unsent</span>
                         ) : (

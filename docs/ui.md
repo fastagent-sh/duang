@@ -367,9 +367,12 @@ it, such as a tooltip — while the third tier keeps it off the screen.
 
 **An outcome you were not there for is a decision, not reassurance.** Runs are long and fact 4 says
 you come back to them, so a run that settles while you are reading something else leaves a mark: the
-conversation row says `done` or `failed`, and the agent row sums them (`2 done`, `1 failed`, with
-failures winning the summary). Opening the conversation spends the mark, the way an unread count is
-spent by reading — its whole purpose is to disappear. A run you stopped yourself leaves nothing,
+conversation row says `done` or `failed` as a filled pill with its label in semibold, the agent row
+sums them (`2 done`, `1 failed`, with failures winning the summary), and the dock carries the total
+so it is answerable without duang being the window in front. Tested as a tinted word first, and
+missed several times in a row — this is the one mark in the interface that has to be seen from
+across the room, so it is Telegram's unread pill and nothing quieter. Opening the conversation
+spends the mark, the way an unread count is spent by reading — its whole purpose is to disappear. A run you stopped yourself leaves nothing,
 because you already know. The mark lives in memory: it is a fact about this window's attention, and
 the transcript stays the only durable record of what happened.
 

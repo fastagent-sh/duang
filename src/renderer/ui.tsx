@@ -108,6 +108,30 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
   );
 }
 
+/**
+ * A filled count, Telegram's unread pill: the one thing in the sidebar that has to be seen from
+ * across the room. A tinted word was missed in testing, repeatedly — this is louder on purpose and
+ * exists only for outcomes nobody has looked at yet (§9).
+ */
+export function Pill({
+  tone,
+  onAccent,
+  children,
+}: {
+  tone: "accent" | "danger";
+  /** Riding on a row that is already filled with the accent: the fill has to invert or it vanishes. */
+  onAccent?: boolean;
+  children: ReactNode;
+}) {
+  const fills = {
+    accent: onAccent ? "bg-accent-fg text-accent" : "bg-accent text-accent-fg",
+    danger: onAccent ? "bg-accent-fg text-danger" : "bg-danger text-danger-fg",
+  };
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${fills[tone]}`}>{children}</span>
+  );
+}
+
 export type Tone = "accent" | "success" | "warning" | "danger" | "muted";
 
 const dot: Record<Tone, string> = {
