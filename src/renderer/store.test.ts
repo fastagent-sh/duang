@@ -620,3 +620,23 @@ test("a renamed conversation takes the label the runtime reports, and a refusal 
   );
   store.dispose();
 });
+
+test("a rename that cannot be read back, and one refused on a conversation nobody opened, both say so", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => listed("s1");
+  await store.load();
+
+  // The name is written, and re-reading the list fails: the row would otherwise keep the old label
+  // with nothing said about it.
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime would not restart" });
+  await store.renameSession("a", "s1", "Named");
+  assert.equal(store.getSnapshot().sessionsError["a"], "runtime would not restart");
+
+  // A conversation of another agent, never opened here: there is no transcript to put a refusal in,
+  // so it goes on that agent's row rather than into the window-wide banner.
+  api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
+  await store.renameSession("b", "never-opened", "Named");
+  assert.equal(store.getSnapshot().sessionsError["b"], "session is busy");
+  assert.equal(store.getSnapshot().error, undefined, "and not into the banner with someone else's Retry");
+  store.dispose();
+});

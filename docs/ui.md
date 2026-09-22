@@ -118,11 +118,10 @@ anyway. A conversation row is 32 tall, has no avatar, and indents under its agen
 The row opens the agent, which is enough to put its latest conversation on screen; clicking the
 agent you are already on lists its conversations, and clicking again puts the list away. Nothing
 unfolds by itself — opening an agent already answers "what was I doing here", and unfolding the
-roster on top of that answers a question nobody asked. The caret at the row's trailing edge does the same for any agent, which
-is the part the row cannot express — it is how a second agent's conversations appear without
-leaving the one you are reading. Any number
-of agents can be listed at once, and folding one never closes the conversation being read. Opening
-an agent lists it too, because you have to see where you are. Which rows are open is a view
+roster on top of that answers a question nobody asked. The caret at the row's trailing edge does the
+same for any agent, which is the part the row cannot express: it is how a second agent's
+conversations appear without leaving the one you are reading. Any number of agents can be listed at
+once, and folding one never closes the conversation being read. Which rows are open is a view
 preference: it lives in the sidebar and is not remembered across launches.
 
 Listing an agent that is not open loads its conversations, which boots that agent's runtime the same

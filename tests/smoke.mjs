@@ -603,12 +603,44 @@ if (!process.versions.electron) {
         "a named conversation stops falling back to its first message",
       );
 
-      // A way back to the live turn: the control exists exactly while the tail is not being followed.
-      assert.equal(
-        await evaluate("document.querySelector('button[aria-label=\"Back to the latest\"]') === null"),
-        true,
-        "nothing to offer while the transcript is at the bottom",
+      // A way back to the live turn: absent at the bottom, offered once the tail is not followed,
+      // and gone again after it takes you back.
+      const backToLatest = "document.querySelector('button[aria-label=\"Back to the latest\"]')";
+      assert.equal(await evaluate(`${backToLatest} === null`), true, "nothing to offer while at the bottom");
+      // The smoke conversation is short, so make the window small enough for it to overflow — the
+      // control only means anything when there is something to scroll past.
+      const size = win.getSize();
+      win.setSize(800, 540);
+      await until(
+        `(() => { const el = document.querySelector('[aria-label="Transcript"]'); return el.scrollHeight > el.clientHeight + 40; })()`,
+        "the transcript can scroll",
       );
+      // Each poll re-issues the scroll: the tail-following effect can pull the view back in the same
+      // frame, and a test that scrolls once is testing that race instead of the control.
+      const atTop = `(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        el.scrollTop = 0;
+        return ${backToLatest} !== null;
+      })()`;
+      const atBottom = `(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        el.scrollTop = el.scrollHeight;
+        return ${backToLatest} === null;
+      })()`;
+      // A resize can make a transcript scrollable with no scroll event to notice it, so settle at
+      // the bottom first: the control has to be absent there before it means anything above.
+      await until(atBottom, "still nothing to offer at the bottom of a small window");
+      await until(atTop, "scrolling up offers the way back");
+      await evaluate(`${backToLatest}.click()`);
+      await until(`${backToLatest} === null`, "and it is gone once the transcript is back at the bottom");
+      assert.ok(
+        await evaluate(`(() => {
+          const el = document.querySelector('[aria-label="Transcript"]');
+          return el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+        })()`),
+        "the transcript is at the bottom again",
+      );
+      win.setSize(size[0], size[1]);
 
       // The row's actions control follows its own focus: the row keeps focus after a click, which
       // used to keep the control on screen. Reaching the actions by keyboard is the context menu's

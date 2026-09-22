@@ -169,7 +169,14 @@ export function Sidebar({
    * Never nowhere — folding the open agent takes `current` off screen, and a list with no
    * `tabIndex={0}` in it is a list Tab cannot enter at all.
    */
-  const active = (focusable.find((row) => row.key === reached) ?? focusable.find((row) => row.key === current) ?? focusable[0])?.key;
+  const active = (
+    focusable.find((row) => row.key === reached) ??
+    focusable.find((row) => row.key === current) ??
+    // The open conversation is not listed unless its agent is unfolded; the agent itself is the
+    // next truest answer to "where am I", and only then the top of the list.
+    focusable.find((row) => row.key === `agent:${agentId ?? ""}`) ??
+    focusable[0]
+  )?.key;
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const go = (key: string) => {
     setReached(key);
@@ -328,16 +335,31 @@ export function Sidebar({
                       {errors[agent.id]}
                     </p>
                   )}
-                  {conversations.map((row) =>
-                    renaming?.agent === agent.id && renaming.session === row.session ? (
+                  {conversations.map((row) => {
+                    // A conversation the runtime has never heard of can be neither renamed nor
+                    // deleted — `update()` and `delete()` both answer `no_such_session` — so it has
+                    // no menu at all, which is what the keyboard's Delete already assumed.
+                    const menu = row.fresh
+                      ? undefined
+                      : () =>
+                          void onMenu(true).then((chosen) => {
+                            if (chosen === "rename")
+                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
+                            if (chosen === "delete") onDelete(agent.id, row.session);
+                          });
+                    return renaming?.agent === agent.id && renaming.session === row.session ? (
                       <RenameRow
                         key={row.session}
                         label={renaming.label}
                         onCancel={() => {
+                          // The row's button is unmounted while this input stands in for it, so the
+                          // focus is asked for and taken once it is back — the same path a deleted
+                          // row uses. Focusing here would be a no-op and leave the body focused.
+                          restore.current = `conv:${agent.id}/${row.session}`;
                           setRenaming(undefined);
-                          buttons.current.get(`conv:${agent.id}/${row.session}`)?.focus();
                         }}
                         onCommit={(name) => {
+                          restore.current = `conv:${agent.id}/${row.session}`;
                           setRenaming(undefined);
                           if (name.trim() && name.trim() !== renaming.label) onRename(agent.id, row.session, name);
                         }}
@@ -356,12 +378,9 @@ export function Sidebar({
                         // Notes and Safari's bookmarks do it.
                         onDoubleClick={() => !row.fresh && setRenaming({ agent: agent.id, session: row.session, label: row.label })}
                         onContextMenu={(event) => {
+                          if (!menu) return;
                           event.preventDefault();
-                          void onMenu(!row.fresh).then((chosen) => {
-                            if (chosen === "rename")
-                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
-                            if (chosen === "delete") onDelete(agent.id, row.session);
-                          });
+                          menu();
                         }}
                         disabled={disabled && selected}
                         aria-current={selected && row.session === session ? "page" : undefined}
@@ -400,25 +419,21 @@ export function Sidebar({
                       </button>
                       {/* One way to act on a row, not a shortcut to its most destructive action:
                           the same menu the right click raises. */}
-                      <Button
-                        kind="ghost"
-                        size={28}
-                        tabIndex={-1}
-                        onClick={() => {
-                          void onMenu(!row.fresh).then((chosen) => {
-                            if (chosen === "rename")
-                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
-                            if (chosen === "delete") onDelete(agent.id, row.session);
-                          });
-                        }}
-                        title="Conversation actions"
-                        aria-label={`Actions for ${row.label}`}
-                        icon={<DotsThree size={16} weight="bold" />}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      />
+                      {menu && (
+                        <Button
+                          kind="ghost"
+                          size={28}
+                          tabIndex={-1}
+                          onClick={menu}
+                          title="Conversation actions"
+                          aria-label={`Actions for ${row.label}`}
+                          icon={<DotsThree size={16} weight="bold" />}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        />
+                      )}
                     </div>
-                    ),
-                  )}
+                    );
+                  })}
                   {selected && !disabled && (
                     <Button
                       kind="ghost"
@@ -779,6 +794,17 @@ export function Transcript({
   // Scrolling up during a long run stops the tail following, and the only way back was to scroll:
   // the control appears exactly while that is true.
   const [away, setAway] = useState(false);
+  /**
+   * One place that decides it, because scrolling is not the only way the answer changes: resizing
+   * the window, or output growing past the viewport, makes a transcript scrollable without any
+   * scroll event to notice it.
+   */
+  const check = () => {
+    const el = box.current;
+    if (!el) return;
+    follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    setAway(!follow.current);
+  };
 
   // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
   const last = items.at(-1);
@@ -787,7 +813,15 @@ export function Transcript({
   useEffect(() => {
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
+    check();
   }, [items, busySince, streaming]);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col">
@@ -798,9 +832,10 @@ export function Transcript({
           onClick={() => {
             const el = box.current;
             if (!el) return;
-            follow.current = true;
-            setAway(false);
-            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+            // Not smooth: every frame of an animated scroll fires `scroll`, and until the last one
+            // the transcript is not at the bottom, so the button it came from flickers back.
+            el.scrollTop = el.scrollHeight;
+            check();
           }}
           aria-label="Back to the latest"
           title="Back to the latest"
@@ -816,11 +851,7 @@ export function Transcript({
       tabIndex={0}
       role="region"
       aria-label="Transcript"
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        setAway(!follow.current);
-      }}
+      onScroll={check}
       // pt clears the floating header; the first message starts below it, not behind it.
       className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
       style={{ paddingBottom: bottomGap }}
