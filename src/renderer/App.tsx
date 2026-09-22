@@ -26,9 +26,13 @@ export default function App() {
   // Only the open agent has running and drafted conversations worth marking; another agent's list
   // is just its history.
   const rowsFor = (id: string) =>
-    id === agentId
-      ? rows(sessions[id] ?? [], c?.session, view.runningSessions, view.draftSessions)
-      : rows(sessions[id] ?? []);
+    rows(
+      sessions[id] ?? [],
+      id === agentId ? c?.session : undefined,
+      view.running[id],
+      view.unsent[id],
+      view.unseen[id],
+    );
   const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
@@ -68,6 +72,12 @@ export default function App() {
     observer.current.observe(el);
   }, []);
 
+  // The dock carries the same count the sidebar does, for the times duang is not the window in front.
+  const unseenCount = Object.values(view.unseen).reduce((sum, byAgent) => sum + Object.keys(byAgent).length, 0);
+  useEffect(() => {
+    void duang.setUnseenCount(unseenCount);
+  }, [unseenCount]);
+
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
@@ -89,7 +99,8 @@ export default function App() {
         agents={agents}
         agentId={agentId}
         states={states}
-        running={view.runningAgents}
+        running={view.running}
+        unseen={view.unseen}
         rowsFor={rowsFor}
         session={c?.session}
         expanded={expanded}
@@ -126,7 +137,7 @@ export default function App() {
             agent={agent.name}
             title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
             dir={agent.dir}
-            working={view.runningAgents.includes(agent.id)}
+            working={!!view.running[agent.id]?.length}
             context={
               usage?.contextTokens !== undefined && usage.contextWindow
                 ? Math.round((usage.contextTokens / usage.contextWindow) * 100)

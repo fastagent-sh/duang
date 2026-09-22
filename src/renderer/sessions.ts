@@ -7,6 +7,12 @@ export interface Row {
   updatedAt?: number;
   /** Minted here and not yet known to the runtime: a session exists once a turn lands in it. */
   fresh?: boolean;
+  /** A turn is in flight in this conversation. The sidebar's answer to "which one is working". */
+  running?: boolean;
+  /** Unsent text is waiting here. Listed for the same reason a running one is: it is not finished. */
+  draft?: boolean;
+  /** An outcome that landed while the person was elsewhere, and has not been looked at yet. */
+  unseen?: "done" | "failed";
 }
 
 /** A timestamp as a list row wants it: coarse on purpose, because an exact clock time is noise here. */
@@ -26,16 +32,25 @@ export function rows(
   selected?: string,
   running: string[] = [],
   drafts: string[] = [],
+  unseen: Record<string, "done" | "failed"> = {},
 ): Row[] {
+  const mark = <T extends { session: string }>(row: T) => ({
+    ...row,
+    ...(running.includes(row.session) ? { running: true } : {}),
+    ...(drafts.includes(row.session) ? { draft: true } : {}),
+    ...(unseen[row.session] ? { unseen: unseen[row.session] } : {}),
+  });
   const known = [...summaries]
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((s) => ({ session: s.session, label: s.name ?? s.preview ?? s.session, updatedAt: s.updatedAt }));
+    .map((s) => mark({ session: s.session, label: s.name ?? s.preview ?? s.session, updatedAt: s.updatedAt }));
   const local = [...new Set([...(selected ? [selected] : []), ...running, ...drafts])]
     .filter((session) => !known.some((row) => row.session === session))
-    .map((session) => ({
-      session,
-      label: running.includes(session) ? "Running conversation" : "New conversation",
-      fresh: true,
-    }));
+    .map((session) =>
+      mark({
+        session,
+        label: running.includes(session) ? "Running conversation" : "New conversation",
+        fresh: true,
+      }),
+    );
   return [...local, ...known];
 }

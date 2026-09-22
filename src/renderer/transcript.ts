@@ -18,7 +18,7 @@ export type Item =
    * a quiet line or as a failure — stopping a run is not an error, and colouring it like one was
    * the transcript telling the person they broke something.
    */
-  | { kind: "note"; tone: "info" | "error"; text: string };
+  | { kind: "note"; tone: "info" | "warning" | "error"; text: string };
 
 /**
  * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
@@ -134,7 +134,9 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         {
           kind: "note",
           tone: stopped ? "info" : "error",
-          text: `run ${String(data.status)}${error?.message ? `: ${error.message}` : ""}`,
+          // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
+          // `aborted`, and never `failed` — that word blames the run for their decision.
+          text: `run ${stopped ? "stopped" : String(data.status)}${error?.message ? `: ${error.message}` : ""}`,
         },
       ];
     }

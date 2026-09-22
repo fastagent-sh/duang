@@ -136,6 +136,12 @@ function register(): void {
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
   ipcMain.handle("models:list", credentials);
+  // The dock is where "something happened while you were away" belongs: the sidebar can only say it
+  // while duang is the window you are looking at.
+  ipcMain.handle("app:unseen", (_e, count: number) => {
+    if (!Number.isInteger(count) || count < 0) throw new Error(`Unseen count must be a non-negative integer: ${count}`);
+    app.setBadgeCount(count);
+  });
 
   ipcMain.handle("session:delete", async (_e, id: string, session: string) => {
     requireSession(session);

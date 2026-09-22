@@ -79,9 +79,12 @@ export default function Gallery() {
           <Button disabled="This agent is not ready">Reveal in Finder</Button>
         </Section>
 
-        <Section title="Badges" note="a mark and a word, never colour alone; pulse means still happening">
+        <Section title="Badges — the one status vocabulary" note="a mark and a word, never colour alone; pulse means still happening">
           <Badge tone="accent" pulse>
             working… 12s
+          </Badge>
+          <Badge tone="accent" pulse>
+            2 working
           </Badge>
           <Badge tone="accent" pulse>
             running
@@ -89,7 +92,10 @@ export default function Gallery() {
           <Badge tone="success">done</Badge>
           <Badge tone="danger">failed</Badge>
           <Badge tone="muted">stopped</Badge>
+          <Badge tone="warning">refused</Badge>
           <Badge tone="warning">needs a model</Badge>
+          <Badge tone="warning">no agent yet</Badge>
+          <Badge tone="danger">broken</Badge>
         </Section>
 
         <Section title="Surfaces" note="value plus a hairline, not shadow — except the one popover shadow">

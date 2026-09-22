@@ -24,7 +24,7 @@ import type { AgentRow } from "../preload/index.ts";
 import type { Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
-import { Avatar, Badge, Button, dot, type Tone } from "./ui.tsx";
+import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
 import type { AgentState, Store, View } from "./store.ts";
 
 /** A path as a person writes it. */
@@ -57,6 +57,7 @@ export function Sidebar({
   agentId,
   states,
   running,
+  unseen,
   rowsFor,
   session,
   expanded,
@@ -72,7 +73,10 @@ export function Sidebar({
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
-  running: string[];
+  /** Running conversations per agent: the count is what makes `2 working` possible. */
+  running: Record<string, string[]>;
+  /** Outcomes nobody has looked at yet, per agent. The reason to come back to this window. */
+  unseen: Record<string, Record<string, "done" | "failed">>;
   rowsFor: (agentId: string) => Row[];
   session?: string;
   expanded: string[];
@@ -115,7 +119,9 @@ export function Sidebar({
           const selected = agent.id === agentId;
           const open = expanded.includes(agent.id);
           const state = states[agent.id] ?? "ready";
-          const working = running.includes(agent.id);
+          const busy = running[agent.id]?.length ?? 0;
+          const waiting = Object.values(unseen[agent.id] ?? {});
+          const failures = waiting.filter((outcome) => outcome === "failed").length;
           const conversations = open ? rowsFor(agent.id) : [];
           return (
             <div key={agent.id}>
@@ -124,29 +130,40 @@ export function Sidebar({
                   aria-label={agent.name}
                   aria-current={selected ? "true" : undefined}
                   onClick={() => onSelect(agent.id)}
-                  title={`${agent.name}\n${agent.dir}\n${working ? "Working" : says[state]}`}
+                  title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
                   // The open agent is the filled row and its conversations are tinted underneath:
                   // the group you are working in is what the column marks first.
                   className={`flex w-full items-center gap-3 py-2.5 pr-10 pl-3 text-left transition-colors ${
                     selected ? "bg-accent text-accent-fg" : "hover:bg-hover"
                   }`}
                 >
-                  <Avatar name={agent.name} working={working} />
+                  <Avatar name={agent.name} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
                     <span className={`block truncate text-[11px] font-mono ${selected ? "opacity-75" : "text-muted"}`}>
                       {home(agent.dir)}
                     </span>
                   </span>
-                  {/* Idle and ready is the state worth saying nothing about (§9). */}
-                  {(working || state !== "ready") &&
-                    (working ? (
-                      <Badge tone="accent" pulse className="min-w-0">
-                        <span className="truncate">working</span>
+                  {/* Idle and ready is the state worth saying nothing about (§9). Everything else
+                      is said in words: a coloured dot alone leaves colour doing the work, and the
+                      count is what the agent row can say that a conversation row cannot. */}
+                  {busy > 0 ? (
+                    <Badge tone="accent" pulse className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}>
+                      <span className="truncate">{busy > 1 ? `${busy} working` : "working"}</span>
+                    </Badge>
+                  ) : waiting.length > 0 ? (
+                    // What landed while you were away, summed on the agent row and spent when the
+                    // conversation is opened. Failures are what the count is for, so they win.
+                    <Pill tone={failures ? "danger" : "accent"} onAccent={selected}>
+                      {failures ? `${failures} failed` : `${waiting.length} done`}
+                    </Pill>
+                  ) : (
+                    state !== "ready" && (
+                      <Badge tone={tones[state]} className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}>
+                        <span className="truncate">{says[state].toLowerCase()}</span>
                       </Badge>
-                    ) : (
-                      <span aria-label={says[state]} className={`size-2 shrink-0 rounded-full ${dot[tones[state]]}`} />
-                    ))}
+                    )
+                  )}
                 </button>
                 {/* Opening an agent and looking at its conversations are two different questions, so
                     they are two different controls. Any number of agents can be open at once. */}
@@ -180,18 +197,32 @@ export function Sidebar({
                         }`}
                       >
                         <span
-                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""}`}
+                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""} ${
+                            row.unseen ? "font-semibold" : ""
+                          }`}
                         >
                           {row.label}
                         </span>
-                        {row.updatedAt !== undefined && (
-                          <span
-                            className={`shrink-0 text-[10px] group-hover:invisible ${
-                              selected && row.session === session ? "text-accent opacity-75" : "text-muted"
-                            }`}
-                          >
-                            {ago(row.updatedAt)}
-                          </span>
+                        {/* Which conversation is alive is the question this row answers; the agent
+                            row above only says that one of them is. */}
+                        {row.running ? (
+                          <Badge tone="accent" pulse>
+                            working
+                          </Badge>
+                        ) : row.unseen ? (
+                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"}>{row.unseen}</Pill>
+                        ) : row.draft ? (
+                          <span className="shrink-0 text-[10px] text-muted italic">unsent</span>
+                        ) : (
+                          row.updatedAt !== undefined && (
+                            <span
+                              className={`shrink-0 text-[10px] group-hover:invisible ${
+                                selected && row.session === session ? "text-accent opacity-75" : "text-muted"
+                              }`}
+                            >
+                              {ago(row.updatedAt)}
+                            </span>
+                          )
                         )}
                       </button>
                       {!row.fresh && (
@@ -634,15 +665,20 @@ function Message({ item }: { item: Item }) {
       );
     case "note":
       // A fact about the session, not something anyone said: centred, quiet, and only red when it
-      // is genuinely a failure.
+      // is genuinely a failure. A refusal names itself, because "refused" and "failed" are not the
+      // same answer — nothing ran, so the text is still the person's to edit (§9).
       return (
-        <div
-          className={`flex items-center justify-center gap-1.5 text-[11px] ${
-            item.tone === "error" ? "text-danger" : "text-muted"
-          }`}
-        >
-          {item.tone === "error" ? <WarningCircle size={12} /> : <Info size={12} />}
-          <span className="font-mono">{item.text}</span>
+        <div className="flex items-center justify-center gap-1.5 text-[11px]">
+          {item.tone === "warning" ? (
+            <Badge tone="warning" icon={<WarningCircle size={12} />}>
+              refused
+            </Badge>
+          ) : (
+            <span className={item.tone === "error" ? "text-danger" : "text-muted"}>
+              {item.tone === "error" ? <WarningCircle size={12} /> : <Info size={12} />}
+            </span>
+          )}
+          <span className={`font-mono ${item.tone === "error" ? "text-danger" : "text-muted"}`}>{item.text}</span>
         </div>
       );
     case "tool":
@@ -662,12 +698,18 @@ const toolIcons: Record<string, typeof Terminal> = {
   fetch: Globe,
 };
 
-/** One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9. */
-function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone: Tone } {
+/**
+ * One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9.
+ *
+ * A tool that simply worked says nothing: the third tier of §9 is "nothing to do, show nothing",
+ * and a trace where nine cards in ten wear a green `done` is exactly how the one that failed gets
+ * lost. Absence is unambiguous here because every other outcome, including still running, is named.
+ */
+function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone: Tone } | undefined {
   if (item.status === "interrupted") return { word: "stopped", tone: "muted" };
   if (item.isError) return { word: "failed", tone: "danger" };
   if (item.status === "running") return { word: "running", tone: "accent" };
-  return { word: "done", tone: "success" };
+  return undefined;
 }
 
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
@@ -681,9 +723,11 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
         <Icon size={14} className="shrink-0 text-muted" />
         <span className="font-mono truncate">{summary || item.name}</span>
         {/* The state belongs next to the command it describes, not at the far edge of the row. */}
-        <Badge tone={state.tone} pulse={item.status === "running"} className="shrink-0">
-          {state.word}
-        </Badge>
+        {state && (
+          <Badge tone={state.tone} pulse={item.status === "running"} className="shrink-0">
+            {state.word}
+          </Badge>
+        )}
       </summary>
       <div className="px-3 pb-2.5 pt-0.5 space-y-2 text-[11.5px] font-mono">
         {summary !== stringify(item.args) && (

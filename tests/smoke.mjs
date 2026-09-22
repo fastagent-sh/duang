@@ -82,6 +82,8 @@ if (!process.versions.electron) {
 
     let requests = 0;
     let hold = false;
+    /** When set, the model's answer waits for this: a run that finishes while you are elsewhere. */
+    let gate;
     let anthropicRequests = 0;
     globalThis.fetch = async (url, options = {}) => {
       const target = String(url instanceof Request ? url.url : url);
@@ -114,6 +116,7 @@ if (!process.versions.electron) {
           else options.signal?.addEventListener("abort", abort, { once: true });
         });
       }
+      if (gate) await gate;
       const tool = requests === 1;
       const item = tool
         ? {
@@ -239,7 +242,15 @@ if (!process.versions.electron) {
         "document.body.innerText.includes('Smoke answer') && !document.body.innerText.includes('working…')",
         "stream settles",
       );
-      await until("document.querySelector('details')?.innerText.includes('done')", "tool trace finishes");
+      // A tool that worked says nothing (§9, third tier): the card is finished when its result is
+      // in and the running badge is gone.
+      await until(
+        `(() => {
+          const card = document.querySelector('details');
+          return card && card.textContent.includes('Hello from the workspace') && !card.textContent.includes('running');
+        })()`,
+        "tool trace finishes",
+      );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
       // The card now separates arguments from result, so read the whole card rather than its first block.
       const transcript = await evaluate("document.querySelector('details').textContent");
@@ -288,8 +299,41 @@ if (!process.versions.electron) {
       await click("Read hello.txt and answer.");
       await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "return to active run");
       await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').click()");
-      await until("document.body.innerText.includes('run aborted')", "abort is a settled transcript outcome");
+      await until("document.body.innerText.includes('run stopped')", "stopping is a settled transcript outcome");
       await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "composer leaves running state");
+
+      // A run that finishes while another conversation is on screen is the thing you came back for:
+      // the sidebar keeps a filled mark and the dock carries the count until it is looked at.
+      hold = false;
+      let release;
+      gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      await message("Answer while I look elsewhere.");
+      await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
+      await until("document.body.innerText.includes('What should we work on')", "left the running conversation");
+      release();
+      gate = undefined;
+      await until(
+        "document.querySelector('aside').innerText.includes('done')",
+        "an outcome nobody saw is marked in the sidebar",
+      );
+      assert.equal(electron.app.getBadgeCount(), 1, "and counted on the dock");
+      // The message went into the conversation that was already open, so find the row by the mark
+      // it is carrying rather than by a label.
+      await evaluate(`(() => {
+        // Conversation rows have no aria-label; the agent row above also ends with "1 done".
+        const row = [...document.querySelectorAll('aside button')].find(
+          (b) => !b.getAttribute('aria-label') && b.textContent.endsWith('done'),
+        );
+        if (!row) throw new Error('Missing the marked conversation row');
+        row.click();
+      })()`);
+      await until(
+        "!document.querySelector('aside').innerText.includes('done')",
+        "looking at it spends the mark",
+      );
+      assert.equal(electron.app.getBadgeCount(), 0, "and clears the dock");
 
       // Persisted registry and history survive reloading the renderer.
       win.webContents.reload();
@@ -433,10 +477,8 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('moved-away')", "the missing directory is named");
       // Removal is offered by the panel that explains the problem, not by the sidebar row, so look
       // for the button rather than for the word anywhere on screen.
-      assert.ok(
-        await evaluate(
-          "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
-        ),
+      await until(
+        "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
         "a directory that no longer exists stays removable from the panel that explains it",
       );
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
