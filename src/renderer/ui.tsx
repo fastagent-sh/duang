@@ -29,6 +29,7 @@ export function Button({
   kind = "secondary",
   size = 32,
   loud,
+  onAccent,
   icon,
   disabled,
   title,
@@ -43,6 +44,12 @@ export function Button({
   kind?: "primary" | "secondary" | "ghost" | "danger";
   size?: 28 | 32;
   loud?: boolean;
+  /**
+   * Riding on a row already filled with the accent. A call site cannot fix this with a class: its
+   * `text-accent-fg` and `ghost`'s own `text-muted` have the same specificity, so the generated
+   * sheet's order decides, and the caret on the open agent's row came out grey on violet.
+   */
+  onAccent?: boolean;
   icon?: ReactNode;
   disabled?: string | false;
   children?: ReactNode;
@@ -52,7 +59,9 @@ export function Button({
   const kinds = {
     primary: ["bg-accent text-accent-fg", "hover:bg-accent/85"],
     secondary: ["border border-stroke", "hover:bg-hover"],
-    ghost: ["text-muted", "hover:bg-hover hover:text-text"],
+    ghost: onAccent
+      ? ["text-accent-fg", "hover:bg-accent-fg/15 hover:text-accent-fg"]
+      : ["text-muted", "hover:bg-hover hover:text-text"],
     danger: ["text-muted", "hover:bg-danger/12 hover:text-danger"],
   };
   const filled = { primary: "bg-accent text-accent-fg", danger: "bg-danger text-danger-fg" };

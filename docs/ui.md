@@ -115,12 +115,13 @@ the directory is what identifies an agent, and the conversations are listed dire
 anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
 
 **Opening an agent and listing its conversations are two questions, so they are two controls.**
-The row opens the agent and shows what it has been doing; clicking the agent you are already on
-puts that list away again. The caret at the row's trailing edge does the same for any agent, which
-is the part the row cannot express — it is how a second agent's conversations appear without
-leaving the one you are reading. Any number
-of agents can be listed at once, and folding one never closes the conversation being read. Opening
-an agent lists it too, because you have to see where you are. Which rows are open is a view
+The row opens the agent, which is enough to put its latest conversation on screen; clicking the
+agent you are already on lists its conversations, and clicking again puts the list away. Nothing
+unfolds by itself — opening an agent already answers "what was I doing here", and unfolding the
+roster on top of that answers a question nobody asked. The caret at the row's trailing edge does the
+same for any agent, which is the part the row cannot express: it is how a second agent's
+conversations appear without leaving the one you are reading. Any number of agents can be listed at
+once, and folding one never closes the conversation being read. Which rows are open is a view
 preference: it lives in the sidebar and is not remembered across launches.
 
 Listing an agent that is not open loads its conversations, which boots that agent's runtime the same
@@ -136,8 +137,10 @@ the list, not the size of the thing selected.
 the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,
 and the reason shows up as soon as two agents are listed — a card per agent turns the column into a
 stack of panels and makes an open agent look heavy. A conversation row is one line indented to the
-agent's text, with the relative time trailing and Delete in its place on hover, so a topic is
-visibly lighter than the agent that owns it.
+agent's text, with the relative time trailing and a `…` in its place on hover, so a topic is visibly
+lighter than the agent that owns it. The `…` opens the row's menu rather than being a shortcut to
+its most destructive action: one way to act on a row, and it is the same menu the right click and
+Shift+F10 raise.
 
 **An expanded agent lists its conversations**, including one that is running and one holding unsent
 text, because fact 4 makes "what is alive right now" the question the sidebar exists to answer. Only
@@ -335,7 +338,21 @@ Everything else follows from those two:
   started one. *Only in the live view:* the fact is recorded when the message is sent, and FastAgent's
   session entries carry the text without saying a run was in flight, so a reopened conversation shows
   the bubble without the label. Deriving it would mean keeping a second record of the transcript,
-  which this app does not do.
+  which this app does not do; making it durable is asked for upstream in
+  [fastagent#595](https://github.com/fastagent-sh/fastagent/issues/595).
+- **A conversation is named, or it borrows its first message.** FastAgent owns the label
+  (`update({ name })`), and until something sets it a row falls back to the opening sentence — which
+  is why a conversation whose subject moved on keeps the sentence it started with. Renaming happens
+  in place on the row, reached the way macOS reaches it: the row's context menu carries `Rename…`,
+  and a double click on the row does it directly — single click already opens, so the double is
+  free, which is how Notes' folders and Safari's bookmarks work. Enter keeps the name, Escape drops
+  it, an empty name is not a rename. The menu is a native one, so it looks like the system's and not
+  like one of our popovers, and Chromium raises it for Shift+F10 and the Menu key too, which is the
+  keyboard path. No F2: that is the Windows convention. duang does not invent a name from the
+  model's output either — that spends a request nobody asked for.
+- **A way back to the live turn.** Scrolling up stops the tail from following, and that is exactly
+  when a control appears above the composer to take you back to the bottom. It exists only while
+  that is true, so a transcript at the bottom carries nothing extra.
 - **Streaming** trails a block cursor `▍`, which says "still writing" without a spinner and vanishes
   on settle.
 - **A settled answer ends with when it landed and a way to copy it**, and nothing else. Runs are
@@ -434,6 +451,37 @@ what they lose is a place in the tab order.
 
 **The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
 Chromium gives a scroll container the arrow keys once it has focus.
+
+## 11b. Keys
+
+The whole list, so it lives in one place instead of being read out of the handlers.
+
+| Key | Where | Does |
+|---|---|---|
+| `⌘N` | anywhere | New conversation in the open agent |
+| `Esc` | anywhere | Stop the running turn (a popover takes it first) |
+| `Tab` | anywhere | Sidebar → transcript → composer |
+| `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
+| `Home` `End` | roster | First and last row |
+| `→` `←` | roster, on an agent | Show and hide its conversations |
+| `Enter` `Space` | roster | Open the row |
+| `Shift+F10`, `Menu` | roster, on a conversation | Its menu: `Rename…`, `Delete Conversation` |
+| `Delete` `Backspace` | roster, on a conversation | Delete it, after confirming |
+| `Enter` | renaming a conversation | Keep the name |
+| `Esc` | renaming a conversation | Drop it |
+| `Enter` | composer | Send |
+| `⇧Enter` | composer | Newline |
+| `/` | composer | Command completion |
+| `↓` `↑` | composer, list open | Move through the completions |
+| `Enter` `Tab` | composer, list open | Accept the name rather than send — a bare `/name` is never a message |
+| `Esc` | composer, list open | Dismiss the completions |
+| `Esc` | model picker | Close it and return focus to the chip that opened it |
+| arrows, `PageUp` `PageDown` | transcript, focused | Scroll, from Chromium |
+
+An IME composing text keeps `Enter`: sending there would cut a word in half.
+
+Deliberately absent: `F2` for rename, which is the Windows convention (see §8), and a global search
+key, which `⌘K` is reserved for in week 3.
 
 ## 12. Brand
 

@@ -39,6 +39,8 @@ function harness() {
     revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
     setUnseenCount: async () => {},
+    conversationMenu: async () => undefined,
+    renameSession: async () => ({ ok: true }),
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {
       opens.push(session);
@@ -585,5 +587,56 @@ test("a message sent into a running turn is marked as having joined it", async (
     false,
     "compacting is not a run to join",
   );
+  store.dispose();
+});
+
+test("a renamed conversation takes the label the runtime reports, and a refusal stays in its own transcript", async () => {
+  const { api, store } = harness();
+  const renames: string[][] = [];
+  api.renameSession = async (agentId, session, name) => {
+    renames.push([agentId, session, name]);
+    return { ok: true };
+  };
+  api.openAgent = async () => listed("s1");
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+
+  api.openAgent = async () =>
+    ({
+      ok: true,
+      model: "provider/model",
+      sessions: [{ session: "s1", name: "The i18n check", updatedAt: 6, createdAt: 0, messageCount: 2 }],
+    }) as never;
+  await store.renameSession("a", "s1", "The i18n check");
+  assert.deepEqual(renames, [["a", "s1", "The i18n check"]]);
+  assert.equal(store.getSnapshot().sessions["a"]?.[0]?.name, "The i18n check", "the list is re-read, not patched");
+
+  // A refused rename is a refusal: nothing ran, and it belongs to that conversation's transcript.
+  api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
+  await store.renameSession("a", "s1", "Another name");
+  assert.deepEqual(
+    c.items.filter((item) => item.kind === "note").map((item) => [item.tone, item.text]),
+    [["warning", "session is busy"]],
+  );
+  store.dispose();
+});
+
+test("a rename that cannot be read back, and one refused on a conversation nobody opened, both say so", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => listed("s1");
+  await store.load();
+
+  // The name is written, and re-reading the list fails: the row would otherwise keep the old label
+  // with nothing said about it.
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime would not restart" });
+  await store.renameSession("a", "s1", "Named");
+  assert.equal(store.getSnapshot().sessionsError["a"], "runtime would not restart");
+
+  // A conversation of another agent, never opened here: there is no transcript to put a refusal in,
+  // so it goes on that agent's row rather than into the window-wide banner.
+  api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
+  await store.renameSession("b", "never-opened", "Named");
+  assert.equal(store.getSnapshot().sessionsError["b"], "session is busy");
+  assert.equal(store.getSnapshot().error, undefined, "and not into the banner with someone else's Retry");
   store.dispose();
 });

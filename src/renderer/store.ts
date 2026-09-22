@@ -222,6 +222,27 @@ export function createStore(api: DuangApi) {
   };
   const leave = () => publish({ conversation: undefined });
 
+  /**
+   * Re-reads one agent's conversations. Ordered per agent, so a slow answer cannot overwrite a
+   * newer one, and a failure lands on that agent's row instead of nowhere: an empty list and a list
+   * that could not be read are not the same answer.
+   */
+  async function listSessions(id: string) {
+    const request = (listRequests.get(id) ?? 0) + 1;
+    listRequests.set(id, request);
+    const settle = (patch: Partial<View>) => {
+      if (listRequests.get(id) === request) publish(patch);
+    };
+    try {
+      const result = await api.openAgent(id);
+      if (!result.ok) return settle({ sessionsError: { ...view.sessionsError, [id]: result.message } });
+      const { [id]: _cleared, ...errors } = view.sessionsError;
+      settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors });
+    } catch (error) {
+      settle({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
+    }
+  }
+
   async function refreshList(id: string) {
     if (id !== view.agentId) return;
     const request = ++listRequest;
@@ -401,21 +422,7 @@ export function createStore(api: DuangApi) {
      * `states`: that drives the main panel, and a fold-and-expand of the open agent would otherwise
      * put the window into "this agent is broken" with no message to show for it.
      */
-    async listSessions(id: string) {
-      const request = (listRequests.get(id) ?? 0) + 1;
-      listRequests.set(id, request);
-      const settle = (patch: Partial<View>) => {
-        if (listRequests.get(id) === request) publish(patch);
-      };
-      try {
-        const result = await api.openAgent(id);
-        if (!result.ok) return settle({ sessionsError: { ...view.sessionsError, [id]: result.message } });
-        const { [id]: _cleared, ...errors } = view.sessionsError;
-        settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors });
-      } catch (error) {
-        settle({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
-      }
-    },
+    listSessions,
     open,
     /** Read on every opening of the picker: a `fastagent login` while duang runs needs no restart. */
     async loadModels() {
@@ -523,6 +530,31 @@ export function createStore(api: DuangApi) {
         if (view.agents[0]) await selectAgent(view.agents[0].id);
       } catch (error) {
         note(error);
+      }
+    },
+    /**
+     * Names a conversation, in FastAgent, which owns the label. The list is re-read afterwards
+     * rather than patched locally: the summary that matters is the one the runtime reports.
+     */
+    async renameSession(id: string, session: string, name: string) {
+      const open = conversations.get(key(id, session));
+      /**
+       * A conversation nobody has opened has no transcript to put this in, and the window-wide
+       * banner would offer a Retry for something else entirely. Its agent's row is where the
+       * sidebar already says why a list is not what you expected.
+       */
+      const report = (text: string) => {
+        if (open) note(text, open, "warning");
+        else publish({ sessionsError: { ...view.sessionsError, [id]: text } });
+      };
+      try {
+        const result = await api.renameSession(id, session, name);
+        if (!result.ok) return report(result.error.message);
+        // The name is FastAgent's now; re-read rather than patch, through the same ordered path
+        // expanding uses, so a failed read is reported instead of leaving the old label in place.
+        await listSessions(id);
+      } catch (error) {
+        report(message(error));
       }
     },
     /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */

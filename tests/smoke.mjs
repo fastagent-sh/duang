@@ -203,6 +203,15 @@ if (!process.versions.electron) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
     }
+    /** Conversations are listed only when asked for now, so a test that needs them asks first. */
+    async function listConversations(name) {
+      const caret = `document.querySelector('button[aria-label="Show conversations of ${name}"]')`;
+      if (await evaluate(`${caret} !== null`)) await evaluate(`${caret}.click()`);
+      await until(
+        `document.querySelector('button[aria-label="Hide conversations of ${name}"]') !== null`,
+        `${name}'s conversations are listed`,
+      );
+    }
     async function message(text) {
       await evaluate(`(() => {
     const input = document.querySelector('textarea');
@@ -279,6 +288,7 @@ if (!process.versions.electron) {
       assert.ok(firstSession);
 
       // Reopen through the actual UI and verify runtime-owned history, not the optimistic echo.
+      await listConversations("Smoke");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "new conversation");
       await click("Read hello.txt and answer.");
@@ -445,6 +455,7 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
       // Opening an agent and looking at its conversations are separate controls: the caret folds
       // the list without closing the conversation being read.
+      await listConversations("Smoke");
       await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
       await until(
         "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
@@ -522,6 +533,7 @@ if (!process.versions.electron) {
 
       // Folding the open agent with the caret — the keyboard has not moved, so the row the keyboard
       // started on is simply gone. The list still has to have exactly one way in, or Tab skips it.
+      await listConversations("Smoke");
       await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
       await until(
         "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
@@ -566,19 +578,84 @@ if (!process.versions.electron) {
         "Right opens it again",
       );
 
-      // The delete control follows its own focus: the row keeps focus after a click, which used to
-      // keep the control on screen. Reaching it by keyboard is the Delete key's job (§11), not the
-      // tab order's. Opacity is read after the transition settles, not during it.
-      const deleteOpacity = `(() => {
-        const del = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
-        return getComputedStyle(del).opacity;
-      })()`;
-      await evaluate("[...document.querySelectorAll('aside button[title=\"Delete conversation\"]')][0].focus()");
-      await until(`${deleteOpacity} === '1'`, "a focused delete control is visible");
-      await evaluate(
-        "[...document.querySelectorAll('aside button[title=\"Delete conversation\"]')][0].closest('.group').querySelector('button').focus()",
+      // Naming a conversation. The menu that carries Rename is native, so the test drives what the
+      // menu would: a double click on the row, which is the other way in.
+      await evaluate(`(() => {
+        const row = [...document.querySelectorAll('aside > div + div button')].find(
+          (b) => !b.getAttribute('aria-label') && b.textContent.includes('Read hello.txt and answer.'),
+        );
+        if (!row) throw new Error('Missing the conversation row');
+        row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      })()`);
+      await until("document.querySelector('aside input[aria-label=\"Conversation name\"]') !== null", "rename opens");
+      await evaluate(`(() => {
+        const input = document.querySelector('aside input[aria-label="Conversation name"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'The i18n check');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`);
+      await until(
+        "document.querySelector('aside').innerText.includes('The i18n check')",
+        "the runtime reports the name it was given",
       );
-      await until(`${deleteOpacity} === '0'`, "and hides again when the row takes the focus back");
+      assert.ok(
+        !(await evaluate("document.querySelector('aside').innerText")).includes("Read hello.txt and answer."),
+        "a named conversation stops falling back to its first message",
+      );
+
+      // A way back to the live turn: absent at the bottom, offered once the tail is not followed,
+      // and gone again after it takes you back.
+      const backToLatest = "document.querySelector('button[aria-label=\"Back to the latest\"]')";
+      assert.equal(await evaluate(`${backToLatest} === null`), true, "nothing to offer while at the bottom");
+      // The smoke conversation is short, so make the window small enough for it to overflow — the
+      // control only means anything when there is something to scroll past.
+      const size = win.getSize();
+      win.setSize(800, 540);
+      await until(
+        `(() => { const el = document.querySelector('[aria-label="Transcript"]'); return el.scrollHeight > el.clientHeight + 40; })()`,
+        "the transcript can scroll",
+      );
+      // Each poll re-issues the scroll: the tail-following effect can pull the view back in the same
+      // frame, and a test that scrolls once is testing that race instead of the control.
+      const atTop = `(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        el.scrollTop = 0;
+        return ${backToLatest} !== null;
+      })()`;
+      const atBottom = `(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        el.scrollTop = el.scrollHeight;
+        return ${backToLatest} === null;
+      })()`;
+      // A resize can make a transcript scrollable with no scroll event to notice it, so settle at
+      // the bottom first: the control has to be absent there before it means anything above.
+      await until(atBottom, "still nothing to offer at the bottom of a small window");
+      await until(atTop, "scrolling up offers the way back");
+      await evaluate(`${backToLatest}.click()`);
+      await until(`${backToLatest} === null`, "and it is gone once the transcript is back at the bottom");
+      assert.ok(
+        await evaluate(`(() => {
+          const el = document.querySelector('[aria-label="Transcript"]');
+          return el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+        })()`),
+        "the transcript is at the bottom again",
+      );
+      win.setSize(size[0], size[1]);
+
+      // The row's actions control follows its own focus: the row keeps focus after a click, which
+      // used to keep the control on screen. Reaching the actions by keyboard is the context menu's
+      // job (Shift+F10) and Delete's, not the tab order's. Opacity is read after the transition
+      // settles, not during it.
+      const actionsOpacity = `(() => {
+        const actions = [...document.querySelectorAll('aside button[title="Conversation actions"]')][0];
+        return getComputedStyle(actions).opacity;
+      })()`;
+      await evaluate("[...document.querySelectorAll('aside button[title=\"Conversation actions\"]')][0].focus()");
+      await until(`${actionsOpacity} === '1'`, "a focused actions control is visible");
+      await evaluate(
+        "[...document.querySelectorAll('aside button[title=\"Conversation actions\"]')][0].closest('.group').querySelector('button').focus()",
+      );
+      await until(`${actionsOpacity} === '0'`, "and hides again when the row takes the focus back");
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
       await type("   \n  ");

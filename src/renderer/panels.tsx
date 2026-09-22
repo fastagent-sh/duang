@@ -1,7 +1,9 @@
 /** Everything the app draws that is not state: panels, rows, and the composer. */
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowDown,
   ArrowUp,
+  DotsThree,
   CaretDown,
   Check,
   Copy,
@@ -16,7 +18,6 @@ import {
   Plus,
   Stop,
   Terminal,
-  Trash,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
@@ -51,6 +52,39 @@ const says: Record<AgentState, string> = {
 };
 
 /**
+ * A conversation's row while it is being named. FastAgent owns the label (`update({ name })`); until
+ * something sets it, a row falls back to the first message, which is why a conversation whose
+ * subject moved on keeps the sentence it started with.
+ */
+function RenameRow({
+  label,
+  onCommit,
+  onCancel,
+}: {
+  label: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(label);
+  return (
+    <input
+      autoFocus
+      aria-label="Conversation name"
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(event) => {
+        // The roster's arrows and Delete belong to rows, not to a text field.
+        event.stopPropagation();
+        if (event.key === "Enter") onCommit(value);
+        if (event.key === "Escape") onCancel();
+      }}
+      className="my-0.5 block w-[calc(100%-60px)] ml-[54px] rounded-card bg-bg px-2 py-1 text-[12.5px] outline-none ring-1 ring-accent/60"
+    />
+  );
+}
+
+/**
  * One column: who you work with, and what each of them has been talking about.
  *
  * Agents are rows rather than a strip of tiles, because a name and its state need words. Any number
@@ -74,6 +108,8 @@ export function Sidebar({
   onOpen,
   onNew,
   onDelete,
+  onRename,
+  onMenu,
 }: {
   agents: AgentRow[];
   agentId?: string;
@@ -94,6 +130,9 @@ export function Sidebar({
   onOpen: (agentId: string, session: string) => void;
   onNew: () => void;
   onDelete: (agentId: string, session: string) => void;
+  onRename: (agentId: string, session: string, name: string) => void;
+  /** Raises the row's own menu — Rename lives there, which is where macOS keeps it. */
+  onMenu: (canRename: boolean) => Promise<"rename" | "delete" | undefined>;
 }) {
   /**
    * One tab stop for the whole column (§11, WAI-ARIA APG): Tab reaches the list, arrows move inside
@@ -130,7 +169,14 @@ export function Sidebar({
    * Never nowhere — folding the open agent takes `current` off screen, and a list with no
    * `tabIndex={0}` in it is a list Tab cannot enter at all.
    */
-  const active = (focusable.find((row) => row.key === reached) ?? focusable.find((row) => row.key === current) ?? focusable[0])?.key;
+  const active = (
+    focusable.find((row) => row.key === reached) ??
+    focusable.find((row) => row.key === current) ??
+    // The open conversation is not listed unless its agent is unfolded; the agent itself is the
+    // next truest answer to "where am I", and only then the top of the list.
+    focusable.find((row) => row.key === `agent:${agentId ?? ""}`) ??
+    focusable[0]
+  )?.key;
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const go = (key: string) => {
     setReached(key);
@@ -141,6 +187,8 @@ export function Sidebar({
    * and the list stops being reachable without a fresh Tab. The neighbour it left behind is focused
    * once it exists (APG's rule for deleting inside a list).
    */
+  /** The conversation being renamed in place, if any. FastAgent owns the name; this is the edit. */
+  const [renaming, setRenaming] = useState<{ agent: string; session: string; label: string }>();
   const restore = useRef<string>(undefined);
   useEffect(() => {
     const key = restore.current;
@@ -275,7 +323,8 @@ export function Sidebar({
                   aria-label={`${open ? "Hide" : "Show"} conversations of ${agent.name}`}
                   title={open ? "Hide conversations" : "Show conversations"}
                   icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
-                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 ${selected ? "text-accent-fg hover:bg-accent-fg/15 hover:text-accent-fg" : ""}`}
+                  onAccent={selected}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2"
                 />
               </div>
 
@@ -286,7 +335,36 @@ export function Sidebar({
                       {errors[agent.id]}
                     </p>
                   )}
-                  {conversations.map((row) => (
+                  {conversations.map((row) => {
+                    // A conversation the runtime has never heard of can be neither renamed nor
+                    // deleted — `update()` and `delete()` both answer `no_such_session` — so it has
+                    // no menu at all, which is what the keyboard's Delete already assumed.
+                    const menu = row.fresh
+                      ? undefined
+                      : () =>
+                          void onMenu(true).then((chosen) => {
+                            if (chosen === "rename")
+                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
+                            if (chosen === "delete") onDelete(agent.id, row.session);
+                          });
+                    return renaming?.agent === agent.id && renaming.session === row.session ? (
+                      <RenameRow
+                        key={row.session}
+                        label={renaming.label}
+                        onCancel={() => {
+                          // The row's button is unmounted while this input stands in for it, so the
+                          // focus is asked for and taken once it is back — the same path a deleted
+                          // row uses. Focusing here would be a no-op and leave the body focused.
+                          restore.current = `conv:${agent.id}/${row.session}`;
+                          setRenaming(undefined);
+                        }}
+                        onCommit={(name) => {
+                          restore.current = `conv:${agent.id}/${row.session}`;
+                          setRenaming(undefined);
+                          if (name.trim() && name.trim() !== renaming.label) onRename(agent.id, row.session, name);
+                        }}
+                      />
+                    ) : (
                     <div key={row.session} className="group relative">
                       <button
                         ref={(el) => {
@@ -296,6 +374,14 @@ export function Sidebar({
                         tabIndex={active === `conv:${agent.id}/${row.session}` ? 0 : -1}
                         onFocus={() => setReached(`conv:${agent.id}/${row.session}`)}
                         onClick={() => onOpen(agent.id, row.session)}
+                        // Single click already opens, so double click is free for renaming the way
+                        // Notes and Safari's bookmarks do it.
+                        onDoubleClick={() => !row.fresh && setRenaming({ agent: agent.id, session: row.session, label: row.label })}
+                        onContextMenu={(event) => {
+                          if (!menu) return;
+                          event.preventDefault();
+                          menu();
+                        }}
                         disabled={disabled && selected}
                         aria-current={selected && row.session === session ? "page" : undefined}
                         className={`flex w-full items-baseline gap-2 py-1.5 pr-3 pl-[54px] text-left transition-colors ${
@@ -331,23 +417,23 @@ export function Sidebar({
                           )
                         )}
                       </button>
-                      {!row.fresh && (
+                      {/* One way to act on a row, not a shortcut to its most destructive action:
+                          the same menu the right click raises. */}
+                      {menu && (
                         <Button
-                          kind="danger"
+                          kind="ghost"
                           size={28}
                           tabIndex={-1}
-                          onClick={() => onDelete(agent.id, row.session)}
-                          title="Delete conversation"
-                          aria-label="Delete conversation"
-                          icon={<Trash size={13} />}
-                          // Its own focus, not the group's: clicking a conversation leaves focus on
-                          // the row, and group-focus-within left the delete showing after the
-                          // pointer had moved on.
+                          onClick={menu}
+                          title="Conversation actions"
+                          aria-label={`Actions for ${row.label}`}
+                          icon={<DotsThree size={16} weight="bold" />}
                           className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
                         />
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                   {selected && !disabled && (
                     <Button
                       kind="ghost"
@@ -705,6 +791,20 @@ export function Transcript({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
+  // Scrolling up during a long run stops the tail following, and the only way back was to scroll:
+  // the control appears exactly while that is true.
+  const [away, setAway] = useState(false);
+  /**
+   * One place that decides it, because scrolling is not the only way the answer changes: resizing
+   * the window, or output growing past the viewport, makes a transcript scrollable without any
+   * scroll event to notice it.
+   */
+  const check = () => {
+    const el = box.current;
+    if (!el) return;
+    follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    setAway(!follow.current);
+  };
 
   // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
   const last = items.at(-1);
@@ -713,9 +813,37 @@ export function Transcript({
   useEffect(() => {
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
+    check();
   }, [items, busySince, streaming]);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
+    <div className="relative flex-1 min-h-0 flex flex-col">
+      {away && (
+        <Button
+          kind="secondary"
+          size={32}
+          onClick={() => {
+            const el = box.current;
+            if (!el) return;
+            // Not smooth: every frame of an animated scroll fires `scroll`, and until the last one
+            // the transcript is not at the bottom, so the button it came from flickers back.
+            el.scrollTop = el.scrollHeight;
+            check();
+          }}
+          aria-label="Back to the latest"
+          title="Back to the latest"
+          icon={<ArrowDown size={16} />}
+          className="absolute right-6 z-10 bg-surface shadow-lg"
+          style={{ bottom: bottomGap - 8 }}
+        />
+      )}
     <div
       ref={box}
       // A focusable region, so the transcript can be read and scrolled from the keyboard (§11).
@@ -723,10 +851,7 @@ export function Transcript({
       tabIndex={0}
       role="region"
       aria-label="Transcript"
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-      }}
+      onScroll={check}
       // pt clears the floating header; the first message starts below it, not behind it.
       className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
       style={{ paddingBottom: bottomGap }}
@@ -754,6 +879,7 @@ export function Transcript({
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

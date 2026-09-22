@@ -53,12 +53,10 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [store, agentState, busy, view.loading]);
 
-  // Which agents show their conversations. Selecting one opens it, because you have to see where
-  // you are; the caret adds and removes any other.
+  // Which agents show their conversations — asked for, never assumed. Opening an agent puts you in
+  // its latest conversation, which the transcript already shows; unfolding the roster on top of
+  // that is a second answer to a question nobody asked.
   const [expanded, setExpanded] = useState<string[]>([]);
-  useEffect(() => {
-    if (agentId) setExpanded((ids) => (ids.includes(agentId) ? ids : [...ids, agentId]));
-  }, [agentId]);
 
   // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
   // with the draft, and messages must end above it rather than behind it. The ref is stable, or
@@ -127,6 +125,8 @@ export default function App() {
           else void store.open(id);
         }}
         onNew={() => void store.newConversation()}
+        onRename={(agent, id, name) => void store.renameSession(agent, id, name)}
+        onMenu={(canRename) => duang.conversationMenu(canRename)}
         onDelete={(agent, id) => {
           if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent, id);
         }}
