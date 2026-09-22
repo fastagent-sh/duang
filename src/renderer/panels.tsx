@@ -101,31 +101,60 @@ export function Sidebar({
    * Tab walk the roster three times — so the keys they stand for live on the row: Right and Left
    * expand and collapse an agent, Delete removes a conversation.
    */
-  const rowsOnScreen: { key: string; agent: string; session?: string }[] = [];
+  const rowsOnScreen: { key: string; agent: string; session?: string; fresh?: boolean }[] = [];
   for (const agent of agents) {
     rowsOnScreen.push({ key: `agent:${agent.id}`, agent: agent.id });
     if (expanded.includes(agent.id)) {
       for (const row of rowsFor(agent.id))
-        rowsOnScreen.push({ key: `conv:${agent.id}/${row.session}`, agent: agent.id, session: row.session });
+        rowsOnScreen.push({
+          key: `conv:${agent.id}/${row.session}`,
+          agent: agent.id,
+          session: row.session,
+          fresh: row.fresh,
+        });
       // "New conversation" is a row in the list, so the arrows reach it too; anything left tabbable
       // inside the list would make Tab walk the roster a second time.
       if (agent.id === agentId && !disabled) rowsOnScreen.push({ key: `new:${agent.id}`, agent: agent.id });
     }
   }
+  /**
+   * A disabled button ignores `tabIndex` and refuses `focus()`, so the open agent's conversations
+   * drop out while it is loading. Moving over them would leave the real focus somewhere the ring is
+   * not, and Enter would then open a row nobody can see is active.
+   */
+  const focusable = rowsOnScreen.filter((row) => !(disabled && row.agent === agentId && row.session));
   const current = session && agentId ? `conv:${agentId}/${session}` : `agent:${agentId ?? ""}`;
   const [reached, setReached] = useState<string>();
-  // The keyboard starts where the eye is: whatever is open, until the arrows move somewhere else.
-  const active = rowsOnScreen.some((row) => row.key === reached) ? reached : current;
+  /**
+   * The keyboard starts where the eye is: whatever is open, until the arrows move somewhere else.
+   * Never nowhere — folding the open agent takes `current` off screen, and a list with no
+   * `tabIndex={0}` in it is a list Tab cannot enter at all.
+   */
+  const active = (focusable.find((row) => row.key === reached) ?? focusable.find((row) => row.key === current) ?? focusable[0])?.key;
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const go = (key: string) => {
     setReached(key);
     buttons.current.get(key)?.focus();
   };
+  /**
+   * A row deleted from the keyboard takes the focus with it: the browser hands it back to the body,
+   * and the list stops being reachable without a fresh Tab. The neighbour it left behind is focused
+   * once it exists (APG's rule for deleting inside a list).
+   */
+  const restore = useRef<string>(undefined);
+  useEffect(() => {
+    const key = restore.current;
+    if (!key) return;
+    const el = buttons.current.get(key);
+    if (!el) return;
+    restore.current = undefined;
+    el.focus();
+  });
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const index = rowsOnScreen.findIndex((row) => row.key === active);
-    const row = rowsOnScreen[index];
+    const index = focusable.findIndex((row) => row.key === active);
+    const row = focusable[index];
     const step = (to: number) => {
-      const target = rowsOnScreen[Math.max(0, Math.min(rowsOnScreen.length - 1, to))];
+      const target = focusable[Math.max(0, Math.min(focusable.length - 1, to))];
       if (target) {
         event.preventDefault();
         go(target.key);
@@ -134,7 +163,7 @@ export function Sidebar({
     if (event.key === "ArrowDown") return step(index + 1);
     if (event.key === "ArrowUp") return step(index - 1);
     if (event.key === "Home") return step(0);
-    if (event.key === "End") return step(rowsOnScreen.length - 1);
+    if (event.key === "End") return step(focusable.length - 1);
     if (!row) return;
     if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && !row.session) {
       const open = expanded.includes(row.agent);
@@ -142,8 +171,15 @@ export function Sidebar({
       event.preventDefault();
       return onToggle(row.agent);
     }
-    if ((event.key === "Delete" || event.key === "Backspace") && row.session) {
+    // Same condition as the button: a conversation the runtime has never heard of has no delete
+    // control, and asking main to delete it earns a confirmation followed by an error.
+    if ((event.key === "Delete" || event.key === "Backspace") && row.session && !row.fresh) {
       event.preventDefault();
+      const neighbour = focusable[index + 1] ?? focusable[index - 1];
+      if (neighbour) {
+        restore.current = neighbour.key;
+        setReached(neighbour.key);
+      }
       return onDelete(row.agent, row.session);
     }
   };

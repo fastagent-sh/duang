@@ -426,8 +426,10 @@ whatever the keyboard is on. The keyboard starts on what is open and stays where
 
 **A row's controls are keys, not tab stops.** A caret and a delete on every row would make Tab walk
 the roster three times over, so the row answers for them: Right and Left expand and collapse an
-agent, Delete removes the conversation the keyboard is on. `New conversation` is a row in the list
-for the same reason. The controls stay clickable and keep their labels for assistive technology;
+agent, Delete or Backspace removes the conversation the keyboard is on — Backspace because on macOS
+that is the delete key on the main keyboard — and neither touches a conversation the runtime has
+never heard of, which has no delete control either. `New conversation` is a row in the list for the
+same reason. A deleted row hands the focus to its neighbour, so the list stays navigable. The controls stay clickable and keep their labels for assistive technology;
 what they lose is a place in the tab order.
 
 **The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
