@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  DotsThree,
   CaretDown,
   Check,
   Copy,
@@ -17,7 +18,6 @@ import {
   Plus,
   Stop,
   Terminal,
-  Trash,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
@@ -397,21 +397,24 @@ export function Sidebar({
                           )
                         )}
                       </button>
-                      {!row.fresh && (
-                        <Button
-                          kind="danger"
-                          size={28}
-                          tabIndex={-1}
-                          onClick={() => onDelete(agent.id, row.session)}
-                          title="Delete conversation"
-                          aria-label="Delete conversation"
-                          icon={<Trash size={13} />}
-                          // Its own focus, not the group's: clicking a conversation leaves focus on
-                          // the row, and group-focus-within left the delete showing after the
-                          // pointer had moved on.
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        />
-                      )}
+                      {/* One way to act on a row, not a shortcut to its most destructive action:
+                          the same menu the right click raises. */}
+                      <Button
+                        kind="ghost"
+                        size={28}
+                        tabIndex={-1}
+                        onClick={() => {
+                          void onMenu(!row.fresh).then((chosen) => {
+                            if (chosen === "rename")
+                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
+                            if (chosen === "delete") onDelete(agent.id, row.session);
+                          });
+                        }}
+                        title="Conversation actions"
+                        aria-label={`Actions for ${row.label}`}
+                        icon={<DotsThree size={16} weight="bold" />}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      />
                     </div>
                     ),
                   )}

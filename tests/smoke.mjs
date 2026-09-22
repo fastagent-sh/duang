@@ -598,19 +598,20 @@ if (!process.versions.electron) {
         "nothing to offer while the transcript is at the bottom",
       );
 
-      // The delete control follows its own focus: the row keeps focus after a click, which used to
-      // keep the control on screen. Reaching it by keyboard is the Delete key's job (§11), not the
-      // tab order's. Opacity is read after the transition settles, not during it.
-      const deleteOpacity = `(() => {
-        const del = [...document.querySelectorAll('aside button[title="Delete conversation"]')][0];
-        return getComputedStyle(del).opacity;
+      // The row's actions control follows its own focus: the row keeps focus after a click, which
+      // used to keep the control on screen. Reaching the actions by keyboard is the context menu's
+      // job (Shift+F10) and Delete's, not the tab order's. Opacity is read after the transition
+      // settles, not during it.
+      const actionsOpacity = `(() => {
+        const actions = [...document.querySelectorAll('aside button[title="Conversation actions"]')][0];
+        return getComputedStyle(actions).opacity;
       })()`;
-      await evaluate("[...document.querySelectorAll('aside button[title=\"Delete conversation\"]')][0].focus()");
-      await until(`${deleteOpacity} === '1'`, "a focused delete control is visible");
+      await evaluate("[...document.querySelectorAll('aside button[title=\"Conversation actions\"]')][0].focus()");
+      await until(`${actionsOpacity} === '1'`, "a focused actions control is visible");
       await evaluate(
-        "[...document.querySelectorAll('aside button[title=\"Delete conversation\"]')][0].closest('.group').querySelector('button').focus()",
+        "[...document.querySelectorAll('aside button[title=\"Conversation actions\"]')][0].closest('.group').querySelector('button').focus()",
       );
-      await until(`${deleteOpacity} === '0'`, "and hides again when the row takes the focus back");
+      await until(`${actionsOpacity} === '0'`, "and hides again when the row takes the focus back");
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
       await type("   \n  ");

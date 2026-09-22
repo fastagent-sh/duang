@@ -136,8 +136,10 @@ the list, not the size of the thing selected.
 the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,
 and the reason shows up as soon as two agents are listed — a card per agent turns the column into a
 stack of panels and makes an open agent look heavy. A conversation row is one line indented to the
-agent's text, with the relative time trailing and Delete in its place on hover, so a topic is
-visibly lighter than the agent that owns it.
+agent's text, with the relative time trailing and a `…` in its place on hover, so a topic is visibly
+lighter than the agent that owns it. The `…` opens the row's menu rather than being a shortcut to
+its most destructive action: one way to act on a row, and it is the same menu the right click and
+Shift+F10 raise.
 
 **An expanded agent lists its conversations**, including one that is running and one holding unsent
 text, because fact 4 makes "what is alive right now" the question the sidebar exists to answer. Only
