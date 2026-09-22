@@ -559,3 +559,31 @@ test("what finished while you were elsewhere is marked, and opening it spends th
   assert.equal(store.getSnapshot().unseen["a"]?.[third.session], undefined, "a stop is not unseen news");
   store.dispose();
 });
+
+test("a message sent into a running turn is marked as having joined it", async () => {
+  const { store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+
+  store.setDraft("first");
+  await store.send();
+  const first = c.items.find((item) => item.kind === "user")!;
+  assert.equal(first.steered, false, "a message that starts a turn joined nothing");
+
+  emit(c, "run_started");
+  store.setDraft("and also this");
+  await store.send();
+  assert.equal(c.items.filter((item) => item.kind === "user").at(-1)?.steered, true);
+
+  // Compaction is not a run: a message sent while the context is being compacted starts a turn.
+  emit(c, "run_settled", { status: "completed" });
+  emit(c, "state_changed", { status: "compacting" });
+  store.setDraft("after compaction started");
+  await store.send();
+  assert.equal(
+    c.items.filter((item) => item.kind === "user").at(-1)?.steered,
+    false,
+    "compacting is not a run to join",
+  );
+  store.dispose();
+});

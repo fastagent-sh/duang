@@ -555,7 +555,10 @@ export function createStore(api: DuangApi) {
       c.draft = "";
       // Steering: this message joined a run that was already going. Afterwards nothing else
       // distinguishes it from one that started a turn (§8), so the fact is recorded now.
-      c.items = [...c.items, { kind: "user", text, at: Date.now(), steered: busy(c) }];
+      // A run in flight, not `busy(c)`: that predicate also covers compaction, and a message sent
+      // while the context is being compacted starts a turn rather than joining one.
+      const joining = c.state?.status === "running" || c.sends > 0;
+      c.items = [...c.items, { kind: "user", text, at: Date.now(), steered: joining }];
       const echo = c.items.at(-1);
       const runStarts = c.runStarts;
       const restoreRejected = () => {

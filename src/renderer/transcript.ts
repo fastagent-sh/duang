@@ -1,9 +1,13 @@
 /** Fold session entries and live events into what the transcript shows. Pure, so it is testable. */
 import type { SessionEntry, SessionEvent } from "@fastagent-sh/fastagent/session";
 
-/** When it happened. Carried on every item, because both the day separators and the time under a
- *  message read it — the transcript is a record, and a record without times reads as one moment. */
-type At = { at?: number };
+/**
+ * When it happened. Required on every item, because both the day separators and the time under a
+ * message read it — the transcript is a record, and a record without times reads as one moment.
+ * Required rather than optional so a future producer that forgets it fails to compile, instead of
+ * silently dropping a day boundary.
+ */
+type At = { at: number };
 
 export type Item = At &
   ({ kind: "user"; text: string; steered?: boolean }
@@ -24,6 +28,21 @@ export type Item = At &
    */
   | { kind: "note"; tone: "info" | "warning" | "error"; text: string });
 
+/**
+ * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of
+ * days: read in January, a December conversation dated `Dec 25` looks like this year's.
+ */
+export function dayLabel(at: number, now: number = Date.now()): string {
+  const date = new Date(at);
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const days = Math.round((midnight.getTime() - new Date(at).setHours(0, 0, 0, 0)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
+}
+
 /** A day boundary in the reading flow: without it, yesterday's run reads as if it just happened. */
 export type Line = Item | { kind: "day"; at: number };
 
@@ -35,11 +54,9 @@ export function lines(items: Item[]): Line[] {
   const out: Line[] = [];
   let day: string | undefined;
   for (const item of items) {
-    if (item.at !== undefined) {
-      const stamp = new Date(item.at).toDateString();
-      if (day !== undefined && stamp !== day) out.push({ kind: "day", at: item.at });
-      day = stamp;
-    }
+    const stamp = new Date(item.at).toDateString();
+    if (day !== undefined && stamp !== day) out.push({ kind: "day", at: item.at });
+    day = stamp;
     out.push(item);
   }
   return out;
@@ -124,8 +141,13 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       return [...items, { kind, text: String(data.delta ?? ""), open: true, at: event.timestamp }];
     }
     case "message_finished": {
+      // Stamped on settling, not on the first delta: an answer that streamed for five minutes would
+      // otherwise show one time live and another after a reopen, where history carries the time
+      // FastAgent wrote the entry.
       return items.map((item) =>
-        item.kind === "assistant" || item.kind === "thinking" ? { ...item, open: false } : item,
+        item.kind === "assistant" || item.kind === "thinking"
+          ? { ...item, open: false, at: event.timestamp }
+          : item,
       );
     }
     case "tool_started":

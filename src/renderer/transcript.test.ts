@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, fromEntries, lines, type Item } from "./transcript.ts";
+import { apply, dayLabel, fromEntries, lines, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -10,7 +10,10 @@ test("deltas accumulate into one message and close on finish", () => {
   items = apply(items, event("message_delta", { channel: "text", delta: "llo" }));
   assert.deepEqual(items, [{ kind: "assistant", text: "Hello", open: true, at: 0 }]);
 
-  items = apply(items, event("message_finished", {}));
+  // Settling restamps it: the time under an answer is when it landed, which is also the time
+  // history will carry for it.
+  items = apply(items, { type: "message_finished", timestamp: 90, data: {} } as never);
+  assert.deepEqual(items, [{ kind: "assistant", text: "Hello", open: false, at: 90 }]);
   items = apply(items, event("message_delta", { channel: "text", delta: "next" }));
   assert.equal(items.length, 2, "a finished message is not appended to");
 });
@@ -43,7 +46,7 @@ test("only a failed run leaves a note", () => {
 });
 
 test("unknown event types change nothing", () => {
-  const items: Item[] = [{ kind: "user", text: "x" }];
+  const items: Item[] = [{ kind: "user", text: "x", at: 0 }];
   assert.equal(apply(items, event("something_new", {})), items);
 });
 
@@ -125,7 +128,15 @@ test("a day boundary becomes its own line, and only where the day actually chang
     lines(items).map((line) => (line.kind === "day" ? "—day—" : line.kind)),
     ["user", "assistant", "—day—", "user"],
   );
-  // Nothing to separate: one day, and items without a time cannot claim one.
+  // Nothing to separate inside one day.
   assert.equal(lines([items[0]!, items[1]!]).length, 2);
-  assert.equal(lines([{ kind: "user", text: "no time" }]).length, 1);
+});
+
+test("a day label crosses the year, not a count of days", () => {
+  const jan = Date.UTC(2026, 0, 5, 12, 0, 0);
+  assert.equal(dayLabel(jan, jan), "Today");
+  assert.equal(dayLabel(jan - 86_400_000, jan), "Yesterday");
+  // Eleven days back, but a different year: the year has to be said or it reads as this December.
+  assert.match(dayLabel(Date.UTC(2025, 11, 25, 12, 0, 0), jan), /2025/);
+  assert.doesNotMatch(dayLabel(Date.UTC(2026, 0, 1, 12, 0, 0), jan), /2026/);
 });

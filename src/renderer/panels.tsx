@@ -23,7 +23,7 @@ import {
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
 import type { AgentRow } from "../preload/index.ts";
-import { lines, type Item } from "./transcript.ts";
+import { dayLabel, lines, type Item } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
@@ -31,17 +31,6 @@ import type { AgentState, Store, View } from "./store.ts";
 
 /** Clock time, for the end of a message: the day is the separator's job, not every line's. */
 const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-/** A day as a separator says it: today and yesterday by name, anything older by date. */
-function day(at: number): string {
-  const date = new Date(at);
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-  const days = Math.round((midnight.getTime() - new Date(date).setHours(0, 0, 0, 0)) / 86_400_000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return date.toLocaleDateString([], { month: "short", day: "numeric", year: days > 300 ? "numeric" : undefined });
-}
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
@@ -636,7 +625,7 @@ export function Transcript({
             // reads as one sitting.
             <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
               <span className="h-px flex-1 bg-stroke" />
-              {day(line.at)}
+              {dayLabel(line.at)}
               <span className="h-px flex-1 bg-stroke" />
             </div>
           ) : (
@@ -682,7 +671,7 @@ function Message({ item }: { item: Item }) {
               started it (§8). */}
           <div className="flex items-center gap-2 text-[10px] text-muted">
             {item.steered && <span className="text-accent">joined the run</span>}
-            {item.at !== undefined && <span>{clock(item.at)}</span>}
+            <span>{clock(item.at)}</span>
           </div>
         </div>
       );
@@ -690,11 +679,12 @@ function Message({ item }: { item: Item }) {
       return (
         <div className="group/msg">
           <div className="md leading-relaxed">
+            {/* The cursor is appended to the text rather than to the container: Streamdown emits
+                block elements, so a sibling span would start its own line instead of trailing the
+                last word. Token arrival is the animation (§8, §10). */}
             <Streamdown components={markdownComponents} controls={markdownControls}>
-              {item.text}
+              {item.open ? `${item.text}▍` : item.text}
             </Streamdown>
-            {/* Token arrival is the animation; the cursor only says "still writing" (§8, §10). */}
-            {item.open && <span className="ml-0.5 animate-pulse text-accent">▍</span>}
           </div>
           {!item.open && <Footer text={item.text} at={item.at} />}
         </div>
@@ -738,25 +728,35 @@ function Message({ item }: { item: Item }) {
  * What an agent's answer ends with: when it landed, and a way to take it somewhere else. Nothing
  * else — a rating has nowhere to go, and branching and editing are not features here.
  */
-function Footer({ text, at }: { text: string; at?: number }) {
+function Footer({ text, at }: { text: string; at: number }) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState<string>();
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
     <div className="mt-2 flex items-center gap-1 text-[10px] text-muted">
-      {at !== undefined && <span className="tabular-nums">{clock(at)}</span>}
+      <span className="tabular-nums">{clock(at)}</span>
+      {failed && <span className="text-danger">could not copy: {failed}</span>}
       <Button
         kind="ghost"
         size={28}
         aria-label={copied ? "Copied" : "Copy message"}
-        title="Copy this answer"
+        title={failed ?? "Copy this answer"}
         icon={copied ? <Check size={13} /> : <Copy size={13} />}
-        className="opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100"
+        className={`transition-opacity ${failed ? "" : "opacity-0"} group-hover/msg:opacity-100 focus-visible:opacity-100`}
         onClick={() => {
-          void navigator.clipboard.writeText(text).then(() => {
-            setCopied(true);
-            timer.current = window.setTimeout(() => setCopied(false), 1500);
-          });
+          // Refused clipboards happen — an unfocused window, another process holding it. Saying
+          // nothing leaves a button that looks broken, so the failure takes the button's own label.
+          navigator.clipboard.writeText(text).then(
+            () => {
+              setCopied(true);
+              timer.current = window.setTimeout(() => setCopied(false), 1500);
+            },
+            (error: unknown) => {
+              setFailed(String(error instanceof Error ? error.message : error));
+              timer.current = window.setTimeout(() => setFailed(undefined), 4000);
+            },
+          );
         }}
       />
     </div>
