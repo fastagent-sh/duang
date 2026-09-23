@@ -32,6 +32,12 @@ export function ListingResult({ generatedListing, workflowPhase, onCopy }: Listi
 }
 \`\`\`
 
+| Section | Source | Regenerates |
+|---|---|---|
+| Title | \`generatedListing.title\` | per section |
+| Bullets | \`bulletPoints[]\` | per section |
+| Keywords | backend | never |
+
 Three things follow from it:
 
 - every section renders from one source of truth
@@ -39,6 +45,14 @@ Three things follow from it:
 - \`showRegenerateAll\` is a presentation flag, nothing more
 
 Run \`bun run i18n:check\` before committing; it compares the twelve message files.`;
+
+const THOUGHTS = [
+  "Start by reading the file they pointed at; everything else depends on what is actually in it.",
+  "Now the i18n check. If the script is missing this fails fast, which is still an answer.",
+  `The user wants three things: read the file, run the i18n check, and explain ListingResult.
+The check is going to fail — there is no such script in this workspace — so the explanation should
+stand on its own rather than depend on the check's output.`,
+];
 
 const chunk = (text, size) => text.match(new RegExp(`[\\s\\S]{1,${size}}`, "g")) ?? [];
 
@@ -88,14 +102,31 @@ if (!process.versions.electron) {
             ? { id: "fc_2", type: "function_call", call_id: "call_2", name: "bash", arguments: JSON.stringify({ command: "bun run i18n:check" }) }
             : { id: "msg", type: "message", role: "assistant", content: [{ type: "output_text", text: ANSWER, annotations: [] }] };
       const tool = requests < 3;
+      // Every turn reasons first, so the transcript carries a real run of thinking-and-tool lines:
+      // that alternation is the rhythm §8 is about, and one tool call on its own never shows it. A
+      // reasoning item has to open its own output slot before its deltas mean anything.
+      const thought = THOUGHTS[requests - 1];
+      const reasoning = { id: `rs_${requests}`, type: "reasoning", summary: [{ type: "summary_text", text: thought }] };
+      const index = 1;
       const events = [
         { type: "response.created", response: { id: `resp_${requests}` } },
-        { type: "response.output_item.added", output_index: 0, item: { ...item, ...(tool ? { arguments: "" } : { content: [] }) } },
+        { type: "response.output_item.added", output_index: 0, item: { ...reasoning, summary: [] } },
+        ...chunk(thought, 30).map((delta) => ({ type: "response.reasoning_summary_text.delta", output_index: 0, delta })),
+        { type: "response.output_item.done", output_index: 0, item: reasoning },
+        { type: "response.output_item.added", output_index: index, item: { ...item, ...(tool ? { arguments: "" } : { content: [] }) } },
         // Chunked on purpose: a fence is unclosed for most of the stream, which is where the
         // renderer's block detection actually gets tested.
-        ...(tool ? [] : chunk(ANSWER, 40).map((delta) => ({ type: "response.output_text.delta", output_index: 0, delta }))),
-        { type: "response.output_item.done", output_index: 0, item },
-        { type: "response.completed", response: { id: `resp_${requests}`, status: "completed", output: [item], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } },
+        ...(tool ? [] : chunk(ANSWER, 40).map((delta) => ({ type: "response.output_text.delta", output_index: index, delta }))),
+        { type: "response.output_item.done", output_index: index, item },
+        {
+          type: "response.completed",
+          response: {
+            id: `resp_${requests}`,
+            status: "completed",
+            output: [reasoning, item],
+            usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+          },
+        },
       ];
       return new Response(events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), {
         headers: { "content-type": "text/event-stream" },
@@ -136,13 +167,43 @@ if (!process.versions.electron) {
       for (const theme of ["dark", "light"]) {
         nativeTheme.themeSource = theme;
         await new Promise((resolve) => setTimeout(resolve, 400));
+        // After the theme has settled, not before: switching it relays out the highlighted code and
+        // moves the bottom out from under a scroll position taken earlier.
+        await evaluate(`(() => {
+          const box = document.querySelector('[aria-label="Transcript"]');
+          if (box) box.scrollTop = box.scrollHeight;
+        })()`);
         const image = await win.webContents.capturePage();
         const path = fileURLToPath(new URL(`../out/shots/${name}-${theme}.png`, import.meta.url));
         await writeFile(path, image.toPNG());
         console.log(path);
       }
     };
+    // One tool card open: expanded arguments and output are a state the transcript draws, and a
+    // sheet of closed rows never shows it.
+    await evaluate(`document.querySelectorAll('details')[1].open = true`);
+    // The live tail is the view people actually sit in, so that is what the shot shows. The printed
+    // number is the clearance between the last line and the composer (App.tsx `bottomGap`).
+    console.log(
+      "clearance above composer:",
+      await evaluate(`(() => {
+        const box = document.querySelector('[aria-label="Transcript"]');
+        box.scrollTop = box.scrollHeight;
+        const last = box.querySelector('.column').lastElementChild;
+        const composer = document.querySelector('textarea').closest('.composer-column');
+        return Math.round(composer.getBoundingClientRect().top - last.getBoundingClientRect().bottom);
+      })()`),
+    );
     await capture("app");
+
+    // Reopened, the conversation is history: nothing in it arrived just now, so nothing in it may
+    // float in as if it had. Printed rather than asserted, like the clearance above — and 0 is the
+    // only right answer.
+    const reopened = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+    win.webContents.reload();
+    await reopened;
+    await until("document.body.innerText.includes('sectionsGenerated')", "the reopened conversation");
+    console.log("rows animating in on reopen:", await evaluate(`document.querySelectorAll('.column > .enter').length`));
 
     // The component sheet, in the same window and the same build as the app it documents.
     // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.

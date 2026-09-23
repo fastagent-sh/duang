@@ -72,7 +72,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
 }
 
 function Plain({ code }: { code: string }) {
-  return <pre className="mt-1.5 overflow-x-auto font-mono text-[12.5px] leading-[1.65]">{code}</pre>;
+  return <pre className="mt-1.5 overflow-x-auto font-mono text-[12.5px] leading-relaxed">{code}</pre>;
 }
 
 function Highlighted({ code, language }: { code: string; language: string }) {
@@ -91,7 +91,7 @@ function Highlighted({ code, language }: { code: string; language: string }) {
         // While tokens arrive the grammar is re-run; throttling keeps a long stream from re-highlighting
         // on every delta.
         delay={80}
-        className="mt-1.5 block overflow-x-auto font-mono text-[12.5px] leading-[1.65] [&_pre]:bg-transparent"
+        className="mt-1.5 block overflow-x-auto font-mono text-[12.5px] leading-relaxed [&_pre]:bg-transparent"
     >
       {code}
     </ShikiHighlighter>

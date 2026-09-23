@@ -214,57 +214,75 @@ on top of a grey app.
 | `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.89 0.005 285)` | hairlines, card borders |
 | `text` | `oklch(0.95 0.005 285)` | `oklch(0.22 0.01 285)` | body |
 | `muted` | `oklch(0.68 0.01 285)` | `oklch(0.50 0.01 285)` | metadata, timestamps |
-| `accent` | `oklch(0.72 0.16 295)` | `oklch(0.55 0.19 295)` | selection, primary action, focus |
-| `accent-weak` | `accent / 15%` | `accent / 12%` | selected row, user bubble |
-| `accent-fg` | `oklch(0.16 0.01 285)` | `oklch(1 0 0)` | text on a filled accent surface |
+| `accent` | `oklch(0.72 0.16 295)` | `oklch(0.55 0.19 295)` | accent **as text**: links, badges, focus rings |
+| `accent-weak` | `accent / 15%` | `accent / 12%` | selected conversation, user bubble |
+| `accent-fill` | `oklch(0.52 0.2 295)` | same | accent **as a surface**: selected agent, primary button |
+| `danger-fill` | `oklch(0.52 0.2 25)` | same | danger as a surface (Stop) |
+| `fill-fg` | `oklch(1 0 0)` | same | text on either fill |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
-| `warning` | `oklch(0.78 0.13 75)` | `oklch(0.58 0.13 75)` | needs a model, no agent yet |
+| `warning` | `oklch(0.79 0.15 65)` | `oklch(0.58 0.15 60)` | needs a model, no agent yet |
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
-| `danger-fg` | `oklch(0.16 0.01 285)` | `oklch(1 0 0)` | text on a filled danger surface (Stop) |
+
+Accent as text and accent as a surface cannot be one value. As text it sits against the page, so
+dark mode needs it light; as a fill under white text it has to be dark, or the selected agent
+becomes the brightest object on screen. The two fills therefore do **not** change between themes:
+one selection violet in both, the way macOS and Telegram keep one selection blue. At L 0.52 white
+on it is about 4.2:1, which is where Telegram's own selected row sits.
 
 Every interactive role is defined as a set, not derived at the call site — Telegram's palette does
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
-`accent-fg`. A component picks a role; it never computes a hover colour itself.
+`fill-fg`. A component picks a role; it never computes a hover colour itself.
 
-The sidebar has no background colour of its own: it is `vibrancy: "sidebar"` over the window, with
-rows drawn in `accent-weak` when selected. Light mode needs the darker, more saturated accent, or it
-turns grey on white.
-
-Avatar tiles use eight fixed low-chroma hues, chosen by `order[hash % 7]` with
-`order = [0, 7, 4, 1, 6, 3, 5]`. The shuffle is Telegram's and it exists so that agents registered
-one after another do not come out looking alike.
+Avatar tiles walk seven fixed hues, chosen by `ORDER[hash % 7]` with `ORDER = [0, 4, 1, 6, 3, 5, 2]`.
+The shuffle is Telegram's and it exists so that agents registered one after another do not come out
+looking alike.
 
 ## 5. Typography
 
 ```css
---font-sans: Inter, "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
---font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
+--font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+--font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
 ```
 
-Chinese is a first-class case, not a fallback accident: Inter carries no CJK, so today every Chinese
-string in the app is drawn by whatever the system picks. Pairing Inter with PingFang SC fixes the
-mismatch. Chinese text keeps the same size but takes more leading — 1.75 against 1.6 — because CJK
-glyphs fill their em box. Do not force CJK into the monospace family; let it fall back to PingFang SC
-inside code contexts rather than deforming it.
+The system face, paired with the system's own CJK face. This is a native window with a hidden title
+bar, and a web font beside it reads as a page rather than an app. Do not force CJK into the monospace
+family; let it fall back to PingFang SC inside code contexts rather than deforming it.
 
-Five steps, no more:
+**Chinese is a first-class case, and CSS cannot see it.** CJK glyphs fill their em box and want more
+leading than Latin at the same size. A `:lang(zh)` rule is the obvious way to say so, and it does not
+work here: the document is `lang="en"` and nothing marks a Chinese message as Chinese, so the rule
+never fires once. Only a per-message script detector could, and that is a second source of truth
+about the transcript bought for a difference of 0.05. Prose therefore takes **one** leading, 1.7:
+right for Chinese, slightly airy for English, and this is a document column rather than a dense list.
+It lives in one place, `.md, .bubble`, which the composer wears too so that a long message does not
+reflow the moment it is sent.
+
+Five steps, no more. They sit close together on purpose — this is a dense app, and the ramp that
+carries meaning is weight and colour, not size:
 
 | Role | Size / line-height / weight |
 |---|---|
-| Conversation body | 14 / 1.7 / 400 |
-| Agent name, section titles | 13.5 / 1.4 / 500 |
-| Preview, timestamps, state | 12 / 1.4 / 400, `muted` |
-| Code, paths, tool output | 12.5 / 1.6 / 400, mono |
-| Badges, labels | 11 / 1 / 500, tracking +0.02em |
+| Agent name, `New conversation` heading | 13.5 / 1.4 / 600 |
+| Conversation body, composer, sidebar rows | 13 / 1.7 / 400 |
+| Tool rows, thinking, model list, card bodies | 12 / 1.5 / 400 |
+| Code, paths, tool output | 12.5 / 1.625 / 400, mono |
+| Badges, timestamps, labels | 11 / 1 / 400–500 |
+
+Mono sits half a step above the sans beside it on purpose: its x-height is smaller, so the same
+nominal size reads smaller. Nothing is drawn at 10 or 11.5 — a half-pixel step is invisible, and all
+it does is stop two things that should match from matching.
 
 Emphasis uses weight, never hue. Body text is never coloured.
 
 ## 6. Icons
 
-Phosphor, Regular weight, at 16 (inline), 18 (buttons), 20 (empty states). Bold is reserved for the
-current selection and destructive actions, so weight rather than colour marks emphasis. Every icon
-carries a label or `aria-label`; icon-only controls exist only where the symbol is universal (send,
-stop, close).
+Phosphor at Bold, set once for the whole app through `IconContext`, at 11–16px. Bold rather than
+Regular because Regular is a hairline at these sizes: next to 13px text at 600 it reads as a thinner,
+greyer thing than the words beside it, which is most of what makes an interface look drawn by a
+compiler. Bold sits at roughly SF Symbols' semibold, the weight macOS itself puts next to text of
+this size. Emphasis is therefore colour, not weight — a running tool's icon takes the accent, a
+failed one takes danger. Every icon carries a label or `aria-label`; icon-only controls exist only
+where the symbol is universal (send, stop, close).
 
 ## 6b. Controls
 
@@ -327,10 +345,19 @@ in the transcript really is chat. Ours is the work.
 
 Everything else follows from those two:
 
-- **Tool calls are cards** in the document flow: icon, command, and the state immediately after the
-  command rather than pushed to the far right where it loses its subject. Expanded, a card shows
-  arguments and result; results over twelve lines fold.
-- **Thinking** collapses to one muted line (`thinking · 3s`) and expands into a quoted block.
+- **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
+  tool's name, the command, and the state immediately after the command rather than pushed to the
+  far right where it loses its subject — on no fill and behind no border, the same weight as the
+  `thinking` line beside it. Boxing a closed call is wrong in both directions: full width it is a
+  grey slab, shrunk to its text it reads as a button dropped into the prose. The surface arrives
+  with the output it has to hold. Open, the card shows arguments as labels and values rather than
+  as the JSON the wire carried, and the output out of its MCP content envelope. Output folds at twelve
+  lines or 1500 characters, whichever comes first — one minified line has no line ceiling — to a
+  footer row that spans the card, rather than into its own scroll region. Argument values fold at
+  the same limits, because a `write` carries the whole file it writes. A shape we cannot
+  unwrap keeps its JSON: a result nobody can see is worse than an ugly one.
+- **Thinking** collapses to one muted line (`thinking · 3s`, trailed by the line it is on) and
+  expands into a quoted block.
 - **System events are one centred muted line**: model changed, run stopped, a send refused. They are
   facts about the session, not things anyone said.
 - **A steered message** keeps its bubble and adds an accent rule down its leading edge with the
@@ -359,8 +386,12 @@ Everything else follows from those two:
   long and read later, so the time is part of the record; the copy control appears on hover. A
   rating has nowhere to go here, and branching and editing are not features, so the row that other
   clients fill with icons stays at two things.
-- **Turn spacing** is 24 within a turn and 32 between turns. Long output needs the rhythm more than
-  a dense list does.
+- **Spacing is decided by the pair, not by one constant.** 32 above what someone sent, 24 wherever
+  the register changes, and **8** between two asides — a tool call, a thinking line, a system note.
+  Those are single lines of one activity, and giving `bash` / `thinking` / `bash` the space a
+  paragraph gets is what turns a work log into a sparse list. Below the last line there is 48 before
+  the composer: the transcript is pinned to its bottom while a run streams, so that gap is where the
+  newest line lands, and at 16 it sat on the composer's edge under the fade.
 - **A date separator** — one centred muted line — appears where a conversation crosses a day. Reading
   yesterday's run is the normal case here, and without it a background conversation reads as if it
   all happened at once. Telegram has had this since the beginning for the same reason.
@@ -425,9 +456,27 @@ the person's to edit.
 
 ## 10. Motion
 
-140ms, `cubic-bezier(0.2, 0, 0, 1)`. Four things move: rows expanding and collapsing (180ms),
-popovers appearing (opacity plus 4px rise, 120ms), hover backgrounds (100ms), and presence — the
-avatar ring and the conversation dot breathing together at 1.8s. Streaming text is not animated — token arrival is the animation, and a
+One easing, `cubic-bezier(0.2, 0, 0, 1)`, and three named shapes. The vocabulary is borrowed from
+Beautiful UI, not its components: a small set of movements used consistently is what reads as
+polish, and a large set used occasionally is what reads as a demo.
+
+| Shape | What it is | Where |
+|---|---|---|
+| `enter` | opacity plus a 6px rise, 180ms | anything arriving in the transcript: a message, a tool call, the working indicator. Not history — opening a conversation shows its backlog still |
+| `pop` | opacity plus scale from 0.96, 160ms | something appearing in place rather than arriving: `back to the latest` |
+| `shimmer` | a highlight swept across the words, 2.4s, looping | work in progress with nothing to show yet: `working… 12s`, `thinking` while it streams |
+
+`shimmer` replaces blinking a label's opacity, which is the cheapest-looking thing an interface can
+do and which sits on screen for minutes at a time here.
+
+Disclosures open by growing. `interpolate-size: allow-keywords` plus a transition on
+`::details-content` animates to automatic height with no JavaScript measuring anything — this is
+Electron on a known Chromium, so the feature is simply available. Both disclosures in the app, a
+tool call and a thinking block, go from one line to a block of output, which was the jump that made
+the transcript feel like it was redrawing itself.
+
+Hover backgrounds are 100ms, popovers 120ms, and presence breathes at 1.8s — the avatar ring and
+the conversation dot together. Streaming text is not animated: token arrival is the animation, and a
 transition on top of it produces jitter. Everything collapses to instant under
 `prefers-reduced-motion`.
 
