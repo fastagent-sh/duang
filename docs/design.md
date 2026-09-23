@@ -19,34 +19,40 @@ Five, and no more.
 | **Deployment** | this agent's cloud copy: URL, token, channels | control service |
 | **Account** | who pays; exists only because the cloud does | control service |
 
-An agent has **two places**: the local directory, and its cloud copy. They do not share
-conversations, because a cloud agent has neither your files nor your history. The UI says so with a
-`Local | Cloud` switch rather than merging two lists into a lie.
+The roadmap gives an agent **two places**: the local directory, and its cloud copy. They do not
+share conversations, because a cloud agent has neither your files nor your history. A future
+`Local | Cloud` switch will keep those lists separate; the current client is local-only.
 
 Notably absent: message, thread, group, membership, invite. Conversations are read from the runtime
 (`sessions.list()`, `entries()`); the client stores no transcript of its own.
 
 ## Screens
 
+The shipped layout has two columns: a single 320px sidebar combining agents and their
+conversations, and the open conversation. Geometry and interaction details live in
+[the design system](ui.md#3-structure).
+
 ```
-┌──────┬────────────────────┬──────────────────────────────────┐
-│ rail │ conversations      │ conversation                     │
-│      │                    │                                  │
-│ ◉    │ [ Local | Cloud ]  │  header: name · model · context  │
-│ ◎    │                    │                                  │
-│ ◉    │  · yesterday's fix │  user / assistant / thinking     │
-│      │  · telegram: #ops  │  tool calls, collapsed           │
-│ ⊞    │  · schedule: daily │                                  │
-│      │                    │  composer                        │
-└──────┴────────────────────┴──────────────────────────────────┘
-  agents        per agent              one conversation
-  + Activity
+┌ sidebar · 320px ──────────┐  ┌ conversation ──────────────────────┐
+│ duang                 +   │  │ floating header: agent · title     │
+│                           │  │                                    │
+│ ▾ Agent A                 │  │ user / assistant / thinking        │
+│     yesterday's fix       │  │ tool calls                         │
+│     another conversation  │  │                                    │
+│     + New conversation    │  │                                    │
+│ ▸ Agent B                 │  │ floating composer · model · send   │
+└───────────────────────────┘  └────────────────────────────────────┘
 ```
 
-**Rail** — one entry per agent, a dot for state (`local` · `deployed` · `running` · `failed`), plus
-one fixed entry: **Activity**.
+**Sidebar** — one row per agent, with presence and setup failures shown on that row. Conversations
+appear beneath an agent when explicitly expanded; opening an agent does not automatically expand
+its list. There is no separate agent rail or conversation-list column.
 
-**Activity** is every cloud agent's conversations merged and sorted by `updatedAt` — the inbox for
+**Planned additions** — `Local | Cloud` in the sidebar header (Week 3), a pinned **Activity** row
+above the agents (Week 4), and a right-hand panel for files, diffs and discovered settings (Week 2).
+None of these surfaces is present in the current client.
+
+**Activity (planned)** is every cloud agent's conversations merged and sorted by `updatedAt` — the inbox for
 work that happened without you. Unread is a local comparison of `updatedAt`/`messageCount` against
 what this machine last displayed. No server, no push, no new data source.
 
@@ -62,8 +68,9 @@ cannot already show you: a schedule failed, a deploy finished or failed, an agen
 agent's actual work arrives in a Telegram group, which already pushes to your phone; duplicating
 that is how you end up building a push service for no gain.
 
-**Conversation list** — `SessionSummary` rows: `name ?? preview`, relative `updatedAt`, a badge for
-where the conversation came from (you, a channel, a schedule).
+**Conversation rows** — nested under their agent in the sidebar, using `SessionSummary` names
+or previews and relative `updatedAt`. Badges for channel or schedule origin are planned with
+cloud conversations.
 
 **Conversation** — the transcript, and the only screen with real density:
 
