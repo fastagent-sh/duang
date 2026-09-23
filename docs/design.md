@@ -70,9 +70,51 @@ names and schedules, and a recent result/failure/skip **only where the runtime o
 preview must not imply that a routine will fire after the laptop is turned off. Showing an exact
 next run or a success badge requires an authoritative clock/outcome source, not a guessed timer.
 
+## Settings: model providers and network (planned, stage 1)
+
+The first run must not require a terminal, and a preset recipient must be able to add their own
+credentials. Settings open in the content area (`⌘,`, the app menu, or the model picker's
+**Manage providers…** / empty-state **Connect a provider**); the sidebar stays visible so running
+work remains in view. One page, two groups, no empty categories:
+
+**Model providers.** A *Connected* list shows each provider with how it is authenticated
+(subscription, API key, custom endpoint or an environment variable) and offers Reconnect and
+Disconnect; an environment-sourced credential cannot be disconnected from duang and says which
+variable supplies it. *Add a provider* offers three ways in:
+
+- **Subscription** (OAuth): Claude Pro/Max, ChatGPT/Codex, GitHub Copilot and the other flows
+  FastAgent supports. Sign-in happens in the system browser.
+- **API key** for a built-in provider, verified once when saved, with an optional base URL for a
+  relay or gateway in front of that provider.
+- **Custom endpoint**, in pi's `models.json` schema: name, API type, base URL, optional key and the
+  model ids (fetched from the endpoint when it lists them, otherwise typed). Ollama and LM Studio
+  are prefills, not separate integrations.
+
+Keys go to the application's FastAgent credential file, shared with the `fastagent` CLI and every
+agent on the machine; the page shows that path. A provider holds one credential, so signing in with
+an API key replaces a subscription login for the same provider, and the page says so before it
+happens. Custom endpoints need a machine-level models file that every agent reads
+([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)); a definition's own
+`models.json` still wins for that agent. Such an endpoint is local to this machine and does not
+travel with a preset or deployment.
+
+**Network.** *Automatic* is the default and needs no setup: model and sign-in requests follow the
+system proxy per request, including its bypass list and PAC rules, and pick up a VPN client being
+switched on or off; a TUN-mode VPN needs nothing at all. *Manual* takes an `http://`, `https://`
+or `socks5://` URL; *Off* connects directly. The page shows the route currently in effect and its
+source, and *Test connection* reports reachability or the original error. When a proxy is in effect,
+the agent's own commands (`git`, `npm`, `curl`) receive the matching proxy variables, as a terminal
+user would export them.
+
+Reasoning effort is not a setting: it sits beside the model on the conversation and applies to that
+conversation. Per-agent material (tool secrets, inherited machine skills) belongs to the agent
+detail view above. Appearance follows the system; shortcuts, notifications, a global default model
+and accounts are not settings until a shipped feature needs them.
+
 ## Paths through the product
 
-**Daily local use (current foundation).** Add an agent directory, choose a model, start work,
+**Daily local use (current foundation).** Connect a model provider (planned in-app; today
+`fastagent login`), add an agent directory, choose a model, start work,
 switch away, return to the real outcome, continue. Stage 1 strengthens the return-to-work flow,
 loaded-definition visibility and relevant local change review, using real tasks before adding
 compact, fork or a complete file tree. The current client already covers the basic chat, history,

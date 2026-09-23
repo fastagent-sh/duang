@@ -552,6 +552,36 @@ shows the first two letters over a background chosen by hashing the name across 
 hues. Identity is the tile; presence is the ring around it (§9), never a change to the tile itself,
 so an agent looks like the same agent whether it is busy or idle.
 
+## 12b. Planned: settings and connecting a provider
+
+Behaviour is in [interaction.md](interaction.md#planned-providers-network-and-reasoning-effort-stage-1);
+this is how it should read. References: Zed's AI settings, which name subscriptions and API access
+as different things; OpenCode's connect-provider dialog, one dialog walking method, prompt, waiting
+and result; Codex's "Sign in with ChatGPT / API key" pair. Refused: Cherry Studio's dense
+per-provider forms, where a `Check` beside the key field read as a key check but tested a model.
+
+```
+┌ sidebar ────────────────┬ Settings ────────────────────────────────────────┐
+│ (unchanged,             │ Model providers                                  │
+│  running work visible)  │   Connected   name · Subscription   Reconnect …  │
+│                         │   Add a provider  [Subscription|API key|Custom]  │
+│                         │   Credentials file · ~/.fastagent/…   Reveal     │
+│                         │ Network                                          │
+│                         │   (•) Automatic   via 127.0.0.1:7897 · macOS     │
+│                         │   ( ) Manual   ( ) Off          Test connection  │
+└─────────────────────────┴──────────────────────────────────────────────────┘
+```
+
+- Settings replace the conversation in the content area and use the reading column's width; Escape
+  or the back control returns to the conversation. No left navigation while there are two groups.
+- Provider rows use the conversation-row rhythm; the authentication kind is a neutral badge, and a
+  failure is a `danger` badge with its reason, never colour alone (§9).
+- *Add a provider* is a searchable list grouped Subscription / API key / Custom endpoint. Choosing
+  a row opens the connect dialog: the modal dialog surface (§6b), 440 wide, one `primary` action
+  per step. A device code is monospace at 22px with a Copy control; a browser step shows waiting
+  status with `Open again` and `Copy link`, and folds the paste-a-code field under it.
+- Reasoning effort is a `ghost` chip beside the model chip, with the same popover list.
+
 ## 13. Shipped Week 1 visual pass
 
 This list records the completed visual redesign; it is not the roadmap for the next product stages.
