@@ -15,7 +15,7 @@ import {
   workingAgents,
   type AgentRow,
 } from "./agents.ts";
-import { credentials } from "./credentials.ts";
+import { modelsFor } from "./credentials.ts";
 import { useSystemProxy } from "./proxy.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { send } from "./send.ts";
@@ -118,9 +118,9 @@ function register(): void {
     if (typeof model !== "string") throw new Error("Model must be a string");
     if (session !== undefined) requireSession(session);
     const row = await requireAgent(id);
-    // The picker only offers configured models, so a miss here means the file changed underneath it.
-    if (!(await credentials()).specs.includes(model))
-      return refuse("model_unavailable", `${model} is not in the configured credential file — pick another.`);
+    // The picker offers this agent's runnable models, so a miss here means something changed underneath it.
+    if (!(await modelsFor(row.dir)).specs.includes(model))
+      return refuse("model_unavailable", `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
     if (result.ok) stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
     return result;
@@ -135,7 +135,7 @@ function register(): void {
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
-  ipcMain.handle("models:list", credentials);
+  ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
   // The dock is where "something happened while you were away" belongs: the sidebar can only say it
   // while duang is the window you are looking at.
   ipcMain.handle("app:unseen", (_e, count: number) => {
@@ -216,8 +216,8 @@ function register(): void {
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
-    // One credential file serves every runtime, so no conversation can name a model this agent
-    // cannot authenticate: the picker only ever offered what that file has.
+    // One credential file serves every runtime, and the picker only offered what this agent can
+    // authenticate through it.
     return withAgentRun(await requireAgent(id), ({ agent, control }) =>
       send(agent, control.sessions.get(session), text),
     );

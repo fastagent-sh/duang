@@ -19,8 +19,11 @@ Adding an agent chooses a directory; a plain project can be scaffolded after con
 broken agent shows its original failure with a way to retry, reveal or remove it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
-The picker leads with the selected model and a short credential-file label; expanding the label
-reveals the complete FastAgent path. Configuration is not a provider probe.
+The picker lists the models the open agent can run: built-ins configured in the credential file
+plus the agent's own `models.json` endpoints, so one agent's endpoints never appear for another. It
+leads with the selected model and a short credential-file label; expanding the label reveals the
+complete FastAgent path. Configuration is not a provider probe: a listed endpoint or expired login
+can still fail at request time, with the provider's error.
 The model on a historical conversation can differ from the agent's default.
 
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
@@ -52,9 +55,9 @@ branching are conditional on demonstrated long-conversation needs, not a checkli
 
 ## Planned: providers, network and reasoning effort (stage 1)
 
-**Model picker.** The list is the open agent's: what its runtime accepts (`allowedModels`), so a
-model from the definition's `models.json` or the machine's custom endpoints appears and can be
-chosen ([#59](https://github.com/fastagent-sh/duang/issues/59)). With nothing configured it offers
+**Model picker.** The list is already the open agent's (above); the machine's custom endpoints
+([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)) will join it through the
+same FastAgent call. With nothing configured it offers
 **Connect a provider**; otherwise it ends with **Manage providers…**. Both open Settings.
 Returning from a successful connection reopens the picker without choosing a model for the person.
 

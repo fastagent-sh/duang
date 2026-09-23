@@ -28,8 +28,8 @@ it need not proxy every conversation or own a transcript.
 `createPiAgentFromDir` in `@fastagent-sh/fastagent/pi`; a future remote connection uses FastAgent's
 public `connectAgent` and `connectSessionControl`, subject to the endpoint's `capabilities()`.
 Local turns use `agent.invoke`; observing, steering, stopping and reading history use the bound
-session control. Pin a tested FastAgent revision before consuming newer remote APIs: the current
-pinned version and upstream differ in authentication, invoke paths and routines.
+session control. Bump and verify the pinned FastAgent revision together with the feature that
+consumes a newer API.
 
 **The preload exposes typed, named operations**, not a stringly-typed gateway. Week 1 exposes only
 the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
@@ -117,8 +117,8 @@ revocable invite may initially mean "anyone holding this link"; it must not clai
 named person. If named recipients are required, add authentication before making that promise.
 
 A protected endpoint must enforce the invite boundary on **both** `POST /invoke` and `/control/*`.
-Newer FastAgent has no built-in control token; the older pinned contract's
-`FASTAGENT_CONTROL_TOKEN` is not a future access design. A raw deployment-wide
+FastAgent has no built-in control token; the `FASTAGENT_CONTROL_TOKEN` of older revisions is not a
+future access design. A raw deployment-wide
 `SessionControl.sessions.list()` enumerates everyone's sessions, so a shared host must scope reads,
 writes and events to the visitor's own sessions without storing a second transcript. Owner-only
 routines, definition updates and deployment controls must not be exposed through a visitor invite.
@@ -142,13 +142,12 @@ Do not claim a specific Fly topology, sign-in provider or price before verifying
 
 A clock must remain available while the owner's laptop is off. On Fly, the safe first configuration
 for a cron routine is a resident machine; the current upstream plan keeps one running when required.
-A sleeping machine cannot wake itself for its own cron. Newer upstream provides `GET /routines`
+A sleeping machine cannot wake itself for its own cron. FastAgent provides `GET /routines`
 (names, cron and timezone, not outcomes) and `POST /run` (run by name), but `POST /run` is **not** a
 clock or a slot-claim protocol. A future external scheduler needs demonstrated delivery,
 authorization, deduplication and honest failure/skip reporting before reducing residency. Some
-routines may need residency for reasons other than cron. The older pinned FastAgent contract and
-newer upstream use different route and routine names; bump and verify the pin with the feature that
-consumes it, without modifying a developer's existing sibling checkout.
+routines may need residency for reasons other than cron. Verify these routes at the pinned revision
+with the feature that consumes them, without modifying a developer's existing sibling checkout.
 
 If a host cannot provide a recent routine outcome through the runtime's sessions, claim records or
 host telemetry, show "outcome unavailable" rather than infer success from `GET /routines`. A

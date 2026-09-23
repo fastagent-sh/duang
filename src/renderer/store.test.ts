@@ -365,14 +365,17 @@ test("a refused model change or removal is shown, and changes nothing", async ()
 test("the picker rereads models on every open, and a stale answer never lands", async () => {
   const { api, store } = harness();
   let listed = 0;
-  api.listModels = async () => {
+  const askedFor: string[] = [];
+  api.listModels = async (agentId) => {
     listed++;
+    askedFor.push(agentId);
     return { specs: ["provider/model"], authPath: "/tmp/auth.json" };
   };
   await store.load();
 
   await store.loadModels();
   assert.deepEqual(store.getSnapshot().models, { specs: ["provider/model"], authPath: "/tmp/auth.json" });
+  assert.deepEqual(askedFor, [store.getSnapshot().agentId], "the list is the open agent's own (its models.json)");
   await store.loadModels();
   assert.equal(listed, 2, "a login while duang runs must show up without a restart");
 

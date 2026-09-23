@@ -66,7 +66,7 @@ files, secrets or deployment controls. No in-app code editor or general remote f
 
 Routines belong on an owner's online agent even if that agent has never been shared. Show declared
 names and schedules, and a recent result/failure/skip **only where the runtime or host reports it**;
-`GET /routines` in newer FastAgent lists names and schedules, not execution outcomes. A local
+`GET /routines` in FastAgent lists names and schedules, not execution outcomes. A local
 preview must not imply that a routine will fire after the laptop is turned off. Showing an exact
 next run or a success badge requires an authoritative clock/outcome source, not a guessed timer.
 
@@ -163,7 +163,7 @@ direct invitations fail a real need; do not silently treat one person's session 
 - A remote timeout or disconnected stream never replays an accepted run or routine. On recovery,
   read state and history and report any outcome the runtime cannot prove as unknown.
 - Hosting must not copy local credentials or conversations. The remote service has no built-in
-  authentication in newer FastAgent; protect both control and invoke, isolate visitors' session
+  authentication in FastAgent; protect both control and invoke, isolate visitors' session
   access, and make invitations revocable before sharing an endpoint.
 - Routine time requires a resident machine or a verified external scheduler. Failed, skipped and
   interrupted fires are not successes; stop does not roll back tool effects.

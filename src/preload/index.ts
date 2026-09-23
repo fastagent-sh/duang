@@ -47,7 +47,8 @@ const api = {
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
   /** Where duang keeps its agent list — the one thing to open when that file cannot be read. */
   revealRegistry: (): Promise<void> => ipcRenderer.invoke("registry:reveal"),
-  listModels: (): Promise<Models> => ipcRenderer.invoke("models:list"),
+  /** What this agent can run: built-ins and its own `models.json`, as configured in the credential file. */
+  listModels: (agentId: string): Promise<Models> => ipcRenderer.invoke("models:list", agentId),
   /**
    * How many finished runs nobody has looked at. The dock is where "something happened while you
    * were away" belongs: the sidebar can only say it while duang is the window you are in.

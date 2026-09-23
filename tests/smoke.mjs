@@ -63,6 +63,15 @@ if (!process.versions.electron) {
     if (selectedAuth !== defaultAuth) await writeFile(defaultAuth, JSON.stringify({ "openai-codex": codex }));
     await writeFile(selectedAuth, JSON.stringify(stored));
     await writeFile(join(configured, "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
+    // A definition-local endpoint (#59): listed for this agent only, and accepted as its model.
+    await writeFile(
+      join(configured, "models.json"),
+      JSON.stringify({
+        providers: {
+          local: { baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", apiKey: "ollama", models: [{ id: "m1" }] },
+        },
+      }),
+    );
     // A skill is what `commands()` lists, so the composer's `/` completion has something to find.
     await mkdir(join(configured, "skills", "demo"), { recursive: true });
     await writeFile(
@@ -409,11 +418,13 @@ if (!process.versions.electron) {
       await message("Use the configured model with the selected credentials.");
       await until("document.body.innerText.includes('Smoke answer') && !document.body.innerText.includes('working…')", "configured model uses the same credential file");
 
-      const models = await evaluate("window.duang.listModels()");
+      const models = await evaluate("window.duang.listModels('configured')");
       assert.equal(models.authPath, selectedAuth);
       assert.ok(models.specs.includes("anthropic/claude-sonnet-4-5"));
       const codexModel = models.specs.find((spec) => spec.startsWith("openai-codex/"));
       assert.ok(codexModel);
+      assert.ok(models.specs.includes("local/m1"), "the agent's own models.json endpoint is pickable");
+      assert.ok(!(await evaluate("window.duang.listModels('smoke')")).specs.includes("local/m1"), "another agent's endpoint is not");
       const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "cross-provider model picker");
@@ -427,6 +438,8 @@ if (!process.versions.electron) {
       // The read issued alongside the change must wait for the new runtime instead of reporting a
       // broken agent. Whether it lands inside the window is main's to schedule, so assert only the
       // outcome; the forced-window verification is described in the PR.
+      assert.deepEqual(await evaluate("window.duang.setModel('configured', 'local/m1')"), { ok: true }, "setModel accepts it");
+      assert.equal((await evaluate("window.duang.setModel('configured', 'local/nope')")).error.code, "model_unavailable");
       const racing = await evaluate(`(async () => {
         const change = window.duang.setModel('configured', ${JSON.stringify(codexModel)});
         const reads = [];
@@ -457,18 +470,18 @@ if (!process.versions.electron) {
       assert.equal(missing.ok, false);
       assert.equal(missing.error.message, "Provider is not configured: anthropic");
       assert.equal(anthropicRequests, 2);
-      assert.ok(!(await evaluate("window.duang.listModels()")).specs.some((spec) => spec.startsWith("anthropic/")));
+      assert.ok(!(await evaluate("window.duang.listModels('configured')")).specs.some((spec) => spec.startsWith("anthropic/")));
       const expired = { ...stored, anthropic: { ...stored.anthropic, expires: 0 } };
       await writeFile(selectedAuth, JSON.stringify(expired));
-      assert.ok((await evaluate("window.duang.listModels()")).specs.includes("anthropic/claude-sonnet-4-5"), "picker does not attempt OAuth refresh");
+      assert.ok((await evaluate("window.duang.listModels('configured')")).specs.includes("anthropic/claude-sonnet-4-5"), "picker does not attempt OAuth refresh");
       const refreshFailure = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Expired token check')`);
       assert.equal(refreshFailure.ok, false);
       assert.match(refreshFailure.error.message, /Synthetic OAuth refresh rejected/);
       assert.deepEqual(JSON.parse(await readFile(selectedAuth, "utf8")), expired, "failed refresh preserves the credential");
       await writeFile(selectedAuth, "{invalid");
-      assert.match(await evaluate("window.duang.listModels().then(() => '', error => error.message)"), /corrupt auth file/);
+      assert.match(await evaluate("window.duang.listModels('configured').then(() => '', error => error.message)"), /corrupt auth file/);
       await writeFile(selectedAuth, JSON.stringify(stored));
-      assert.ok((await evaluate("window.duang.listModels()")).specs.includes("anthropic/claude-sonnet-4-5"));
+      assert.ok((await evaluate("window.duang.listModels('configured')")).specs.includes("anthropic/claude-sonnet-4-5"));
       const recovered = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Retry with restored credentials')`);
       assert.equal(recovered.ok, true);
       assert.equal(anthropicRequests, 3);

@@ -68,8 +68,8 @@ snapshot of the agent definition; edits on the laptop do not silently change the
 Routine execution is not guaranteed by a suspended machine: a cron instant does not wake it. Start
 with a resident machine and show its cost. Consider an external clock only once it reliably wakes
 scheduled work and reports failure or skipped runs; a manual `POST /run` alone is not an external
-scheduler. FastAgent's routine API and deployment residency differ between the currently pinned
-revision and newer upstream; reconcile that contract before implementing hosting. See
+scheduler. Verify FastAgent's routine API and deployment residency at the pinned revision before
+implementing hosting. See
 [architecture](docs/architecture.md#online-execution-and-routines).
 
 The desktop client and preset sharing are free. duang cloud is an optional paid host, not a
@@ -185,20 +185,16 @@ The fragmented Week 1 status display was subsequently redesigned
 
 Accepted limitations, each recorded in its issue:
 
-- **`/name` does not invoke anything.** Completion spells the name; the agent reads the line as
-  text and usually acts on it, which is the model's judgement rather than a promise. Making it
-  deterministic is a FastAgent contract question
-  ([fastagent#572](https://github.com/fastagent-sh/fastagent/issues/572)); duang will not expand
-  commands itself, because that breaks for remote agents whose files are not on this machine.
+- **A completed skill name is read as text.** FastAgent's engine expands `/skill:<name>` and a
+  prompt template's `/<name>` ([fastagent#572](https://github.com/fastagent-sh/fastagent/issues/572)),
+  but completion inserts `/<name>` for both, so a skill is still the model's judgement rather than a
+  promise. duang will not expand commands itself, because that breaks for remote agents whose files
+  are not on this machine.
 - **History replay is partial.** Durable entries expose tool names and results but not tool
   arguments, thinking or settled run outcomes, and partial output emitted before a reload is not
   replayed. Nothing presents partial history as a complete trace.
 - **Usage and cost are not shown.** The runtime records them per turn, but the live session state
   duang reads does not carry them; nothing is invented in their place.
-- **Skills load only from the agent's own `fastagent/skills/`**, so global skills are invisible
-  ([fastagent#570](https://github.com/fastagent-sh/fastagent/issues/570)), and an unreadable agent
-  directory is reported upstream as "no agent here"
-  ([fastagent#571](https://github.com/fastagent-sh/fastagent/issues/571)).
 - **One unexplained incident**: a run whose output was produced and stored never rendered live,
   once, and has not reproduced. Recorded with its evidence in
   [#10](https://github.com/fastagent-sh/duang/issues/10) rather than patched blind.

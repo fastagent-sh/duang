@@ -1,10 +1,10 @@
 /**
  * Slash-command completion: names only, and a name is all it is.
  *
- * FastAgent's `commands()` is a LISTING, not an invocation surface (session-control design §5.1.1):
- * the data plane takes prompts as text and nothing expands `/name`. So typing one sends that line as
- * written — useful because the agent's own skills are named there — and the composer's only job is to
- * spell the name correctly. Arguments are typed after it like any other text.
+ * FastAgent's `commands()` is a LISTING; the line is sent as written and any expansion is the
+ * engine's (`/skill:<name>` for a skill, `/<name>` for a prompt template). The composer's only job
+ * is to spell the name correctly; it inserts `/<name>` for both, so a completed skill is read as
+ * text. Arguments are typed after it like any other text.
  */
 import type { AgentCommand } from "@fastagent-sh/fastagent/session";
 
