@@ -80,16 +80,16 @@ own error. A variable is shown on the row beside any stored credential and canno
 
 **Custom endpoints** require a name, API type, base URL and at least one model; a key is optional
 for a local server. The name becomes a new provider id: an id that is already a built-in provider is
-refused, so a relay cannot silently take over a built-in provider's credentials. A machine models file that cannot be read or parsed is shown as that error at
-the providers list, never as "no custom endpoints", and is never overwritten.
+refused, so a relay cannot silently take over a built-in provider's credentials. A machine models
+file that cannot be read or parsed is shown as that error at the providers list, never as "no custom endpoints", and is never overwritten.
 
 **Network.** *Automatic* resolves the route for each request from the system, so switching a VPN
 client on or off needs no action in duang, when duang was launched without proxy variables. If it
 was launched from a terminal with `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY` set, *Automatic* uses
 those, shows them as the source, and does not follow system changes until duang is relaunched from
 the Dock or Finder; *Manual* and *Off* still override them. If the proxy in effect cannot be
-reached, requests fail with an error naming that proxy; duang does not silently fall back to a direct connection, which may also
-be blocked or may bypass a route the person chose. A setting change applies to new requests; a
+reached, requests fail with an error naming that proxy; duang does not silently fall back to a
+direct connection, which may also be blocked or may bypass a route the person chose. A setting change applies to new requests; a
 running turn keeps its connection. *Test connection* uses the same route as a model request. A
 settings file that cannot be read is reported, not replaced with defaults.
 
