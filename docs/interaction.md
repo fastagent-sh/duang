@@ -50,6 +50,56 @@ FastAgent and relevant files/diffs; if runtime discovery is unavailable, say so.
 shown in this view is **declared**, not guaranteed to run while the app is closed. Compact and
 branching are conditional on demonstrated long-conversation needs, not a checklist of Pi commands.
 
+## Planned: providers, network and reasoning effort (stage 1)
+
+**Model picker.** The list is the open agent's: what its runtime accepts (`allowedModels`), so a
+model from the definition's `models.json` or the machine's custom endpoints appears and can be
+chosen ([#59](https://github.com/fastagent-sh/duang/issues/59)). With nothing configured it offers
+**Connect a provider**; otherwise it ends with **Manage providers…**. Both open Settings.
+Returning from a successful connection reopens the picker without choosing a model for the person.
+
+**Connecting.** The flow is driven by FastAgent's login
+([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) and rendered by the kind
+of step it asks for, never by per-provider screens: a browser sign-in opens the system browser and
+offers *Open again* and *Copy link*, with a folded field for pasting a code or redirect URL when
+the browser is on another device (the field disappears if the browser callback wins); a device code
+is shown large with *Copy* and a link to the verification page, counting down if it expires; a key
+is a masked field that is cleared once submitted and never stored in drafts; a choice is a list.
+A key is verified once: a rejected key (HTTP 401) is asked for again with the provider's reason; a
+key that could not be verified is saved with that warning. Cancel, Escape or closing the window
+ends the flow and writes nothing, with no error shown. Any other failure (port in use, token
+exchange, network) shows the original message with *Try again* and *Back*. A provider holds one
+stored credential, so connecting either kind over the other (a key over a subscription login, or
+the reverse) says first that it will replace it.
+
+**Disconnecting** removes the stored credential and is confirmed with its reach: the credential
+file is shared with the CLI and every agent on this machine. If an environment variable also
+supplies the provider, the confirmation says requests will continue with that variable (named);
+otherwise it says conversations using the provider fail on their next request with the provider's
+own error. A variable is shown on the row beside any stored credential and cannot be removed here.
+
+**Custom endpoints** require a name, API type, base URL and at least one model; a key is optional
+for a local server. The name becomes a new provider id: an id that is already a built-in provider is
+refused, so a relay cannot silently take over a built-in provider's credentials. A machine models
+file that cannot be read or parsed is shown as that error at the providers list, never as "no custom endpoints", and is never overwritten.
+
+**Network.** *Automatic* resolves the route for each request from the system, so switching a VPN
+client on or off needs no action in duang, when duang was launched without proxy variables. If it
+was launched from a terminal with `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY` set, *Automatic* uses
+those, shows them as the source, and does not follow system changes until duang is relaunched from
+the Dock or Finder; *Manual* and *Off* still override them. If the proxy in effect cannot be
+reached, requests fail with an error naming that proxy; duang does not silently fall back to a
+direct connection, which may also be blocked or may bypass a route the person chose. A setting change applies to new requests; a
+running turn keeps its connection. *Test connection* uses the same route as a model request. A
+settings file that cannot be read is reported, not replaced with defaults.
+
+**Reasoning effort** sits beside the model on the conversation, lists the levels the conversation's
+current model supports (`availableThinkingLevels`) and is hidden when there are none. A choice
+applies to that conversation only; unchanged conversations follow the agent's `thinkingLevel`.
+While the conversation has a turn running the control is disabled with the reason "Stop the turn
+to change reasoning effort": FastAgent refuses a session update while its lease is held
+(`SessionBusy`) rather than queueing it, the same as a model change.
+
 ## Planned: copy a preset (stage 2)
 
 "Copy preset" previews exactly which portable definition files travel and explicitly excludes

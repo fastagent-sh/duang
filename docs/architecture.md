@@ -43,6 +43,43 @@ FastAgent resolves credentials for the actual session model and owns OAuth refre
 The renderer receives model specs and the selected path, never credential contents. See the
 [credential policy](../README.md#run-it) for defaults and explicit overrides.
 
+**Planned: sign-in runs in main.** Main calls FastAgent's public login entry point
+([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with the same `authPath`
+and relays each prompt and event to the renderer over typed IPC, one flow at a time; cancel and
+window destruction abort it, which also closes the provider's local callback server. A secret
+travels from renderer to main once, as an answer; no message from main to the renderer carries
+credential contents. Browser and verification URLs open with `shell.openExternal` after an
+`https:` (or loopback `http:`) check, never in an app window. A custom endpoint's key is stored
+through the public `fastagentCredentialStore`; its definition goes to the machine-level models
+file ([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)), which duang edits
+only by its own provider ids, with an atomic write, refusing to touch a file it cannot parse. duang
+never writes an entry for a built-in provider id: a `baseUrl` override there would outlive the
+credential it was entered with and send a later subscription token or official key to the relay.
+
+**Planned: one network route, owned by Chromium.** Node's `fetch` ignores the system proxy, and a
+proxy read once at startup misses a VPN client switched on later, PAC rules and the system bypass
+list. Main therefore installs an undici dispatcher that asks `session.resolveProxy(url)` for each
+new connection and maps the answer (`DIRECT`, `PROXY`, `HTTPS`, `SOCKS5`) to undici agents; the
+Network setting only changes the session's proxy configuration (`system`, fixed rules, or
+`direct`), and proxy variables present at launch are translated into the same configuration. A
+spike on macOS with Clash Verge in system-proxy mode confirmed that `resolveProxy` returns the
+proxy for provider hosts and `DIRECT` for loopback, private ranges and `.local`, and that a Node
+`fetch` without it reached Anthropic directly and got HTTP 403. Picking up a system proxy switched
+while duang runs is expected from Chromium's configuration watcher but was not tested, nor was an
+unreachable proxy. Only the first entry of a PAC list is used and proxy authentication is
+unsupported until a real user needs either.
+
+Agent commands cannot use the dispatcher: pi's shell tool spawns with `getShellEnv()`, a copy of
+`process.env` taken at each spawn, so the only lever is main's own `process.env`, shared by every
+agent in the process (matching the one app-wide Network setting). When the route is not direct and
+no proxy variables came from the launch environment, main sets `HTTPS_PROXY`, `HTTP_PROXY` and
+`ALL_PROXY` to the proxy `resolveProxy` returns for `https://github.com`, the host agent commands
+most often need, and `NO_PROXY` to `localhost,127.0.0.1,::1`; *Manual* sets the manual URL and
+*Off* removes the variables duang set. Commands spawned after a change see it; a running command
+keeps its environment. `resolveProxy` answers one URL, not a bypass list, so per-host PAC rules and
+the system bypass list beyond loopback do not reach child processes: a private-range or `.local`
+host reached by a command goes through the proxy. Launch-environment variables are left untouched.
+
 **Runtime replacement is agent-scoped.** Changing a default model prepares a new assembly and
 updates the selected session before committing the registry choice. Admission is guarded across
 all conversations, including turns still opening their runtime: no model replacement or removal
@@ -62,7 +99,10 @@ registry. Writes serialize read/modify/rename, so concurrent changes do not lose
 write never publishes an in-memory success. Conversations remain the runtime's files. The renderer
 persists drafts and selection in localStorage; live output and attention marks are presentation
 state, not a second durable transcript. Remote contacts and credentials are future work: never
-store access tokens alongside contact metadata; use OS-backed secure storage for secrets.
+store access tokens alongside contact metadata; use OS-backed secure storage for secrets. Model
+credentials are not duang's: they stay in FastAgent's credential file. Planned app preferences
+(the network mode) live in `userData/settings.json`, validated on read; an unreadable file is an
+error, not a first run.
 
 `ponytail:` one JSON file with atomic writes; move to SQLite when a list of agents stops fitting in
 memory, which is not a real horizon for this product.
@@ -124,6 +164,8 @@ work may already have happened. These are data-integrity constraints, not an ent
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
 | Model and channel credentials | each runtime's credential store or host secrets | Never copy a local OAuth login into a remote deployment. |
+| Machine model endpoints (planned) | machine-level FastAgent models file | Local to this machine; not part of a preset or deployment. |
+| App preferences (planned) | `userData/settings.json` | Network mode only; never credentials. |
 | Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |
 | Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |
 

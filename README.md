@@ -83,7 +83,10 @@ Week 1 local setup, streaming, history and navigation have been accepted. Stages
 are **not yet accepted**. A stage number is an outcome gate, not a calendar week.
 
 1. **Daily local workbench.** Find an agent, start work, switch away, return to the real outcome and
-   continue without a terminal. Inspect the loaded definition and relevant local changes as needed.
+   continue without a terminal. Connect a model provider (subscription, API key or custom endpoint)
+   in the app rather than through `fastagent login`, and have the proxy follow system changes with a
+   setting to override it; today the system proxy is read once at launch and cannot be changed.
+   Inspect the loaded definition and relevant local changes as needed.
    Reuse Week 1 chat; prioritize demonstrated gaps over a full IDE, file tree or every session
    control. Local routine inspection must not promise execution after the laptop closes.
 2. **Share a preset.** Another person imports a portable definition on a different machine and
