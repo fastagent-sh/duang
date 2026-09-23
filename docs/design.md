@@ -77,23 +77,26 @@ credentials. Settings open in the content area (`⌘,`, the app menu, or the mod
 **Manage providers…** / empty-state **Connect a provider**); the sidebar stays visible so running
 work remains in view. One page, two groups, no empty categories:
 
-**Model providers.** A *Connected* list shows each provider with how it is authenticated
-(subscription, API key, custom endpoint or an environment variable) and offers Reconnect and
-Disconnect; an environment-sourced credential cannot be disconnected from duang and says which
-variable supplies it. *Add a provider* offers three ways in:
+**Model providers.** A *Connected* list shows each provider with every source that authenticates
+it (subscription, API key, custom endpoint, environment variable) and offers Reconnect and
+Disconnect. An environment variable cannot be removed from duang; the row names it, and a provider
+with both a stored credential and a variable shows both. *Add a provider* offers three ways in:
 
 - **Subscription** (OAuth): Claude Pro/Max, ChatGPT/Codex, GitHub Copilot and the other flows
   FastAgent supports. Sign-in happens in the system browser.
-- **API key** for a built-in provider, verified once when saved, with an optional base URL for a
-  relay or gateway in front of that provider.
+- **API key** for a built-in provider, verified once when saved, sent only to that provider's own
+  endpoint.
 - **Custom endpoint**, in pi's `models.json` schema: name, API type, base URL, optional key and the
   model ids (fetched from the endpoint when it lists them, otherwise typed). Ollama and LM Studio
-  are prefills, not separate integrations.
+  are prefills, not separate integrations. A relay or gateway in front of Anthropic or OpenAI is a
+  custom endpoint too, under its own provider id: duang never redirects a built-in provider's
+  `baseUrl`, so a subscription token or official key cannot be sent to a third party by a setting
+  left behind from another credential.
 
 Keys go to the application's FastAgent credential file, shared with the `fastagent` CLI and every
-agent on the machine; the page shows that path. A provider holds one credential, so signing in with
-an API key replaces a subscription login for the same provider, and the page says so before it
-happens. Custom endpoints need a machine-level models file that every agent reads
+agent on the machine; the page shows that path. A provider holds one stored credential, so an API
+key replaces a subscription login for the same provider and vice versa, and the page says so before
+it happens. Custom endpoints need a machine-level models file that every agent reads
 ([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)); a definition's own
 `models.json` still wins for that agent. Such an endpoint is local to this machine and does not
 travel with a preset or deployment.
@@ -102,9 +105,11 @@ travel with a preset or deployment.
 system proxy per request, including its bypass list and PAC rules, and pick up a VPN client being
 switched on or off; a TUN-mode VPN needs nothing at all. *Manual* takes an `http://`, `https://`
 or `socks5://` URL; *Off* connects directly. The page shows the route currently in effect and its
-source, and *Test connection* reports reachability or the original error. When a proxy is in effect,
-the agent's own commands (`git`, `npm`, `curl`) receive the matching proxy variables, as a terminal
-user would export them.
+source, and *Test connection* reports reachability or the original error. Proxy variables present
+when duang was launched from a terminal are an explicit route: *Automatic* then uses them and stops
+following the system until relaunch, and the page says so. When a proxy is in effect, the agent's
+own commands (`git`, `npm`, `curl`) receive one proxy in the standard variables, as a terminal user
+would export it; per-host PAC rules and the system bypass list do not reach them.
 
 Reasoning effort is not a setting: it sits beside the model on the conversation and applies to that
 conversation. Per-agent material (tool secrets, inherited machine skills) belongs to the agent

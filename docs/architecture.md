@@ -49,10 +49,12 @@ and relays each prompt and event to the renderer over typed IPC, one flow at a t
 window destruction abort it, which also closes the provider's local callback server. A secret
 travels from renderer to main once, as an answer; no message from main to the renderer carries
 credential contents. Browser and verification URLs open with `shell.openExternal` after an
-`https:` (or loopback `http:`) check, never in an app window. A custom endpoint's key is stored through the
-public `fastagentCredentialStore`; its definition goes to the machine-level models file
-([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)), which duang edits only by
-provider id, with an atomic write, refusing to touch a file it cannot parse.
+`https:` (or loopback `http:`) check, never in an app window. A custom endpoint's key is stored
+through the public `fastagentCredentialStore`; its definition goes to the machine-level models
+file ([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)), which duang edits
+only by its own provider ids, with an atomic write, refusing to touch a file it cannot parse. duang
+never writes an entry for a built-in provider id: a `baseUrl` override there would outlive the
+credential it was entered with and send a later subscription token or official key to the relay.
 
 **Planned: one network route, owned by Chromium.** Node's `fetch` ignores the system proxy, and a
 proxy read once at startup misses a VPN client switched on later, PAC rules and the system bypass
@@ -64,10 +66,19 @@ spike on macOS with Clash Verge in system-proxy mode confirmed that `resolveProx
 proxy for provider hosts and `DIRECT` for loopback, private ranges and `.local`, and that a Node
 `fetch` without it reached Anthropic directly and got HTTP 403. Picking up a system proxy switched
 while duang runs is expected from Chromium's configuration watcher but was not tested, nor was an
-unreachable proxy. Only the first entry of a PAC list
-is used and proxy authentication is unsupported until a real user needs either. Agent commands
-receive `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`NO_PROXY` derived from the same answer when a proxy
-is in effect; whether FastAgent's tools read the environment at spawn time must be verified.
+unreachable proxy. Only the first entry of a PAC list is used and proxy authentication is
+unsupported until a real user needs either.
+
+Agent commands cannot use the dispatcher: pi's shell tool spawns with `getShellEnv()`, a copy of
+`process.env` taken at each spawn, so the only lever is main's own `process.env`, shared by every
+agent in the process (matching the one app-wide Network setting). When the route is not direct and
+no proxy variables came from the launch environment, main sets `HTTPS_PROXY`, `HTTP_PROXY` and
+`ALL_PROXY` to the proxy `resolveProxy` returns for `https://github.com`, the host agent commands
+most often need, and `NO_PROXY` to `localhost,127.0.0.1,::1`; *Manual* sets the manual URL and
+*Off* removes the variables duang set. Commands spawned after a change see it; a running command
+keeps its environment. `resolveProxy` answers one URL, not a bypass list, so per-host PAC rules and
+the system bypass list beyond loopback do not reach child processes: a private-range or `.local`
+host reached by a command goes through the proxy. Launch-environment variables are left untouched.
 
 **Runtime replacement is agent-scoped.** Changing a default model prepares a new assembly and
 updates the selected session before committing the registry choice. Admission is guarded across
