@@ -835,6 +835,15 @@ export function Transcript({
   const last = items.at(-1);
   const streaming = last?.kind === "assistant" || last?.kind === "thinking" ? last.open : false;
 
+  const shown = lines(items);
+  /**
+   * `enter` is for what arrives, and history has not arrived — it was already there. This component
+   * remounts for every conversation it shows (keyed by subscription), and it mounts with the history
+   * already loaded, so the rows on screen at mount are the old ones and everything past them is new.
+   * Without this, opening a conversation floated its whole backlog in at once.
+   */
+  const history = useRef(shown.length);
+
   useEffect(() => {
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
@@ -882,7 +891,7 @@ export function Transcript({
       style={{ paddingBottom: bottomGap }}
     >
       <div className="column">
-        {lines(items).map((line, index, all) =>
+        {shown.map((line, index, all) =>
           line.kind === "day" ? (
             // Reading yesterday's run is the normal case here; without this the whole conversation
             // reads as one sitting.
@@ -894,7 +903,7 @@ export function Transcript({
           ) : (
             // `enter` runs once, when the element is created — a streaming answer re-renders into
             // the same node, so the rise does not restart on every token.
-            <div key={index} className={`enter ${gap(all[index - 1], line)}`}>
+            <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1], line)}`}>
               <Message item={line} />
             </div>
           ),
@@ -1173,7 +1182,7 @@ function Output({ text, isError }: { text: string; isError?: boolean }) {
         // shrinks to its label rather than filling the line the way a div's would.
         <button
           type="button"
-          className="-mx-2.5 -mb-2.5 mt-2 flex h-7 w-[calc(100%+1.25rem)] items-center justify-center gap-1.5 rounded-b-card border-t border-stroke text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
+          className="focus-inset -mx-2.5 -mb-2.5 mt-2 flex h-7 w-[calc(100%+1.25rem)] items-center justify-center gap-1.5 rounded-b-card border-t border-stroke text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
           onClick={() => setOpen(!open)}
         >
           <CaretDown size={10} className={`transition-transform ${open ? "rotate-180" : ""}`} />

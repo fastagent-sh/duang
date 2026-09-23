@@ -196,6 +196,15 @@ if (!process.versions.electron) {
     );
     await capture("app");
 
+    // Reopened, the conversation is history: nothing in it arrived just now, so nothing in it may
+    // float in as if it had. Printed rather than asserted, like the clearance above — and 0 is the
+    // only right answer.
+    const reopened = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+    win.webContents.reload();
+    await reopened;
+    await until("document.body.innerText.includes('sectionsGenerated')", "the reopened conversation");
+    console.log("rows animating in on reopen:", await evaluate(`document.querySelectorAll('.column > .enter').length`));
+
     // The component sheet, in the same window and the same build as the app it documents.
     // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.
     win.setSize(1180, 2000);

@@ -241,6 +241,16 @@ summary:focus-visible,
   border-radius: 4px;
 }
 
+/* A control that fills its container edge to edge draws the ring inside itself: outside, the ring
+   lands in the container's clip and three sides of it disappear. The tool card's fold footer is
+   one — a disclosure clips its content so it can grow open. A plain class, not a Tailwind variant:
+   the rule above is unlayered and would beat any utility. */
+.focus-inset:focus-visible {
+  outline-offset: -2px;
+  /* Back to the control's own corners, which the rule above flattens to 4px. */
+  border-radius: revert-layer;
+}
+
 /* Popovers: the model list and the slash completions are two different things — one takes focus, one
    must not — but they are the same surface floating above the same composer, so they share a look.
    The only shadow in the app (§7). */

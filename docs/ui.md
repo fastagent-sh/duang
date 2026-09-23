@@ -351,8 +351,10 @@ Everything else follows from those two:
   `thinking` line beside it. Boxing a closed call is wrong in both directions: full width it is a
   grey slab, shrunk to its text it reads as a button dropped into the prose. The surface arrives
   with the output it has to hold. Open, the card shows arguments as labels and values rather than
-  as the JSON the wire carried, and the output out of its MCP content envelope; results over twelve
-  lines fold to a footer row on the card rather than into their own scroll region. A shape we cannot
+  as the JSON the wire carried, and the output out of its MCP content envelope. Output folds at twelve
+  lines or 1500 characters, whichever comes first — one minified line has no line ceiling — to a
+  footer row that spans the card, rather than into its own scroll region. Argument values fold at
+  the same limits, because a `write` carries the whole file it writes. A shape we cannot
   unwrap keeps its JSON: a result nobody can see is worse than an ugly one.
 - **Thinking** collapses to one muted line (`thinking · 3s`, trailed by the line it is on) and
   expands into a quoted block.
@@ -460,7 +462,7 @@ polish, and a large set used occasionally is what reads as a demo.
 
 | Shape | What it is | Where |
 |---|---|---|
-| `enter` | opacity plus a 6px rise, 180ms | anything arriving in the transcript: a message, a tool call, the working indicator |
+| `enter` | opacity plus a 6px rise, 180ms | anything arriving in the transcript: a message, a tool call, the working indicator. Not history — opening a conversation shows its backlog still |
 | `pop` | opacity plus scale from 0.96, 160ms | something appearing in place rather than arriving: `back to the latest` |
 | `shimmer` | a highlight swept across the words, 2.4s, looping | work in progress with nothing to show yet: `working… 12s`, `thinking` while it streams |
 
