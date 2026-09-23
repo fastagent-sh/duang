@@ -88,12 +88,16 @@ body,
   height: 100%;
 }
 
-/* The reading column: what the agent produces needs room for code and Chinese prose, capped so a
-   maximised window does not stretch a line past reading length. */
+/* Keep room for wide code and tables; prose gets its own shorter line length below. */
 .column {
   width: 100%;
   max-width: 920px;
   margin-inline: auto;
+}
+
+/* A scrolled line can end mid-glyph at the top edge; fade that cut without hiding the first turn. */
+.transcript-scroll {
+  mask-image: linear-gradient(to bottom, transparent 12px, #000 20px);
 }
 
 /* The composer is an input, not a reading surface. A text field as wide as the transcript looks like
@@ -213,19 +217,20 @@ details[open]::details-content {
   background: transparent !important;
 }
 
-/*
- * Reading leading, for the two surfaces that carry prose: what the agent writes and what you sent.
- *
- * One value for Latin and CJK alike. CJK glyphs fill their em box and want more air than Latin, and
- * this used to be a `:lang(zh)` rule — which never fired once, because the document is `lang="en"`
- * and nothing marks a Chinese message as Chinese. CSS cannot see which script a run of text is;
- * only a per-message detector could, and that is a second source of truth about the transcript for
- * a difference of 0.05. 1.7 is the compromise: right for Chinese, a little airy for English, and
- * this is a document column rather than a dense list.
- */
+/* Chinese and Latin share one leading; code and tables can use the full reading column while
+   paragraphs and lists stay short enough to scan. The composer still matches sent bubbles. */
 .md,
 .bubble {
   line-height: 1.7;
+}
+.md {
+  font-size: 14px;
+}
+.md p,
+.md ul,
+.md ol,
+.md blockquote {
+  max-width: 720px;
 }
 
 /* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
@@ -337,9 +342,13 @@ summary:focus-visible,
   text-decoration: underline;
 }
 [data-streamdown^="heading-"] {
-  font-size: 1em;
+  font-size: 1.1em;
   font-weight: 600;
-  margin: 1.2em 0 0.4em;
+  margin: 1.35em 0 0.45em;
+}
+[data-streamdown="heading-1"],
+[data-streamdown="heading-2"] {
+  font-size: 1.25em;
 }
 [data-streamdown="horizontal-rule"] {
   border-color: var(--color-stroke);

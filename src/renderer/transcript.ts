@@ -180,6 +180,18 @@ export function stringify(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
+/** A tool call's most telling argument — the path, command or query, not the whole object. */
+export function firstArg(args: unknown): string {
+  if (typeof args === "string") return args;
+  if (!args || typeof args !== "object") return "";
+  const entry = Object.entries(args as Record<string, unknown>).find(([, value]) => typeof value === "string");
+  if (!entry) return "";
+  const text = entry[1] as string;
+  // Only a path argument is a path; a command starting with / still needs its executable.
+  if (entry[0] === "path" && text.startsWith("/")) return `…/${text.split("/").filter(Boolean).slice(-2).join("/")}`;
+  return text.length <= 72 ? text : `${text.slice(0, 71)}…`;
+}
+
 /**
  * Thinking ends when the model starts doing something else — answering or calling a tool — not
  * when the whole message settles. The message can go on for minutes after its thinking stopped, and

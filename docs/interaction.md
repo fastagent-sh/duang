@@ -7,8 +7,8 @@ with Week 1 and subsequent UI work; later stages are **planned**, not implemente
 
 ## Shipped local workbench
 
-The window has a 320px sidebar combining agent rows with their explicitly expanded conversation
-rows, and a transcript with a floating header and composer. There is no separate agent rail. An
+The window has a 240–320px sidebar combining agent rows with their explicitly expanded conversation
+rows, and a transcript with its own floating-shaped header row and composer. There is no separate agent rail. An
 agent row restores its last open conversation if still available, otherwise an active run, then
 the most recent conversation (or a new one); clicking it again or using its caret expands or
 collapses its list. Expanding a different agent can load its conversations without navigating away.
@@ -19,7 +19,8 @@ Adding an agent chooses a directory; a plain project can be scaffolded after con
 broken agent shows its original failure with a way to retry, reveal or remove it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
-The picker shows the selected FastAgent credential path; configuration is not a provider probe.
+The picker leads with the selected model and a short credential-file label; expanding the label
+reveals the complete FastAgent path. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.
 
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
@@ -30,9 +31,9 @@ failed run may already have performed tool work. Stop does not roll back complet
 to cancel a non-cancellable tool.
 
 The composer sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
-the input method. `⌘N` starts a conversation in the open agent; Escape dismisses an active overlay
-before it can stop a run. While a run is live the composer steers it; the runtime decides the
-actual admission. A refused send is not shown as delivered. The roster is one tab stop with arrow
+the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
+agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
+run. While a run is live the composer steers it; the runtime decides the actual admission. A refused send is not shown as delivered. The roster is one tab stop with arrow
 navigation, and the transcript is focusable. Scrolling up suspends tail-follow; a control returns
 to the latest turn. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.

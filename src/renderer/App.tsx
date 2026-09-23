@@ -39,19 +39,30 @@ export default function App() {
     void store.load();
     return store.dispose;
   }, [store]);
+  const newConversation = useCallback(() => {
+    const opened = store.newConversation();
+    const target = store.getSnapshot().conversation;
+    void opened.then(() => {
+      const current = store.getSnapshot();
+      // The fixture cannot delay session:open to test a late result. Match the originating
+      // conversation so a completion after navigation cannot steal another conversation's focus.
+      if (target && current.conversation === target && !current.blocked)
+        document.querySelector<HTMLTextAreaElement>('main textarea[aria-label="Message"]')?.focus();
+    });
+  }, [store]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
       if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
         event.preventDefault();
-        void store.newConversation();
+        newConversation();
       }
       // The open model picker stops Escape itself, so reaching here means no dialog wanted it.
       if (event.key === "Escape" && busy) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, agentState, busy, view.loading]);
+  }, [newConversation, store, agentState, busy, view.loading]);
 
   // Which agents show their conversations — asked for, never assumed. Opening an agent puts you in
   // its latest conversation, which the transcript already shows; unfolding the roster on top of
@@ -124,7 +135,7 @@ export default function App() {
           if (agent !== agentId) void store.selectAgent(agent, id);
           else void store.open(id);
         }}
-        onNew={() => void store.newConversation()}
+        onNew={newConversation}
         onRename={(agent, id, name) => void store.renameSession(agent, id, name)}
         onMenu={(canRename) => duang.conversationMenu(canRename)}
         onDelete={(agent, id) => {
@@ -148,7 +159,7 @@ export default function App() {
           />
         )}
         {error ? (
-          <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
+          <div role="alert" className="mt-2 px-6 py-2 text-danger whitespace-pre-wrap break-words">
             {error}{" "}
             <button className="underline" onClick={() => void store.retry()}>
               Retry
@@ -158,7 +169,7 @@ export default function App() {
           // An ended subscription is not a failure: the conversation is intact, this view stopped
           // listening. Say it in the calm voice and offer the one action that fixes it.
           c?.ended && (
-            <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
+            <div role="status" className="mt-2 px-6 py-2 text-muted whitespace-pre-wrap break-words">
               {c.ended}{" "}
               <button className="underline" onClick={() => void store.retry()}>
                 Reconnect
@@ -184,7 +195,7 @@ export default function App() {
         ) : agentState === "no_agent" ? (
           <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
         ) : !c || c.items.length === 0 ? (
-          <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
+          <NewConversation>{composer}</NewConversation>
         ) : (
           // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
           // run streams, so this gap *is* where the newest line lands. At 16 the line you are

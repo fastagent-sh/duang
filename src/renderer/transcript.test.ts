@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, foldHead, fromEntries, lines, toolText, type Item } from "./transcript.ts";
+import { apply, dayLabel, firstArg, foldHead, fromEntries, lines, toolText, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -73,6 +73,15 @@ test("tool output comes out of its envelope, and an unknown shape keeps its JSON
   // An image part is not text; dropping it would hide the result entirely.
   const image = { content: [{ type: "image", data: "…" }] };
   assert.equal(toolText(image), JSON.stringify(image, null, 2));
+});
+
+test("tool summaries keep the beginning of commands and the end of file paths", () => {
+  const command = '/bin/sh -c "curl https://example.com/api/v1/start"';
+  assert.equal(firstArg({ command }), command);
+  const longCommand = command + " --header " + "x".repeat(80);
+  assert.equal(firstArg({ command: longCommand }), `${longCommand.slice(0, 71)}…`);
+  assert.equal(firstArg({ path: "/tmp/project/hello.txt" }), "…/project/hello.txt");
+  assert.equal(firstArg({ pattern: "/api/v1/start" }), "/api/v1/start");
 });
 
 test("long output folds by lines and by characters, and short output does not fold", () => {

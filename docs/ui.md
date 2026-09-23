@@ -85,7 +85,7 @@ The shipped local client has two columns. The future contact and optional detail
 specified in [design.md](design.md#the-workbench), not by reserving permanent chrome here.
 
 ```
-┌ sidebar 320 (glass) ───────────┬ conversation ───────────────────────┐
+┌ sidebar 240–320 ───────────────┬ conversation ───────────────────────┐
 │ duang·                    ＋    │ floating header                       │
 │ AM  amazonseo.ai               │ turns · tool details · outcomes       │
 │     project path               │                                       │
@@ -103,8 +103,9 @@ Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall,
 rounded square with a two-stop gradient in its hue — flat tiles look printed, and the gradient is
 most of why Telegram's list feels alive. The open conversation is a filled accent row rather than a
 tint, which is the same list's other trick: a selection that answers rather than shades.
-The second line currently shows the workspace directory, not a message preview: local identity
-comes from a directory, and conversations are listed directly below. An online or invited contact
+The second line leads with the workspace directory's name and shows its parent when room permits,
+not a message preview: local identity comes from a directory, and the full path stays available on
+hover. Conversations are listed directly below. An online or invited contact
 will need a provider and location label instead; do not imply someone else's path is a local one.
 A conversation row is 32 tall, has no avatar, and indents under its agent.
 
@@ -123,12 +124,11 @@ way opening it would — FastAgent owns the session list and duang will not keep
 where sessions live.
 
 Selection is the accent, never a grey — grey is what a row looks like under the pointer. The open
-agent is the filled row and the conversation on screen is tinted underneath it: the column marks
-the group you are working in first, and the topic inside it second. Weight follows the hierarchy of
-the list, not the size of the thing selected.
+agent gets a light tint; its selected conversation gets the solid fill. This keeps the group visible
+without letting it compete with the topic currently being read.
 
-**One flat list, no card per agent.** Full-width rows, a hairline that starts where the text does,
-the open conversation filled edge to edge: Telegram, WeChat and Codex all draw a roster this way,
+**One flat list, no card per agent.** Slightly inset rows, a hairline that starts where the text
+does, and the open conversation filled within its row: Telegram, WeChat and Codex draw a roster this way,
 and the reason shows up as soon as two agents are listed — a card per agent turns the column into a
 stack of panels and makes an open agent look heavy. A conversation row is one line indented to the
 agent's text, with the relative time trailing and a `…` in its place on hover, so a topic is visibly
@@ -139,7 +139,9 @@ Shift+F10 raise.
 **An expanded agent lists its conversations**, including one that is running and one holding unsent
 text, because fact 4 makes "what is alive right now" the question the sidebar exists to answer. Only
 the open agent marks which of them is running or drafted; another agent's list is its history, and
-its live work shows on its own row as a breathing ring and the word `working`.
+its live work shows on its own row as a breathing ring and the word `working`. An empty new
+conversation has no second "New conversation" action beside it until there is a draft or a run to
+preserve. Creating one moves focus to its input once the new session is ready.
 
 A list that cannot be read says why on that agent's row, and only there: expanding never changes
 what the main panel believes about an agent, so folding and expanding the one you are reading cannot
@@ -162,12 +164,15 @@ consumer's relationship with it. Ours is two letters on a tile representing a di
 ring is presence, a performance would be costume.
 
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
-rather than a column filling them, and the conversation's header floats over the transcript as a
-translucent bar instead of a full-width strip cutting the page in two. This is Telegram's desktop
-composition, and its premise holds here: chrome that hovers keeps the content beneath it continuous.
-What does not carry over is putting the transcript itself on a decorative canvas — theirs is bubbles
-over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
-the chrome floats, with the transcript padded so nothing important sits under the header.
+rather than a column filling them. The conversation header keeps a compact floating shape but
+occupies its own row above the scroll area: older text cannot show through or slide behind it.
+The scroll area's top edge fades clipped lines without fading the opening turn. The transcript is
+an opaque document on a plain canvas, not bubbles over wallpaper.
+
+Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
+[narrow, dark](screenshots/reading-narrow-dark.png), and
+[model picker, light](screenshots/model-picker-light.png). Regenerate the full dark/light set with
+`npm run shots`.
 
 Future contacts can be local, owned online or invited online at the same time: no global
 `Local | Cloud` switch. An optional detail reader can show relevant local files, diffs and
@@ -251,13 +256,16 @@ right for Chinese, slightly airy for English, and this is a document column rath
 It lives in one place, `.md, .bubble`, which the composer wears too so that a long message does not
 reflow the moment it is sent.
 
-Five steps, no more. They sit close together on purpose — this is a dense app, and the ramp that
-carries meaning is weight and colour, not size:
+The scale stays compact in navigation and the tool trace. Prose and headings have more space so
+results can be scanned without turning the trace into a second document:
 
 | Role | Size / line-height / weight |
 |---|---|
-| Agent name, `New conversation` heading | 13.5 / 1.4 / 600 |
-| Conversation body, composer, sidebar rows | 13 / 1.7 / 400 |
+| New conversation heading | 22 / normal / 500 |
+| Answer headings | 15–17.5 / prose leading / 600 |
+| Conversation prose | 14 / 1.7 / 400 |
+| Agent name | 13.5 / 1.4 / 600 |
+| Composer, sidebar rows | 13 / 1.7 / 400 |
 | Tool rows, thinking, model list, card bodies | 12 / 1.5 / 400 |
 | Code, paths, tool output | 12.5 / 1.625 / 400, mono |
 | Badges, timestamps, labels | 11 / 1 / 400–500 |
@@ -311,7 +319,8 @@ and it pulses only while the state is still happening.
 
 Popovers share one surface — `surface`, radius 14, hairline, the only shadow in the app — even
 though the model list is a modal dialog that takes focus and the slash completion list deliberately
-does not. Both highlight the current item with `accent-weak`.
+does not. The model picker puts the selected model first, shows only a short credential-file label,
+and expands that label to reveal the full path. Both highlight the current item with `accent-weak`.
 
 ## 7. Space, radius, elevation
 
@@ -330,9 +339,11 @@ drawn differently on purpose.
 sparse, and their job is to be findable when you scroll back: *what did I ask for, and when did I
 change it?* A bubble is a good anchor precisely because it is small and visually distinct.
 
-**What the agent produces is a document.** Left aligned, no bubble, full markdown, in one reading
-column: the width of the pane up to 920, centred. The composer keeps its own narrower measure (768),
-because a text field as wide as the transcript reads as a form rather than a place to type. It writes commands, output, plans, diffs and reports; wrapping that in speech balloons
+**What the agent produces is a document.** Left aligned, no bubble, full markdown in a column up to
+920px wide, with paragraphs and lists capped at 720px; code and tables retain the full width. The
+composer keeps its own narrower measure (768px), because a text field as wide as the transcript
+reads as a form rather than a place to type. It writes commands, output, plans, diffs and reports;
+wrapping that in speech balloons
 fragments a record that needs to be scanned, and gives up the width its content needs. Products that
 bubble both sides keep the heavy work somewhere else — a separate workspace panel — so what remains
 in the transcript really is chat. Ours is the work.
@@ -343,7 +354,8 @@ Everything else follows from those two:
   tool's name, the command, and the state immediately after the command rather than pushed to the
   far right where it loses its subject — on no fill and behind no border, the same weight as the
   `thinking` line beside it. Boxing a closed call is wrong in both directions: full width it is a
-  grey slab, shrunk to its text it reads as a button dropped into the prose. The surface arrives
+  grey slab, shrunk to its text it reads as a button dropped into the prose. A path argument shows
+  its useful tail; a command keeps its beginning, even when it starts with `/`. The surface arrives
   with the output it has to hold. Open, the card shows arguments as labels and values rather than
   as the JSON the wire carried, and the output out of its MCP content envelope. Output folds at twelve
   lines or 1500 characters, whichever comes first — one minified line has no line ceiling — to a
@@ -490,7 +502,8 @@ the roster three times over, so the row answers for them: Right and Left expand 
 agent, Delete or Backspace removes the conversation the keyboard is on — Backspace because on macOS
 that is the delete key on the main keyboard — and neither touches a conversation the runtime has
 never heard of, which has no delete control either. `New conversation` is a row in the list for the
-same reason. A deleted row hands the focus to its neighbour, so the list stays navigable. The controls stay clickable and keep their labels for assistive technology;
+same reason. A deleted row hands the focus to its neighbour; a newly created conversation hands
+it to its composer. The controls stay clickable and keep their labels for assistive technology;
 what they lose is a place in the tab order.
 
 **The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
@@ -502,7 +515,7 @@ The whole list, so it lives in one place instead of being read out of the handle
 
 | Key | Where | Does |
 |---|---|---|
-| `⌘N` | anywhere | New conversation in the open agent |
+| `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
 | `Esc` | anywhere | Stop the running turn (a popover takes it first) |
 | `Tab` | anywhere | Sidebar → transcript → composer |
 | `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
@@ -550,7 +563,7 @@ See [README.md](../README.md#delivery-stages) for those acceptance gates.
    popovers, composer.
 3. **Status.** The single vocabulary, the three tiers, `stopped`, and presence at both levels — the
    avatar ring and the conversation dot.
-4. **Sidebar.** Merge rail and list into one 320 glass column: agent rows, running and drafted
+4. **Sidebar.** Merge rail and list into one 240–320px column: agent rows, running and drafted
    conversations always listed, the rest folded. This one changes navigation, so every smoke
    assertion that locates a control by label has to be re-checked.
 5. **Transcript.** User bubbles, the agent's document column, tool cards, centred system events, the
