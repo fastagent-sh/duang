@@ -319,8 +319,14 @@ if (!process.versions.electron) {
 
       // Reopen through the actual UI and verify runtime-owned history, not the optimistic echo.
       await listConversations("Smoke");
-      await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
+      await evaluate(`document.querySelector('button[title^="New conversation"]').focus()`);
+      await until(`document.activeElement?.title?.startsWith('New conversation')`, "new conversation row focused");
+      await evaluate(`document.activeElement.click()`);
       await until("document.body.innerText.includes('What should we work on')", "new conversation");
+      await until(
+        `document.activeElement?.getAttribute('aria-label') === 'Message' && !document.activeElement.disabled`,
+        "new conversation gives focus to the ready composer",
+      );
       assert.equal(
         await evaluate(`!!document.querySelector('button[title^="New conversation"]')`),
         false,
@@ -716,6 +722,12 @@ if (!process.versions.electron) {
         "the composer scrolls instead of growing past eight lines",
       );
       await type("");
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
+      await until("document.body.innerText.includes('What should we work on?')", "⌘N starts a conversation");
+      await until(
+        `document.activeElement?.getAttribute('aria-label') === 'Message' && !document.activeElement.disabled`,
+        "⌘N focuses the new conversation's composer",
+      );
 
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
       const registry = join(data, "agents.json");

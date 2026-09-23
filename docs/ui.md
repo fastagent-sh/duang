@@ -141,7 +141,7 @@ text, because fact 4 makes "what is alive right now" the question the sidebar ex
 the open agent marks which of them is running or drafted; another agent's list is its history, and
 its live work shows on its own row as a breathing ring and the word `working`. An empty new
 conversation has no second "New conversation" action beside it until there is a draft or a run to
-preserve.
+preserve. Creating one moves focus to its input once the new session is ready.
 
 A list that cannot be read says why on that agent's row, and only there: expanding never changes
 what the main panel believes about an agent, so folding and expanding the one you are reading cannot
@@ -354,7 +354,8 @@ Everything else follows from those two:
   tool's name, the command, and the state immediately after the command rather than pushed to the
   far right where it loses its subject — on no fill and behind no border, the same weight as the
   `thinking` line beside it. Boxing a closed call is wrong in both directions: full width it is a
-  grey slab, shrunk to its text it reads as a button dropped into the prose. The surface arrives
+  grey slab, shrunk to its text it reads as a button dropped into the prose. A path argument shows
+  its useful tail; a command keeps its beginning, even when it starts with `/`. The surface arrives
   with the output it has to hold. Open, the card shows arguments as labels and values rather than
   as the JSON the wire carried, and the output out of its MCP content envelope. Output folds at twelve
   lines or 1500 characters, whichever comes first — one minified line has no line ceiling — to a
@@ -501,7 +502,8 @@ the roster three times over, so the row answers for them: Right and Left expand 
 agent, Delete or Backspace removes the conversation the keyboard is on — Backspace because on macOS
 that is the delete key on the main keyboard — and neither touches a conversation the runtime has
 never heard of, which has no delete control either. `New conversation` is a row in the list for the
-same reason. A deleted row hands the focus to its neighbour, so the list stays navigable. The controls stay clickable and keep their labels for assistive technology;
+same reason. A deleted row hands the focus to its neighbour; a newly created conversation hands
+it to its composer. The controls stay clickable and keep their labels for assistive technology;
 what they lose is a place in the tab order.
 
 **The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
@@ -513,7 +515,7 @@ The whole list, so it lives in one place instead of being read out of the handle
 
 | Key | Where | Does |
 |---|---|---|
-| `⌘N` | anywhere | New conversation in the open agent |
+| `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
 | `Esc` | anywhere | Stop the running turn (a popover takes it first) |
 | `Tab` | anywhere | Sidebar → transcript → composer |
 | `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |

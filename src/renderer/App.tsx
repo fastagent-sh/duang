@@ -39,19 +39,30 @@ export default function App() {
     void store.load();
     return store.dispose;
   }, [store]);
+  const newConversation = useCallback(() => {
+    const opened = store.newConversation();
+    const target = store.getSnapshot().conversation;
+    void opened.then(() => {
+      const current = store.getSnapshot();
+      // The fixture cannot delay session:open to test a late result. Match the originating
+      // conversation so a completion after navigation cannot steal another conversation's focus.
+      if (target && current.conversation === target && !current.blocked)
+        document.querySelector<HTMLTextAreaElement>('main textarea[aria-label="Message"]')?.focus();
+    });
+  }, [store]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
       if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
         event.preventDefault();
-        void store.newConversation();
+        newConversation();
       }
       // The open model picker stops Escape itself, so reaching here means no dialog wanted it.
       if (event.key === "Escape" && busy) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, agentState, busy, view.loading]);
+  }, [newConversation, store, agentState, busy, view.loading]);
 
   // Which agents show their conversations — asked for, never assumed. Opening an agent puts you in
   // its latest conversation, which the transcript already shows; unfolding the roster on top of
@@ -124,7 +135,7 @@ export default function App() {
           if (agent !== agentId) void store.selectAgent(agent, id);
           else void store.open(id);
         }}
-        onNew={() => void store.newConversation()}
+        onNew={newConversation}
         onRename={(agent, id, name) => void store.renameSession(agent, id, name)}
         onMenu={(canRename) => duang.conversationMenu(canRename)}
         onDelete={(agent, id) => {

@@ -24,7 +24,7 @@ import {
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
 import type { AgentRow } from "../preload/index.ts";
-import { dayLabel, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
+import { dayLabel, firstArg, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
@@ -1208,19 +1208,6 @@ function Output({ text, isError }: { text: string; isError?: boolean }) {
       )}
     </div>
   );
-}
-
-
-
-/** A tool call's most telling argument — the path, command or query, not the whole object. */
-function firstArg(args: unknown): string {
-  if (typeof args === "string") return args;
-  if (!args || typeof args !== "object") return "";
-  const values = Object.values(args as Record<string, unknown>).filter((v) => typeof v === "string") as string[];
-  const text = values[0] ?? "";
-  // A path's meaning is at its end, a command's at its start: keep the tail when it looks like one.
-  if (text.startsWith("/")) return `…/${text.split("/").filter(Boolean).slice(-2).join("/")}`;
-  return text.length <= 72 ? text : `${text.slice(0, 71)}…`;
 }
 
 /**
