@@ -36,7 +36,8 @@
    */
   --color-accent-fill: oklch(0.52 0.2 295);
   --color-danger-fill: oklch(0.52 0.2 25);
-  --color-accent-fg: oklch(1 0 0);
+  /* Text on any `*-fill`, not on the accent alone: both fills are dark enough for white. */
+  --color-fill-fg: oklch(1 0 0);
 
   --radius-badge: 6px;
   --radius-card: 10px;
@@ -216,7 +217,7 @@ details[open]::details-content {
  * Reading leading, for the two surfaces that carry prose: what the agent writes and what you sent.
  *
  * One value for Latin and CJK alike. CJK glyphs fill their em box and want more air than Latin, and
- * this used to be a `:lang(zh)` rule \u2014 which never fired once, because the document is `lang="en"`
+ * this used to be a `:lang(zh)` rule — which never fired once, because the document is `lang="en"`
  * and nothing marks a Chinese message as Chinese. CSS cannot see which script a run of text is;
  * only a per-message detector could, and that is a second source of truth about the transcript for
  * a difference of 0.05. 1.7 is the compromise: right for Chinese, a little airy for English, and
@@ -338,7 +339,7 @@ summary:focus-visible,
  * Markdown from the model: rhythm and lists only.
  *
  * Everything else is said once, above, through `data-streamdown`. A second set of element rules for
- * the same DOM does not just repeat itself \u2014 it wins. `.md td` outranks `[data-streamdown="table-cell"]`
+ * the same DOM does not just repeat itself — it wins. `.md td` outranks `[data-streamdown="table-cell"]`
  * on specificity, so the quiet bottom-hairline table above was being drawn as a full grid by a rule
  * written to agree with it.
  */

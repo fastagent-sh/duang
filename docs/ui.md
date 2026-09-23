@@ -218,7 +218,7 @@ on top of a grey app.
 | `accent-weak` | `accent / 15%` | `accent / 12%` | selected conversation, user bubble |
 | `accent-fill` | `oklch(0.52 0.2 295)` | same | accent **as a surface**: selected agent, primary button |
 | `danger-fill` | `oklch(0.52 0.2 25)` | same | danger as a surface (Stop) |
-| `accent-fg` | `oklch(1 0 0)` | same | text on either fill |
+| `fill-fg` | `oklch(1 0 0)` | same | text on either fill |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
 | `warning` | `oklch(0.79 0.15 65)` | `oklch(0.58 0.15 60)` | needs a model, no agent yet |
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
@@ -231,7 +231,7 @@ on it is about 4.2:1, which is where Telegram's own selected row sits.
 
 Every interactive role is defined as a set, not derived at the call site — Telegram's palette does
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
-`accent-fg`. A component picks a role; it never computes a hover colour itself.
+`fill-fg`. A component picks a role; it never computes a hover colour itself.
 
 Avatar tiles walk seven fixed hues, chosen by `ORDER[hash % 7]` with `ORDER = [0, 4, 1, 6, 3, 5, 2]`.
 The shuffle is Telegram's and it exists so that agents registered one after another do not come out

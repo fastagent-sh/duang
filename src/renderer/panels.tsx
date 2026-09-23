@@ -24,7 +24,7 @@ import {
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
 import type { AgentRow } from "../preload/index.ts";
-import { dayLabel, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
+import { dayLabel, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
@@ -289,7 +289,7 @@ export function Sidebar({
                   // The open agent is the filled row and its conversations are tinted underneath:
                   // the group you are working in is what the column marks first.
                   className={`flex w-full items-center gap-3 rounded-card py-2.5 pr-10 pl-3 text-left transition-colors ${
-                    selected ? "bg-accent-fill text-accent-fg" : "hover:bg-hover"
+                    selected ? "bg-accent-fill text-fill-fg" : "hover:bg-hover"
                   }`}
                 >
                   <Avatar name={agent.name} working={busy > 0} />
@@ -303,7 +303,7 @@ export function Sidebar({
                       is said in words: a coloured dot alone leaves colour doing the work, and the
                       count is what the agent row can say that a conversation row cannot. */}
                   {busy > 0 ? (
-                    <Badge tone="accent" pulse className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}>
+                    <Badge tone="accent" pulse className={`min-w-0 ${selected ? "text-fill-fg" : ""}`}>
                       <span className="truncate">{busy > 1 ? `${busy} working` : "working"}</span>
                     </Badge>
                   ) : waiting.length > 0 ? (
@@ -314,7 +314,7 @@ export function Sidebar({
                     </Pill>
                   ) : (
                     state !== "ready" && (
-                      <Badge tone={tones[state]} className={`min-w-0 ${selected ? "text-accent-fg" : ""}`}>
+                      <Badge tone={tones[state]} className={`min-w-0 ${selected ? "text-fill-fg" : ""}`}>
                         <span className="truncate">{says[state].toLowerCase()}</span>
                       </Badge>
                     )
@@ -1116,38 +1116,68 @@ function Args({ args, summary }: { args: unknown; summary: string }) {
       {entries.map(([key, value]) => (
         <Fragment key={key}>
           <dt className="text-muted">{key}</dt>
-          <dd className="font-mono whitespace-pre-wrap break-all">{stringify(value)}</dd>
+          <Value text={stringify(value)} />
         </Fragment>
       ))}
     </dl>
   );
 }
 
+/** One argument's value, folded like output is: a `write` carries the whole file it writes. */
+function Value({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const head = foldHead(text);
+  return (
+    <dd className="font-mono whitespace-pre-wrap break-all">
+      {head !== undefined && !open ? `${head}…` : text}
+      {head !== undefined && (
+        <button
+          type="button"
+          className="ml-1.5 font-sans text-[11px] text-muted transition-colors hover:text-text"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "show less" : "show all"}
+        </button>
+      )}
+    </dd>
+  );
+}
+
 /**
  * What the tool printed. Long output folds rather than growing its own scrollbar: a scroll region
  * inside a scrolling transcript steals the wheel from the page it sits in, and hides how much is
- * there. Twelve lines is the fold (§8) — enough to see whether it is the output you wanted.
+ * there. The fold is `foldHead`'s: twelve lines or about as many characters (§8) — enough to see
+ * whether it is the output you wanted.
  */
 function Output({ text, isError }: { text: string; isError?: boolean }) {
   const [open, setOpen] = useState(false);
-  const rows = text.split("\n");
-  const folded = rows.length > 12 && !open;
+  const head = foldHead(text);
+  // Cut mid-line, the fold hides characters rather than lines, and "0 more lines" would be a lie.
+  const hidden = head === undefined ? 0 : text.split("\n").length - head.split("\n").length;
   return (
-    <div className={isError ? "border-l-2 border-danger pl-2.5" : undefined}>
-      <pre className={`font-mono whitespace-pre-wrap break-all leading-relaxed ${isError ? "text-danger" : ""}`}>
-        {folded ? rows.slice(0, 12).join("\n") : text}
+    <div>
+      {/* The error rule is on the text, not on this wrapper: the footer below has to reach both
+          edges of the card, and a padded, bordered parent would stop it at the red line. */}
+      <pre
+        className={`font-mono whitespace-pre-wrap break-all leading-relaxed ${
+          isError ? "border-l-2 border-danger pl-2.5 text-danger" : ""
+        }`}
+      >
+        {head !== undefined && !open ? head : text}
       </pre>
-      {rows.length > 12 && (
+      {head !== undefined && (
         // The card's own footer, not a link floating under the text: it spans the card, sits on a
-        // hairline, and lands on the card's bottom corners. The negative margins are what reach out
-        // of the padded body it is nested in.
+        // hairline, and lands on the card's bottom corners. The negative margins reach out of the
+        // padded body it is nested in, so its width is the body's plus both of them: `w-full` alone
+        // pins it to the body and the margins only shift it left, and a button's automatic width
+        // shrinks to its label rather than filling the line the way a div's would.
         <button
           type="button"
-          className="-mx-2.5 -mb-2.5 mt-2 flex h-7 w-full items-center justify-center gap-1.5 rounded-b-card border-t border-stroke text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
+          className="-mx-2.5 -mb-2.5 mt-2 flex h-7 w-[calc(100%+1.25rem)] items-center justify-center gap-1.5 rounded-b-card border-t border-stroke text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
           onClick={() => setOpen(!open)}
         >
           <CaretDown size={10} className={`transition-transform ${open ? "rotate-180" : ""}`} />
-          {open ? "show less" : `${rows.length - 12} more lines`}
+          {open ? "show less" : hidden > 0 ? `${hidden} more lines` : "show the rest"}
         </button>
       )}
     </div>

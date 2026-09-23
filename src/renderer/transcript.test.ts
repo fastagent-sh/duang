@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, fromEntries, lines, toolText, type Item } from "./transcript.ts";
+import { apply, dayLabel, foldHead, fromEntries, lines, toolText, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -28,6 +28,26 @@ test("thinking and text are separate items", () => {
   );
 });
 
+test("thinking ends when the answer or a tool starts, and later settles do not stretch it", () => {
+  const at = (type: string, timestamp: number, data: Record<string, unknown> = {}) =>
+    ({ type, timestamp, data }) as never;
+  let items: Item[] = [];
+  items = apply(items, at("message_delta", 1_000, { channel: "thinking", delta: "plan" }));
+  items = apply(items, at("message_delta", 2_000, { channel: "text", delta: "answer" }));
+  items = apply(items, at("message_delta", 30_000, { channel: "text", delta: " more" }));
+  items = apply(items, at("message_finished", 30_000));
+  items = apply(items, at("message_delta", 40_000, { channel: "thinking", delta: "again" }));
+  items = apply(items, at("tool_started", 45_000, { id: "t", name: "bash" }));
+  items = apply(items, at("message_finished", 90_000));
+
+  const [first, answer, second] = items as Extract<Item, { kind: "thinking" | "assistant" }>[];
+  // Measured to where the model moved on, not to whichever message settled last.
+  assert.deepEqual([first!.open, first!.at - (first as { started: number }).started], [false, 1_000]);
+  assert.deepEqual([second!.open, second!.at - (second as { started: number }).started], [false, 5_000]);
+  // A settled answer keeps the time it landed.
+  assert.equal(answer!.at, 30_000);
+});
+
 test("a tool result lands on the call it belongs to", () => {
   let items: Item[] = [];
   items = apply(items, event("tool_started", { id: "a", name: "read" }));
@@ -53,6 +73,15 @@ test("tool output comes out of its envelope, and an unknown shape keeps its JSON
   // An image part is not text; dropping it would hide the result entirely.
   const image = { content: [{ type: "image", data: "…" }] };
   assert.equal(toolText(image), JSON.stringify(image, null, 2));
+});
+
+test("long output folds by lines and by characters, and short output does not fold", () => {
+  assert.equal(foldHead("one\ntwo"), undefined);
+  const many = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
+  assert.equal(foldHead(many)?.split("\n").length, 12);
+  // One line with no ceiling — minified JSON, a curl body — is what line counting alone missed.
+  const wide = "x".repeat(10_000);
+  assert.equal(foldHead(wide)?.length, 1_500);
 });
 
 test("unknown event types change nothing", () => {

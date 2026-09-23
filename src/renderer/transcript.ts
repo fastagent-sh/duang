@@ -164,9 +164,29 @@ export function toolText(result: unknown): string {
   return stringify(result);
 }
 
+/**
+ * The head a long tool payload folds to, or `undefined` when it fits. Lines and characters both
+ * count: a minified JSON body or a one-line log has one line and no ceiling, and wrapped with
+ * `break-all` it would fill the transcript. 1500 characters is about twelve full lines of the
+ * reading column, so the two limits fold at roughly the same height.
+ */
+export function foldHead(text: string): string | undefined {
+  const head = text.split("\n").slice(0, 12).join("\n").slice(0, 1_500);
+  return head.length < text.length ? head : undefined;
+}
+
 /** Tool payloads are JSON, except when the runtime already handed us a string. */
 export function stringify(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+/**
+ * Thinking ends when the model starts doing something else — answering or calling a tool — not
+ * when the whole message settles. The message can go on for minutes after its thinking stopped, and
+ * the block's `at` is what `thinking · Ns` is measured to.
+ */
+function stopThinking(items: Item[], at: number): Item[] {
+  return items.map((item) => (item.kind === "thinking" && item.open ? { ...item, open: false, at } : item));
 }
 
 /** One live event applied to the list. Returns a new list; unknown event types change nothing. */
@@ -185,21 +205,23 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       if (last?.kind === "assistant" && last.open) {
         return [...items.slice(0, -1), { ...last, text: last.text + delta }];
       }
-      return [...items, { kind: "assistant", text: delta, open: true, at: event.timestamp }];
+      return [...stopThinking(items, event.timestamp), { kind: "assistant", text: delta, open: true, at: event.timestamp }];
     }
     case "message_finished": {
       // Stamped on settling, not on the first delta: an answer that streamed for five minutes would
       // otherwise show one time live and another after a reopen, where history carries the time
-      // FastAgent wrote the entry.
+      // FastAgent wrote the entry. Only what is still open settles here — restamping an item that
+      // already settled moves the time under an older answer, and stretches `thinking · Ns` to
+      // the end of every later message.
       return items.map((item) =>
-        item.kind === "assistant" || item.kind === "thinking"
+        (item.kind === "assistant" || item.kind === "thinking") && item.open
           ? { ...item, open: false, at: event.timestamp }
           : item,
       );
     }
     case "tool_started":
       return [
-        ...items,
+        ...stopThinking(items, event.timestamp),
         {
           kind: "tool",
           id: String(data.id),

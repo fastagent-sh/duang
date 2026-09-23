@@ -103,7 +103,7 @@ if (!process.versions.electron) {
             : { id: "msg", type: "message", role: "assistant", content: [{ type: "output_text", text: ANSWER, annotations: [] }] };
       const tool = requests < 3;
       // Every turn reasons first, so the transcript carries a real run of thinking-and-tool lines:
-      // that alternation is the rhythm \u00a78 is about, and one tool call on its own never shows it. A
+      // that alternation is the rhythm §8 is about, and one tool call on its own never shows it. A
       // reasoning item has to open its own output slot before its deltas mean anything.
       const thought = THOUGHTS[requests - 1];
       const reasoning = { id: `rs_${requests}`, type: "reasoning", summary: [{ type: "summary_text", text: thought }] };
