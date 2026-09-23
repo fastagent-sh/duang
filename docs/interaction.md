@@ -1,123 +1,97 @@
 # Interaction
 
-Every state of the core chain — add an agent, pick a model, open a conversation, say something,
-watch it run — and what the app shows in each. `docs/design.md` says what the surfaces are; this
-says how they should behave. This is the requirement; see
-[acceptance status](../README.md#week-1-acceptance-status) for what Week 1 actually shipped and the
-limitations it was accepted with.
+This is the behavior and failure contract. [Product design](design.md) owns the surfaces;
+[architecture](architecture.md) owns state and trust boundaries. The local behavior below shipped
+with Week 1 and subsequent UI work; later stages are **planned**, not implemented. See
+[acceptance status](../README.md#week-1-acceptance-status) for known runtime limitations.
 
-## Layout
+## Shipped local workbench
 
-```
-┌ rail 56 ┬ list 240 ─────────┬ conversation ──────────────┐
-│ agents  │ agent name    [+] │ title        model    stop │
-│         │ model · state     ├────────────────────────────┤
-│  [+]    ├───────────────────┤ transcript (scrolls)       │
-│         │ conversations     ├────────────────────────────┤
-│         │                   │ composer                   │
-└─────────┴───────────────────┴────────────────────────────┘
-```
+The window has a 320px sidebar combining agent rows with their explicitly expanded conversation
+rows, and a transcript with a floating header and composer. There is no separate agent rail. An
+agent row opens its most recent conversation; clicking it again or using its caret expands or
+collapses its list. Expanding a different agent can load its conversations without navigating away.
+A failed list read is shown on that agent's row, not as an empty list. Running and drafted work
+stays attached to its originating agent and conversation when navigating.
 
-Three columns, each full height. The conversation list and transcript scroll independently. Once
-messages exist the composer is pinned to the bottom; an empty conversation centers it as described
-below. Setup errors replace the conversation area. The model picker floats above its composer chip.
+Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. A
+broken agent shows its original failure with a way to retry, reveal or remove it. Removal deletes
+only the local registry row, not the directory or history. Changing the model or removing an agent
+is refused while one of its conversations is running, including a turn still opening the runtime.
+The picker shows the selected FastAgent credential path; configuration is not a provider probe.
+The model on a historical conversation can differ from the agent's default.
 
-## Agents
+A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
+history; the client does not save a second transcript. A conversation can be renamed and deleted,
+with destructive deletion confirmed. The current local view keeps unsent text with its conversation
+across navigation and application restart. A send rejected before admission remains a draft; a
+failed run may already have performed tool work. Stop does not roll back completed work or promise
+to cancel a non-cancellable tool.
 
-The rail shows initials; the list header shows the real name and a revealable directory path.
-The model is shown on the composer chip. A pulsing rail dot identifies an agent with a running turn; every dot also names its state in words,
-so the colour is a shortcut rather than the only telling.
+The composer sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
+the input method. `⌘N` starts a conversation in the open agent; Escape dismisses an active overlay
+before it can stop a run. While a run is live the composer steers it; the runtime decides the
+actual admission. A refused send is not shown as delivered. The roster is one tab stop with arrow
+navigation, and the transcript is focusable. Scrolling up suspends tail-follow; a control returns
+to the latest turn. A closed or failed subscription reports that it is no longer receiving updates
+rather than silently leaving a run on screen forever.
 
-Setup has four states, and the rail dot says which:
+Closing the window does not stop main-process work. Quitting with active local work warns that it
+will interrupt the run; local work does not continue when the app and machine stop. Local channels
+and routines are not started by duang. The current client has no online contacts or share UI.
 
-| State | Rail | The conversation area shows |
-|---|---|---|
-| ready | accent when selected | conversations |
-| needs a model | amber dot | the new-conversation screen, with the chip's list already open |
-| holds no agent yet | amber dot | what duang would write, and a button to write it |
-| broken (not an agent directory, unreadable) | red dot | the reason, verbatim, with *Remove* and *Reveal in Finder* |
+## Planned: daily local use and definition inspection (stage 1)
 
-**A broken agent must always be removable.** Adding the wrong directory is the most likely first
-mistake, and an app that cannot undo it is stuck.
+Walk a real task through find → send → switch away → return to result → continue before adding
+controls. A local owner may open a read-only detail view for the definition actually loaded by
+FastAgent and relevant files/diffs; if runtime discovery is unavailable, say so. A local routine
+shown in this view is **declared**, not guaranteed to run while the app is closed. Compact and
+branching are conditional on demonstrated long-conversation needs, not a checklist of Pi commands.
 
-Changing the model moves the open conversation onto it and makes it the default for conversations
-started later. Other existing conversations keep the model they recorded.
+## Planned: copy a preset (stage 2)
 
-The composer chip changes the model, the directory path reveals it in Finder, and *Remove agent*
-is always available below the conversation list. Removing asks once and removes only duang's row;
-the directory is never touched. Model changes and removal are refused while any conversation of
-that agent is running, including a background one.
+"Copy preset" previews exactly which portable definition files travel and explicitly excludes
+secrets, private sessions, machine paths and unrelated project data. A recipient imports an
+independent directory, configures their own credentials and can edit their own copy. A failed
+import leaves the original untouched. Never present a preset as continued access to the author's
+runtime, or imply that importing also copies their conversations.
 
-## Conversations
+## Planned: use an online agent (stage 3)
 
-`+` mints a new conversation; it appears immediately as *New conversation* in italics and becomes a
-real row with a preview once the first turn settles. Selecting one loads its history.
+An owned agent may have a local test location and a separate online location; select the location
+on that contact, not with a global app switch. The owner can also add a protected self-hosted agent
+with no local directory. An invited agent appears under "shared with me" and exposes only the
+visitor's authorized conversations. Do not expose the author's files, model credentials or owner
+controls. The private online conversation is distinct from channel-group history.
 
-Each row: name or preview, relative time. Hovering or keyboard focus reveals delete; deleting asks
-once. A first turn not yet listed by the runtime remains selectable as *Running conversation* when
-you switch away. A refused deletion keeps its subscription and history intact.
+An invitation is individually revocable. If access means possession of a link, say "anyone with
+this link"; do not promise a named person until identity is actually verified. Losing connection
+keeps unsent text, shows the endpoint's real error and marks the ongoing work as unknown until
+state and entries can be read. Retry reconnects **observation**, never blindly resends accepted
+tool work. Calls refused by `capabilities()` are disabled with their reason rather than failing
+silently. On return, read runtime history; if partial history lacks tool args or outcomes, never
+present it as a complete replay.
 
-Empty states, in the conversation area:
+## Planned: hosted online work and routines (stage 4)
 
-- no agents at all: what duang is, and one button — *Add an agent directory*, plus the
-  `fastagent init` line for someone who has none;
-- agent ready, nothing selected: *New conversation*;
-- conversation open, no messages: the composer's placeholder carries it, nothing else.
+Before publishing, review the versioned definition snapshot, excluded files, server-side model
+credentials, routine schedule and running-host cost. Publishing an agent with no channel or invite
+is valid: the owner may need it only for private conversation or timed work. Keep local OAuth
+credentials and local conversations on the laptop. A remote model choice is governed by the remote
+runtime, not by the local credential picker.
 
-## Composer
+After publish, the owner can see which definition is live, update or stop it, and see verified
+routine results. A scheduled run must actually fire while the desktop and laptop are closed. Show
+failed, skipped or interrupted runs as such; if the host cannot report the outcome, say it is
+unknown. Do not invent a "next run" or "done" from a declaration alone. A channel is an optional
+additional entrance: a private message in duang does not post into a Slack/Feishu/Telegram group.
+An online agent belongs to its host when the client window closes.
 
-A card, not a strip: the workspace path on top, the input in the middle, and the model chip at the
-foot. **The model belongs to the next message, so it lives where the message is written** — not in a
-settings screen. Clicking the chip floats the list above it; that is the only model picker.
-It shows the credential-file path and lists configured providers without refreshing OAuth. An empty
-list explains how to log in to that file and offers Retry; configuration does not guarantee that a
-provider will accept the next request. See the [credential policy](../README.md#run-it).
+## Failures everywhere
 
-A conversation nobody has spoken in yet has no transcript to sit under, so the composer *is* the
-screen: centred, under *What should we work on in ‹agent›?*. It drops to the foot of the window as
-soon as the first message lands.
-
-The textarea grows to eight lines, then scrolls. **Enter sends, Shift+Enter breaks the line**, and
-Enter during IME composition picks a candidate instead. It is never disabled silently: when it
-cannot send, the placeholder says why (*pick a model to start*, *this agent is broken*).
-
-While a run is live the placeholder becomes *steer the run…*, the composer shows Stop where Send was,
-and queued input shows as a count. Sending still works — that is the point of steering. Drafts
-stay with their conversation while navigating; they are not persisted across app restarts.
-A send refused before admission returns to the draft and does not appear as a delivered message.
-
-## Window and quit
-
-Closing a window does not stop a running turn — the runtime lives in the main process. Quitting with
-active work warns that execution will be interrupted, and can be cancelled. Nothing resumes a run
-automatically afterwards.
-
-Stopping, and being interrupted by a quit, end the *run*. They do not undo what its tools already
-did: a file written or a command executed stays that way, and a tool that cannot be cancelled runs
-to its own end. The stop warning says so rather than implying a rollback.
-
-## Keyboard
-
-| Key | Does |
-|---|---|
-| Enter | send |
-| Shift+Enter | newline |
-| ⌘N | new conversation |
-| Esc | dismiss the model picker or command completion first; otherwise stop the running turn |
-
-## Scrolling
-
-The transcript follows the bottom while new content streams, unless the person scrolled up — then
-it stays where they left it until they return to the bottom. No scroll-to-bottom button until that
-proves annoying.
-
-## Failure
-
-Errors appear where the thing that failed was, never as a toast that vanishes:
-
-- opening an agent: in the conversation area, with the actions that fix it;
-- a send, an abort, a delete: as a line in the transcript, in the failure colour;
-- a failed or aborted run: a settled line in the transcript, not a banner.
-
-The original message is always shown as the runtime wrote it. duang never paraphrases another
-program's error.
+Keep the original diagnostic at the affected agent, conversation, routine or publish action, with
+the action that can actually remedy it. An unreadable session list is not an empty one; a refused
+send is not delivery; an accepted run is not a successful outcome. A failed update must not be
+shown as a newly published version. Do not treat a lost network connection as grounds to replay a
+run or routine. Preserve context across navigation without attributing a late event to a different
+contact, location, session or subscription.

@@ -1,46 +1,35 @@
 # Architecture
 
-Which process owns what, and where the boundaries are. `docs/design.md` is the product;
-`README.md` is the positioning and current acceptance status. The local client below is
-implemented; remote clients, the control service and deployment sections describe future work.
-Week 1 is accepted; see [acceptance status](../README.md#week-1-acceptance-status) for the
-limitations that came with it.
+Which process owns what, and where the boundaries are. [Product design](design.md) defines the
+experience and [README.md](../README.md) defines delivery stages. The local process below exists;
+**all remote, sharing and hosting boundaries are plans, not implemented or verified behavior.**
+See [Week 1 acceptance](../README.md#week-1-acceptance-status) for local limits.
 
 ## Processes
 
-```
-┌─ Desktop app ──────────────────────────────┐
-│  renderer (React)     no node, no fs        │
-│      │ preload: a typed mirror of           │
-│      │ SessionControl + one event channel   │
-│  main (Node 24.21 via Electron 44.4)        │
-│      ├── createPiAgentFromDir(dir)       ← local agents, in-process
-│      ├── remote SessionControl (HTTP+SSE) ← cloud agents
-│      ├── the filesystem: agent dirs, git, diffs
-│      └── OS notifications
-└─────────────────────────────────────────────┘
-        │ HTTPS
-┌─ Control service (Fly, one Node process) ──┐
-│   accounts · agents · deployments (SQLite)  │
-│   deploy pipeline (flyctl)                  │
-│   cron: holds every agent's schedule        │
-└─────────────────────────────────────────────┘
-        │ flyctl / HTTPS
-┌─ Agent machines (our Fly org) ─────────────┐
-│   one suspended microVM per deployed agent  │
-│   /control · /telegram · volume at /data    │
-└─────────────────────────────────────────────┘
+```text
+Electron renderer ── typed preload ── Electron main ── local FastAgent (in-process)
+                                         │
+                                         └── planned HTTP/SSE ── protected endpoint
+                                                                  │
+                                         owned self-host or optional duang cloud FastAgent
+                                         (its own sessions, routines and channel adapters)
 ```
 
-Trust: the renderer runs with `contextIsolation` on and no node integration. It never holds a
-directory path it can act on, a Fly token, or a model key — it asks main, and main decides.
+The renderer has `contextIsolation` on and no Node integration. It never gets arbitrary filesystem,
+IPC, shell or credential access. Main owns the local runtime, directory reads and future remote
+connections. FastAgent owns sessions at each location. A visitor's protected remote endpoint must
+not grant direct access to another visitor's sessions. Optional hosting will operate deployments;
+it need not proxy every conversation or own a transcript.
 
 ## The client
 
 **Main owns every `SessionControl`.** Local agents get an agent plus its control plane from
-`createPiAgentFromDir` in `@fastagent-sh/fastagent/pi`; cloud agents will get the HTTP+SSE
-implementation. Both satisfy the same interface. Local turns use `agent.invoke`; observing,
-steering, stopping and reading history use the bound session control.
+`createPiAgentFromDir` in `@fastagent-sh/fastagent/pi`; a future remote connection uses FastAgent's
+public `connectAgent` and `connectSessionControl`, subject to the endpoint's `capabilities()`.
+Local turns use `agent.invoke`; observing, steering, stopping and reading history use the bound
+session control. Pin a tested FastAgent revision before consuming newer remote APIs: the current
+pinned version and upstream differ in authentication, invoke paths and routines.
 
 **The preload exposes typed, named operations**, not a stringly-typed gateway. Week 1 exposes only
 the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
@@ -70,74 +59,76 @@ derived from our own writes.
 **The client persists almost nothing** — `userData/agents.json`: currently each agent's id, name,
 directory and optional model override. Reads validate the file; only a missing file means an empty
 registry. Writes serialize read/modify/rename, so concurrent changes do not lose rows and a failed
-write never publishes an in-memory success. Conversations remain the runtime's files. Drafts and
-live presentation state are in memory only. Deployment endpoints, unread markers and tokens are
-later-week work; tokens belong in Electron `safeStorage`, never the registry.
+write never publishes an in-memory success. Conversations remain the runtime's files. The renderer
+persists drafts and selection in localStorage; live output and attention marks are presentation
+state, not a second durable transcript. Remote contacts and credentials are future work: never
+store access tokens alongside contact metadata; use OS-backed secure storage for secrets.
 
 `ponytail:` one JSON file with atomic writes; move to SQLite when a list of agents stops fitting in
 memory, which is not a real horizon for this product.
 
-## The control service
+## Portable definitions and online contacts (planned)
 
-One Node process, one SQLite file (`node:sqlite`, stdlib), no queue, no worker, no registry.
+A preset carries only reviewed, portable agent definition content; importing creates a separate
+owner and separate runtime state. Do not package local `.secrets`, `.env`, session state, `.git`,
+`node_modules` or unrelated project files. The recipient supplies their own model and service
+credentials. An online invitation instead points to the owner's existing runtime. An individual
+revocable invite may initially mean "anyone holding this link"; it must not claim to identify a
+named person. If named recipients are required, add authentication before making that promise.
 
-| Route | Does |
-|---|---|
-| `POST /auth/device` | GitHub device flow; issues the duang token the client stores |
-| `POST /agents/:id/deploy` | accepts a tarball, runs the pipeline, streams the log |
-| `POST /agents/:id/pause` `DELETE /agents/:id` | suspend + unregister webhook; destroy |
-| `GET /agents` | the account's deployments — never proxies agent conversations |
+A protected endpoint must enforce the invite boundary on **both** `POST /invoke` and `/control/*`.
+Newer FastAgent has no built-in control token; the older pinned contract's
+`FASTAGENT_CONTROL_TOKEN` is not a future access design. A raw deployment-wide
+`SessionControl.sessions.list()` enumerates everyone's sessions, so a shared host must scope reads,
+writes and events to the visitor's own sessions without storing a second transcript. Owner-only
+routines, definition updates and deployment controls must not be exposed through a visitor invite.
+The concrete host-side access boundary needs a tested design at stage 3, not a client-only filter.
 
-`ponytail:` deploys run flyctl in-process, serialized. A table of pending jobs and two workers when
-the queue is visibly slow, not before.
+Each location owns its own session store: local history stays local, online history stays with its
+host, and channel group history does not become a private desktop conversation. Main keeps drafts
+and delayed events bound to the contact, location, session and subscription. A disconnect leaves
+execution status unknown until the runtime is consulted; never reissue accepted work merely to
+restore a stream.
 
-**Secrets never land in our database.** The model API key and channel tokens go from the wizard
-straight to `fly secrets set` on that agent's app; what SQLite holds is the deployment's URL and
-its generated `FASTAGENT_CONTROL_TOKEN`, because the client needs those to talk to the agent at
-all.
+## Online execution and routines
 
-## Deploy pipeline
+**Planned.** Stage 3 connects to an already-running, protected instance owned by the user. Stage 4 offers a
+hosted alternative: publish a reviewed definition snapshot, set required model/channel secrets on
+the host, provision durable runtime state, and provide update and stop controls. The desktop can
+close without stopping online turns or routines. Owner-hosted agents do not depend on our hosting
+service; duang cloud needs only deployment and access metadata, not a centralized chat store.
+Do not claim a specific Fly topology, sign-in provider or price before verifying the hosting path.
 
-1. The client tars the agent directory, excluding `.git`, `node_modules`, `.env` and the session
-   state root. Excluding state is not an optimisation: local conversations are not the cloud
-   agent's conversations, and the upload rule is what enforces that.
-2. The control service unpacks it, calls FastAgent's `planFlyDeploy` to write `fly.toml` with
-   `min_machines_running = 0` and `auto_stop_machines = "suspend"`, sets secrets, and runs
-   `deployFlyRun` in our Fly org.
-3. On success it records URL + control token, registers the Telegram webhook with FastAgent's own
-   `register-webhook` (which already distinguishes "still warming up" from "misconfigured"), and
-   reads the directory's schedules with FastAgent's schedule discovery into its own cron table.
-4. Redeploy is the same path; Fly secrets survive it.
+A clock must remain available while the owner's laptop is off. On Fly, the safe first configuration
+for a cron routine is a resident machine; the current upstream plan keeps one running when required.
+A sleeping machine cannot wake itself for its own cron. Newer upstream provides `GET /routines`
+(names, cron and timezone, not outcomes) and `POST /run` (run by name), but `POST /run` is **not** a
+clock or a slot-claim protocol. A future external scheduler needs demonstrated delivery,
+authorization, deduplication and honest failure/skip reporting before reducing residency. Some
+routines may need residency for reasons other than cron. The older pinned FastAgent contract and
+newer upstream use different route and routine names; bump and verify the pin with the feature that
+consumes it, without modifying a developer's existing sibling checkout.
 
-## The cron waker, and the one upstream change
+If a host cannot provide a recent routine outcome through the runtime's sessions, claim records or
+host telemetry, show "outcome unavailable" rather than infer success from `GET /routines`. A
+successful send or run admission is not a successful outcome. Never auto-replay a routine whose
+work may already have happened. These are data-integrity constraints, not an enterprise audit UI.
 
-A suspended microVM cannot wake itself for a cron instant — this is exactly why FastAgent's
-`fly/plan.ts` pins `min_machines_running = 1` when schedules exist. The control service is awake
-anyway, so it holds the cron and POSTs the due slot, which resumes the machine.
+## State ownership
 
-FastAgent already has both halves: `SchedulerOptions.externalClock` (external delivery owns the
-timers, with slot claim/settle making a double fire impossible) and an HTTP envelope
-`{ name, slot }` → `fireScheduleOnce`. The envelope only exists on the AgentCore path
-(`src/channels/agentcore.ts`); the standard serving path has no such route. Generalising it is the
-single change duang needs upstream, filed as
-[fastagent#557](https://github.com/fastagent-sh/fastagent/issues/557). Until it lands, scheduled
-agents deploy with a machine kept up and cost real money.
-
-## Who owns what
-
-| State | Owner | Notes |
+| State | Owner | Boundary |
 |---|---|---|
-| Agent definition | the directory on your disk | the only editable source of truth |
-| Local conversations | FastAgent's state root, locally | client never copies them |
-| Cloud conversations | the agent's Fly volume at `/data` | survives suspend and redeploy |
-| Deployment URL + control token | control service SQLite, mirrored in `safeStorage` | |
-| Model keys, channel tokens | Fly secrets only | never in our database |
-| Schedules | the directory; mirrored as timers in the control service | |
-| Unread marks | the client | per machine, deliberately |
+| Definition / preset | author's directory / recipient's independent imported directory | Only reviewed portable content travels. |
+| Local conversations | FastAgent local state root | Already implemented; not uploaded on publish. |
+| Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
+| Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
+| Model and channel credentials | each runtime's credential store or host secrets | Never copy a local OAuth login into a remote deployment. |
+| Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |
+| Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |
 
-## Not built
-
-No message store, no sync engine, no CRDT, no websocket server, no push service, no job queue, no
-build worker, no OCI registry, no multi-region, no autoscaler, no quota engine. Logs are Fly's,
-proxied. Each of these returns when a specific limit is hit, and the limit is named where the
-shortcut is taken.
+No universal message database, enterprise membership/approval/audit system, web workbench, social
+network or native group router is needed for the first four stages. A native group would require
+sender attribution and shared-session semantics that today's `SessionControl` does not expose;
+existing FastAgent channel groups remain the first group path. Full-process sandboxing and general
+exactly-once execution are not shipped by FastAgent: untrusted use of powerful tools needs separate
+isolation before being offered.

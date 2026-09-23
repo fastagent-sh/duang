@@ -1,6 +1,11 @@
-# 界面设计
+# Archived Week 1 interface translation
 
-> 本文是 [`ui.md`](ui.md) 的中文翻译，供阅读方便。**英文版是唯一权威**；两者不一致时以英文版为准，修改也先改英文版。
+> This is a historical Chinese translation of the shipped Week 1 visual design. Its product
+> assumptions, future-screen sketches and week numbers are obsolete; it is not a current plan.
+> Use [README.md](../README.md#delivery-stages), [design.md](design.md),
+> [interaction.md](interaction.md) and [ui.md](ui.md) for current English requirements and visuals.
+
+> 本文是 [`ui.md`](ui.md) 早期版本的中文翻译，供阅读方便；**英文版是唯一权威**。
 
 duang 长什么样，以及为什么。`docs/interaction.md` 规定应用**必须怎么行为**；本文规定它**应该怎么读**。两者冲突时以行为为准，本文为错。
 

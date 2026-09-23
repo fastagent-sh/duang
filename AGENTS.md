@@ -2,8 +2,10 @@
 
 ## Product and authority
 
-A local-first Electron client for FastAgent agents, with cloud deployment planned later.
-Agents are contacts backed by directories; conversations and history belong to FastAgent.
+A native local-first workbench for FastAgent agents: use one locally, copy its portable preset,
+connect to your own or an invited online agent, or optionally host it with duang cloud for
+continuous routines. Agents are contacts; conversations and history belong to each FastAgent
+runtime, not a duang transcript store. Only the Week 1 local path is implemented.
 
 - `README.md`: positioning and milestone scope.
 - `docs/design.md`: product objects, surfaces and flows.
@@ -27,8 +29,14 @@ verification of existing code, not a rewrite. Resolve conflicting product polici
   an empty list, hide failure as a fallback, or automatically replay accepted tool work.
 - No real credentials, private sessions or project contents in commits, CI or shared artifacts.
   Local real-provider and OAuth checks are fine; report them separately from mocked results.
-- Keep Week 1 local. No placeholder cloud UI, agent editor, permission-prompt system, files/diffs or
-  advanced session controls without the corresponding product requirement/milestone.
+- Follow the outcome-gated stages in `README.md`: local daily workbench, preset copy, protected
+  online contacts (including the owner's private routine work), optional hosting, then groups or
+  discovery only if needed. Do not present planned screens or routine outcomes as shipped.
+- A preset never exports secrets or session state. Remote invites require a host-side protected
+  access boundary and per-visitor conversation isolation; never expose a raw FastAgent endpoint
+  or deployment-wide session list to visitors. No enterprise administration or audit UI.
+- Avoid placeholder cloud UI, a built-in agent editor, permission prompts, remote file browsing or
+  advanced session controls without a demonstrated product need.
 
 ## Working and verification
 
