@@ -3,7 +3,8 @@
  *
  * Same isolation as the smoke check — a temporary agent, temporary credentials, a fake model
  * response — but it asserts nothing. It drives one conversation that contains every shape the
- * transcript has to draw, then writes `out/shots/{app,components}-{dark,light}.png`.
+ * transcript has to draw, then writes dark and light shots of the result, trace, narrow window,
+ * sidebar, model picker and component gallery to `out/shots/`.
  *
  *   npm run shots && open out/shots/app-dark.png
  */
@@ -44,7 +45,7 @@ Three things follow from it:
 - regeneration is per section, not per listing
 - \`showRegenerateAll\` is a presentation flag, nothing more
 
-Run \`bun run i18n:check\` before committing; it compares the twelve message files.`;
+The i18n check failed. Open the tool call above for the exact diagnostic before committing.`;
 
 const THOUGHTS = [
   "Start by reading the file they pointed at; everything else depends on what is actually in it.",
@@ -163,7 +164,7 @@ if (!process.versions.electron) {
     await until("document.querySelector('pre code span') !== null", "highlighting");
 
     await mkdir(fileURLToPath(new URL("../out/shots", import.meta.url)), { recursive: true });
-    const capture = async (name) => {
+    const capture = async (name, position = "bottom") => {
       for (const theme of ["dark", "light"]) {
         nativeTheme.themeSource = theme;
         await new Promise((resolve) => setTimeout(resolve, 400));
@@ -171,7 +172,7 @@ if (!process.versions.electron) {
         // moves the bottom out from under a scroll position taken earlier.
         await evaluate(`(() => {
           const box = document.querySelector('[aria-label="Transcript"]');
-          if (box) box.scrollTop = box.scrollHeight;
+          if (box) box.scrollTop = ${position === "top" ? "0" : "box.scrollHeight"};
         })()`);
         const image = await win.webContents.capturePage();
         const path = fileURLToPath(new URL(`../out/shots/${name}-${theme}.png`, import.meta.url));
@@ -195,6 +196,20 @@ if (!process.versions.electron) {
       })()`),
     );
     await capture("app");
+    await evaluate(`document.querySelectorAll('details')[1].open = false`);
+    await capture("app-start", "top");
+    win.setSize(820, 660);
+    await capture("app-narrow");
+    win.setSize(1180, 860);
+    await evaluate(`document.querySelector('button[aria-label="Show conversations of amazonseo.ai"]').click()`);
+    await until(`document.querySelector('button[aria-label="Hide conversations of amazonseo.ai"]')`, "expanded sidebar");
+    await capture("app-expanded");
+    await evaluate(`document.querySelector('button[title="Model for this agent"]').click()`);
+    await until(`document.querySelector('dialog[open]')`, "model picker");
+    await capture("models");
+    await evaluate(`document.querySelector('dialog summary').click()`);
+    await capture("models-credentials");
+    await evaluate(`document.querySelector('button[aria-label="Close model picker"]').click()`);
 
     // Reopened, the conversation is history: nothing in it arrived just now, so nothing in it may
     // float in as if it had. Printed rather than asserted, like the clearance above — and 0 is the
@@ -204,6 +219,11 @@ if (!process.versions.electron) {
     await reopened;
     await until("document.body.innerText.includes('sectionsGenerated')", "the reopened conversation");
     console.log("rows animating in on reopen:", await evaluate(`document.querySelectorAll('.column > .enter').length`));
+    await evaluate(`document.querySelector('button[aria-label="Show conversations of amazonseo.ai"]').click()`);
+    await until(`document.querySelector('button[title="New conversation (⌘N)"]')`, "new conversation control");
+    await evaluate(`document.querySelector('button[title="New conversation (⌘N)"]').click()`);
+    await until(`document.body.innerText.includes('What should we work on?')`, "new conversation");
+    await capture("new-conversation");
 
     // The component sheet, in the same window and the same build as the app it documents.
     // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.

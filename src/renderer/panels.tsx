@@ -38,6 +38,12 @@ const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numer
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
 
+/** Lead with the directory name so truncation keeps it visible; the full path is in the title. */
+const location = (dir: string): string => {
+  const parts = home(dir).split("/").filter(Boolean);
+  return parts.length > 1 ? `${parts.at(-1)} · ${parts.at(-2)}` : parts[0] ?? "/";
+};
+
 const tones: Record<AgentState, Tone> = {
   ready: "accent",
   missing_model: "warning",
@@ -142,11 +148,14 @@ export function Sidebar({
    * Tab walk the roster three times — so the keys they stand for live on the row: Right and Left
    * expand and collapse an agent, Delete removes a conversation.
    */
+  const showNew = (id: string, rows: Row[]) =>
+    id === agentId && !disabled && !rows.some((row) => row.session === session && row.fresh && !row.draft && !row.running);
   const rowsOnScreen: { key: string; agent: string; session?: string; fresh?: boolean }[] = [];
   for (const agent of agents) {
     rowsOnScreen.push({ key: `agent:${agent.id}`, agent: agent.id });
     if (expanded.includes(agent.id)) {
-      for (const row of rowsFor(agent.id))
+      const rows = rowsFor(agent.id);
+      for (const row of rows)
         rowsOnScreen.push({
           key: `conv:${agent.id}/${row.session}`,
           agent: agent.id,
@@ -155,7 +164,7 @@ export function Sidebar({
         });
       // "New conversation" is a row in the list, so the arrows reach it too; anything left tabbable
       // inside the list would make Tab walk the roster a second time.
-      if (agent.id === agentId && !disabled) rowsOnScreen.push({ key: `new:${agent.id}`, agent: agent.id });
+      if (showNew(agent.id, rows)) rowsOnScreen.push({ key: `new:${agent.id}`, agent: agent.id });
     }
   }
   /**
@@ -234,7 +243,7 @@ export function Sidebar({
     }
   };
   return (
-    <aside className="w-80 shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
+    <aside className="w-[clamp(15rem,27vw,20rem)] shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
       {/* The window controls overhang this card's top-left. The row is tall enough to hold them
           with air around it, and the wordmark is centred in the column rather than pushed along by
           them — Telegram's header, which has the same problem. */}
@@ -286,35 +295,32 @@ export function Sidebar({
                   onFocus={() => setReached(`agent:${agent.id}`)}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
-                  // The open agent is the filled row and its conversations are tinted underneath:
-                  // the group you are working in is what the column marks first.
+                  // The group stays visible; the conversation being read gets the strong selection.
                   className={`flex w-full items-center gap-3 rounded-card py-2.5 pr-10 pl-3 text-left transition-colors ${
-                    selected ? "bg-accent-fill text-fill-fg" : "hover:bg-hover"
+                    selected ? "bg-accent-weak text-text" : "hover:bg-hover"
                   }`}
                 >
                   <Avatar name={agent.name} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
-                    <span className={`block truncate text-[11px] font-mono ${selected ? "opacity-75" : "text-muted"}`}>
-                      {home(agent.dir)}
-                    </span>
+                    <span className="block truncate text-[11px] text-muted">{location(agent.dir)}</span>
                   </span>
                   {/* Idle and ready is the state worth saying nothing about (§9). Everything else
                       is said in words: a coloured dot alone leaves colour doing the work, and the
                       count is what the agent row can say that a conversation row cannot. */}
                   {busy > 0 ? (
-                    <Badge tone="accent" pulse className={`min-w-0 ${selected ? "text-fill-fg" : ""}`}>
+                    <Badge tone="accent" pulse className="min-w-0">
                       <span className="truncate">{busy > 1 ? `${busy} working` : "working"}</span>
                     </Badge>
                   ) : waiting.length > 0 ? (
                     // What landed while you were away, summed on the agent row and spent when the
                     // conversation is opened. Failures are what the count is for, so they win.
-                    <Pill tone={failures ? "danger" : "accent"} onAccent={selected}>
+                    <Pill tone={failures ? "danger" : "accent"}>
                       {failures ? `${failures} failed` : `${waiting.length} done`}
                     </Pill>
                   ) : (
                     state !== "ready" && (
-                      <Badge tone={tones[state]} className={`min-w-0 ${selected ? "text-fill-fg" : ""}`}>
+                      <Badge tone={tones[state]} className="min-w-0">
                         <span className="truncate">{says[state].toLowerCase()}</span>
                       </Badge>
                     )
@@ -330,7 +336,6 @@ export function Sidebar({
                   aria-label={`${open ? "Hide" : "Show"} conversations of ${agent.name}`}
                   title={open ? "Hide conversations" : "Show conversations"}
                   icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
-                  onAccent={selected}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2"
                 />
               </div>
@@ -346,6 +351,7 @@ export function Sidebar({
                     // A conversation the runtime has never heard of can be neither renamed nor
                     // deleted — `update()` and `delete()` both answer `no_such_session` — so it has
                     // no menu at all, which is what the keyboard's Delete already assumed.
+                    const current = selected && row.session === session;
                     const menu = row.fresh
                       ? undefined
                       : () =>
@@ -390,13 +396,13 @@ export function Sidebar({
                           menu();
                         }}
                         disabled={disabled && selected}
-                        aria-current={selected && row.session === session ? "page" : undefined}
+                        aria-current={current ? "page" : undefined}
                         className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-3 pl-16 text-left transition-colors ${
-                          selected && row.session === session ? "bg-accent-weak text-accent" : "hover:bg-hover"
+                          current ? "bg-accent-fill text-fill-fg" : "hover:bg-hover"
                         }`}
                       >
                         <span
-                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? "text-muted italic" : ""} ${
+                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "opacity-80" : "text-muted"} italic` : ""} ${
                             row.unseen ? "font-semibold" : ""
                           }`}
                         >
@@ -405,18 +411,22 @@ export function Sidebar({
                         {/* Which conversation is alive is the question this row answers; the agent
                             row above only says that one of them is. */}
                         {row.running ? (
-                          <Badge tone="accent" pulse>
+                          <Badge tone="accent" pulse className={current ? "text-fill-fg" : ""}>
                             working
                           </Badge>
                         ) : row.unseen ? (
-                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"}>{row.unseen}</Pill>
+                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"} onAccent={current}>
+                            {row.unseen}
+                          </Pill>
                         ) : row.draft ? (
-                          <span className="shrink-0 text-[11px] text-muted italic">unsent</span>
+                          <span className={`shrink-0 text-[11px] italic ${current ? "text-fill-fg opacity-75" : "text-muted"}`}>
+                            unsent
+                          </span>
                         ) : (
                           row.updatedAt !== undefined && (
                             <span
                               className={`shrink-0 text-[11px] group-hover:invisible ${
-                                selected && row.session === session ? "text-accent opacity-75" : "text-muted"
+                                current ? "text-fill-fg opacity-75" : "text-muted"
                               }`}
                             >
                               {ago(row.updatedAt)}
@@ -432,6 +442,7 @@ export function Sidebar({
                           size={28}
                           tabIndex={-1}
                           onClick={menu}
+                          onAccent={current}
                           title="Conversation actions"
                           aria-label={`Actions for ${row.label}`}
                           icon={<DotsThree size={16} weight="bold" />}
@@ -441,7 +452,7 @@ export function Sidebar({
                     </div>
                     );
                   })}
-                  {selected && !disabled && (
+                  {showNew(agent.id, conversations) && (
                     <Button
                       kind="ghost"
                       size={28}
@@ -474,10 +485,8 @@ export function Sidebar({
 }
 
 /**
- * What you are looking at, floating over it: the conversation, the workspace it runs in, and
- * whatever the turn costs. It hovers rather than sits in a bar because the transcript is the page,
- * and a full-width bar would cut it in two. Translucent, so text passing underneath reads as
- * scrolled away rather than deleted.
+ * What you are looking at: the conversation, workspace and running context. The pill keeps the
+ * floating visual language but occupies its own row, so scrolled text never ghosts through it.
  */
 export function ConversationHeader({
   agent,
@@ -497,34 +506,33 @@ export function ConversationHeader({
   onReveal: () => void;
 }) {
   return (
-    // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
-    // only what you can actually grab or click takes the pointer back.
-    <div className="pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
+    // Keep the pill's floating shape, but give it its own row: scrolled text cannot show through it.
+    <header className="relative z-10 mx-4 mt-2 mb-3 shrink-0 flex items-center gap-2.5 rounded-float bg-surface py-1.5 pr-3 pl-2 ring-1 ring-stroke">
       {/* The same tile as in the sidebar: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
         {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
-        <div className="pointer-events-auto truncate drag">{title}</div>
+        <div className="truncate drag">{title}</div>
         {dir && (
           <button
             onClick={onReveal}
             title={dir}
-            className="pointer-events-auto block max-w-full truncate text-left font-mono text-[11px] text-muted hover:text-text"
+            className="block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
           >
-            {home(dir)}
+            {location(dir)}
           </button>
         )}
       </div>
       {working && <Badge tone="accent" pulse>working</Badge>}
       {context !== undefined && <span className="shrink-0 text-[11px] text-muted">{context}% context</span>}
       {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
-    </div>
+    </header>
   );
 }
 
 /** Whatever replaces the transcript sits in the transcript's box, so the composer never moves. */
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5">{children}</div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-5">{children}</div>;
 }
 
 export function NoAgents({ onAdd }: { onAdd: () => void }) {
@@ -667,7 +675,10 @@ function ModelPopover({
     el.querySelector("input")?.focus();
     return () => el.close();
   }, []);
-  const matches = (models?.specs ?? []).filter((m) => m.toLowerCase().includes(filter.toLowerCase())).slice(0, 60);
+  const matches = (models?.specs ?? [])
+    .filter((m) => m.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => Number(b === current) - Number(a === current))
+    .slice(0, 60);
 
   return (
     <dialog
@@ -695,9 +706,13 @@ function ModelPopover({
       }}
       className="popover fixed m-0 top-auto right-auto w-80 overflow-y-auto text-text backdrop:bg-transparent"
     >
-      {/* The path is long and the close button is small: a row, not a float, or the two overlap. */}
       <div className="flex items-start gap-1 pl-2 pt-1">
-        {models && <p className="flex-1 text-muted text-[11px] break-all">Credentials: {models.authPath}</p>}
+        {models && (
+          <details className="min-w-0 flex-1 text-muted text-[11px]" title={models.authPath}>
+            <summary className="cursor-pointer truncate">Credentials · {location(models.authPath)}</summary>
+            <code className="block break-all p-1 select-text">{models.authPath}</code>
+          </details>
+        )}
         <Button kind="ghost" size={28} onClick={close} aria-label="Close model picker" icon={<X size={14} />} />
       </div>
       {error ? (
@@ -741,11 +756,13 @@ function ModelPopover({
                   onClose();
                   void store.pickModel(model);
                 }}
-                className={`block w-full text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-hover ${
+                aria-current={model === current ? "true" : undefined}
+                className={`flex w-full items-center gap-2 text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-hover ${
                   model === current ? "bg-accent-weak text-accent" : ""
                 }`}
               >
-                {model}
+                <span className="min-w-0 flex-1 truncate">{model}</span>
+                {model === current && <Check size={13} aria-hidden />}
               </button>
             ))}
             {models && matches.length === 0 && <p className="text-muted text-[11px] px-2 py-1.5">Nothing matches.</p>}
@@ -757,11 +774,11 @@ function ModelPopover({
 }
 
 /** The opening screen of a conversation nobody has spoken in yet. */
-export function NewConversation({ agentName, children }: { agentName: string; children: React.ReactNode }) {
+export function NewConversation({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
       <div className="composer-column -mt-16">
-        <h1 className="text-[22px] font-medium mb-5">What should we work on in {agentName}?</h1>
+        <h1 className="text-[22px] font-medium mb-5">What should we work on?</h1>
         {children}
       </div>
     </div>
@@ -886,8 +903,8 @@ export function Transcript({
       role="region"
       aria-label="Transcript"
       onScroll={check}
-      // pt clears the floating header; the first message starts below it, not behind it.
-      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
+      // The scroll area begins below the header, so old text never bleeds around its edges.
+      className="transcript-scroll flex-1 min-h-0 overflow-y-auto px-6 pt-4"
       style={{ paddingBottom: bottomGap }}
     >
       <div className="column">
@@ -1202,8 +1219,8 @@ function firstArg(args: unknown): string {
   const values = Object.values(args as Record<string, unknown>).filter((v) => typeof v === "string") as string[];
   const text = values[0] ?? "";
   // A path's meaning is at its end, a command's at its start: keep the tail when it looks like one.
-  if (text.length <= 72) return text;
-  return text.startsWith("/") ? `…${text.slice(-71)}` : `${text.slice(0, 71)}…`;
+  if (text.startsWith("/")) return `…/${text.split("/").filter(Boolean).slice(-2).join("/")}`;
+  return text.length <= 72 ? text : `${text.slice(0, 71)}…`;
 }
 
 /**
@@ -1297,7 +1314,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
         ref={input}
         aria-label="Message"
         value={value}
-        rows={2}
+        rows={1}
         onChange={(e) => store.setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
@@ -1326,7 +1343,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
         disabled={disabled}
         // The field matches the leading of the bubble it turns into: a composer that types tighter
         // than it sends makes a long message reflow the moment it is sent.
-        className="bubble w-full min-h-10 resize-none bg-transparent outline-none placeholder:text-muted disabled:opacity-40"
+        className="bubble w-full min-h-7 resize-none bg-transparent outline-none placeholder:text-muted disabled:opacity-40"
       />
       <div className="flex items-center gap-2 mt-2">
         <div className="relative">

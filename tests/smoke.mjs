@@ -241,6 +241,7 @@ if (!process.versions.electron) {
       await click("Create agent here");
       await until("document.querySelector('dialog[open]') !== null", "first model picker opens automatically");
       await chooseModel("openai/gpt-4o-mini");
+      await until("document.querySelector('dialog') === null", "first model picker closes");
       await until(
         "document.querySelector('textarea') && !document.querySelector('textarea').disabled",
         "first model unlocks composer",
@@ -261,6 +262,27 @@ if (!process.versions.electron) {
         "tool trace finishes",
       );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
+      // The header owns its space: top padding inside a scroll box alone lets older text bleed
+      // above and through a floating header once the transcript is scrolled.
+      assert.ok(
+        await evaluate(`(() => {
+          const header = document.querySelector('main > header');
+          const transcript = document.querySelector('[aria-label="Transcript"]');
+          return transcript.getBoundingClientRect().top >= header.getBoundingClientRect().bottom;
+        })()`),
+        "scrolled text cannot pass behind the conversation header",
+      );
+      assert.ok(
+        await evaluate(`(() => {
+          const summary = document.querySelector('details summary').textContent;
+          return summary.includes('project/hello.txt') && !summary.includes('duang-smoke-');
+        })()`),
+        "a tool row names the file, not a machine-specific path",
+      );
+      assert.ok(
+        await evaluate("document.querySelector('textarea').getBoundingClientRect().height <= 32"),
+        "the empty composer starts compact and can grow with a draft",
+      );
       // A settled answer ends with when it landed and a way to take it elsewhere.
       assert.ok(
         await evaluate(`(() => {
@@ -275,7 +297,15 @@ if (!process.versions.electron) {
       const transcript = await evaluate("document.querySelector('details').textContent");
       assert.match(transcript, /Hello from the workspace/);
       await click("openai/gpt-4o-mini");
-      await until("document.querySelector('dialog[open]') !== null", "model picker reopens");
+      await until("document.querySelector('dialog button[aria-current=\"true\"]') !== null", "model picker reopens with the current model");
+      assert.equal(
+        await evaluate(`(() => {
+          const selected = document.querySelector('dialog button[aria-current="true"]');
+          return selected?.parentElement.firstElementChild === selected ? selected.textContent.trim() : undefined;
+        })()`),
+        "openai/gpt-4o-mini",
+        "the current model appears first in the picker",
+      );
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "Escape dismisses the picker");
@@ -291,6 +321,11 @@ if (!process.versions.electron) {
       await listConversations("Smoke");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "new conversation");
+      assert.equal(
+        await evaluate(`!!document.querySelector('button[title^="New conversation"]')`),
+        false,
+        "an empty new conversation does not repeat the new-conversation action",
+      );
       await click("Read hello.txt and answer.");
       await until("document.body.innerText.includes('Smoke answer')", "durable history reopens");
       assert.equal((await evaluate("document.body.innerText")).split("Smoke answer").length - 1, 1);
@@ -362,7 +397,7 @@ if (!process.versions.electron) {
       hold = false;
       await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
       await until(
-        "document.body.innerText.includes('What should we work on in Configured') && !document.querySelector('textarea').disabled",
+        "document.body.innerText.includes('What should we work on?') && !document.querySelector('textarea').disabled",
         "directory-configured model",
       );
       await message("Use the configured model with the selected credentials.");
@@ -611,6 +646,10 @@ if (!process.versions.electron) {
       // control only means anything when there is something to scroll past.
       const size = win.getSize();
       win.setSize(800, 540);
+      await until(
+        "document.querySelector('aside').getBoundingClientRect().width <= 260",
+        "the sidebar gives reading space back in a narrow window",
+      );
       await until(
         `(() => { const el = document.querySelector('[aria-label="Transcript"]'); return el.scrollHeight > el.clientHeight + 40; })()`,
         "the transcript can scroll",

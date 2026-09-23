@@ -148,7 +148,7 @@ export default function App() {
           />
         )}
         {error ? (
-          <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
+          <div role="alert" className="mt-2 px-6 py-2 text-danger whitespace-pre-wrap break-words">
             {error}{" "}
             <button className="underline" onClick={() => void store.retry()}>
               Retry
@@ -158,7 +158,7 @@ export default function App() {
           // An ended subscription is not a failure: the conversation is intact, this view stopped
           // listening. Say it in the calm voice and offer the one action that fixes it.
           c?.ended && (
-            <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
+            <div role="status" className="mt-2 px-6 py-2 text-muted whitespace-pre-wrap break-words">
               {c.ended}{" "}
               <button className="underline" onClick={() => void store.retry()}>
                 Reconnect
@@ -184,7 +184,7 @@ export default function App() {
         ) : agentState === "no_agent" ? (
           <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
         ) : !c || c.items.length === 0 ? (
-          <NewConversation agentName={agent?.name ?? ""}>{composer}</NewConversation>
+          <NewConversation>{composer}</NewConversation>
         ) : (
           // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
           // run streams, so this gap *is* where the newest line lands. At 16 the line you are
