@@ -207,8 +207,16 @@ export default function App() {
           // beneath this, which is what keeps the bottom of the window from reading as a seam.
           <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
             {/* The composer is narrower than the reading column, so text would slide past on both
-                sides of it. The canvas fades in underneath instead. */}
-            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
+                sides of it. The canvas is solid up to the composer's top edge and fades over the
+                40px above it: a fixed height shorter than the composer left the line just above it
+                unfaded, so a table's copy buttons read as the composer's own. */}
+            <div
+              className="absolute inset-x-0 bottom-0"
+              style={{
+                height: composerHeight + 16 + 40,
+                background: "linear-gradient(to top, var(--color-bg) calc(100% - 40px), transparent)",
+              }}
+            />
             <div ref={composerBox} className="composer-column pointer-events-auto">
               {composer}
             </div>

@@ -280,6 +280,9 @@ export function Sidebar({
           const waiting = Object.values(unseen[agent.id] ?? {});
           const failures = waiting.filter((outcome) => outcome === "failed").length;
           const conversations = open ? rowsFor(agent.id) : [];
+          // One selection mark at a time: once the conversation being read is listed, it carries
+          // the tint and its agent row steps back to plain.
+          const marked = selected && !conversations.some((row) => row.session === session);
           return (
             <div key={agent.id}>
               <div className="relative">
@@ -295,9 +298,8 @@ export function Sidebar({
                   onFocus={() => setReached(`agent:${agent.id}`)}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
-                  // The group stays visible; the conversation being read gets the strong selection.
                   className={`flex w-full items-center gap-3 rounded-card py-2.5 pr-10 pl-3 text-left transition-colors ${
-                    selected ? "bg-accent-weak text-text" : "hover:bg-hover"
+                    marked ? "bg-accent-weak text-text" : "hover:bg-hover"
                   }`}
                 >
                   <Avatar name={agent.name} working={busy > 0} />
@@ -398,11 +400,11 @@ export function Sidebar({
                         disabled={disabled && selected}
                         aria-current={current ? "page" : undefined}
                         className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-3 pl-16 text-left transition-colors ${
-                          current ? "bg-accent-fill text-fill-fg" : "hover:bg-hover"
+                          current ? "bg-accent-weak text-accent" : "hover:bg-hover"
                         }`}
                       >
                         <span
-                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "opacity-80" : "text-muted"} italic` : ""} ${
+                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
                             row.unseen ? "font-semibold" : ""
                           }`}
                         >
@@ -411,23 +413,21 @@ export function Sidebar({
                         {/* Which conversation is alive is the question this row answers; the agent
                             row above only says that one of them is. */}
                         {row.running ? (
-                          <Badge tone="accent" pulse className={current ? "text-fill-fg" : ""}>
+                          <Badge tone="accent" pulse>
                             working
                           </Badge>
                         ) : row.unseen ? (
-                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"} onAccent={current}>
+                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"}>
                             {row.unseen}
                           </Pill>
                         ) : row.draft ? (
-                          <span className={`shrink-0 text-[11px] italic ${current ? "text-fill-fg opacity-75" : "text-muted"}`}>
+                          <span className="shrink-0 text-[11px] italic text-muted">
                             unsent
                           </span>
                         ) : (
                           row.updatedAt !== undefined && (
                             <span
-                              className={`shrink-0 text-[11px] group-hover:invisible ${
-                                current ? "text-fill-fg opacity-75" : "text-muted"
-                              }`}
+                              className="shrink-0 text-[11px] text-muted group-hover:invisible"
                             >
                               {ago(row.updatedAt)}
                             </span>
@@ -442,7 +442,6 @@ export function Sidebar({
                           size={28}
                           tabIndex={-1}
                           onClick={menu}
-                          onAccent={current}
                           title="Conversation actions"
                           aria-label={`Actions for ${row.label}`}
                           icon={<DotsThree size={16} weight="bold" />}

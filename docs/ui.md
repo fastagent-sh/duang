@@ -101,8 +101,9 @@ conversations are explicitly expanded.
 
 Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40 as a
 rounded square with a two-stop gradient in its hue — flat tiles look printed, and the gradient is
-most of why Telegram's list feels alive. The open conversation is a filled accent row rather than a
-tint, which is the same list's other trick: a selection that answers rather than shades.
+most of why Telegram's list feels alive. The open conversation is an accent tint with accent text,
+not a solid fill: a filled row was the loudest thing on screen and competed with the transcript it
+points at.
 The second line leads with the workspace directory's name and shows its parent when room permits,
 not a message preview: local identity comes from a directory, and the full path stays available on
 hover. Conversations are listed directly below. An online or invited contact
@@ -123,9 +124,9 @@ Listing an agent that is not open loads its conversations, which boots that agen
 way opening it would — FastAgent owns the session list and duang will not keep a second copy of
 where sessions live.
 
-Selection is the accent, never a grey — grey is what a row looks like under the pointer. The open
-agent gets a light tint; its selected conversation gets the solid fill. This keeps the group visible
-without letting it compete with the topic currently being read.
+Selection is the accent, never a grey — grey is what a row looks like under the pointer. There is
+one selection mark at a time: the conversation being read carries the tint when it is listed, and
+its agent row carries it only while that list is folded.
 
 **One flat list, no card per agent.** Slightly inset rows, a hairline that starts where the text
 does, and the open conversation filled within its row: Telegram, WeChat and Codex draw a roster this way,
@@ -166,8 +167,11 @@ ring is presence, a performance would be costume.
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
 rather than a column filling them. The conversation header keeps a compact floating shape but
 occupies its own row above the scroll area: older text cannot show through or slide behind it.
-The scroll area's top edge fades clipped lines without fading the opening turn. The transcript is
-an opaque document on a plain canvas, not bubbles over wallpaper.
+The scroll area's top edge fades clipped lines without fading the opening turn. At the bottom the
+transcript passes beneath the floating composer: the canvas is solid up to the composer's top edge
+and fades over the 40px above it, sized from the composer's measured height so no line sits
+unfaded against it. The transcript is an opaque document on a plain canvas, not bubbles over
+wallpaper.
 
 Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
 [narrow, dark](screenshots/reading-narrow-dark.png), and

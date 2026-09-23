@@ -108,18 +108,18 @@ export default function Gallery() {
           <div className="popover px-3 h-8 grid place-items-center text-[12px]">popover</div>
         </Section>
 
-        <Section title="Conversation rows" note="selected is a tint, not a border" sketch>
-          <div className="w-64 space-y-0.5">
-            <div className="rounded-card bg-accent-weak px-2 py-1.5 text-accent">
-              <div className="truncate">Explain the ListingResult component</div>
-              <div className="text-muted text-[11px]">just now</div>
+        <Section title="Conversation rows" note="one line, time trailing; selected is a tint, not a fill" sketch>
+          <div className="w-72 space-y-0.5">
+            <div className="flex items-baseline gap-2 rounded-card bg-accent-weak py-1.5 pr-3 pl-4 text-accent">
+              <span className="min-w-0 flex-1 truncate text-[12.5px]">Explain the ListingResult component</span>
+              <span className="shrink-0 text-[11px] text-muted">just now</span>
             </div>
-            <div className="rounded-card px-2 py-1.5">
-              <div className="truncate">Run the i18n check</div>
-              <div className="text-muted text-[11px]">2h ago</div>
+            <div className="flex items-baseline gap-2 rounded-card py-1.5 pr-3 pl-4">
+              <span className="min-w-0 flex-1 truncate text-[12.5px]">Run the i18n check</span>
+              <span className="shrink-0 text-[11px] text-muted">2h ago</span>
             </div>
-            <div className="rounded-card px-2 py-1.5">
-              <div className="truncate text-muted italic">New conversation</div>
+            <div className="flex items-baseline gap-2 rounded-card py-1.5 pr-3 pl-4">
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted italic">New conversation</span>
             </div>
           </div>
         </Section>
