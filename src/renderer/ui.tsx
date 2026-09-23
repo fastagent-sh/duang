@@ -57,14 +57,14 @@ export function Button({
   // Resting look and hover look are separate because a disabled button keeps its shape — it is the
   // same control, dimmed — but must not light up under the pointer.
   const kinds = {
-    primary: ["bg-accent text-accent-fg", "hover:bg-accent/85"],
+    primary: ["bg-accent-fill text-accent-fg", "hover:bg-accent-fill/85"],
     secondary: ["border border-stroke", "hover:bg-hover"],
     ghost: onAccent
       ? ["text-accent-fg", "hover:bg-accent-fg/15 hover:text-accent-fg"]
       : ["text-muted", "hover:bg-hover hover:text-text"],
     danger: ["text-muted", "hover:bg-danger/12 hover:text-danger"],
   };
-  const filled = { primary: "bg-accent text-accent-fg", danger: "bg-danger text-danger-fg" };
+  const filled = { primary: "bg-accent-fill text-accent-fg", danger: "bg-danger-fill text-accent-fg" };
   const [rest_, hover] = loud && kind in filled ? [filled[kind as "primary" | "danger"], ""] : kinds[kind];
   const box = children ? `${size === 28 ? "h-7 px-2.5" : "h-8 px-3"} gap-1.5` : size === 28 ? "size-7" : "size-8";
   return (
@@ -136,12 +136,14 @@ export function Pill({
   onAccent?: boolean;
   children: ReactNode;
 }) {
+  // Riding on a filled row, the pill inverts to the row's own foreground — and its text then has to
+  // be the *fill*, not the text-role accent, which is a light violet that all but disappears there.
   const fills = {
-    accent: onAccent ? "bg-accent-fg text-accent" : "bg-accent text-accent-fg",
-    danger: onAccent ? "bg-accent-fg text-danger" : "bg-danger text-danger-fg",
+    accent: onAccent ? "bg-accent-fg text-accent-fill" : "bg-accent-fill text-accent-fg",
+    danger: onAccent ? "bg-accent-fg text-danger-fill" : "bg-danger-fill text-accent-fg",
   };
   return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${fills[tone]}`}>{children}</span>
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${fills[tone]}`}>{children}</span>
   );
 }
 

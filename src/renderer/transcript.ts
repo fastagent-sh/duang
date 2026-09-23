@@ -11,7 +11,12 @@ type At = { at: number };
 
 export type Item = At &
   ({ kind: "user"; text: string; steered?: boolean }
-  | { kind: "assistant" | "thinking"; text: string; open: boolean }
+  | { kind: "assistant"; text: string; open: boolean }
+  /**
+   * `started` is kept because `at` is restamped when the block settles, and "thought for 8s" is
+   * measured from the first token — after the restamp there is nothing left to measure from.
+   */
+  | { kind: "thinking"; text: string; open: boolean; started: number }
   | {
       kind: "tool";
       id: string;
@@ -128,17 +133,59 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
   return items;
 }
 
+/**
+ * What a tool printed, out of the envelope it arrived in. A result reaches us as MCP-shaped content
+ * (`{ content: [{ type: "text", text }] }`, sometimes nested once more), and dumping that verbatim
+ * shows the person the protocol instead of the output — quoted, escaped, and three braces deep.
+ *
+ * Text parts only. Anything else — an image part, a shape we have not seen — keeps its JSON rather than
+ * being silently dropped, because a result nobody can see is worse than an ugly one.
+ */
+export function toolText(result: unknown): string {
+  let value = result;
+  // Depth-limited instead of recursive: the envelope is one or two deep, and a cycle here would
+  // hang the renderer.
+  for (let depth = 0; depth < 3; depth++) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      const parts = value.map((part) =>
+        part && typeof part === "object" && (part as { type?: unknown }).type === "text"
+          ? String((part as { text?: unknown }).text ?? "")
+          : undefined,
+      );
+      return parts.every((part) => part !== undefined) ? parts.join("\n") : stringify(result);
+    }
+    if (value && typeof value === "object" && "content" in value) {
+      value = (value as { content: unknown }).content;
+      continue;
+    }
+    break;
+  }
+  return stringify(result);
+}
+
+/** Tool payloads are JSON, except when the runtime already handed us a string. */
+export function stringify(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
 /** One live event applied to the list. Returns a new list; unknown event types change nothing. */
 export function apply(items: Item[], event: SessionEvent): Item[] {
   const data = event.data as Record<string, unknown>;
   switch (event.type) {
     case "message_delta": {
-      const kind = data.channel === "thinking" ? "thinking" : "assistant";
       const last = items.at(-1);
-      if (last && last.kind === kind && last.open) {
-        return [...items.slice(0, -1), { ...last, text: last.text + String(data.delta ?? "") }];
+      const delta = String(data.delta ?? "");
+      if (data.channel === "thinking") {
+        if (last?.kind === "thinking" && last.open) {
+          return [...items.slice(0, -1), { ...last, text: last.text + delta }];
+        }
+        return [...items, { kind: "thinking", text: delta, open: true, at: event.timestamp, started: event.timestamp }];
       }
-      return [...items, { kind, text: String(data.delta ?? ""), open: true, at: event.timestamp }];
+      if (last?.kind === "assistant" && last.open) {
+        return [...items.slice(0, -1), { ...last, text: last.text + delta }];
+      }
+      return [...items, { kind: "assistant", text: delta, open: true, at: event.timestamp }];
     }
     case "message_finished": {
       // Stamped on settling, not on the first delta: an answer that streamed for five minutes would

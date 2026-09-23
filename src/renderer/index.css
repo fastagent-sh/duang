@@ -20,15 +20,23 @@
   --color-muted: oklch(0.68 0.01 285);
   --color-accent: oklch(0.72 0.16 295);
   --color-accent-weak: oklch(0.72 0.16 295 / 15%);
-  /* Text on a filled accent. The dark mode's accent is light, so its foreground is the background
-     colour, not white — white on it is about 2.5:1. */
-  --color-accent-fg: oklch(0.16 0.01 285);
   --color-success: oklch(0.72 0.14 150);
-  --color-warning: oklch(0.78 0.13 75);
+  /* Hue 65, not 75: at 75 the "needs a model" badge comes out yellow-green, which reads as mud
+     rather than as a caution. Orange is the colour every platform uses for this. */
+  --color-warning: oklch(0.79 0.15 65);
   --color-danger: oklch(0.68 0.17 25);
-  /* Text on a filled danger surface (Stop). Same reasoning as accent-fg: the dark mode's red is
-     light, so its foreground is dark. */
-  --color-danger-fg: oklch(0.16 0.01 285);
+
+  /*
+   * Accent as a surface is not accent as text, and one value cannot be both. As text it has to sit
+   * against the page, so dark mode needs it light; as a fill under white text it has to be dark, or
+   * the selected row turns into the brightest object on screen. These two are that second role, and
+   * they do not change between themes: a selected row is the same violet in both, the way macOS and
+   * Telegram keep one selection blue. L 0.52 against white is ~4.2:1, which is where Telegram's own
+   * selected row sits.
+   */
+  --color-accent-fill: oklch(0.52 0.2 295);
+  --color-danger-fill: oklch(0.52 0.2 25);
+  --color-accent-fg: oklch(1 0 0);
 
   --radius-badge: 6px;
   --radius-card: 10px;
@@ -67,11 +75,9 @@
     --color-muted: oklch(0.5 0.01 285);
     --color-accent: oklch(0.55 0.19 295);
     --color-accent-weak: oklch(0.55 0.19 295 / 12%);
-    --color-accent-fg: oklch(1 0 0);
     --color-success: oklch(0.5 0.14 150);
-    --color-warning: oklch(0.58 0.13 75);
+    --color-warning: oklch(0.58 0.15 60);
     --color-danger: oklch(0.52 0.19 25);
-    --color-danger-fg: oklch(1 0 0);
   }
 }
 
@@ -113,20 +119,112 @@ pre,
   font-variant-numeric: tabular-nums;
 }
 
-/* Shiki resolves its dual themes with light-dark(), which needs the document to declare both. The
-   code surface is ours, so its own background is dropped. */
+/*
+ * Motion. Three shapes and nothing else, borrowed from Beautiful UI's vocabulary because it is a
+ * small, consistent one: arrive by rising a little (`enter`), appear in place by growing into it
+ * (`pop`), and say "still going" by sweeping a highlight across the words (`shimmer`) rather than
+ * blinking their opacity, which is the cheapest-looking thing an interface can do.
+ *
+ * `interpolate-size` is what lets a disclosure animate to `auto` height without JavaScript
+ * measuring anything. This is an Electron app on a known Chromium, so the feature is simply
+ * available — in a browser it would need a fallback.
+ */
 :root {
   color-scheme: light dark;
+  interpolate-size: allow-keywords;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 180%;
+  }
+  to {
+    background-position: -80%;
+  }
+}
+
+.enter {
+  animation: enter 180ms var(--ease-ui) both;
+}
+.pop {
+  animation: pop 160ms var(--ease-ui) both;
+}
+
+/* The highlight has to be painted, not inherited: `currentColor` inside the gradient would resolve
+   to the transparent text colour this needs, and the sweep would be invisible. */
+.shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-muted) 35%,
+    var(--color-text) 50%,
+    var(--color-muted) 65%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/*
+ * Disclosures open by growing rather than by jumping. Every `<details>` in the app is one of two
+ * things — a tool call or a thinking block — and both go from one line to a block of output, which
+ * is exactly the jump that made the transcript feel like it was redrawing itself.
+ */
+details::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition:
+    block-size 200ms var(--ease-ui),
+    content-visibility 200ms allow-discrete;
+}
+details[open]::details-content {
+  block-size: auto;
+}
+
+/* Motion is decoration here; every one of these states is also said in words. */
+@media (prefers-reduced-motion: reduce) {
+  .enter,
+  .pop,
+  .shimmer {
+    animation: none;
+  }
+  .shimmer {
+    color: var(--color-muted);
+  }
+  details::details-content {
+    transition: none;
+  }
 }
 .shiki,
 .shiki span {
   background: transparent !important;
 }
 
-/* CJK glyphs fill their em box, so the same size needs more leading than Latin to read evenly. */
-:lang(zh),
-:lang(ja) {
-  line-height: 1.75;
+/*
+ * Reading leading, for the two surfaces that carry prose: what the agent writes and what you sent.
+ *
+ * One value for Latin and CJK alike. CJK glyphs fill their em box and want more air than Latin, and
+ * this used to be a `:lang(zh)` rule \u2014 which never fired once, because the document is `lang="en"`
+ * and nothing marks a Chinese message as Chinese. CSS cannot see which script a run of text is;
+ * only a per-message detector could, and that is a second source of truth about the transcript for
+ * a difference of 0.05. 1.7 is the compromise: right for Chinese, a little airy for English, and
+ * this is a document column rather than a dense list.
+ */
+.md,
+.bubble {
+  line-height: 1.7;
 }
 
 /* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
@@ -163,14 +261,22 @@ summary:focus-visible,
   -webkit-app-region: no-drag;
 }
 
-/* Scrollbars: present while scrolling, invisible otherwise. */
+/*
+ * Scrollbars: present where the pointer is, invisible otherwise, which is what macOS does and what
+ * this rule used to claim while drawing a permanent grey bar down the transcript. The track keeps
+ * its width either way — fading it in is a colour change, so nothing reflows when it appears.
+ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in oklch, var(--color-muted) 35%, transparent);
+  background: transparent;
   border-radius: 4px;
+  transition: background 150ms var(--ease-ui);
+}
+:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-muted) 35%, transparent);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -217,6 +323,7 @@ summary:focus-visible,
 }
 [data-streamdown="link"] {
   color: var(--color-accent);
+  text-decoration: underline;
 }
 [data-streamdown^="heading-"] {
   font-size: 1em;
@@ -227,16 +334,16 @@ summary:focus-visible,
   border-color: var(--color-stroke);
 }
 
-/* Markdown from the model. Streamdown emits plain elements; these are their house rules. */
+/*
+ * Markdown from the model: rhythm and lists only.
+ *
+ * Everything else is said once, above, through `data-streamdown`. A second set of element rules for
+ * the same DOM does not just repeat itself \u2014 it wins. `.md td` outranks `[data-streamdown="table-cell"]`
+ * on specificity, so the quiet bottom-hairline table above was being drawn as a full grid by a rule
+ * written to agree with it.
+ */
 .md > * + * {
   margin-top: 0.6em;
-}
-.md h1,
-.md h2,
-.md h3 {
-  font-weight: 600;
-  font-size: 1em;
-  margin-top: 1.2em;
 }
 .md ul,
 .md ol {
@@ -253,21 +360,4 @@ summary:focus-visible,
 }
 .md li p {
   display: inline;
-}
-.md a {
-  color: var(--color-accent);
-  text-decoration: underline;
-}
-.md blockquote {
-  border-left: 2px solid var(--color-stroke);
-  padding-left: 0.8em;
-  color: var(--color-muted);
-}
-.md table {
-  border-collapse: collapse;
-}
-.md th,
-.md td {
-  border: 1px solid var(--color-stroke);
-  padding: 0.3em 0.6em;
 }

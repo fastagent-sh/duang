@@ -108,9 +108,9 @@ export default function Gallery() {
           <div className="popover px-3 h-8 grid place-items-center text-[12px]">popover</div>
         </Section>
 
-        <Section title="Conversation rows" note="selected is a surface, not a border" sketch>
+        <Section title="Conversation rows" note="selected is a tint, not a border" sketch>
           <div className="w-64 space-y-0.5">
-            <div className="rounded-card bg-surface px-2 py-1.5">
+            <div className="rounded-card bg-accent-weak px-2 py-1.5 text-accent">
               <div className="truncate">Explain the ListingResult component</div>
               <div className="text-muted text-[11px]">just now</div>
             </div>
@@ -134,8 +134,8 @@ export default function Gallery() {
             <div className="leading-relaxed">
               The check fails in one place, and the cause is a missing key rather than the component.
             </div>
-            <details className="rounded-card bg-surface overflow-hidden">
-              <summary className="cursor-default select-none flex items-center gap-2 px-3 h-7 text-[12px]">
+            <details className="group rounded-card open:bg-surface open:ring-1 open:ring-stroke">
+              <summary className="cursor-default select-none flex items-center gap-2 rounded-card px-2.5 h-8 text-[12px] hover:bg-hover group-open:rounded-b-none">
                 <span className="font-mono">bun run i18n:check</span>
                 <Badge tone="danger">failed</Badge>
               </summary>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, fromEntries, lines, type Item } from "./transcript.ts";
+import { apply, dayLabel, fromEntries, lines, toolText, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -43,6 +43,16 @@ test("only a failed run leaves a note", () => {
   assert.equal(apply([], event("run_settled", { status: "completed" })).length, 0);
   const failed = apply([], event("run_settled", { status: "failed", error: { message: "boom" } }));
   assert.deepEqual(failed, [{ kind: "note", tone: "error", text: "run failed: boom", at: 0 }]);
+});
+
+test("tool output comes out of its envelope, and an unknown shape keeps its JSON", () => {
+  assert.equal(toolText("plain"), "plain");
+  assert.equal(toolText({ content: [{ type: "text", text: "one" }, { type: "text", text: "two" }] }), "one\ntwo");
+  // The shape the runtime actually sends: content wrapping content.
+  assert.equal(toolText({ content: { content: [{ type: "text", text: "deep" }], details: {} } }), "deep");
+  // An image part is not text; dropping it would hide the result entirely.
+  const image = { content: [{ type: "image", data: "…" }] };
+  assert.equal(toolText(image), JSON.stringify(image, null, 2));
 });
 
 test("unknown event types change nothing", () => {
