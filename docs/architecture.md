@@ -85,10 +85,11 @@ routines, definition updates and deployment controls must not be exposed through
 The concrete host-side access boundary needs a tested design at stage 3, not a client-only filter.
 
 Each location owns its own session store: local history stays local, online history stays with its
-host, and channel group history does not become a private desktop conversation. Main keeps drafts
-and delayed events bound to the contact, location, session and subscription. A disconnect leaves
-execution status unknown until the runtime is consulted; never reissue accepted work merely to
-restore a stream.
+host, and channel group history does not become a private desktop conversation. The renderer owns
+drafts and selection (currently keyed by local agent and session); online contacts must also key
+them by location and reject late events from superseded subscriptions. Main owns runtimes and
+subscriptions and forwards events with their origin identifiers. A disconnect leaves execution status unknown until the runtime is consulted; never
+reissue accepted work merely to restore a stream.
 
 ## Online execution and routines
 

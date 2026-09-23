@@ -9,7 +9,8 @@ with Week 1 and subsequent UI work; later stages are **planned**, not implemente
 
 The window has a 320px sidebar combining agent rows with their explicitly expanded conversation
 rows, and a transcript with a floating header and composer. There is no separate agent rail. An
-agent row opens its most recent conversation; clicking it again or using its caret expands or
+agent row restores its last open conversation if still available, otherwise an active run, then
+the most recent conversation (or a new one); clicking it again or using its caret expands or
 collapses its list. Expanding a different agent can load its conversations without navigating away.
 A failed list read is shown on that agent's row, not as an empty list. Running and drafted work
 stays attached to its originating agent and conversation when navigating.
