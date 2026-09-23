@@ -1,27 +1,25 @@
 # Interface design
 
-What duang looks like and why. `docs/interaction.md` says how the app must behave; this says how it
-should read. Where the two disagree, behaviour wins and this file is wrong.
-
-A Chinese translation lives in [`ui.zh.md`](ui.zh.md) for reading convenience. This file is the
-source of truth: change it first, then the translation.
+The visual system shipped with the local Week 1 client, not a specification for every future
+surface. [design.md](design.md) owns the new product paths and [interaction.md](interaction.md)
+owns behavior; when they differ from a future-screen sketch here, follow those documents. The
+[Chinese translation](ui.zh.md) is an archived Week 1 snapshot, not a maintained roadmap.
 
 ## 0. What the product actually asks of the interface
 
-Every decision below is derived from five facts about duang, not from what other products do.
+These facts explain the shipped local visual design; future shared contacts and routines use the
+same reading principles but are not covered by its old future-screen sketches.
 
-1. **The person is a developer who already has an agent working for other people.** Not a consumer
-   trying an assistant.
-2. **The local half exists so you can take over.** README: when the deployed agent misbehaves you
-   "open the same chat, read the full tool trace, and take over". The first job of this interface is
-   reading what an agent did and intervening — oversight, not company.
-3. **The two sides of a conversation are wildly asymmetric.** What you type is short and rare: a
-   task, a correction, a stop. What the agent produces is long, structured and the thing you scan —
-   commands, output, diffs, reports.
+1. **The person works with an agent they created or were invited to use.** Creators also need to
+   inspect the definition and its local changes; recipients mainly give work and read results.
+2. **The client is where work happens and where people return to its outcome.** Local testing,
+   online work and diagnosis should feel continuous without pretending their histories are one.
+3. **The two sides of a conversation are asymmetric.** A task or correction is usually short; the
+   agent's answer and tool work may be long and structured.
 4. **Work runs in the background, in parallel, for a long time.** You come back to it as often as you
    watch it, and you need to see which of several conversations is alive.
-5. **The transcript is the work record.** Later weeks add a read-only workspace panel and a cloud
-   activity inbox, but nothing moves the agent's working detail out of the transcript.
+5. **The transcript is the work record.** Later read-only details may show local files and an
+   owner's routines, but do not duplicate the runtime's conversation history.
 
 Two consequences worth stating before the details. Anything that fragments the agent's output
 (bubbles, cards per paragraph, decoration) fights fact 3 and fact 5. Anything that hides parallel
@@ -57,9 +55,8 @@ made it work there, and whether that premise holds here.
   transcript is the work. *An avatar that performs a lifecycle* — their premise is one
   conversation per Bot plus an expressive character to animate; ours is a lettered tile and parallel
   conversations, so the avatar carries agent presence as a quiet ring while the conversation rows say
-  which one is running. *Status / preview / takeover* — their premise is a machine you can only
-  watch through a screen; our files are on this disk and already open in the person's editor. *Pin
-  and hide* — their premise is a roster of up to 50 Bots; ours is the few agents you actually have.
+  which one is running. *Pin and hide* — their premise is a roster of up to 50 Bots; ours starts with the few agents
+  you actually use. Online contacts may change the size of that list later.
 - **Claude Code desktop** — parallel sessions stay visible and are filterable by state, because
   parallel work is the normal case for a coding agent. Same premise as our fact 4.
 - **Telegram** (tdesktop, macOS and Web are all open source, so these are measured values rather than
@@ -84,35 +81,32 @@ made it work there, and whether that premise holds here.
 
 ## 3. Structure
 
-Two columns. Later weeks add a third and two sidebar elements; their space is reserved now so nothing
-has to move when they arrive.
+The shipped local client has two columns. The future contact and optional detail surfaces are
+specified in [design.md](design.md#the-workbench), not by reserving permanent chrome here.
 
 ```
-┌ sidebar 320 (glass) ───────────┬ conversation ──────────────┬ (week 2) ┐
-│ duang·              ⌘K    ＋   │  title        model ⌄   ⏹  │  files   │
-│ [ local | cloud ]   (week 3)   │                            │  diffs   │
-│ ◎ Activity          (week 4)   │  turns                     │  settings│
-│ ┌────────────────────────────┐ │                            │          │
-│ │ AM  amazonseo.ai       2m  │ │                            │          │
-│ │     reading messages/es…   │ │                            │          │
-│ │   • fixing the i18n check  │ │                            │          │
-│ │     working                │ │                            │          │
-│ │   ⌄ 2 more                 │ │                            │          │
-│ └────────────────────────────┘ ├────────────────────────────┤          │
-│   EX  existing-agent     1h    │  composer                  │          │
-│       你好，我是…              │                            │          │
-└────────────────────────────────┴────────────────────────────┴──────────┘
+┌ sidebar 320 (glass) ───────────┬ conversation ───────────────────────┐
+│ duang·                    ＋    │ floating header                       │
+│ AM  amazonseo.ai               │ turns · tool details · outcomes       │
+│     project path               │                                       │
+│   • fixing the i18n check      │                                       │
+│     working                    │ floating composer                     │
+│ EX  existing-agent             │                                       │
+└────────────────────────────────┴───────────────────────────────────────┘
 ```
 
-**Sidebar rows are agents, not conversations** — one row each, with the current conversation's
-preview on the second line. An agent with a single conversation shows nothing more than a contact row.
+**Sidebar rows are agents, not conversations** — one row each, with the local directory on its
+second line. An agent with a single conversation shows nothing more than a contact row until its
+conversations are explicitly expanded.
 
 Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40 as a
 rounded square with a two-stop gradient in its hue — flat tiles look printed, and the gradient is
 most of why Telegram's list feels alive. The open conversation is a filled accent row rather than a
-tint, which is the same list's other trick: a selection that answers rather than shades. The second line is the workspace directory, not a message preview:
-the directory is what identifies an agent, and the conversations are listed directly below it
-anyway. A conversation row is 32 tall, has no avatar, and indents under its agent.
+tint, which is the same list's other trick: a selection that answers rather than shades.
+The second line currently shows the workspace directory, not a message preview: local identity
+comes from a directory, and conversations are listed directly below. An online or invited contact
+will need a provider and location label instead; do not imply someone else's path is a local one.
+A conversation row is 32 tall, has no avatar, and indents under its agent.
 
 **Opening an agent and listing its conversations are two questions, so they are two controls.**
 The row opens the agent, which is enough to put its latest conversation on screen; clicking the
@@ -175,11 +169,11 @@ What does not carry over is putting the transcript itself on a decorative canvas
 over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
 the chrome floats, with the transcript padded so nothing important sits under the header.
 
-Reserved, in arrival order: a `local | cloud` segmented control in the sidebar header (week 3), a
-pinned **Activity** row above the roster (week 4), and the right panel (week 2) holding the file
-tree, diffs and discovered settings. That panel is a **reader**: the files are on this machine and
-already open in the person's editor, so duang shows them and stays out of the way instead of building
-a workspace to operate.
+Future contacts can be local, owned online or invited online at the same time: no global
+`Local | Cloud` switch. An optional detail reader can show relevant local files, diffs and
+actually loaded settings to the owner; recipients never see someone else's local files. A private
+online agent may run routines without a channel or invite. Do not add a global Activity row or a
+permanently open third column until work cannot be found in the existing roster and transcript.
 
 Removing an agent is not offered by the sidebar at all. A control on the row sat next to the fold
 caret, where one slip removes an agent, and a link at the bottom of the column belonged to nothing
@@ -384,8 +378,9 @@ Everything else follows from those two:
   on settle.
 - **A settled answer ends with when it landed and a way to copy it**, and nothing else. Runs are
   long and read later, so the time is part of the record; the copy control appears on hover. A
-  rating has nowhere to go here, and branching and editing are not features, so the row that other
-  clients fill with icons stays at two things.
+  rating has nowhere to go here. Branching and editing are not shipped Week 1 controls; if a
+  later task needs branching, its affordance belongs beside the relevant entry rather than on
+  every answer.
 - **Spacing is decided by the pair, not by one constant.** 32 above what someone sent, 24 wherever
   the register changes, and **8** between two asides — a tool call, a thinking line, a system note.
   Those are single lines of one activity, and giving `bash` / `thinking` / `bash` the space a
@@ -529,8 +524,8 @@ The whole list, so it lives in one place instead of being read out of the handle
 
 An IME composing text keeps `Enter`: sending there would cut a word in half.
 
-Deliberately absent: `F2` for rename, which is the Windows convention (see §8), and a global search
-key, which `⌘K` is reserved for in week 3.
+Deliberately absent: `F2` for rename, which is the Windows convention (see §8), and global search.
+Add a shortcut only when there is an implemented search surface to focus.
 
 ## 12. Brand
 
@@ -544,7 +539,10 @@ shows the first two letters over a background chosen by hashing the name across 
 hues. Identity is the tile; presence is the ring around it (§9), never a change to the tile itself,
 so an agent looks like the same agent whether it is busy or idle.
 
-## 13. Order of work
+## 13. Shipped Week 1 visual pass
+
+This list records the completed visual redesign; it is not the roadmap for the next product stages.
+See [README.md](../README.md#delivery-stages) for those acceptance gates.
 
 1. **Tokens.** Both colour modes, the font stacks, the radius and spacing scales; swap
    `lucide-react` for `@phosphor-icons/react`. No structural change, no behaviour change.
