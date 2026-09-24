@@ -133,24 +133,15 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
             <Group
               id="network-heading"
               title="Network"
-              footer={
-                <>
-                  How model, sign-in and usage requests reach the internet. Changes apply to new requests; a
-                  running turn keeps its connection. Agent commands such as git, npm and curl get the same proxy
-                  through <code>HTTPS_PROXY</code> and its siblings, loopback direct.
-                  {saved.route.source === "environment" && (
-                    <>
-                      {" "}
-                      duang was launched with {saved.route.variable} set, so Automatic uses it and follows no system
-                      change until duang is relaunched from the Dock or Finder.
-                    </>
-                  )}
-                </>
-              }
             >
               <div role="radiogroup" aria-label="Proxy">
                 <Option label="Automatic" checked={mode === "automatic"} onSelect={() => choose("automatic")}>
                   {state("automatic") ?? `Follow ${MAC ? "macOS" : "system"} proxy settings, including a VPN switched on later`}
+                  {/* Only a terminal launch gets here, and it is the one surprise worth a line: the
+                      variable wins over the system until duang is opened the ordinary way. */}
+                  {saved.route.source === "environment" && (
+                    <span className="block">Set at launch. Open duang from the Dock to follow {MAC ? "macOS" : "system"} settings.</span>
+                  )}
                 </Option>
                 <Option label="Manual" checked={mode === "manual"} onSelect={() => choose("manual")}>
                   {state("manual") ?? savedManual ?? "Not set"}
@@ -181,8 +172,8 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
                   <Field label="Port" value={port} onChange={setPort} placeholder="7890" inputMode="numeric" />
                 </Group>
                 <div className="flex items-start gap-3 px-4">
-                  <p role={problem ? "alert" : undefined} className={`flex-1 text-[12px] ${problem ? "text-danger" : "text-muted"}`}>
-                    {problem ?? "Proxy authentication is not supported yet."}
+                  <p role="alert" className="flex-1 text-[12px] text-danger">
+                    {problem}
                   </p>
                   {/* A hidden submit keeps Enter working in either field; Button forces type="button". */}
                   <button type="submit" hidden />
@@ -204,8 +195,8 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
   );
 }
 
-/** A small-caps heading, an inset card, a muted footnote. */
-function Group({ id, title, footer, children }: { id?: string; title?: string; footer?: ReactNode; children: ReactNode }) {
+/** A small-caps heading over an inset card. */
+function Group({ id, title, children }: { id?: string; title?: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="space-y-1.5">
       {title && (
@@ -214,7 +205,6 @@ function Group({ id, title, footer, children }: { id?: string; title?: string; f
         </h2>
       )}
       <div className="overflow-hidden rounded-float bg-surface ring-1 ring-stroke">{children}</div>
-      {footer && <p className="px-4 text-[12px] leading-relaxed text-muted">{footer}</p>}
     </section>
   );
 }
