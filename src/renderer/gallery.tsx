@@ -10,6 +10,8 @@
 import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { CodeBlock } from "./code.tsx";
+import { PlanUsage } from "./panels.tsx";
+import { contextLabel } from "./usage.ts";
 
 function Section({
   title,
@@ -77,6 +79,30 @@ export default function Gallery() {
             anthropic/claude-sonnet-5
           </Button>
           <Button disabled="This agent is not ready">Reveal in Finder</Button>
+        </Section>
+
+        <Section title="Plan usage" note="the header's right edge: used, reset, and the week's pace against the clock">
+          {(() => {
+            const now = Date.UTC(2026, 8, 23, 12);
+            const plan = (week: number) => ({
+              data: {
+                provider: "anthropic",
+                fetchedAt: now - 60_000,
+                windows: [
+                  { label: "5h", percent: 4, resetsAt: now + 2.5 * 3600_000, windowSeconds: 5 * 3600 },
+                  { label: "7d", percent: week, resetsAt: now + 1.7 * 86_400_000, windowSeconds: 7 * 86_400 },
+                ],
+              },
+            });
+            return (
+              <div className="space-y-2">
+                <PlanUsage plan={plan(18)} now={now} />
+                <PlanUsage plan={plan(88)} now={now} />
+                <PlanUsage plan={{ error: "api.anthropic.com answered 429: rate limited" }} now={now} />
+                <span className="block text-[11px] text-muted tabular-nums">{contextLabel(451_000, 1_000_000)}</span>
+              </div>
+            );
+          })()}
         </Section>
 
         <Section title="Badges — the one status vocabulary" note="a mark and a word, never colour alone; pulse means still happening">

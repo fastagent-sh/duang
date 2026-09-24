@@ -85,11 +85,21 @@ if (!process.versions.electron) {
     /** When set, the model's answer waits for this: a run that finishes while you are elsewhere. */
     let gate;
     let anthropicRequests = 0;
+    let usageRequests = 0;
     globalThis.fetch = async (url, options = {}) => {
       const target = String(url instanceof Request ? url.url : url);
       const headers = new Headers(options.headers ?? (url instanceof Request ? url.headers : undefined));
       if (target === "https://platform.claude.com/v1/oauth/token") {
         throw new Error("Synthetic OAuth refresh rejected");
+      }
+      if (target === "https://api.anthropic.com/api/oauth/usage") {
+        // The plan windows the header shows, read with the same login the conversation runs on.
+        assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
+        usageRequests++;
+        return Response.json({
+          five_hour: { utilization: 4, resets_at: new Date(Date.now() + 3 * 3600_000).toISOString() },
+          seven_day: { utilization: 18, resets_at: new Date(Date.now() + 2 * 86_400_000).toISOString() },
+        });
       }
       if (target.startsWith("https://api.anthropic.com/v1/messages")) {
         assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
@@ -422,6 +432,8 @@ if (!process.versions.electron) {
       await message("Use the Anthropic conversation model.");
       await until("document.body.innerText.includes('Anthropic smoke answer') && !document.body.innerText.includes('working…')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
+      await until("/5h[\\s\\S]*4%[\\s\\S]*7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's plan windows");
+      assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
 
       // Change only the agent default, then reopen Anthropic history through a fresh renderer.
       // The read issued alongside the change must wait for the new runtime instead of reporting a

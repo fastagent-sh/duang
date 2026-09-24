@@ -99,6 +99,12 @@ export default function App() {
 
   const usage = c?.state?.usage;
   const pending = c?.state?.pending;
+  // The plan that pays for this conversation: its own model's provider, which may differ from the
+  // agent default.
+  const provider = (c?.state?.model ?? view.model)?.split("/")[0];
+  useEffect(() => {
+    if (provider) void store.loadUsage(provider);
+  }, [provider, busy, c?.session, store]);
 
   return (
     // Panels float on the window's canvas rather than filling it edge to edge: the gap is what makes
@@ -151,9 +157,10 @@ export default function App() {
             working={!!view.running[agent.id]?.length}
             context={
               usage?.contextTokens !== undefined && usage.contextWindow
-                ? Math.round((usage.contextTokens / usage.contextWindow) * 100)
+                ? { used: usage.contextTokens, window: usage.contextWindow }
                 : undefined
             }
+            plan={provider ? view.usage[provider] : undefined}
             queued={pending ? pending.steering + pending.followUp : undefined}
             onReveal={() => void store.reveal()}
           />

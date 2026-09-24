@@ -193,8 +193,11 @@ Accepted limitations, each recorded in its issue:
 - **History replay is partial.** Durable entries expose tool names and results but not tool
   arguments, thinking or settled run outcomes, and partial output emitted before a reload is not
   replayed. Nothing presents partial history as a complete trace.
-- **Usage and cost are not shown.** The runtime records them per turn, but the live session state
-  duang reads does not carry them; nothing is invented in their place.
+- **Token usage, cost and context are not shown.** The runtime records them per turn, but the live
+  session state duang reads does not carry them
+  ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)); nothing is invented in
+  their place. A Claude or ChatGPT subscription's plan windows are shown, read from endpoints those
+  providers do not document, so they can stop working without notice.
 - **Skills load only from the agent's own `fastagent/skills/`**, so global skills are invisible
   ([fastagent#570](https://github.com/fastagent-sh/fastagent/issues/570)), and an unreadable agent
   directory is reported upstream as "no agent here"

@@ -16,6 +16,7 @@ import {
   type AgentRow,
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
+import { providerUsage } from "./usage.ts";
 import { useSystemProxy } from "./proxy.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { send } from "./send.ts";
@@ -136,6 +137,10 @@ function register(): void {
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
   ipcMain.handle("models:list", credentials);
+  ipcMain.handle("usage:get", (_e, provider: string) => {
+    if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
+    return providerUsage(provider);
+  });
   // The dock is where "something happened while you were away" belongs: the sidebar can only say it
   // while duang is the window you are looking at.
   ipcMain.handle("app:unseen", (_e, count: number) => {

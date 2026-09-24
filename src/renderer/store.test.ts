@@ -38,6 +38,7 @@ function harness() {
     revealAgent: async () => {},
     revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
+    providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
     setUnseenCount: async () => {},
     conversationMenu: async () => undefined,
     renameSession: async () => ({ ok: true }),
@@ -638,5 +639,24 @@ test("a rename that cannot be read back, and one refused on a conversation nobod
   await store.renameSession("b", "never-opened", "Named");
   assert.equal(store.getSnapshot().sessionsError["b"], "session is busy");
   assert.equal(store.getSnapshot().error, undefined, "and not into the banner with someone else's Retry");
+  store.dispose();
+});
+
+test("plan usage is kept per provider, and a failed read replaces the numbers with its reason", async () => {
+  const { api, store } = harness();
+  const data = { provider: "anthropic", windows: [{ label: "5h", percent: 4, windowSeconds: 18_000 }], fetchedAt: 1 };
+  api.providerUsage = async () => data;
+  await store.loadUsage("anthropic");
+  assert.deepEqual(store.getSnapshot().usage.anthropic, { data });
+
+  api.providerUsage = async () => {
+    throw new Error("Error invoking remote method 'usage:get': Error: api.anthropic.com answered 429: rate limited");
+  };
+  await store.loadUsage("anthropic");
+  assert.deepEqual(
+    store.getSnapshot().usage.anthropic,
+    { error: "api.anthropic.com answered 429: rate limited" },
+    "a stale percentage must not stay on screen as current",
+  );
   store.dispose();
 });

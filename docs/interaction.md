@@ -23,6 +23,15 @@ The picker leads with the selected model and a short credential-file label; expa
 reveals the complete FastAgent path. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.
 
+The conversation header shows what is left of the plan paying for it: for a Claude or ChatGPT
+subscription login of the conversation's own provider, each window's share used, its reset time, and
+for windows of a day or more the pace against the clock (`▼` under, `▲` over). An API key shows
+nothing, because it has no plan windows. Opening a conversation, changing its provider and a run
+starting or ending ask again; main answers from a three-minute cache, since Anthropic's route answers 429 when
+polled. A failed read replaces the numbers with `usage unavailable` and the provider's error on
+hover, never a stale percentage. Context appears as `45.1%/1.0M` once FastAgent reports it
+([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)).
+
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
 history; the client does not save a second transcript. A conversation can be renamed and deleted,
 with destructive deletion confirmed. The current local view keeps unsent text with its conversation

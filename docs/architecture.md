@@ -37,6 +37,12 @@ session and subscription id. Stale subscriptions cannot replace the current view
 close on navigation; running conversations retain theirs until settlement, so switching away does
 not lose streamed output. Reloading or destroying the window closes its subscriptions, not its runs.
 
+**Plan usage is read in main.** For an OAuth login of `anthropic` or `openai-codex`, main takes the
+token from FastAgent's public `createPiModels({ authPath }).getAuth(provider)` (which refreshes an
+expired login under the credential file's lock, as a run would) and calls the provider's own usage
+route. Neither route is documented; an unexpected shape is an error, not zero. The renderer
+receives window percentages and reset times only.
+
 **Credential-file selection is application-scoped.** The picker and all assemblies receive the
 same explicit `authPath`; it is never chosen from an agent default or a cached provider probe.
 FastAgent resolves credentials for the actual session model and owns OAuth refresh/writeback.
