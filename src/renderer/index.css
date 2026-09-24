@@ -95,11 +95,6 @@ body,
   margin-inline: auto;
 }
 
-/* A scrolled line can end mid-glyph at the top edge; fade that cut without hiding the first turn. */
-.transcript-scroll {
-  mask-image: linear-gradient(to bottom, transparent 12px, #000 20px);
-}
-
 /* The composer is an input, not a reading surface. A text field as wide as the transcript looks like
    a form; it keeps its own, narrower measure. */
 .composer-column {

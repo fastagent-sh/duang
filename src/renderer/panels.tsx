@@ -506,10 +506,6 @@ export function Sidebar({
 }
 
 /**
- * What you are looking at: the conversation, workspace and running context. The pill keeps the
- * floating visual language but occupies its own row, so scrolled text never ghosts through it.
- */
-/**
  * What is left of the plan paying for this conversation: each window's share used, when it resets,
  * and for the week whether it is burning faster than the clock (▲) or slower (▼). Nothing for an API
  * key; a failed read says so instead of leaving old numbers up.
@@ -517,7 +513,7 @@ export function Sidebar({
 export function PlanUsage({ plan, now = Date.now() }: { plan?: { data?: ProviderUsage; error?: string }; now?: number }) {
   if (plan?.error)
     return (
-      <span className="shrink-0 text-[11px] text-muted" title={errorLine(plan.error)}>
+      <span className="pointer-events-auto shrink-0 text-[11px] text-muted" title={errorLine(plan.error)}>
         usage unavailable
       </span>
     );
@@ -531,7 +527,7 @@ export function PlanUsage({ plan, now = Date.now() }: { plan?: { data?: Provider
     `${plan!.data!.provider} · updated ${ago(plan!.data!.fetchedAt)}`,
   ].join("\n");
   return (
-    <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted tabular-nums" title={detail}>
+    <span className="pointer-events-auto flex shrink-0 items-center gap-3 text-[11px] text-muted tabular-nums" title={detail}>
       {windows.map((w) => (
         <PlanWindow key={w.label} window={w} now={now} />
       ))}
@@ -559,6 +555,12 @@ function PlanWindow({ window: w, now }: { window: UsageWindow; now: number }) {
   );
 }
 
+/**
+ * What you are looking at, floating over it: the conversation, the workspace it runs in, and what is
+ * left of the plan and the context. It hovers rather than sits in a bar because the transcript is the
+ * page, and a full-width bar would cut it in two. Translucent, so text passing underneath reads as
+ * scrolled away rather than deleted.
+ */
 export function ConversationHeader({
   agent,
   title,
@@ -579,18 +581,19 @@ export function ConversationHeader({
   onReveal: () => void;
 }) {
   return (
-    // Keep the pill's floating shape, but give it its own row: scrolled text cannot show through it.
-    <header className="@container relative z-10 mx-4 mt-2 mb-3 shrink-0 flex items-center gap-2.5 rounded-float bg-surface py-1.5 pr-3 pl-2 ring-1 ring-stroke">
+    // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
+    // only what you can actually grab, click or hover for a tooltip takes the pointer back.
+    <header className="@container pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
       {/* The same tile as in the sidebar: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
         {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
-        <div className="truncate drag">{title}</div>
+        <div className="pointer-events-auto truncate drag">{title}</div>
         {dir && (
           <button
             onClick={onReveal}
             title={dir}
-            className="block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
+            className="pointer-events-auto block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
           >
             {location(dir)}
           </button>
@@ -599,7 +602,7 @@ export function ConversationHeader({
       {working && <Badge tone="accent" pulse>working</Badge>}
       <PlanUsage plan={plan} />
       {context && (
-        <span className="shrink-0 text-[11px] text-muted tabular-nums" title="Context used, out of the model's window">
+        <span className="pointer-events-auto shrink-0 text-[11px] text-muted tabular-nums" title="Context used, out of the model's window">
           {contextLabel(context.used, context.window)}
         </span>
       )}
@@ -610,7 +613,7 @@ export function ConversationHeader({
 
 /** Whatever replaces the transcript sits in the transcript's box, so the composer never moves. */
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-5">{children}</div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5">{children}</div>;
 }
 
 export function NoAgents({ onAdd }: { onAdd: () => void }) {
@@ -981,8 +984,8 @@ export function Transcript({
       role="region"
       aria-label="Transcript"
       onScroll={check}
-      // The scroll area begins below the header, so old text never bleeds around its edges.
-      className="transcript-scroll flex-1 min-h-0 overflow-y-auto px-6 pt-4"
+      // pt clears the floating header; the first message starts below it, not behind it.
+      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
       style={{ paddingBottom: bottomGap }}
     >
       <div className="column">
