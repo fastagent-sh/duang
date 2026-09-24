@@ -1,5 +1,5 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
-import type { AgentRow, DuangApi, Models, SessionFrame } from "../preload/index.ts";
+import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
 import { apply, fromEntries, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
@@ -94,6 +94,8 @@ export interface View {
    * job. Opening the conversation clears it — like an unread mark, it exists to be spent.
    */
   unseen: Record<string, Record<string, "done" | "failed">>;
+  /** Plan windows per provider: the last answer, or why there is none. Main decides how often to ask. */
+  usage: Record<string, { data?: ProviderUsage; error?: string }>;
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 /** [agentId, session] pairs into one list per agent. */
@@ -142,6 +144,7 @@ export function createStore(api: DuangApi) {
     running: {},
     unsent: {},
     unseen: {},
+    usage: {},
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
@@ -433,6 +436,19 @@ export function createStore(api: DuangApi) {
         if (request === modelsRequest) publish({ models });
       } catch (error) {
         if (request === modelsRequest) publish({ modelsError: message(error) });
+      }
+    },
+    /**
+     * Asked whenever the open conversation's provider or run state changes; main answers from its
+     * cache inside the gap, so asking often costs nothing. A failure replaces the numbers: showing a
+     * stale percentage as current would be the quiet kind of wrong.
+     */
+    async loadUsage(provider: string) {
+      try {
+        const data = await api.providerUsage(provider);
+        publish({ usage: { ...view.usage, [provider]: { data } } });
+      } catch (error) {
+        publish({ usage: { ...view.usage, [provider]: { error: message(error) } } });
       }
     },
     /** Once per agent, on the first `/`: the names are the definition's, and it is live. */

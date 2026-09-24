@@ -23,7 +23,8 @@ import {
 } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
-import type { AgentRow } from "../preload/index.ts";
+import type { AgentRow, ProviderUsage, UsageWindow } from "../preload/index.ts";
+import { contextLabel, pace, paceLabel, resetLabel } from "./usage.ts";
 import { dayLabel, firstArg, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
@@ -487,12 +488,63 @@ export function Sidebar({
  * What you are looking at: the conversation, workspace and running context. The pill keeps the
  * floating visual language but occupies its own row, so scrolled text never ghosts through it.
  */
+/**
+ * What is left of the plan paying for this conversation: each window's share used, when it resets,
+ * and for the week whether it is burning faster than the clock (▲) or slower (▼). Nothing for an API
+ * key; a failed read says so instead of leaving old numbers up.
+ */
+export function PlanUsage({ plan, now = Date.now() }: { plan?: { data?: ProviderUsage; error?: string }; now?: number }) {
+  if (plan?.error)
+    return (
+      <span className="shrink-0 text-[11px] text-muted" title={plan.error}>
+        usage unavailable
+      </span>
+    );
+  const windows = plan?.data?.windows;
+  if (!windows?.length) return null;
+  const detail = [
+    ...windows.map((w) => {
+      const reset = w.resetsAt === undefined ? "" : `, resets ${new Date(w.resetsAt).toLocaleString()}`;
+      return `${w.label}: ${w.percent.toFixed(1)}% used${reset}`;
+    }),
+    `${plan!.data!.provider} · updated ${ago(plan!.data!.fetchedAt)}`,
+  ].join("\n");
+  return (
+    <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted tabular-nums" title={detail}>
+      {windows.map((w) => (
+        <PlanWindow key={w.label} window={w} now={now} />
+      ))}
+    </span>
+  );
+}
+
+function PlanWindow({ window: w, now }: { window: UsageWindow; now: number }) {
+  const reset = resetLabel(w);
+  const diff = pace(w, now);
+  return (
+    <span className="flex items-center gap-1.5">
+      {w.label}
+      <span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-stroke">
+        <span className="block h-full rounded-full bg-muted" style={{ width: `${Math.min(100, w.percent)}%` }} />
+      </span>
+      {w.percent.toFixed(0)}%
+      {/* A narrow header keeps the percentages; when and how fast move to the tooltip. Measured on
+          the header, not the window, because the sidebar's width is the person's to drag. */}
+      {reset && <span className="@max-[44rem]:hidden">~ {reset}</span>}
+      {diff !== undefined && (
+        <span className={`@max-[44rem]:hidden ${diff > 0 ? "text-danger" : "text-success"}`}>{paceLabel(diff)}</span>
+      )}
+    </span>
+  );
+}
+
 export function ConversationHeader({
   agent,
   title,
   dir,
   working,
   context,
+  plan,
   queued,
   onReveal,
 }: {
@@ -500,13 +552,14 @@ export function ConversationHeader({
   title: string;
   dir?: string;
   working: boolean;
-  context?: number;
+  context?: { used: number; window: number };
+  plan?: { data?: ProviderUsage; error?: string };
   queued?: number;
   onReveal: () => void;
 }) {
   return (
     // Keep the pill's floating shape, but give it its own row: scrolled text cannot show through it.
-    <header className="relative z-10 mx-4 mt-2 mb-3 shrink-0 flex items-center gap-2.5 rounded-float bg-surface py-1.5 pr-3 pl-2 ring-1 ring-stroke">
+    <header className="@container relative z-10 mx-4 mt-2 mb-3 shrink-0 flex items-center gap-2.5 rounded-float bg-surface py-1.5 pr-3 pl-2 ring-1 ring-stroke">
       {/* The same tile as in the sidebar: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
@@ -523,7 +576,12 @@ export function ConversationHeader({
         )}
       </div>
       {working && <Badge tone="accent" pulse>working</Badge>}
-      {context !== undefined && <span className="shrink-0 text-[11px] text-muted">{context}% context</span>}
+      <PlanUsage plan={plan} />
+      {context && (
+        <span className="shrink-0 text-[11px] text-muted tabular-nums" title="Context used, out of the model's window">
+          {contextLabel(context.used, context.window)}
+        </span>
+      )}
       {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
     </header>
   );

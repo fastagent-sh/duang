@@ -167,6 +167,10 @@ ring is presence, a performance would be costume.
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
 rather than a column filling them. The conversation header keeps a compact floating shape but
 occupies its own row above the scroll area: older text cannot show through or slide behind it.
+Its right edge says how much is left, in muted 11px text: the plan's windows as `5h ▬ 4% ~ 14:29`
+with a 40px bar, the week's pace as a green `▼` or red `▲` percentage, then context as
+`45.1%/1.0M`. No threshold colours: the percentage is the signal. When the header is narrower than
+44rem, reset times and pace move to the tooltip and the percentages stay.
 The scroll area's top edge fades clipped lines without fading the opening turn. At the bottom the
 transcript passes beneath the floating composer: the canvas is solid up to the composer's top edge
 and fades over the 40px above it, sized from the composer's measured height so no line sits

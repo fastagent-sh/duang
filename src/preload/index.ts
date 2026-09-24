@@ -13,6 +13,8 @@ export type { AgentRow } from "../main/agent-files.ts";
 import type { AgentRow } from "../main/agent-files.ts";
 export type { Models } from "../main/credentials.ts";
 import type { Models } from "../main/credentials.ts";
+export type { ProviderUsage, UsageWindow } from "../main/usage.ts";
+import type { ProviderUsage } from "../main/usage.ts";
 
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
@@ -48,6 +50,8 @@ const api = {
   /** Where duang keeps its agent list — the one thing to open when that file cannot be read. */
   revealRegistry: (): Promise<void> => ipcRenderer.invoke("registry:reveal"),
   listModels: (): Promise<Models> => ipcRenderer.invoke("models:list"),
+  /** A subscription's plan windows for this provider; no `windows` when its login is not a subscription. */
+  providerUsage: (provider: string): Promise<ProviderUsage> => ipcRenderer.invoke("usage:get", provider),
   /**
    * How many finished runs nobody has looked at. The dock is where "something happened while you
    * were away" belongs: the sidebar can only say it while duang is the window you are in.
