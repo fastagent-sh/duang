@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contextLabel, pace, paceLabel, resetLabel } from "./usage.ts";
+import { contextLabel, errorLine, pace, paceLabel, resetLabel } from "./usage.ts";
 
 const HOUR = 3600;
 const DAY = 24 * HOUR;
@@ -27,4 +27,16 @@ test("a reset reads as a time inside a day, and as a weekday beyond one", () => 
 test("context is how full, out of how much", () => {
   assert.equal(contextLabel(451_000, 1_000_000), "45.1%/1.0M");
   assert.equal(contextLabel(50_000, 200_000), "25.0%/200K");
+});
+
+test("an error keeps its own first line and drops the call stack pi-ai appends to it", () => {
+  // Shape observed from a real expired Anthropic login whose refresh failed.
+  const real =
+    "ModelsError: OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://platform.claude.com/v1/oauth/token; details=Error: fetch failed; stack=Error: fetch failed\n" +
+    "    at postJson (file:///x/anthropic.js:144:28)\n    at refreshAnthropicToken (file:///x/anthropic.js:276:30)";
+  assert.equal(
+    errorLine(real),
+    "ModelsError: OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://platform.claude.com/v1/oauth/token; details=Error: fetch failed; stack=Error: fetch failed",
+  );
+  assert.equal(errorLine("api.anthropic.com answered 429: rate limited"), "api.anthropic.com answered 429: rate limited");
 });

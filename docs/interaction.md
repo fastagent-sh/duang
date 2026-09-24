@@ -28,8 +28,8 @@ subscription login of the conversation's own provider, each window's share used,
 for windows of a day or more the pace against the clock (`▼` under, `▲` over). An API key shows
 nothing, because it has no plan windows. Opening a conversation, changing its provider and a run
 starting or ending ask again; main answers from a three-minute cache, since Anthropic's route answers 429 when
-polled. A failed read replaces the numbers with `usage unavailable` and the provider's error on
-hover, never a stale percentage. Context appears as `45.1%/1.0M` once FastAgent reports it
+polled. A failed read replaces the numbers with `usage unavailable` and the first line of the
+provider's error on hover (without any call stack the message carries), never a stale percentage. Context appears as `45.1%/1.0M` once FastAgent reports it
 ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)).
 
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent

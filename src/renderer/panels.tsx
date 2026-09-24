@@ -24,7 +24,7 @@ import {
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
 import type { AgentRow, ProviderUsage, UsageWindow } from "../preload/index.ts";
-import { contextLabel, pace, paceLabel, resetLabel } from "./usage.ts";
+import { contextLabel, errorLine, pace, paceLabel, resetLabel } from "./usage.ts";
 import { dayLabel, firstArg, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
 import { ago, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
@@ -496,7 +496,7 @@ export function Sidebar({
 export function PlanUsage({ plan, now = Date.now() }: { plan?: { data?: ProviderUsage; error?: string }; now?: number }) {
   if (plan?.error)
     return (
-      <span className="shrink-0 text-[11px] text-muted" title={plan.error}>
+      <span className="shrink-0 text-[11px] text-muted" title={errorLine(plan.error)}>
         usage unavailable
       </span>
     );
