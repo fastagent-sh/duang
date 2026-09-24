@@ -273,15 +273,20 @@ if (!process.versions.electron) {
         "tool trace finishes",
       );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
-      // The header owns its space: top padding inside a scroll box alone lets older text bleed
-      // above and through a floating header once the transcript is scrolled.
+      // The header floats over the transcript, as Telegram's does: text scrolls beneath it, the
+      // transcript's own top padding starts the first turn below it, and it lets the wheel through.
       assert.ok(
         await evaluate(`(() => {
-          const header = document.querySelector('main > header');
+          const header = document.querySelector('main > header').getBoundingClientRect();
           const transcript = document.querySelector('[aria-label="Transcript"]');
-          return transcript.getBoundingClientRect().top >= header.getBoundingClientRect().bottom;
+          const box = transcript.getBoundingClientRect();
+          return (
+            box.top < header.bottom &&
+            box.top + parseFloat(getComputedStyle(transcript).paddingTop) >= header.bottom &&
+            getComputedStyle(document.querySelector('main > header')).pointerEvents === 'none'
+          );
         })()`),
-        "scrolled text cannot pass behind the conversation header",
+        "the header floats over the transcript without covering its first turn or catching the wheel",
       );
       assert.ok(
         await evaluate(`(() => {

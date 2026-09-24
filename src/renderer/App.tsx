@@ -196,7 +196,7 @@ export default function App() {
               />
             )}
             {error ? (
-              <div role="alert" className="mt-2 px-6 py-2 text-danger whitespace-pre-wrap break-words">
+              <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
                 {error}{" "}
                 <button className="underline" onClick={() => void store.retry()}>
                   Retry
@@ -206,7 +206,7 @@ export default function App() {
               // An ended subscription is not a failure: the conversation is intact, this view stopped
               // listening. Say it in the calm voice and offer the one action that fixes it.
               c?.ended && (
-                <div role="status" className="mt-2 px-6 py-2 text-muted whitespace-pre-wrap break-words">
+                <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
                   {c.ended}{" "}
                   <button className="underline" onClick={() => void store.retry()}>
                     Reconnect
@@ -244,16 +244,8 @@ export default function App() {
               // beneath this, which is what keeps the bottom of the window from reading as a seam.
               <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
                 {/* The composer is narrower than the reading column, so text would slide past on both
-                    sides of it. The canvas is solid up to the composer's top edge and fades over the
-                    40px above it: a fixed height shorter than the composer left the line just above it
-                    unfaded, so a table's copy buttons read as the composer's own. */}
-                <div
-                  className="absolute inset-x-0 bottom-0"
-                  style={{
-                    height: composerHeight + 16 + 40,
-                    background: "linear-gradient(to top, var(--color-bg) calc(100% - 40px), transparent)",
-                  }}
-                />
+                    sides of it. The canvas fades in underneath instead. */}
+                <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
                 <div ref={composerBox} className="composer-column pointer-events-auto">
                   {composer}
                 </div>

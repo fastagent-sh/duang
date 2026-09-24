@@ -166,17 +166,21 @@ consumer's relationship with it. Ours is two letters on a tile representing a di
 ring is presence, a performance would be costume.
 
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
-rather than a column filling them. The conversation header keeps a compact floating shape but
-occupies its own row above the scroll area: older text cannot show through or slide behind it.
+rather than a column filling them, and the conversation's header floats over the transcript as a
+translucent bar instead of a full-width strip cutting the page in two. This is Telegram's desktop
+composition, and its premise holds here: chrome that hovers keeps the content beneath it continuous.
+What does not carry over is putting the transcript itself on a decorative canvas — theirs is bubbles
+over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
+the chrome floats, with the transcript padded so nothing important sits under the header.
 Its right edge says how much is left, in muted 11px text: the plan's windows as `5h ▬ 4% ~ 14:29`
 with a 40px bar, the week's pace as a green `▼` or red `▲` percentage, then context as
 `45.1%/1.0M`. No threshold colours: the percentage is the signal. When the header is narrower than
 44rem, reset times and pace move to the tooltip and the percentages stay.
-The scroll area's top edge fades clipped lines without fading the opening turn. At the bottom the
-transcript passes beneath the floating composer: the canvas is solid up to the composer's top edge
-and fades over the 40px above it, sized from the composer's measured height so no line sits
-unfaded against it. The transcript is an opaque document on a plain canvas, not bubbles over
-wallpaper.
+The composer floats the same way at the bottom: the transcript passes beneath it, and a short fade
+behind it keeps text from sliding past its sides. Tried and reverted: a header in its own row with a
+masked top edge (#58), and a solid backdrop behind the composer with a 40px fade above it (#62).
+Both stopped text at a line, which made the conversation read as a framed box rather than a
+continuous page.
 
 Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
 [narrow, dark](screenshots/reading-narrow-dark.png), and
