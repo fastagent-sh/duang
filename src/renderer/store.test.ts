@@ -42,7 +42,7 @@ function harness() {
     getSettings: async () => ({ network: { mode: "automatic" }, route: { source: "system" } }),
     setNetwork: async () => ({ source: "system" }),
     revealSettings: async () => {},
-    testNetwork: async () => ({ status: 200, route: { source: "system" } }),
+    testNetwork: async () => ({ status: 200, ms: 1, route: { source: "system" } }),
     onOpenSettings: () => () => {},
     setUnseenCount: async () => {},
     conversationMenu: async () => undefined,

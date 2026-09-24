@@ -104,13 +104,14 @@ travel with a preset or deployment.
 
 **Network (shipped).** *Automatic* is the default and needs no setup: model and sign-in requests
 follow the system proxy per request, including its bypass list and PAC rules, and pick up a VPN
-client being switched on or off; a TUN-mode VPN needs nothing at all. *Manual* takes an `http://`, `https://`
-or `socks5://` URL; *Off* connects directly. The page shows the route currently in effect and its
-source, and *Test connection* reports reachability or the original error. Proxy variables present
-when duang was launched from a terminal are an explicit route: *Automatic* then uses them and stops
-following the system until relaunch, and the page says so. When a proxy is in effect, the agent's
-own commands (`git`, `npm`, `curl`) receive one proxy in the standard variables, as a terminal user
-would export it; per-host PAC rules and the system bypass list do not reach them.
+client being switched on or off; a TUN-mode VPN needs nothing at all. *Manual* takes a type (HTTP,
+HTTPS or SOCKS5), a server and a port; *Off* connects directly. The page shows the route currently in effect
+and its source, and checks it: connected with its latency, or unreachable with the original error.
+Proxy variables present when duang was launched from a terminal are an explicit route: *Automatic*
+then uses them and stops following the system until relaunch, and the page says so. When a proxy is
+in effect, the agent's own commands (`git`, `npm`, `curl`) receive one proxy in the standard
+variables, as a terminal user would export it; per-host PAC rules and the system bypass list do not
+reach them.
 
 Reasoning effort is not a setting: it sits beside the model on the conversation and applies to that
 conversation. Per-agent material (tool secrets, inherited machine skills) belongs to the agent

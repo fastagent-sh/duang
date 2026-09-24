@@ -60,7 +60,7 @@ const api = {
   setNetwork: (network: Network): Promise<Route> => ipcRenderer.invoke("settings:setNetwork", network),
   revealSettings: (): Promise<void> => ipcRenderer.invoke("settings:reveal"),
   /** One request over the model route: any HTTP status means it works; a rejection names the route. */
-  testNetwork: (): Promise<{ status: number; route: Route }> => ipcRenderer.invoke("network:test"),
+  testNetwork: (): Promise<{ status: number; ms: number; route: Route }> => ipcRenderer.invoke("network:test"),
   /** A subscription's plan windows for this provider; no `windows` when its login is not a subscription. */
   providerUsage: (provider: string): Promise<ProviderUsage> => ipcRenderer.invoke("usage:get", provider),
   /**

@@ -571,28 +571,42 @@ and result; Codex's "Sign in with ChatGPT / API key" pair. Refused: Cherry Studi
 per-provider forms, where a `Check` beside the key field read as a key check but tested a model.
 
 ```
-┌ sidebar ────────────────┬ Settings ────────────────────────────────────────┐
-│ (unchanged,             │ Model providers                                  │
-│  running work visible)  │   Connected   name · Subscription   Reconnect …  │
-│                         │   Add a provider  [Subscription|API key|Custom]  │
-│                         │   Credentials file · ~/.fastagent/…   Reveal     │
-│                         │ Network                                          │
-│                         │   (•) Automatic   via 127.0.0.1:7897 · macOS     │
-│                         │   ( ) Manual   ( ) Off          Test connection  │
-└─────────────────────────┴──────────────────────────────────────────────────┘
+Settings                                                        ×
+
+NETWORK
+╭─────────────────────────────────────────────────────────────────╮
+│ Automatic                                                     ✓ │
+│ via http://127.0.0.1:7897 · macOS settings · connected · 320 ms │
+│   ───────────────────────────────────────────────────────────── │
+│ Manual                                                          │
+│ Not set                                                         │
+│   ───────────────────────────────────────────────────────────── │
+│ Off                                                             │
+│ Connect directly                                                │
+╰─────────────────────────────────────────────────────────────────╯
+How requests reach the internet … (footnote)
+
+MANUAL PROXY                               (only while Manual is chosen)
+╭ HTTP / HTTPS / SOCKS5, one checked ╮  ╭ Server │ Port ╮  [Use this proxy]
 ```
 
-- Shipped: the App menu's **Settings…** (`⌘,`, where macOS apps keep app-level settings) and a
-  Settings row at the foot of the sidebar open Settings in place of the conversation, 640 wide,
-  with the Network group only. The row is a gear and the word, muted, set apart from the roster by
-  a hairline and not beside its `+`: that header acts on the agent list, Settings is app-level and
-  rarely used, and it is a place rather than an action, so it takes the selection mark while open.
-  It is its own tab stop after the roster. Each choice is a row that takes the accent
-  tint when selected; the route in effect sits in a surface card with *Test connection* beside it.
-  Escape or the close control returns to the conversation. No left navigation while there are two
-  groups.
-- Provider rows use the conversation-row rhythm; the authentication kind is a neutral badge, and a
-  failure is a `danger` badge with its reason, never colour alone (§9).
+- Shipped, drawn the way Telegram draws its settings: a small-caps muted heading over an inset
+  card (`surface`, hairline ring, radius 14) on the plain canvas, rows divided by hairlines that
+  start where the text does, the choice marked by a trailing accent ✓ rather than a leading radio,
+  and fields as rows (a label, then the value) rather than one URL to spell. The chosen row carries
+  the connection's state as its second line — `connected · 320 ms` in the accent, or
+  `unreachable (ECONNREFUSED)` in danger with the whole error on hover — instead of a *Test
+  connection* button. Explanations are footnotes under their card. Not taken from Telegram: the
+  sidebar does not turn into a settings list, because running work must stay visible; a category
+  list will head the page once there is a second group.
+- The App menu's **Settings…** (`⌘,`, where macOS apps keep app-level settings) and a Settings row
+  at the foot of the sidebar open Settings in place of the conversation, 600 wide. The row is a
+  gear and the word, muted, set apart from the roster by a hairline and not beside its `+`: that
+  header acts on the agent list, Settings is app-level and rarely used, and it is a place rather
+  than an action, so it takes the selection mark while open. It is its own tab stop after the
+  roster. Escape or the close control returns to the conversation.
+- Planned: provider rows use the conversation-row rhythm; the authentication kind is a neutral
+  badge, and a failure is a `danger` badge with its reason, never colour alone (§9).
 - *Add a provider* is a searchable list grouped Subscription / API key / Custom endpoint. Choosing
   a row opens the connect dialog: the modal dialog surface (§6b), 440 wide, one `primary` action
   per step. A device code is monospace at 22px with a Copy control; a browser step shows waiting

@@ -84,12 +84,13 @@ export async function syncCommandProxy(): Promise<void> {
   }
 }
 
-/** One request over the same route a model call takes. Any HTTP answer means the network works. */
-export async function testConnection(): Promise<{ status: number; route: Route }> {
+/** One request over the same route a model call takes, timed. Any HTTP answer means the network works. */
+export async function testConnection(): Promise<{ status: number; ms: number; route: Route }> {
   const route = await describeRoute();
+  const started = performance.now();
   try {
     const response = await fetch(MODEL_HOST, { method: "HEAD", signal: AbortSignal.timeout(TEST_TIMEOUT_MS) });
-    return { status: response.status, route };
+    return { status: response.status, ms: Math.round(performance.now() - started), route };
   } catch (error) {
     // `fetch failed` alone says nothing; the cause and the route are what a person can act on.
     const cause = (error as Error & { cause?: Error & { code?: string } }).cause;

@@ -72,7 +72,8 @@ spike on macOS with Clash Verge in system-proxy mode confirmed that `resolveProx
 proxy for provider hosts and `DIRECT` for loopback, private ranges and `.local`, and that a Node
 `fetch` without it reached Anthropic directly and got HTTP 403. With the dispatcher installed, a
 real Codex run streamed through Clash and its `bash` tool saw the proxy variables; a proxy that is
-not listening fails *Test connection* with `ECONNREFUSED` and the proxy's address. Picking up a
+not listening fails the page's connection check with `ECONNREFUSED` and the proxy's address; the
+same check reached Anthropic through Clash's SOCKS5 port. Picking up a
 system proxy switched while duang runs is expected from Chromium's configuration watcher, and the
 dispatcher asks per request, but switching one was not tested. Only the first entry of a PAC list is used and proxy authentication is
 unsupported until a real user needs either.

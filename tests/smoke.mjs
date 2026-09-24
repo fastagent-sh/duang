@@ -751,18 +751,21 @@ if (!process.versions.electron) {
       // the route; an invalid URL is refused with its reason; an unreadable file is reported, not
       // shown as the defaults; Escape leaves.
       const settingsFile = join(data, "settings.json");
-      const setProxyUrl = (value) =>
+      const fill = (label, value) =>
         evaluate(`(() => {
-          const input = document.querySelector('input[aria-label="Proxy URL"]');
+          const input = document.querySelector('input[aria-label=${JSON.stringify(label)}]');
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
           input.dispatchEvent(new Event('input', { bubbles: true }));
         })()`);
+      const choose = (label) =>
+        evaluate(`[...document.querySelectorAll('[role=radio]')].find((r) => r.textContent.trim().startsWith(${JSON.stringify(label)})).click()`);
       // The App menu owns Settings… (⌘,); clicking the item is what the shortcut does.
       const settingsItem = Menu.getApplicationMenu().getMenuItemById("settings");
       assert.equal(settingsItem.accelerator, "Command+,");
       assert.ok(Menu.getApplicationMenu().items.some((item) => item.role === "editmenu"), "copy and paste keep their menu");
       settingsItem.click();
-      await until("document.querySelector('#network-heading') && document.body.innerText.includes('Now')", "Settings… opens Settings");
+      // The chosen row checks its own connection on arrival; there is no button to find first.
+      await until("document.querySelector('#network-heading') && /connected · \\d+ ms/.test(document.body.innerText)", "Settings… opens Settings and checks the route");
       assert.ok(await evaluate(`!!document.querySelector('button[aria-label="Configured"]')`), "the sidebar stays in view");
       assert.deepEqual(
         await evaluate(`[...document.querySelectorAll('aside [aria-current]')].map((el) => el.textContent.trim())`),
@@ -771,19 +774,27 @@ if (!process.versions.electron) {
       );
       settingsItem.click();
       assert.ok(await evaluate("!!document.querySelector('#network-heading')"), "asking again keeps Settings open");
-      await evaluate(`document.querySelectorAll('input[type=radio]')[2].click()`);
-      await until("document.body.innerText.includes('Direct · off')", "Off applies at once");
+      await choose("Off");
+      await until("document.body.innerText.includes('Direct · off') && /connected · \\d+ ms/.test(document.body.innerText)", "Off applies at once and is checked");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" });
-      await click("Test connection");
-      await until("document.body.innerText.includes('answered HTTP 204 directly')", "the test names the route");
-      await setProxyUrl("ftp://127.0.0.1:9");
-      await click("Apply");
-      await until("document.body.innerText.includes('http://, https:// or socks5://')", "an invalid proxy URL is refused");
-      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" }, "a refused URL is not saved");
-      await setProxyUrl("http://127.0.0.1:9");
-      await click("Apply");
+      assert.equal(await evaluate(`document.querySelector('[role=radio][aria-checked=true]').textContent.trim().split('Direct')[0]`), "Off");
+      // Manual with nothing saved shows its form and applies nothing until the proxy is complete.
+      await choose("Manual");
+      await until("document.querySelector('input[aria-label=Server]')", "the manual form");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('Server is required')", "an empty server is refused");
+      await fill("Server", "127.0.0.1");
+      await fill("Port", "70000");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('Port is a number from 1 to 65535')", "an impossible port is refused");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" }, "a refused proxy is not saved");
+      await choose("SOCKS5");
+      await choose("HTTP");
+      await fill("Port", "9");
+      await click("Use this proxy");
       await until("document.body.innerText.includes('via http://127.0.0.1:9 · manual')", "Manual applies");
-      await evaluate(`document.querySelectorAll('input[type=radio]')[0].click()`);
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:9" });
+      await choose("Automatic");
       await until("/· (macOS|system) settings/.test(document.body.innerText)", "Automatic follows the system");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
       await writeFile(settingsFile, "{broken");

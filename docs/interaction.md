@@ -31,10 +31,13 @@ connection). *Automatic* resolves the route for each request from the system, so
 client on or off needs no action in duang, when duang was launched without proxy variables. If it
 was launched from a terminal with `HTTPS_PROXY` or `ALL_PROXY` set, *Automatic* uses that, names
 it as the source and does not follow system changes until duang is relaunched from the Dock or
-Finder; *Manual* (`http://`, `https://` or `socks5://`) and *Off* still override it. An invalid
-URL is refused with its reason and not saved. The page shows the route model requests take now,
-and *Test connection* sends one request over it: any HTTP status is reported as that status, and a
-failure names the route and the cause (`ECONNREFUSED` for a proxy that is not running). A model
+Finder; *Manual* and *Off* still override it. *Manual* is a type (HTTP, HTTPS or SOCKS5), a
+server and a port; choosing it with nothing saved applies nothing until **Use this proxy**, and each
+field that cannot work says so (`Server is required`, `Port is a number from 1 to 65535`) and
+nothing is saved. The chosen row shows the route model requests take now and checks it with one
+request on opening and after every change: `connected · 320 ms` for any HTTP answer, or
+`unreachable (ECONNREFUSED)` with the full error, naming the route, on hover; a refresh control
+checks again. A model
 request through an unreachable proxy fails with whatever its provider SDK reports, often only a
 connection error; duang never falls back to a direct connection, which may be blocked or may
 bypass a route the person chose. A settings file that cannot be read is reported at launch and on
