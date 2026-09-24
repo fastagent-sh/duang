@@ -27,6 +27,12 @@ export function pace(window: UsageWindow, now: number): number | undefined {
 
 export const paceLabel = (diff: number) => `${diff > 0 ? "▲" : "▼"}${Math.abs(diff).toFixed(1)}%`;
 
+/**
+ * The provider's own sentence, without the call stack some errors carry inside their message (pi-ai's
+ * `ModelsError` appends `stack=` and every frame). The first line keeps what failed and why.
+ */
+export const errorLine = (error: string) => error.split("\n", 1)[0]!.trim();
+
 /** "1.0M", "200K": a context window's size, the way model pages print it. */
 export function tokens(n: number): string {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
