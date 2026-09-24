@@ -11,6 +11,7 @@ import {
   FilePlus,
   FileText,
   FolderOpen,
+  GearSix,
   Globe,
   Info,
   MagnifyingGlass,
@@ -114,6 +115,7 @@ export function Sidebar({
   onSelect,
   onToggle,
   onAdd,
+  onSettings,
   onOpen,
   onNew,
   onDelete,
@@ -136,6 +138,7 @@ export function Sidebar({
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onAdd: () => void;
+  onSettings: () => void;
   onOpen: (agentId: string, session: string) => void;
   onNew: () => void;
   onDelete: (agentId: string, session: string) => void;
@@ -253,6 +256,15 @@ export function Sidebar({
           duang<span className="text-accent">·</span>
         </span>
         <span className="flex-1" />
+        <Button
+          kind="ghost"
+          size={28}
+          onClick={onSettings}
+          className="no-drag"
+          title="Settings (⌘,)"
+          aria-label="Settings"
+          icon={<GearSix size={16} />}
+        />
         <Button
           kind="ghost"
           size={28}

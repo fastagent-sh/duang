@@ -524,7 +524,8 @@ The whole list, so it lives in one place instead of being read out of the handle
 | Key | Where | Does |
 |---|---|---|
 | `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
-| `Esc` | anywhere | Stop the running turn (a popover takes it first) |
+| `Esc` | anywhere | Stop the running turn (a popover, then Settings, takes it first) |
+| `⌘,` | anywhere | Open or close Settings |
 | `Tab` | anywhere | Sidebar → transcript → composer |
 | `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
 | `Home` `End` | roster | First and last row |
@@ -560,7 +561,7 @@ shows the first two letters over a background chosen by hashing the name across 
 hues. Identity is the tile; presence is the ring around it (§9), never a change to the tile itself,
 so an agent looks like the same agent whether it is busy or idle.
 
-## 12b. Planned: settings and connecting a provider
+## 12b. Settings (network shipped) and connecting a provider (planned)
 
 Behaviour is in [interaction.md](interaction.md#planned-providers-network-and-reasoning-effort-stage-1);
 this is how it should read. References: Zed's AI settings, which name subscriptions and API access
@@ -580,8 +581,11 @@ per-provider forms, where a `Check` beside the key field read as a key check but
 └─────────────────────────┴──────────────────────────────────────────────────┘
 ```
 
-- Settings replace the conversation in the content area and use the reading column's width; Escape
-  or the back control returns to the conversation. No left navigation while there are two groups.
+- Shipped: the gear beside `+` in the sidebar header and `⌘,` open Settings in place of the
+  conversation, 640 wide, with the Network group only. Each choice is a row that takes the accent
+  tint when selected; the route in effect sits in a surface card with *Test connection* beside it.
+  Escape or the close control returns to the conversation. No left navigation while there are two
+  groups.
 - Provider rows use the conversation-row rhythm; the authentication kind is a neutral badge, and a
   failure is a `danger` badge with its reason, never colour alone (§9).
 - *Add a provider* is a searchable list grouped Subscription / API key / Custom endpoint. Choosing

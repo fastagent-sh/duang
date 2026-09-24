@@ -17,11 +17,14 @@ import {
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
 import { providerUsage } from "./usage.ts";
-import { useSystemProxy } from "./proxy.ts";
+import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
+import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
+
+const settingsFile = () => join(app.getPath("userData"), "settings.json");
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -136,6 +139,19 @@ function register(): void {
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
+  // Read on every open of the page: a file fixed by hand shows up without a restart, and a broken one
+  // is reported there rather than shown as the defaults.
+  ipcMain.handle("settings:get", async () => ({ network: (await readSettings(settingsFile())).network, route: await describeRoute() }));
+  ipcMain.handle("settings:setNetwork", async (_e, value: unknown) => {
+    const next = network(value);
+    // A file that cannot be read is not overwritten from here: it may hold what the person meant.
+    const settings = await readSettings(settingsFile());
+    await writeSettings(settingsFile(), { ...settings, network: next });
+    await applyNetwork(next);
+    return describeRoute();
+  });
+  ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settingsFile()));
+  ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", credentials);
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
@@ -221,6 +237,8 @@ function register(): void {
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
+    // The agent's commands spawn during this run; they get the route as it is now.
+    await syncCommandProxy();
     // One credential file serves every runtime, so no conversation can name a model this agent
     // cannot authenticate: the picker only ever offered what that file has.
     return withAgentRun(await requireAgent(id), ({ agent, control }) =>
@@ -236,7 +254,18 @@ function register(): void {
 void app
   .whenReady()
   .then(async () => {
-    await useSystemProxy();
+    let settings = DEFAULTS;
+    try {
+      settings = await readSettings(settingsFile());
+    } catch (error) {
+      // The network still needs a route, and guessing someone's manual proxy is worse than the
+      // system's. Said out loud, and again on the Settings page until the file is fixed.
+      dialog.showErrorBox(
+        "duang could not read its settings",
+        `${(error as Error).message}\n\nThe network follows the system proxy until the file is fixed or removed.`,
+      );
+    }
+    await applyNetwork(settings.network);
     register();
     createWindow();
     app.on("activate", () => {

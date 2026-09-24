@@ -70,12 +70,13 @@ names and schedules, and a recent result/failure/skip **only where the runtime o
 preview must not imply that a routine will fire after the laptop is turned off. Showing an exact
 next run or a success badge requires an authoritative clock/outcome source, not a guessed timer.
 
-## Settings: model providers and network (planned, stage 1)
+## Settings: model providers and network (stage 1; network shipped)
 
 The first run must not require a terminal, and a preset recipient must be able to add their own
-credentials. Settings open in the content area (`⌘,`, the app menu, or the model picker's
-**Manage providers…** / empty-state **Connect a provider**); the sidebar stays visible so running
-work remains in view. One page, two groups, no empty categories:
+credentials. Settings open in the content area (`⌘,` or the sidebar's gear; planned: the model
+picker's **Manage providers…** / empty-state **Connect a provider**); the sidebar stays visible so
+running work remains in view. One page, two groups, no empty categories; until in-app sign-in
+exists (fastagent#602) the page holds only Network.
 
 **Model providers.** A *Connected* list shows each provider with every source that authenticates
 it (subscription, API key, custom endpoint, environment variable) and offers Reconnect and
@@ -101,9 +102,9 @@ it happens. Custom endpoints need a machine-level models file that every agent r
 `models.json` still wins for that agent. Such an endpoint is local to this machine and does not
 travel with a preset or deployment.
 
-**Network.** *Automatic* is the default and needs no setup: model and sign-in requests follow the
-system proxy per request, including its bypass list and PAC rules, and pick up a VPN client being
-switched on or off; a TUN-mode VPN needs nothing at all. *Manual* takes an `http://`, `https://`
+**Network (shipped).** *Automatic* is the default and needs no setup: model and sign-in requests
+follow the system proxy per request, including its bypass list and PAC rules, and pick up a VPN
+client being switched on or off; a TUN-mode VPN needs nothing at all. *Manual* takes an `http://`, `https://`
 or `socks5://` URL; *Off* connects directly. The page shows the route currently in effect and its
 source, and *Test connection* reports reachability or the original error. Proxy variables present
 when duang was launched from a terminal are an explicit route: *Automatic* then uses them and stops

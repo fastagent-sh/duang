@@ -92,6 +92,7 @@ if (!process.versions.electron) {
       if (target === "https://platform.claude.com/v1/oauth/token") {
         throw new Error("Synthetic OAuth refresh rejected");
       }
+      if (target === "https://api.anthropic.com" && options.method === "HEAD") return new Response(null, { status: 204 });
       if (target === "https://api.anthropic.com/api/oauth/usage") {
         // The plan windows the header shows, read with the same login the conversation runs on.
         assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
@@ -740,6 +741,46 @@ if (!process.versions.electron) {
         `document.activeElement?.getAttribute('aria-label') === 'Message' && !document.activeElement.disabled`,
         "⌘N focuses the new conversation's composer",
       );
+
+      // Settings open beside the sidebar; Off and Manual are saved and applied at once; a test names
+      // the route; an invalid URL is refused with its reason; an unreadable file is reported, not
+      // shown as the defaults; Escape leaves.
+      const settingsFile = join(data, "settings.json");
+      const setProxyUrl = (value) =>
+        evaluate(`(() => {
+          const input = document.querySelector('input[aria-label="Proxy URL"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        })()`);
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, cancelable: true }))`);
+      await until("document.querySelector('#network-heading') && document.body.innerText.includes('Now')", "⌘, opens Settings");
+      assert.ok(await evaluate(`!!document.querySelector('button[aria-label="Configured"]')`), "the sidebar stays in view");
+      await evaluate(`document.querySelectorAll('input[type=radio]')[2].click()`);
+      await until("document.body.innerText.includes('Direct · off')", "Off applies at once");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" });
+      await click("Test connection");
+      await until("document.body.innerText.includes('answered HTTP 204 directly')", "the test names the route");
+      await setProxyUrl("ftp://127.0.0.1:9");
+      await click("Apply");
+      await until("document.body.innerText.includes('http://, https:// or socks5://')", "an invalid proxy URL is refused");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" }, "a refused URL is not saved");
+      await setProxyUrl("http://127.0.0.1:9");
+      await click("Apply");
+      await until("document.body.innerText.includes('via http://127.0.0.1:9 · manual')", "Manual applies");
+      await evaluate(`document.querySelectorAll('input[type=radio]')[0].click()`);
+      await until("/· (macOS|system) settings/.test(document.body.innerText)", "Automatic follows the system");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
+      await writeFile(settingsFile, "{broken");
+      await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, cancelable: true }))`);
+      await until("document.body.innerText.includes('settings.json') && document.body.innerText.includes('Reveal in Finder')", "an unreadable settings file is reported");
+      assert.ok(!(await evaluate("!!document.querySelector('#network-heading')")), "a broken file is not shown as the defaults");
+      await writeFile(settingsFile, JSON.stringify({ network: { mode: "automatic" } }));
+      await click("Retry");
+      await until("document.querySelector('#network-heading')", "Retry reads the fixed file");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("!document.querySelector('#network-heading') && document.querySelector('textarea')", "Escape leaves Settings");
 
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
       const registry = join(data, "agents.json");

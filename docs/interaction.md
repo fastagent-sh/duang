@@ -23,6 +23,23 @@ The picker leads with the selected model and a short credential-file label; expa
 reveals the complete FastAgent path. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.
 
+Settings open with `⌘,` or the sidebar's gear, in place of the conversation; the sidebar stays,
+and choosing a conversation, `⌘N` or Escape returns to it. **Network** has three choices, saved to
+`userData/settings.json` and applied at once to new requests (a running turn keeps its
+connection). *Automatic* resolves the route for each request from the system, so switching a VPN
+client on or off needs no action in duang, when duang was launched without proxy variables. If it
+was launched from a terminal with `HTTPS_PROXY` or `ALL_PROXY` set, *Automatic* uses that, names
+it as the source and does not follow system changes until duang is relaunched from the Dock or
+Finder; *Manual* (`http://`, `https://` or `socks5://`) and *Off* still override it. An invalid
+URL is refused with its reason and not saved. The page shows the route model requests take now,
+and *Test connection* sends one request over it: any HTTP status is reported as that status, and a
+failure names the route and the cause (`ECONNREFUSED` for a proxy that is not running). A model
+request through an unreachable proxy fails with whatever its provider SDK reports, often only a
+connection error; duang never falls back to a direct connection, which may be blocked or may
+bypass a route the person chose. A settings file that cannot be read is reported at launch and on
+the page, with Reveal and Retry, and is never shown as or overwritten with the defaults; the
+network follows the system proxy until it is fixed.
+
 The conversation header shows what is left of the plan paying for it: for a Claude or ChatGPT
 subscription login of the conversation's own provider, each window's share used, its reset time, and
 for windows of a day or more the pace against the clock (`▼` under, `▲` over). An API key shows
@@ -91,16 +108,6 @@ own error. A variable is shown on the row beside any stored credential and canno
 for a local server. The name becomes a new provider id: an id that is already a built-in provider is
 refused, so a relay cannot silently take over a built-in provider's credentials. A machine models
 file that cannot be read or parsed is shown as that error at the providers list, never as "no custom endpoints", and is never overwritten.
-
-**Network.** *Automatic* resolves the route for each request from the system, so switching a VPN
-client on or off needs no action in duang, when duang was launched without proxy variables. If it
-was launched from a terminal with `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY` set, *Automatic* uses
-those, shows them as the source, and does not follow system changes until duang is relaunched from
-the Dock or Finder; *Manual* and *Off* still override them. If the proxy in effect cannot be
-reached, requests fail with an error naming that proxy; duang does not silently fall back to a
-direct connection, which may also be blocked or may bypass a route the person chose. A setting change applies to new requests; a
-running turn keeps its connection. *Test connection* uses the same route as a model request. A
-settings file that cannot be read is reported, not replaced with defaults.
 
 **Reasoning effort** sits beside the model on the conversation, lists the levels the conversation's
 current model supports (`availableThinkingLevels`) and is hidden when there are none. A choice
