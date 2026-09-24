@@ -84,8 +84,8 @@ are **not yet accepted**. A stage number is an outcome gate, not a calendar week
 
 1. **Daily local workbench.** Find an agent, start work, switch away, return to the real outcome and
    continue without a terminal. Connect a model provider (subscription, API key or custom endpoint)
-   in the app rather than through `fastagent login`, and have the proxy follow system changes with a
-   setting to override it; today the system proxy is read once at launch and cannot be changed.
+   in the app rather than through `fastagent login`. The network already follows the system proxy
+   per request, with a setting to override it (Settings → Network, `⌘,`).
    Inspect the loaded definition and relevant local changes as needed.
    Reuse Week 1 chat; prioritize demonstrated gaps over a full IDE, file tree or every session
    control. Local routine inspection must not promise execution after the laptop closes.
@@ -154,8 +154,9 @@ The picker checks credential configuration without refreshing OAuth or testing t
 Reopening it or pressing Retry rereads the file, so external login changes need no app restart.
 Execution resolves the actual conversation's provider, including history that differs from the
 agent default; OAuth refresh and provider errors remain visible. OAuth refresh writes back to the
-selected file through the SDK. Behind a proxy, the system setting is picked up automatically —
-Node's `fetch` ignores `HTTPS_PROXY` on its own, so duang installs the dispatcher.
+selected file through the SDK. Behind a proxy, every request follows the system's proxy settings as
+they are at that moment (a VPN switched on later included), because Node's `fetch` would otherwise
+ignore them; Settings → Network can fix a proxy or turn it off, and tests the route.
 
 ## Week 1 acceptance status
 

@@ -62,7 +62,7 @@ only by its own provider ids, with an atomic write, refusing to touch a file it 
 never writes an entry for a built-in provider id: a `baseUrl` override there would outlive the
 credential it was entered with and send a later subscription token or official key to the relay.
 
-**Planned: one network route, owned by Chromium.** Node's `fetch` ignores the system proxy, and a
+**One network route, owned by Chromium.** Node's `fetch` ignores the system proxy, and a
 proxy read once at startup misses a VPN client switched on later, PAC rules and the system bypass
 list. Main therefore installs an undici dispatcher that asks `session.resolveProxy(url)` for each
 new connection and maps the answer (`DIRECT`, `PROXY`, `HTTPS`, `SOCKS5`) to undici agents; the
@@ -70,10 +70,16 @@ Network setting only changes the session's proxy configuration (`system`, fixed 
 `direct`), and proxy variables present at launch are translated into the same configuration. A
 spike on macOS with Clash Verge in system-proxy mode confirmed that `resolveProxy` returns the
 proxy for provider hosts and `DIRECT` for loopback, private ranges and `.local`, and that a Node
-`fetch` without it reached Anthropic directly and got HTTP 403. Picking up a system proxy switched
-while duang runs is expected from Chromium's configuration watcher but was not tested, nor was an
-unreachable proxy. Only the first entry of a PAC list is used and proxy authentication is
-unsupported until a real user needs either.
+`fetch` without it reached Anthropic directly and got HTTP 403. With the dispatcher installed, a
+real Codex run streamed through Clash and its `bash` tool saw the proxy variables; a proxy that is
+not listening fails the page's connection check with `ECONNREFUSED` and the proxy's address; the
+same check reached Anthropic through Clash's SOCKS5 port. Picking up a
+system proxy switched while duang runs is expected from Chromium's configuration watcher, and the
+dispatcher asks per request, but switching one was not tested. Only the first entry of a PAC list
+is used, and proxy authentication is unsupported until a real user needs it: Chromium's route answer
+(`PROXY h:p`) carries no credentials. A launch variable with a user name or password therefore fails
+every request with that explanation instead of the proxy's bare 407; before this route existed,
+undici read such credentials from `HTTPS_PROXY` directly, so that launch is a regression.
 
 Agent commands cannot use the dispatcher: pi's shell tool spawns with `getShellEnv()`, a copy of
 `process.env` taken at each spawn, so the only lever is main's own `process.env`, shared by every
@@ -81,7 +87,8 @@ agent in the process (matching the one app-wide Network setting). When the route
 no proxy variables came from the launch environment, main sets `HTTPS_PROXY`, `HTTP_PROXY` and
 `ALL_PROXY` to the proxy `resolveProxy` returns for `https://github.com`, the host agent commands
 most often need, and `NO_PROXY` to `localhost,127.0.0.1,::1`; *Manual* sets the manual URL and
-*Off* removes the variables duang set. Commands spawned after a change see it; a running command
+*Off* removes the variables duang set. This is re-applied before every send, so a run's commands
+see the route as it is when the run starts; a running command
 keeps its environment. `resolveProxy` answers one URL, not a bypass list, so per-host PAC rules and
 the system bypass list beyond loopback do not reach child processes: a private-range or `.local`
 host reached by a command goes through the proxy. Launch-environment variables are left untouched.

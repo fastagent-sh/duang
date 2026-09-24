@@ -1,6 +1,6 @@
 /** Real Electron + preload + FastAgent; only the model's HTTP response is faked. No credentials or network needed. */
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -25,7 +25,7 @@ if (!process.versions.electron) {
     }
   }
 } else {
-  const { app, BrowserWindow } = electron;
+  const { app, BrowserWindow, Menu } = electron;
   async function run() {
     const root = process.env.DUANG_SMOKE_ROOT;
     assert.ok(root, "Run with node tests/smoke.mjs so the fixture is isolated");
@@ -92,6 +92,7 @@ if (!process.versions.electron) {
       if (target === "https://platform.claude.com/v1/oauth/token") {
         throw new Error("Synthetic OAuth refresh rejected");
       }
+      if (target === "https://api.anthropic.com" && options.method === "HEAD") return new Response(null, { status: 204 });
       if (target === "https://api.anthropic.com/api/oauth/usage") {
         // The plan windows the header shows, read with the same login the conversation runs on.
         assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
@@ -577,12 +578,17 @@ if (!process.versions.electron) {
       // One tab stop for the roster, arrows inside it (§11).
       const roster = () =>
         evaluate(`(() => {
-          const rows = [...document.querySelectorAll('aside > div + div button')];
+          const rows = [...document.querySelectorAll('aside [aria-label="Agents"] button')];
           return { rows: rows.length, tabbable: rows.filter((b) => b.tabIndex === 0).length };
         })()`);
       const counted = await roster();
       assert.ok(counted.rows > 1, "there is more than one row to walk");
       assert.equal(counted.tabbable, 1, "the roster is one tab stop, not one per row");
+      assert.equal(
+        await evaluate(`[...document.querySelectorAll('aside > :not([aria-label="Agents"]) button')].find((b) => b.textContent.trim() === 'Settings')?.tabIndex`),
+        0,
+        "Settings, outside the roster, is its own tab stop",
+      );
 
       // Folding the open agent with the caret — the keyboard has not moved, so the row the keyboard
       // started on is simply gone. The list still has to have exactly one way in, or Tab skips it.
@@ -606,7 +612,7 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "char", keyCode: "Tab" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
       await until(
-        "document.activeElement.closest('aside > div + div') !== null",
+        "document.activeElement.closest('aside [aria-label=Agents]') !== null",
         "Tab enters the roster from outside it",
       );
 
@@ -616,7 +622,7 @@ if (!process.versions.electron) {
         evaluate(
           `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
         );
-      await evaluate("document.querySelector('aside > div + div button[tabindex=\"0\"]').focus()");
+      await evaluate("document.querySelector('aside [aria-label=Agents] button[tabindex=\"0\"]').focus()");
       await press("ArrowUp");
       await until(
         "document.activeElement.getAttribute('aria-label') === 'Smoke'",
@@ -634,7 +640,7 @@ if (!process.versions.electron) {
       // Naming a conversation. The menu that carries Rename is native, so the test drives what the
       // menu would: a double click on the row, which is the other way in.
       await evaluate(`(() => {
-        const row = [...document.querySelectorAll('aside > div + div button')].find(
+        const row = [...document.querySelectorAll('aside [aria-label=Agents] button')].find(
           (b) => !b.getAttribute('aria-label') && b.textContent.includes('Read hello.txt and answer.'),
         );
         if (!row) throw new Error('Missing the conversation row');
@@ -741,6 +747,140 @@ if (!process.versions.electron) {
         "⌘N focuses the new conversation's composer",
       );
 
+      // Settings open beside the sidebar; Off and Manual are saved and applied at once; a test names
+      // the route; an invalid URL is refused with its reason; an unreadable file is reported, not
+      // shown as the defaults; Escape leaves.
+      const settingsFile = join(data, "settings.json");
+      const fill = (label, value) =>
+        evaluate(`(() => {
+          const input = document.querySelector('input[aria-label=${JSON.stringify(label)}]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        })()`);
+      const choose = (label) =>
+        evaluate(`[...document.querySelectorAll('[role=radio]')].find((r) => r.textContent.trim().startsWith(${JSON.stringify(label)})).click()`);
+      // The App menu owns Settings… (⌘,); clicking the item is what the shortcut does.
+      const settingsItem = Menu.getApplicationMenu().getMenuItemById("settings");
+      assert.equal(settingsItem.accelerator, "Command+,");
+      assert.ok(Menu.getApplicationMenu().items.some((item) => item.role === "editmenu"), "copy and paste keep their menu");
+      settingsItem.click();
+      // The chosen row checks its own connection on arrival; there is no button to find first.
+      await until("document.querySelector('#network-heading') && /connected · \\d+ ms/.test(document.body.innerText)", "Settings… opens Settings and checks the route");
+      assert.ok(await evaluate(`!!document.querySelector('button[aria-label="Configured"]')`), "the sidebar stays in view");
+      assert.deepEqual(
+        await evaluate(`[...document.querySelectorAll('aside [aria-current]')].map((el) => el.textContent.trim())`),
+        ["Settings"],
+        "while Settings shows, its row is the one selection mark",
+      );
+      settingsItem.click();
+      assert.ok(await evaluate("!!document.querySelector('#network-heading')"), "asking again keeps Settings open");
+      await choose("Off");
+      await until("document.body.innerText.includes('Direct · off') && /connected · \\d+ ms/.test(document.body.innerText)", "Off applies at once and is checked");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" });
+      assert.equal(await evaluate(`document.querySelector('[role=radio][aria-checked=true]').textContent.trim().split('Direct')[0]`), "Off");
+      // Manual with nothing saved shows its form and applies nothing until the proxy is complete.
+      await choose("Manual");
+      await until("document.querySelector('input[aria-label=Server]')", "the manual form");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('Server is required')", "an empty server is refused");
+      await fill("Server", "127.0.0.1");
+      await fill("Port", "70000");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('Port is a number from 1 to 65535')", "an impossible port is refused");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" }, "a refused proxy is not saved");
+      await choose("SOCKS5");
+      await choose("HTTP");
+      await fill("Port", "9");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('via http://127.0.0.1:9 · manual')", "Manual applies");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:9" });
+      // A scheme's default port is saved and read back, not dropped to an empty field.
+      await fill("Port", "80");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('via http://127.0.0.1:80 · manual')", "port 80 applies");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:80" });
+      await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
+      settingsItem.click();
+      await until("document.querySelector('input[aria-label=Port]')?.value === '80'", "the reopened form shows port 80");
+      await choose("Automatic");
+      await until("/· (macOS|system) settings/.test(document.body.innerText)", "Automatic follows the system");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
+      // Two choices in one tick are applied in order: the file, Chromium and the page end on the second.
+      await evaluate(`(() => {
+        const rows = [...document.querySelectorAll('[role=radio]')];
+        rows.find((r) => r.textContent.trim().startsWith('Off')).click();
+        rows.find((r) => r.textContent.trim().startsWith('Automatic')).click();
+      })()`);
+      // The clicks return before either change lands, so wait for the file to stop changing.
+      for (let last = -1, now = (await stat(settingsFile)).mtimeMs; now !== last; ) {
+        last = now;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        now = (await stat(settingsFile)).mtimeMs;
+      }
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
+      assert.equal((await evaluate("window.duang.getSettings()")).route.source, "system", "Chromium ended on the second choice too");
+      await until("/· (macOS|system) settings[\\s·]*connected/.test(document.body.innerText)", "the page ends on the second choice");
+      // Enter on the refresh control checks again; it does not re-apply (rewrite) the choice.
+      const written = (await stat(settingsFile)).mtimeMs;
+      await evaluate(`document.querySelector('button[aria-label="Check the connection again"]').focus()`);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+      win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+      await until("/connected · \\d+ ms/.test(document.body.innerText)", "the check runs again");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.equal((await stat(settingsFile)).mtimeMs, written, "Enter on refresh did not re-apply the setting");
+      // One tab stop per choice group, on the checked row; the arrows move the choice and wrap.
+      assert.deepEqual(
+        await evaluate(`[...document.querySelectorAll('[role=radiogroup]')].map((g) => g.querySelectorAll('[role=radio][tabindex="0"]').length)`),
+        [1],
+        "the Proxy group is one tab stop",
+      );
+      const key = (keyCode) => {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+      };
+      await evaluate(`document.querySelector('[role=radio][aria-checked=true]').focus()`);
+      key("Up");
+      await until("document.body.innerText.includes('Direct · off')", "ArrowUp from the first row wraps to Off and chooses it");
+      key("Down");
+      await until("/· (macOS|system) settings/.test(document.body.innerText) && document.activeElement?.textContent.trim().startsWith('Automatic')", "ArrowDown wraps back to Automatic");
+      await writeFile(settingsFile, "{broken");
+      await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
+      await until("!document.querySelector('#network-heading')", "the close control leaves Settings");
+      // The sidebar's own way in, at its foot.
+      await click("Settings");
+      await until("document.body.innerText.includes('settings.json') && document.body.innerText.includes('Reveal in Finder')", "an unreadable settings file is reported");
+      assert.ok(!(await evaluate("!!document.querySelector('#network-heading')")), "a broken file is not shown as the defaults");
+      await writeFile(settingsFile, JSON.stringify({ network: { mode: "automatic" } }));
+      await click("Retry");
+      await until("document.querySelector('#network-heading')", "Retry reads the fixed file");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("!document.querySelector('#network-heading') && document.querySelector('textarea')", "Escape leaves Settings");
+
+      // A route duang cannot take (SOCKS4, from a PAC file) is shown, not fatal: a send still goes
+      // out, agent commands just get no proxy, and the page says both. Choosing again recovers.
+      await electron.session.defaultSession.setProxy({
+        mode: "pac_script",
+        pacScript: `data:application/x-ns-proxy-autoconfig,${encodeURIComponent('function FindProxyForURL() { return "SOCKS 127.0.0.1:1080"; }')}`,
+      });
+      assert.equal(await electron.session.defaultSession.resolveProxy("https://github.com"), "SOCKS 127.0.0.1:1080");
+      const answers = () => evaluate("document.body.innerText.split('Smoke answer').length");
+      const before = await answers();
+      await message("Send through a SOCKS4 PAC answer.");
+      await until(`document.body.innerText.split('Smoke answer').length > ${before} && !document.body.innerText.includes('working…')`, "a send is not stopped by the commands' route");
+      settingsItem.click();
+      await until(
+        "document.body.innerText.includes('unsupported proxy route') && document.body.innerText.includes('Agent commands get no proxy: Unsupported proxy route \"SOCKS 127.0.0.1:1080\"')",
+        "both unusable routes are shown, and the settings file is not blamed",
+      );
+      assert.ok(!(await evaluate("document.body.innerText.includes('Fix or remove the file')")));
+      await choose("Automatic");
+      await until("/· (macOS|system) settings/.test(document.body.innerText) && !document.body.innerText.includes('Agent commands get no proxy')", "choosing again recovers");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("!document.querySelector('#network-heading')", "Escape leaves Settings again");
+
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
       const registry = join(data, "agents.json");
       const savedRegistry = await readFile(registry, "utf8");
@@ -758,6 +898,23 @@ if (!process.versions.electron) {
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
+
+      // ⌘, with every window closed opens one already on Settings: the request waits in main for
+      // the new renderer's listener instead of being sent before it exists.
+      const closed = new Promise((resolve) => win.once("closed", resolve));
+      win.close();
+      await closed;
+      Menu.getApplicationMenu().getMenuItemById("settings").click();
+      const reopened = BrowserWindow.getAllWindows()[0];
+      assert.ok(reopened, "Settings… opens a window when none is open");
+      let onSettings = false;
+      for (let i = 0; i < 200 && !onSettings; i++) {
+        onSettings = await reopened.webContents
+          .executeJavaScript("!!document.querySelector('#network-heading')", true)
+          .catch(() => false);
+        if (!onSettings) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(onSettings, "the new window lands on Settings");
       console.log(
         `Electron smoke passed (${selectedAuth === defaultAuth ? "default auth" : "explicit auth"}): local workflow, cross-provider history, missing/corrupt credentials and recovery`,
       );

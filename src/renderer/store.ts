@@ -112,7 +112,7 @@ const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" |
  * throw across IPC, and Electron wraps those as "Error invoking remote method 'x': Error: <what main
  * said>"; expected refusals arrive as values and never come through here.
  */
-const message = (error: unknown): string =>
+export const message = (error: unknown): string =>
   (error instanceof Error ? error.message : String(error)).replace(
     /^Error invoking remote method '[^']*': (Error: )?/,
     "",

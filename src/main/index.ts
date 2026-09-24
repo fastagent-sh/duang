@@ -17,11 +17,67 @@ import {
 } from "./agents.ts";
 import { credentials } from "./credentials.ts";
 import { providerUsage } from "./usage.ts";
-import { useSystemProxy } from "./proxy.ts";
+import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
+import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
+
+const settingsFile = () => join(app.getPath("userData"), "settings.json");
+let settingsChange: Promise<unknown> = Promise.resolve();
+
+/**
+ * Settings asked for with no window open. A new window's listener registers after React's first
+ * effects, which can be after `did-finish-load`, and a message sent to no listener is dropped — so
+ * the request waits here until the renderer asks for it.
+ */
+let settingsPending = false;
+
+/** Settings is a place in the window, so the menu item asks the renderer to go there. */
+function openSettings(): void {
+  const existing = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (existing) {
+    existing.show();
+    existing.webContents.send("app:settings");
+    return;
+  }
+  settingsPending = true;
+  createWindow();
+}
+
+/**
+ * macOS keeps app-level Settings in the App menu under ⌘, (HIG, The menu bar). Replacing Electron's
+ * default menu replaces all of it, so the standard File, Edit, View and Window menus are rebuilt from
+ * their roles — without Edit, ⌘C and ⌘V stop working in every text field.
+ */
+function setApplicationMenu(): void {
+  if (process.platform !== "darwin") return;
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { role: "about" },
+          { type: "separator" },
+          { id: "settings", label: "Settings…", accelerator: "Command+,", click: openSettings },
+          { type: "separator" },
+          { role: "services" },
+          { type: "separator" },
+          { role: "hide" },
+          { role: "hideOthers" },
+          { role: "unhide" },
+          { type: "separator" },
+          { role: "quit" },
+        ],
+      },
+      { role: "fileMenu" },
+      { role: "editMenu" },
+      { role: "viewMenu" },
+      { role: "windowMenu" },
+    ]),
+  );
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -136,6 +192,31 @@ function register(): void {
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
+  // Read on every open of the page: a file fixed by hand shows up without a restart, and a broken one
+  // is reported there rather than shown as the defaults.
+  ipcMain.handle("settings:get", async () => ({ network: (await readSettings(settingsFile())).network, route: await describeRoute() }));
+  ipcMain.handle("settings:setNetwork", (_e, value: unknown) => {
+    // One change at a time: two quick choices must end with the file, Chromium's configuration and
+    // the answer all saying the second one, not whichever await finished last.
+    const run = settingsChange.then(async () => {
+      const next = network(value);
+      // A file that cannot be read is not overwritten from here: it may hold what the person meant.
+      const settings = await readSettings(settingsFile());
+      await writeSettings(settingsFile(), { ...settings, network: next });
+      await applyNetwork(next);
+      return describeRoute();
+    });
+    // The caller gets the failure; the next change still runs.
+    settingsChange = run.catch(() => {});
+    return run;
+  });
+  ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settingsFile()));
+  ipcMain.handle("app:settingsPending", () => {
+    const pending = settingsPending;
+    settingsPending = false;
+    return pending;
+  });
+  ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", credentials);
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
@@ -221,6 +302,8 @@ function register(): void {
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
+    // The agent's commands spawn during this run; they get the route as it is now.
+    await syncCommandProxy();
     // One credential file serves every runtime, so no conversation can name a model this agent
     // cannot authenticate: the picker only ever offered what that file has.
     return withAgentRun(await requireAgent(id), ({ agent, control }) =>
@@ -236,7 +319,19 @@ function register(): void {
 void app
   .whenReady()
   .then(async () => {
-    await useSystemProxy();
+    let settings = DEFAULTS;
+    try {
+      settings = await readSettings(settingsFile());
+    } catch (error) {
+      // The network still needs a route, and guessing someone's manual proxy is worse than the
+      // system's. Said out loud, and again on the Settings page until the file is fixed.
+      dialog.showErrorBox(
+        "duang could not read its settings",
+        `${(error as Error).message}\n\nThe network follows the system proxy until the file is fixed or removed.`,
+      );
+    }
+    await applyNetwork(settings.network);
+    setApplicationMenu();
     register();
     createWindow();
     app.on("activate", () => {

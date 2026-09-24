@@ -14,6 +14,10 @@ import type { AgentRow } from "../main/agent-files.ts";
 export type { Models } from "../main/credentials.ts";
 import type { Models } from "../main/credentials.ts";
 export type { ProviderUsage, UsageWindow } from "../main/usage.ts";
+export type { Network } from "../main/settings.ts";
+import type { Network } from "../main/settings.ts";
+export type { Route } from "../main/proxy.ts";
+import type { Route } from "../main/proxy.ts";
 import type { ProviderUsage } from "../main/usage.ts";
 
 export type OpenResult =
@@ -50,6 +54,13 @@ const api = {
   /** Where duang keeps its agent list — the one thing to open when that file cannot be read. */
   revealRegistry: (): Promise<void> => ipcRenderer.invoke("registry:reveal"),
   listModels: (): Promise<Models> => ipcRenderer.invoke("models:list"),
+  /** duang's own preferences and the route requests take now. Rejects when the settings file is unreadable. */
+  getSettings: (): Promise<{ network: Network; route: Route }> => ipcRenderer.invoke("settings:get"),
+  /** Saves and applies at once; new requests use it, a running turn keeps its connection. */
+  setNetwork: (network: Network): Promise<Route> => ipcRenderer.invoke("settings:setNetwork", network),
+  revealSettings: (): Promise<void> => ipcRenderer.invoke("settings:reveal"),
+  /** One request over the model route: any HTTP status means it works; a rejection names the route. */
+  testNetwork: (): Promise<{ status: number; ms: number; route: Route }> => ipcRenderer.invoke("network:test"),
   /** A subscription's plan windows for this provider; no `windows` when its login is not a subscription. */
   providerUsage: (provider: string): Promise<ProviderUsage> => ipcRenderer.invoke("usage:get", provider),
   /**
@@ -83,6 +94,14 @@ const api = {
     ipcRenderer.invoke("session:send", agentId, session, text),
   abort: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:abort", agentId, session),
+  /** The App menu's Settings… (⌘,): main owns the shortcut, the renderer owns where the page is. */
+  onOpenSettings: (listener: () => void): (() => void) => {
+    const handler = (): void => listener();
+    ipcRenderer.on("app:settings", handler);
+    // A request made before this listener existed (⌘, with no window open) is held by main.
+    void ipcRenderer.invoke("app:settingsPending").then((pending: boolean) => pending && listener());
+    return () => void ipcRenderer.off("app:settings", handler);
+  },
   onSessionEvent: (listener: (frame: SessionFrame) => void): (() => void) => {
     const handler = (_e: unknown, frame: SessionFrame): void => listener(frame);
     ipcRenderer.on("session:event", handler);

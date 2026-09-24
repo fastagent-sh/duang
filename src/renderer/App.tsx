@@ -13,6 +13,7 @@ import {
   Transcript,
   UnreadableRegistry,
 } from "./panels.tsx";
+import { Settings } from "./settings.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
@@ -23,6 +24,9 @@ export default function App() {
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
+  // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
+  // is not remembered across launches.
+  const [settings, setSettings] = useState(false);
   // Only the open agent has running and drafted conversations worth marking; another agent's list
   // is just its history.
   const rowsFor = (id: string) =>
@@ -39,6 +43,8 @@ export default function App() {
     void store.load();
     return store.dispose;
   }, [store]);
+  // The App menu's Settings… (⌘,) opens the page; asking again while it is open keeps it there.
+  useEffect(() => duang.onOpenSettings(() => setSettings(true)), []);
   const newConversation = useCallback(() => {
     const opened = store.newConversation();
     const target = store.getSnapshot().conversation;
@@ -55,14 +61,20 @@ export default function App() {
       if (event.defaultPrevented || event.isComposing) return;
       if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
         event.preventDefault();
+        setSettings(false);
         newConversation();
+      }
+      // Escape leaves Settings before it can reach a run: stopping work you cannot see is a surprise.
+      if (event.key === "Escape" && settings) {
+        setSettings(false);
+        return;
       }
       // The open model picker stops Escape itself, so reaching here means no dialog wanted it.
       if (event.key === "Escape" && busy) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newConversation, store, agentState, busy, view.loading]);
+  }, [newConversation, store, agentState, busy, view.loading, settings]);
 
   // Which agents show their conversations — asked for, never assumed. Opening an agent puts you in
   // its latest conversation, which the transcript already shows; unfolding the roster on top of
@@ -122,6 +134,11 @@ export default function App() {
         errors={view.sessionsError}
         disabled={agentState !== "ready" || view.loading}
         onSelect={(id) => {
+          // Any way into a conversation leaves Settings; the agent you were on comes back as it was.
+          if (settings) {
+            setSettings(false);
+            if (id === agentId) return;
+          }
           // Clicking the row opens the agent and shows what it has been doing; clicking the agent
           // you are already on puts that list away. The caret does the same for any other agent,
           // which is the part the row cannot express.
@@ -134,14 +151,23 @@ export default function App() {
           // Reading a list is what needs the runtime; putting it away does not.
           if (showing) void store.listSessions(id);
         }}
-        onAdd={() => void store.addAgent()}
+        onAdd={() => {
+          setSettings(false);
+          void store.addAgent();
+        }}
+        settingsOpen={settings}
+        onSettings={() => setSettings(true)}
         onOpen={(agent, id) => {
+          setSettings(false);
           // Going to another agent's conversation is one navigation, not a switch followed by an
           // open: the second one would land wherever the selection had moved to by then.
           if (agent !== agentId) void store.selectAgent(agent, id);
           else void store.open(id);
         }}
-        onNew={newConversation}
+        onNew={() => {
+          setSettings(false);
+          newConversation();
+        }}
         onRename={(agent, id, name) => void store.renameSession(agent, id, name)}
         onMenu={(canRename) => duang.conversationMenu(canRename)}
         onDelete={(agent, id) => {
@@ -149,85 +175,91 @@ export default function App() {
         }}
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
-        {agent && (
-          <ConversationHeader
-            agent={agent.name}
-            title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
-            dir={agent.dir}
-            working={!!view.running[agent.id]?.length}
-            context={
-              usage?.contextTokens !== undefined && usage.contextWindow
-                ? { used: usage.contextTokens, window: usage.contextWindow }
-                : undefined
-            }
-            plan={provider ? view.usage[provider] : undefined}
-            queued={pending ? pending.steering + pending.followUp : undefined}
-            onReveal={() => void store.reveal()}
-          />
-        )}
-        {error ? (
-          <div role="alert" className="mt-2 px-6 py-2 text-danger whitespace-pre-wrap break-words">
-            {error}{" "}
-            <button className="underline" onClick={() => void store.retry()}>
-              Retry
-            </button>
-          </div>
+        {settings ? (
+          <Settings api={duang} onClose={() => setSettings(false)} />
         ) : (
-          // An ended subscription is not a failure: the conversation is intact, this view stopped
-          // listening. Say it in the calm voice and offer the one action that fixes it.
-          c?.ended && (
-            <div role="status" className="mt-2 px-6 py-2 text-muted whitespace-pre-wrap break-words">
-              {c.ended}{" "}
-              <button className="underline" onClick={() => void store.retry()}>
-                Reconnect
-              </button>
-            </div>
-          )
-        )}
-        {!agentId ? (
-          // An unreadable registry is not an empty one: offering "add your first agent" would deny the
-          // failure and hand over an action that cannot succeed until the file is fixed.
-          view.error ? (
-            <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
-          ) : (
-            <NoAgents onAdd={() => void store.addAgent()} />
-          )
-        ) : agentState === "broken" ? (
-          <BrokenAgent
-            message={view.error ?? ""}
-            onRemove={remove}
-            onReveal={() => void store.reveal()}
-            onRetry={() => void store.retry()}
-          />
-        ) : agentState === "no_agent" ? (
-          <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
-        ) : !c || c.items.length === 0 ? (
-          <NewConversation>{composer}</NewConversation>
-        ) : (
-          // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
-          // run streams, so this gap *is* where the newest line lands. At 16 the line you are
-          // reading sat on the composer's edge, half under the fade.
-          <Transcript key={c.subscription} items={c.items} busySince={c.busySince} bottomGap={composerHeight + 64} />
-        )}
-        {agentId && agentState === "ready" && c && c.items.length > 0 && (
-          // Floating, not stacked: the transcript runs the full height of the pane and passes
-          // beneath this, which is what keeps the bottom of the window from reading as a seam.
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
-            {/* The composer is narrower than the reading column, so text would slide past on both
-                sides of it. The canvas is solid up to the composer's top edge and fades over the
-                40px above it: a fixed height shorter than the composer left the line just above it
-                unfaded, so a table's copy buttons read as the composer's own. */}
-            <div
-              className="absolute inset-x-0 bottom-0"
-              style={{
-                height: composerHeight + 16 + 40,
-                background: "linear-gradient(to top, var(--color-bg) calc(100% - 40px), transparent)",
-              }}
-            />
-            <div ref={composerBox} className="composer-column pointer-events-auto">
-              {composer}
-            </div>
-          </div>
+          <>
+            {agent && (
+              <ConversationHeader
+                agent={agent.name}
+                title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
+                dir={agent.dir}
+                working={!!view.running[agent.id]?.length}
+                context={
+                  usage?.contextTokens !== undefined && usage.contextWindow
+                    ? { used: usage.contextTokens, window: usage.contextWindow }
+                    : undefined
+                }
+                plan={provider ? view.usage[provider] : undefined}
+                queued={pending ? pending.steering + pending.followUp : undefined}
+                onReveal={() => void store.reveal()}
+              />
+            )}
+            {error ? (
+              <div role="alert" className="mt-2 px-6 py-2 text-danger whitespace-pre-wrap break-words">
+                {error}{" "}
+                <button className="underline" onClick={() => void store.retry()}>
+                  Retry
+                </button>
+              </div>
+            ) : (
+              // An ended subscription is not a failure: the conversation is intact, this view stopped
+              // listening. Say it in the calm voice and offer the one action that fixes it.
+              c?.ended && (
+                <div role="status" className="mt-2 px-6 py-2 text-muted whitespace-pre-wrap break-words">
+                  {c.ended}{" "}
+                  <button className="underline" onClick={() => void store.retry()}>
+                    Reconnect
+                  </button>
+                </div>
+              )
+            )}
+            {!agentId ? (
+              // An unreadable registry is not an empty one: offering "add your first agent" would deny the
+              // failure and hand over an action that cannot succeed until the file is fixed.
+              view.error ? (
+                <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+              ) : (
+                <NoAgents onAdd={() => void store.addAgent()} />
+              )
+            ) : agentState === "broken" ? (
+              <BrokenAgent
+                message={view.error ?? ""}
+                onRemove={remove}
+                onReveal={() => void store.reveal()}
+                onRetry={() => void store.retry()}
+              />
+            ) : agentState === "no_agent" ? (
+              <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
+            ) : !c || c.items.length === 0 ? (
+              <NewConversation>{composer}</NewConversation>
+            ) : (
+              // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
+              // run streams, so this gap *is* where the newest line lands. At 16 the line you are
+              // reading sat on the composer's edge, half under the fade.
+              <Transcript key={c.subscription} items={c.items} busySince={c.busySince} bottomGap={composerHeight + 64} />
+            )}
+            {agentId && agentState === "ready" && c && c.items.length > 0 && (
+              // Floating, not stacked: the transcript runs the full height of the pane and passes
+              // beneath this, which is what keeps the bottom of the window from reading as a seam.
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
+                {/* The composer is narrower than the reading column, so text would slide past on both
+                    sides of it. The canvas is solid up to the composer's top edge and fades over the
+                    40px above it: a fixed height shorter than the composer left the line just above it
+                    unfaded, so a table's copy buttons read as the composer's own. */}
+                <div
+                  className="absolute inset-x-0 bottom-0"
+                  style={{
+                    height: composerHeight + 16 + 40,
+                    background: "linear-gradient(to top, var(--color-bg) calc(100% - 40px), transparent)",
+                  }}
+                />
+                <div ref={composerBox} className="composer-column pointer-events-auto">
+                  {composer}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

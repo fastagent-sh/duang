@@ -125,8 +125,9 @@ way opening it would — FastAgent owns the session list and duang will not keep
 where sessions live.
 
 Selection is the accent, never a grey — grey is what a row looks like under the pointer. There is
-one selection mark at a time: the conversation being read carries the tint when it is listed, and
-its agent row carries it only while that list is folded.
+one selection mark at a time, and it says what the content area shows: the conversation being read
+carries the tint when it is listed, its agent row carries it only while that list is folded, and
+while Settings shows, the Settings row at the foot of the sidebar carries it instead.
 
 **One flat list, no card per agent.** Slightly inset rows, a hairline that starts where the text
 does, and the open conversation filled within its row: Telegram, WeChat and Codex draw a roster this way,
@@ -524,7 +525,9 @@ The whole list, so it lives in one place instead of being read out of the handle
 | Key | Where | Does |
 |---|---|---|
 | `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
-| `Esc` | anywhere | Stop the running turn (a popover takes it first) |
+| `Esc` | anywhere | Stop the running turn (a popover, then Settings, takes it first) |
+| `⌘,` | anywhere | Open Settings (the App menu's Settings…); again keeps it open |
+| `↑` `↓` `←` `→` | Settings, a choice group | Move the choice; the group is one tab stop, on the checked row |
 | `Tab` | anywhere | Sidebar → transcript → composer |
 | `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
 | `Home` `End` | roster | First and last row |
@@ -560,30 +563,52 @@ shows the first two letters over a background chosen by hashing the name across 
 hues. Identity is the tile; presence is the ring around it (§9), never a change to the tile itself,
 so an agent looks like the same agent whether it is busy or idle.
 
-## 12b. Planned: settings and connecting a provider
+## 12b. Settings (network shipped) and connecting a provider (planned)
 
-Behaviour is in [interaction.md](interaction.md#planned-providers-network-and-reasoning-effort-stage-1);
+Behaviour is in interaction.md: [Settings and Network](interaction.md#shipped-local-workbench)
+(shipped) and [providers](interaction.md#planned-providers-and-reasoning-effort-stage-1) (planned);
 this is how it should read. References: Zed's AI settings, which name subscriptions and API access
 as different things; OpenCode's connect-provider dialog, one dialog walking method, prompt, waiting
 and result; Codex's "Sign in with ChatGPT / API key" pair. Refused: Cherry Studio's dense
 per-provider forms, where a `Check` beside the key field read as a key check but tested a model.
 
 ```
-┌ sidebar ────────────────┬ Settings ────────────────────────────────────────┐
-│ (unchanged,             │ Model providers                                  │
-│  running work visible)  │   Connected   name · Subscription   Reconnect …  │
-│                         │   Add a provider  [Subscription|API key|Custom]  │
-│                         │   Credentials file · ~/.fastagent/…   Reveal     │
-│                         │ Network                                          │
-│                         │   (•) Automatic   via 127.0.0.1:7897 · macOS     │
-│                         │   ( ) Manual   ( ) Off          Test connection  │
-└─────────────────────────┴──────────────────────────────────────────────────┘
+Settings                                                        ×
+
+NETWORK
+╭─────────────────────────────────────────────────────────────────╮
+│ Automatic                                                     ✓ │
+│ via http://127.0.0.1:7897 · macOS settings · connected · 320 ms │
+│   ───────────────────────────────────────────────────────────── │
+│ Manual                                                          │
+│ Not set                                                         │
+│   ───────────────────────────────────────────────────────────── │
+│ Off                                                             │
+│ Connect directly                                                │
+╰─────────────────────────────────────────────────────────────────╯
+
+MANUAL PROXY                               (only while Manual is chosen)
+╭ HTTP / HTTPS / SOCKS5, one checked ╮  ╭ Server │ Port ╮  [Use this proxy]
 ```
 
-- Settings replace the conversation in the content area and use the reading column's width; Escape
-  or the back control returns to the conversation. No left navigation while there are two groups.
-- Provider rows use the conversation-row rhythm; the authentication kind is a neutral badge, and a
-  failure is a `danger` badge with its reason, never colour alone (§9).
+- Shipped, drawn the way Telegram draws its settings: a small-caps muted heading over an inset card
+  (`surface`, hairline ring, radius 14) on the plain canvas, rows divided by hairlines that start
+  where the text does, the choice marked by a trailing accent ✓ rather than a leading radio, and
+  fields as rows (a label, then the value) rather than one URL to spell. The chosen row carries the
+  connection's state as its second line — `connected · 320 ms` in the accent, or `unreachable
+  (ECONNREFUSED)` in danger with the whole error on hover — instead of a *Test connection* button.
+  No explanatory footnotes: what the rows do not need saying, and the one surprise — a terminal
+  launch whose `HTTPS_PROXY` overrides the system — is a third line on the Automatic row, shown only
+  then. Not taken from Telegram: the sidebar does not turn into a settings list, because running
+  work must stay visible; a category list will head the page once there is a second group.
+- The App menu's **Settings…** (`⌘,`, where macOS apps keep app-level settings) and a Settings row
+  at the foot of the sidebar open Settings in place of the conversation, 600 wide. The row is a
+  gear and the word, muted, set apart from the roster by a hairline and not beside its `+`: that
+  header acts on the agent list, Settings is app-level and rarely used, and it is a place rather
+  than an action, so it takes the selection mark while open. It is its own tab stop after the
+  roster. Escape or the close control returns to the conversation.
+- Planned: provider rows use the conversation-row rhythm; the authentication kind is a neutral
+  badge, and a failure is a `danger` badge with its reason, never colour alone (§9).
 - *Add a provider* is a searchable list grouped Subscription / API key / Custom endpoint. Choosing
   a row opens the connect dialog: the modal dialog surface (§6b), 440 wide, one `primary` action
   per step. A device code is monospace at 22px with a Copy control; a browser step shows waiting

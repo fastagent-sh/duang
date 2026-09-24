@@ -11,6 +11,7 @@ import {
   FilePlus,
   FileText,
   FolderOpen,
+  GearSix,
   Globe,
   Info,
   MagnifyingGlass,
@@ -114,6 +115,8 @@ export function Sidebar({
   onSelect,
   onToggle,
   onAdd,
+  settingsOpen,
+  onSettings,
   onOpen,
   onNew,
   onDelete,
@@ -136,6 +139,9 @@ export function Sidebar({
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onAdd: () => void;
+  /** Settings is showing in the content area: it takes the one selection mark. */
+  settingsOpen: boolean;
+  onSettings: () => void;
   onOpen: (agentId: string, session: string) => void;
   onNew: () => void;
   onDelete: (agentId: string, session: string) => void;
@@ -272,7 +278,7 @@ export function Sidebar({
           runs into both walls of the column reads as a slab with two square corners cut by the
           panel, which is the difference between this list and Telegram's. Inset, the fill is a
           rounded shape sitting *in* the column. */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-1.5" onKeyDown={onKeyDown}>
+      <div role="navigation" aria-label="Agents" className="flex-1 overflow-y-auto min-h-0 px-1.5" onKeyDown={onKeyDown}>
         {agents.map((agent) => {
           const selected = agent.id === agentId;
           const open = expanded.includes(agent.id);
@@ -282,8 +288,8 @@ export function Sidebar({
           const failures = waiting.filter((outcome) => outcome === "failed").length;
           const conversations = open ? rowsFor(agent.id) : [];
           // One selection mark at a time: once the conversation being read is listed, it carries
-          // the tint and its agent row steps back to plain.
-          const marked = selected && !conversations.some((row) => row.session === session);
+          // the tint and its agent row steps back to plain; while Settings shows, neither does.
+          const marked = !settingsOpen && selected && !conversations.some((row) => row.session === session);
           return (
             <div key={agent.id}>
               <div className="relative">
@@ -295,7 +301,7 @@ export function Sidebar({
                   tabIndex={active === `agent:${agent.id}` ? 0 : -1}
                   aria-label={agent.name}
                   aria-expanded={open}
-                  aria-current={selected ? "true" : undefined}
+                  aria-current={selected && !settingsOpen ? "true" : undefined}
                   onFocus={() => setReached(`agent:${agent.id}`)}
                   onClick={() => onSelect(agent.id)}
                   title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
@@ -354,7 +360,7 @@ export function Sidebar({
                     // A conversation the runtime has never heard of can be neither renamed nor
                     // deleted — `update()` and `delete()` both answer `no_such_session` — so it has
                     // no menu at all, which is what the keyboard's Delete already assumed.
-                    const current = selected && row.session === session;
+                    const current = !settingsOpen && selected && row.session === session;
                     const menu = row.fresh
                       ? undefined
                       : () =>
@@ -479,6 +485,21 @@ export function Sidebar({
             </div>
           );
         })}
+      </div>
+      {/* App-level and rarely used, so it sits apart from the roster rather than beside its "+".
+          It is a place, not an action: while Settings shows, this row is the one selection mark. */}
+      <div className="shrink-0 border-t border-stroke px-1.5 py-1.5">
+        <button
+          onClick={onSettings}
+          aria-current={settingsOpen ? "page" : undefined}
+          title="Settings (⌘,)"
+          className={`flex w-full items-center gap-2.5 rounded-card h-8 px-3 text-left text-[12.5px] transition-colors ${
+            settingsOpen ? "bg-accent-weak text-accent" : "text-muted hover:bg-hover hover:text-text"
+          }`}
+        >
+          <GearSix size={16} aria-hidden />
+          Settings
+        </button>
       </div>
     </aside>
   );
