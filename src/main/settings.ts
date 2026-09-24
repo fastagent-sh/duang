@@ -13,7 +13,8 @@ export interface Settings {
 }
 export const DEFAULTS: Settings = { network: { mode: "automatic" } };
 
-const SCHEMES = ["http:", "https:", "socks5:"];
+/** The port a scheme implies, written out so a saved proxy always names its port. */
+const DEFAULT_PORTS: Record<string, string> = { "http:": "80", "https:": "443", "socks5:": "1080" };
 
 /** A proxy URL Chromium and undici both accept: http, https or socks5, with a host. */
 export function proxyUrl(value: unknown): string {
@@ -24,9 +25,11 @@ export function proxyUrl(value: unknown): string {
   } catch {
     throw new Error(`Not a URL: ${value}`);
   }
-  if (!SCHEMES.includes(url.protocol) || !url.hostname)
+  if (!(url.protocol in DEFAULT_PORTS) || !url.hostname)
     throw new Error(`A proxy URL is http://, https:// or socks5:// with a host: ${value}`);
-  return `${url.protocol}//${url.host}`;
+  // `url.host` drops a port equal to the scheme's default, and the page reads the port back from
+  // what was saved; an empty Port field would then refuse the next save.
+  return `${url.protocol}//${url.hostname}:${url.port || DEFAULT_PORTS[url.protocol]}`;
 }
 
 export function network(value: unknown): Network {

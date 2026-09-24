@@ -24,6 +24,20 @@ export function routeOf(pac: string): string | undefined {
   }
 }
 
+/**
+ * `routeOf` for callers that must not stop over an answer it cannot use — the display and the
+ * commands' variables. The only failure it expects is `routeOf`'s unsupported-route refusal, and it
+ * hands that back as data to be shown; requests still fail through the dispatcher's own refusal.
+ */
+export function tryRoute(pac: string): { proxy?: string } | { error: string } {
+  try {
+    const proxy = routeOf(pac);
+    return proxy ? { proxy } : {};
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+}
+
 /** An agent whose every connection fails with `error`, so a routing failure reaches the caller as a request error. */
 const failing = (error: Error) =>
   new Agent({

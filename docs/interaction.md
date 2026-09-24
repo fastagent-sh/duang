@@ -37,7 +37,10 @@ field that cannot work says so (`Server is required`, `Port is a number from 1 t
 nothing is saved. The chosen row shows the route model requests take now and checks it with one
 request on opening and after every change: `connected · 320 ms` for any HTTP answer, or
 `unreachable (ECONNREFUSED)` with the full error, naming the route, on hover; a refresh control
-checks again. A model
+checks again. A route duang cannot take (a PAC answer such as SOCKS4) shows as `unsupported proxy
+route` and fails model requests with that reason; if only the route for agent commands is
+unusable, they get no proxy variables and the page says so in red. Neither stops duang from
+starting or sending. Choices are applied one at a time in the order made. A model
 request through an unreachable proxy fails with whatever its provider SDK reports, often only a
 connection error; duang never falls back to a direct connection, which may be blocked or may
 bypass a route the person chose. A settings file that cannot be read is reported at launch and on
@@ -80,7 +83,7 @@ FastAgent and relevant files/diffs; if runtime discovery is unavailable, say so.
 shown in this view is **declared**, not guaranteed to run while the app is closed. Compact and
 branching are conditional on demonstrated long-conversation needs, not a checklist of Pi commands.
 
-## Planned: providers, network and reasoning effort (stage 1)
+## Planned: providers and reasoning effort (stage 1)
 
 **Model picker.** The list is the open agent's: what its runtime accepts (`allowedModels`), so a
 model from the definition's `models.json` or the machine's custom endpoints appears and can be

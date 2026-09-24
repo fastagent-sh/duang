@@ -3,7 +3,7 @@ import { createServer, request as httpRequest, type Server } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { test } from "node:test";
 import { fetch, getGlobalDispatcher, setGlobalDispatcher } from "undici";
-import { commandProxyEnv, routeOf, RoutedDispatcher } from "./route.ts";
+import { commandProxyEnv, routeOf, RoutedDispatcher, tryRoute } from "./route.ts";
 
 test("a PAC answer becomes the proxy to use, and anything unsupported is an error", () => {
   assert.equal(routeOf("DIRECT"), undefined);
@@ -12,6 +12,14 @@ test("a PAC answer becomes the proxy to use, and anything unsupported is an erro
   assert.equal(routeOf("HTTPS proxy.corp:443"), "https://proxy.corp:443");
   assert.equal(routeOf("SOCKS5 127.0.0.1:7891"), "socks5://127.0.0.1:7891");
   assert.throws(() => routeOf("SOCKS 127.0.0.1:1080"), /Unsupported proxy route "SOCKS 127.0.0.1:1080"/);
+});
+
+test("an unusable answer is returned as its reason, so a display or the commands' variables cannot stop the app", () => {
+  assert.deepEqual(tryRoute("DIRECT"), {});
+  assert.deepEqual(tryRoute("PROXY 127.0.0.1:7897"), { proxy: "http://127.0.0.1:7897" });
+  assert.deepEqual(tryRoute("SOCKS 127.0.0.1:1080"), {
+    error: 'Unsupported proxy route "SOCKS 127.0.0.1:1080": only PROXY, HTTPS and SOCKS5 are',
+  });
 });
 
 test("commands get one proxy with loopback direct, in both spellings, or nothing", () => {

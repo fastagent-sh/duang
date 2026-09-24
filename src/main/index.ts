@@ -25,6 +25,7 @@ import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent
 import type { SessionFrame } from "../preload/index.ts";
 
 const settingsFile = () => join(app.getPath("userData"), "settings.json");
+let settingsChange: Promise<unknown> = Promise.resolve();
 
 /** Settings is a place in the window, so the menu item asks the renderer to go there. */
 function openSettings(): void {
@@ -184,13 +185,20 @@ function register(): void {
   // Read on every open of the page: a file fixed by hand shows up without a restart, and a broken one
   // is reported there rather than shown as the defaults.
   ipcMain.handle("settings:get", async () => ({ network: (await readSettings(settingsFile())).network, route: await describeRoute() }));
-  ipcMain.handle("settings:setNetwork", async (_e, value: unknown) => {
-    const next = network(value);
-    // A file that cannot be read is not overwritten from here: it may hold what the person meant.
-    const settings = await readSettings(settingsFile());
-    await writeSettings(settingsFile(), { ...settings, network: next });
-    await applyNetwork(next);
-    return describeRoute();
+  ipcMain.handle("settings:setNetwork", (_e, value: unknown) => {
+    // One change at a time: two quick choices must end with the file, Chromium's configuration and
+    // the answer all saying the second one, not whichever await finished last.
+    const run = settingsChange.then(async () => {
+      const next = network(value);
+      // A file that cannot be read is not overwritten from here: it may hold what the person meant.
+      const settings = await readSettings(settingsFile());
+      await writeSettings(settingsFile(), { ...settings, network: next });
+      await applyNetwork(next);
+      return describeRoute();
+    });
+    // The caller gets the failure; the next change still runs.
+    settingsChange = run.catch(() => {});
+    return run;
   });
   ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settingsFile()));
   ipcMain.handle("network:test", () => testConnection());

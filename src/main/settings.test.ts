@@ -25,6 +25,10 @@ test("only a missing file is a first run; an unreadable one names itself", async
 test("a proxy URL is normalised to scheme and host, and anything else is refused", () => {
   assert.equal(proxyUrl(" http://127.0.0.1:7890/ "), "http://127.0.0.1:7890");
   assert.equal(proxyUrl("socks5://127.0.0.1:7891"), "socks5://127.0.0.1:7891");
+  // A default port is kept, not dropped, so the page can show it again.
+  assert.equal(proxyUrl("http://proxy.corp:80"), "http://proxy.corp:80");
+  assert.equal(proxyUrl("https://proxy.corp"), "https://proxy.corp:443");
+  assert.equal(proxyUrl("socks5://proxy.corp"), "socks5://proxy.corp:1080");
   assert.throws(() => proxyUrl(""), /needs a URL/);
   assert.throws(() => proxyUrl("127.0.0.1:7890"), /http:\/\/, https:\/\/ or socks5:\/\/|Not a URL/);
   assert.deepEqual(network({ mode: "off" }), { mode: "off" });

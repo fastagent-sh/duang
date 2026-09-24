@@ -41,6 +41,8 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
   const [check, setCheck] = useState<Check>();
   // A slow answer for a route that has since changed must not land on the new one.
   const checks = useRef(0);
+  // Nor may an earlier choice's answer land after a later one's.
+  const applies = useRef(0);
 
   const runCheck = async () => {
     const id = ++checks.current;
@@ -74,13 +76,15 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
   }, []);
 
   const apply = async (network: Network) => {
+    const id = ++applies.current;
     setProblem(undefined);
     try {
       const route = await api.setNetwork(network);
+      if (id !== applies.current) return;
       setSaved({ network, route });
       void runCheck();
     } catch (error) {
-      setProblem(message(error));
+      if (id === applies.current) setProblem(message(error));
     }
   };
   const choose = (next: Network["mode"]) => {
@@ -183,6 +187,11 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
                 </div>
               </form>
             )}
+            {saved.route.commandError && (
+              <p role="alert" className="px-4 text-danger text-[12px]">
+                {saved.route.commandError}
+              </p>
+            )}
             {mode !== "manual" && problem && (
               <p role="alert" className="px-4 text-danger text-[12px]">
                 {problem}
@@ -231,6 +240,8 @@ function Option({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
+        // Only the row's own keys: Enter on the refresh control inside it must refresh, not re-apply.
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onSelect();
@@ -296,7 +307,14 @@ function Status({ route, check, onRefresh }: { route: Route; check?: Check; onRe
         : <span className="text-accent" title={`api.anthropic.com answered HTTP ${check.status}`}>connected · {check.ms} ms</span>;
   return (
     <span className="flex flex-wrap items-center gap-x-1.5">
-      <span className="font-mono">{routeLabel(route)}</span>
+      {route.error ? (
+        // The system answered with a route duang cannot take; model requests fail with this reason.
+        <span className="text-danger" title={route.error}>
+          unsupported proxy route
+        </span>
+      ) : (
+        <span className="font-mono">{routeLabel(route)}</span>
+      )}
       {result && <span aria-hidden>·</span>}
       <span role="status">{result}</span>
       <button

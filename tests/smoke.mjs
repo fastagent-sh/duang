@@ -1,6 +1,6 @@
 /** Real Electron + preload + FastAgent; only the model's HTTP response is faked. No credentials or network needed. */
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -797,6 +797,30 @@ if (!process.versions.electron) {
       await choose("Automatic");
       await until("/· (macOS|system) settings/.test(document.body.innerText)", "Automatic follows the system");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
+      // Two choices in one tick are applied in order: the file, Chromium and the page end on the second.
+      await evaluate(`(() => {
+        const rows = [...document.querySelectorAll('[role=radio]')];
+        rows.find((r) => r.textContent.trim().startsWith('Off')).click();
+        rows.find((r) => r.textContent.trim().startsWith('Automatic')).click();
+      })()`);
+      // The clicks return before either change lands, so wait for the file to stop changing.
+      for (let last = -1, now = (await stat(settingsFile)).mtimeMs; now !== last; ) {
+        last = now;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        now = (await stat(settingsFile)).mtimeMs;
+      }
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
+      assert.equal((await evaluate("window.duang.getSettings()")).route.source, "system", "Chromium ended on the second choice too");
+      await until("/· (macOS|system) settings[\\s·]*connected/.test(document.body.innerText)", "the page ends on the second choice");
+      // Enter on the refresh control checks again; it does not re-apply (rewrite) the choice.
+      const written = (await stat(settingsFile)).mtimeMs;
+      await evaluate(`document.querySelector('button[aria-label="Check the connection again"]').focus()`);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+      win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+      await until("/connected · \\d+ ms/.test(document.body.innerText)", "the check runs again");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.equal((await stat(settingsFile)).mtimeMs, written, "Enter on refresh did not re-apply the setting");
       await writeFile(settingsFile, "{broken");
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
       await until("!document.querySelector('#network-heading')", "the close control leaves Settings");
@@ -810,6 +834,29 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("!document.querySelector('#network-heading') && document.querySelector('textarea')", "Escape leaves Settings");
+
+      // A route duang cannot take (SOCKS4, from a PAC file) is shown, not fatal: a send still goes
+      // out, agent commands just get no proxy, and the page says both. Choosing again recovers.
+      await electron.session.defaultSession.setProxy({
+        mode: "pac_script",
+        pacScript: `data:application/x-ns-proxy-autoconfig,${encodeURIComponent('function FindProxyForURL() { return "SOCKS 127.0.0.1:1080"; }')}`,
+      });
+      assert.equal(await electron.session.defaultSession.resolveProxy("https://github.com"), "SOCKS 127.0.0.1:1080");
+      const answers = () => evaluate("document.body.innerText.split('Smoke answer').length");
+      const before = await answers();
+      await message("Send through a SOCKS4 PAC answer.");
+      await until(`document.body.innerText.split('Smoke answer').length > ${before} && !document.body.innerText.includes('working…')`, "a send is not stopped by the commands' route");
+      settingsItem.click();
+      await until(
+        "document.body.innerText.includes('unsupported proxy route') && document.body.innerText.includes('Agent commands get no proxy: Unsupported proxy route \"SOCKS 127.0.0.1:1080\"')",
+        "both unusable routes are shown, and the settings file is not blamed",
+      );
+      assert.ok(!(await evaluate("document.body.innerText.includes('Fix or remove the file')")));
+      await choose("Automatic");
+      await until("/· (macOS|system) settings/.test(document.body.innerText) && !document.body.innerText.includes('Agent commands get no proxy')", "choosing again recovers");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("!document.querySelector('#network-heading')", "Escape leaves Settings again");
 
       // An unreadable registry must read as a failure, not as a fresh install with no agents.
       const registry = join(data, "agents.json");

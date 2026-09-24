@@ -9,7 +9,7 @@
  */
 import { session } from "electron";
 import { setGlobalDispatcher } from "undici";
-import { commandProxyEnv, routeOf, RoutedDispatcher } from "./route.ts";
+import { commandProxyEnv, RoutedDispatcher, tryRoute } from "./route.ts";
 import type { Network } from "./settings.ts";
 
 /** Model traffic is what the route display is about. */
@@ -35,9 +35,14 @@ export interface Route {
   source: Source;
   /** The launch variable Automatic is using, when it is. */
   variable?: string;
+  /** Why the model host's route cannot be used (an unsupported PAC answer); requests fail with it. */
+  error?: string;
+  /** Why agent commands got no proxy variables, when they did not. */
+  commandError?: string;
 }
 
 let current: Network = { mode: "automatic" };
+let commandError: string | undefined;
 let installed = false;
 
 export async function applyNetwork(network: Network): Promise<void> {
@@ -64,10 +69,16 @@ export async function applyNetwork(network: Network): Promise<void> {
   await syncCommandProxy();
 }
 
+/** Never throws for an unusable route: it is something to show, and the settings file is not at fault. */
 export async function describeRoute(): Promise<Route> {
-  const proxy = routeOf(await session.defaultSession.resolveProxy(MODEL_HOST));
+  const route = tryRoute(await session.defaultSession.resolveProxy(MODEL_HOST));
   const source: Source = current.mode === "automatic" ? (launchUrl ? "environment" : "system") : current.mode === "manual" ? "manual" : "off";
-  return { ...(proxy ? { proxy } : {}), source, ...(source === "environment" ? { variable: launchVariable } : {}) };
+  return {
+    ...route,
+    source,
+    ...(source === "environment" ? { variable: launchVariable } : {}),
+    ...(commandError ? { commandError } : {}),
+  };
 }
 
 /**
@@ -76,7 +87,13 @@ export async function describeRoute(): Promise<Route> {
  */
 export async function syncCommandProxy(): Promise<void> {
   if (launchUrl) return;
-  const proxy = routeOf(await session.defaultSession.resolveProxy(COMMAND_HOST));
+  const route = tryRoute(await session.defaultSession.resolveProxy(COMMAND_HOST));
+  // An answer the variables cannot express (a SOCKS4 PAC entry) costs the commands their proxy —
+  // no variables at all, never a stale one — not the app its start or a send. The page and the log
+  // say so.
+  commandError = "error" in route ? `Agent commands get no proxy: ${route.error}` : undefined;
+  if (commandError) console.error(`[duang] ${commandError}`);
+  const proxy = "error" in route ? undefined : route.proxy;
   for (const [name, value] of Object.entries(commandProxyEnv(proxy))) {
     if (presentAtLaunch.has(name)) continue;
     if (value === undefined) delete process.env[name];
@@ -87,6 +104,7 @@ export async function syncCommandProxy(): Promise<void> {
 /** One request over the same route a model call takes, timed. Any HTTP answer means the network works. */
 export async function testConnection(): Promise<{ status: number; ms: number; route: Route }> {
   const route = await describeRoute();
+  if (route.error) throw new Error(`${new URL(MODEL_HOST).host}: ${route.error}`);
   const started = performance.now();
   try {
     const response = await fetch(MODEL_HOST, { method: "HEAD", signal: AbortSignal.timeout(TEST_TIMEOUT_MS) });
