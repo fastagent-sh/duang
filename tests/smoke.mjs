@@ -25,7 +25,7 @@ if (!process.versions.electron) {
     }
   }
 } else {
-  const { app, BrowserWindow } = electron;
+  const { app, BrowserWindow, Menu } = electron;
   async function run() {
     const root = process.env.DUANG_SMOKE_ROOT;
     assert.ok(root, "Run with node tests/smoke.mjs so the fixture is isolated");
@@ -578,12 +578,17 @@ if (!process.versions.electron) {
       // One tab stop for the roster, arrows inside it (§11).
       const roster = () =>
         evaluate(`(() => {
-          const rows = [...document.querySelectorAll('aside > div + div button')];
+          const rows = [...document.querySelectorAll('aside [aria-label="Agents"] button')];
           return { rows: rows.length, tabbable: rows.filter((b) => b.tabIndex === 0).length };
         })()`);
       const counted = await roster();
       assert.ok(counted.rows > 1, "there is more than one row to walk");
       assert.equal(counted.tabbable, 1, "the roster is one tab stop, not one per row");
+      assert.equal(
+        await evaluate(`[...document.querySelectorAll('aside > :not([aria-label="Agents"]) button')].find((b) => b.textContent.trim() === 'Settings')?.tabIndex`),
+        0,
+        "Settings, outside the roster, is its own tab stop",
+      );
 
       // Folding the open agent with the caret — the keyboard has not moved, so the row the keyboard
       // started on is simply gone. The list still has to have exactly one way in, or Tab skips it.
@@ -607,7 +612,7 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "char", keyCode: "Tab" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
       await until(
-        "document.activeElement.closest('aside > div + div') !== null",
+        "document.activeElement.closest('aside [aria-label=Agents]') !== null",
         "Tab enters the roster from outside it",
       );
 
@@ -617,7 +622,7 @@ if (!process.versions.electron) {
         evaluate(
           `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
         );
-      await evaluate("document.querySelector('aside > div + div button[tabindex=\"0\"]').focus()");
+      await evaluate("document.querySelector('aside [aria-label=Agents] button[tabindex=\"0\"]').focus()");
       await press("ArrowUp");
       await until(
         "document.activeElement.getAttribute('aria-label') === 'Smoke'",
@@ -635,7 +640,7 @@ if (!process.versions.electron) {
       // Naming a conversation. The menu that carries Rename is native, so the test drives what the
       // menu would: a double click on the row, which is the other way in.
       await evaluate(`(() => {
-        const row = [...document.querySelectorAll('aside > div + div button')].find(
+        const row = [...document.querySelectorAll('aside [aria-label=Agents] button')].find(
           (b) => !b.getAttribute('aria-label') && b.textContent.includes('Read hello.txt and answer.'),
         );
         if (!row) throw new Error('Missing the conversation row');
@@ -752,9 +757,20 @@ if (!process.versions.electron) {
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
           input.dispatchEvent(new Event('input', { bubbles: true }));
         })()`);
-      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, cancelable: true }))`);
-      await until("document.querySelector('#network-heading') && document.body.innerText.includes('Now')", "⌘, opens Settings");
+      // The App menu owns Settings… (⌘,); clicking the item is what the shortcut does.
+      const settingsItem = Menu.getApplicationMenu().getMenuItemById("settings");
+      assert.equal(settingsItem.accelerator, "Command+,");
+      assert.ok(Menu.getApplicationMenu().items.some((item) => item.role === "editmenu"), "copy and paste keep their menu");
+      settingsItem.click();
+      await until("document.querySelector('#network-heading') && document.body.innerText.includes('Now')", "Settings… opens Settings");
       assert.ok(await evaluate(`!!document.querySelector('button[aria-label="Configured"]')`), "the sidebar stays in view");
+      assert.deepEqual(
+        await evaluate(`[...document.querySelectorAll('aside [aria-current]')].map((el) => el.textContent.trim())`),
+        ["Settings"],
+        "while Settings shows, its row is the one selection mark",
+      );
+      settingsItem.click();
+      assert.ok(await evaluate("!!document.querySelector('#network-heading')"), "asking again keeps Settings open");
       await evaluate(`document.querySelectorAll('input[type=radio]')[2].click()`);
       await until("document.body.innerText.includes('Direct · off')", "Off applies at once");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" });
@@ -772,7 +788,9 @@ if (!process.versions.electron) {
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
       await writeFile(settingsFile, "{broken");
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
-      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, cancelable: true }))`);
+      await until("!document.querySelector('#network-heading')", "the close control leaves Settings");
+      // The sidebar's own way in, at its foot.
+      await click("Settings");
       await until("document.body.innerText.includes('settings.json') && document.body.innerText.includes('Reveal in Finder')", "an unreadable settings file is reported");
       assert.ok(!(await evaluate("!!document.querySelector('#network-heading')")), "a broken file is not shown as the defaults");
       await writeFile(settingsFile, JSON.stringify({ network: { mode: "automatic" } }));

@@ -94,6 +94,12 @@ const api = {
     ipcRenderer.invoke("session:send", agentId, session, text),
   abort: (agentId: string, session: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:abort", agentId, session),
+  /** The App menu's Settings… (⌘,): main owns the shortcut, the renderer owns where the page is. */
+  onOpenSettings: (listener: () => void): (() => void) => {
+    const handler = (): void => listener();
+    ipcRenderer.on("app:settings", handler);
+    return () => void ipcRenderer.off("app:settings", handler);
+  },
   onSessionEvent: (listener: (frame: SessionFrame) => void): (() => void) => {
     const handler = (_e: unknown, frame: SessionFrame): void => listener(frame);
     ipcRenderer.on("session:event", handler);

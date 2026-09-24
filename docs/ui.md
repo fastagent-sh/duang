@@ -125,8 +125,9 @@ way opening it would — FastAgent owns the session list and duang will not keep
 where sessions live.
 
 Selection is the accent, never a grey — grey is what a row looks like under the pointer. There is
-one selection mark at a time: the conversation being read carries the tint when it is listed, and
-its agent row carries it only while that list is folded.
+one selection mark at a time, and it says what the content area shows: the conversation being read
+carries the tint when it is listed, its agent row carries it only while that list is folded, and
+while Settings shows, the Settings row at the foot of the sidebar carries it instead.
 
 **One flat list, no card per agent.** Slightly inset rows, a hairline that starts where the text
 does, and the open conversation filled within its row: Telegram, WeChat and Codex draw a roster this way,
@@ -525,7 +526,7 @@ The whole list, so it lives in one place instead of being read out of the handle
 |---|---|---|
 | `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
 | `Esc` | anywhere | Stop the running turn (a popover, then Settings, takes it first) |
-| `⌘,` | anywhere | Open or close Settings |
+| `⌘,` | anywhere | Open Settings (the App menu's Settings…); again keeps it open |
 | `Tab` | anywhere | Sidebar → transcript → composer |
 | `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
 | `Home` `End` | roster | First and last row |
@@ -581,8 +582,12 @@ per-provider forms, where a `Check` beside the key field read as a key check but
 └─────────────────────────┴──────────────────────────────────────────────────┘
 ```
 
-- Shipped: the gear beside `+` in the sidebar header and `⌘,` open Settings in place of the
-  conversation, 640 wide, with the Network group only. Each choice is a row that takes the accent
+- Shipped: the App menu's **Settings…** (`⌘,`, where macOS apps keep app-level settings) and a
+  Settings row at the foot of the sidebar open Settings in place of the conversation, 640 wide,
+  with the Network group only. The row is a gear and the word, muted, set apart from the roster by
+  a hairline and not beside its `+`: that header acts on the agent list, Settings is app-level and
+  rarely used, and it is a place rather than an action, so it takes the selection mark while open.
+  It is its own tab stop after the roster. Each choice is a row that takes the accent
   tint when selected; the route in effect sits in a surface card with *Test connection* beside it.
   Escape or the close control returns to the conversation. No left navigation while there are two
   groups.

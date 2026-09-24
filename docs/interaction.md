@@ -23,8 +23,9 @@ The picker leads with the selected model and a short credential-file label; expa
 reveals the complete FastAgent path. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.
 
-Settings open with `⌘,` or the sidebar's gear, in place of the conversation; the sidebar stays,
-and choosing a conversation, `⌘N` or Escape returns to it. **Network** has three choices, saved to
+Settings open from the App menu's **Settings…** (`⌘,`) or the Settings row at the foot of the
+sidebar, in place of the conversation; the sidebar stays, and choosing a conversation, `⌘N`, the
+close control or Escape returns to it. Opening it again while it shows keeps it open. **Network** has three choices, saved to
 `userData/settings.json` and applied at once to new requests (a running turn keeps its
 connection). *Automatic* resolves the route for each request from the system, so switching a VPN
 client on or off needs no action in duang, when duang was launched without proxy variables. If it

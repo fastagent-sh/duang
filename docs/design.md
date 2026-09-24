@@ -73,8 +73,8 @@ next run or a success badge requires an authoritative clock/outcome source, not 
 ## Settings: model providers and network (stage 1; network shipped)
 
 The first run must not require a terminal, and a preset recipient must be able to add their own
-credentials. Settings open in the content area (`⌘,` or the sidebar's gear; planned: the model
-picker's **Manage providers…** / empty-state **Connect a provider**); the sidebar stays visible so
+credentials. Settings open in the content area (the App menu's Settings… `⌘,`, or the Settings
+row at the foot of the sidebar; planned: the model picker's **Manage providers…** / empty-state **Connect a provider**); the sidebar stays visible so
 running work remains in view. One page, two groups, no empty categories; until in-app sign-in
 exists (fastagent#602) the page holds only Network.
 

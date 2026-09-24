@@ -26,6 +26,48 @@ import type { SessionFrame } from "../preload/index.ts";
 
 const settingsFile = () => join(app.getPath("userData"), "settings.json");
 
+/** Settings is a place in the window, so the menu item asks the renderer to go there. */
+function openSettings(): void {
+  const existing = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  const win = existing ?? createWindow();
+  win.show();
+  if (win.webContents.isLoading()) win.webContents.once("did-finish-load", () => win.webContents.send("app:settings"));
+  else win.webContents.send("app:settings");
+}
+
+/**
+ * macOS keeps app-level Settings in the App menu under ⌘, (HIG, The menu bar). Replacing Electron's
+ * default menu replaces all of it, so the standard File, Edit, View and Window menus are rebuilt from
+ * their roles — without Edit, ⌘C and ⌘V stop working in every text field.
+ */
+function setApplicationMenu(): void {
+  if (process.platform !== "darwin") return;
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { role: "about" },
+          { type: "separator" },
+          { id: "settings", label: "Settings…", accelerator: "Command+,", click: openSettings },
+          { type: "separator" },
+          { role: "services" },
+          { type: "separator" },
+          { role: "hide" },
+          { role: "hideOthers" },
+          { role: "unhide" },
+          { type: "separator" },
+          { role: "quit" },
+        ],
+      },
+      { role: "fileMenu" },
+      { role: "editMenu" },
+      { role: "viewMenu" },
+      { role: "windowMenu" },
+    ]),
+  );
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     ...savedBounds(),
@@ -266,6 +308,7 @@ void app
       );
     }
     await applyNetwork(settings.network);
+    setApplicationMenu();
     register();
     createWindow();
     app.on("activate", () => {

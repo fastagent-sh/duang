@@ -43,6 +43,8 @@ export default function App() {
     void store.load();
     return store.dispose;
   }, [store]);
+  // The App menu's Settings… (⌘,) opens the page; asking again while it is open keeps it there.
+  useEffect(() => duang.onOpenSettings(() => setSettings(true)), []);
   const newConversation = useCallback(() => {
     const opened = store.newConversation();
     const target = store.getSnapshot().conversation;
@@ -57,11 +59,6 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
-      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
-        event.preventDefault();
-        setSettings((open) => !open);
-        return;
-      }
       if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
         event.preventDefault();
         setSettings(false);
@@ -158,7 +155,8 @@ export default function App() {
           setSettings(false);
           void store.addAgent();
         }}
-        onSettings={() => setSettings((open) => !open)}
+        settingsOpen={settings}
+        onSettings={() => setSettings(true)}
         onOpen={(agent, id) => {
           setSettings(false);
           // Going to another agent's conversation is one navigation, not a switch followed by an
