@@ -29,7 +29,6 @@ export function Button({
   kind = "secondary",
   size = 32,
   loud,
-  onAccent,
   icon,
   disabled,
   title,
@@ -44,12 +43,6 @@ export function Button({
   kind?: "primary" | "secondary" | "ghost" | "danger";
   size?: 28 | 32;
   loud?: boolean;
-  /**
-   * Riding on a row already filled with the accent. A call site cannot fix this with a class: its
-   * `text-fill-fg` and `ghost`'s own `text-muted` have the same specificity, so the generated
-   * sheet's order decides, and the caret on the open agent's row came out grey on violet.
-   */
-  onAccent?: boolean;
   icon?: ReactNode;
   disabled?: string | false;
   children?: ReactNode;
@@ -59,9 +52,7 @@ export function Button({
   const kinds = {
     primary: ["bg-accent-fill text-fill-fg", "hover:bg-accent-fill/85"],
     secondary: ["border border-stroke", "hover:bg-hover"],
-    ghost: onAccent
-      ? ["text-fill-fg", "hover:bg-fill-fg/15 hover:text-fill-fg"]
-      : ["text-muted", "hover:bg-hover hover:text-text"],
+    ghost: ["text-muted", "hover:bg-hover hover:text-text"],
     danger: ["text-muted", "hover:bg-danger/12 hover:text-danger"],
   };
   const filled = { primary: "bg-accent-fill text-fill-fg", danger: "bg-danger-fill text-fill-fg" };
@@ -126,22 +117,8 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
  * across the room. A tinted word was missed in testing, repeatedly — this is louder on purpose and
  * exists only for outcomes nobody has looked at yet (§9).
  */
-export function Pill({
-  tone,
-  onAccent,
-  children,
-}: {
-  tone: "accent" | "danger";
-  /** Riding on a row that is already filled with the accent: the fill has to invert or it vanishes. */
-  onAccent?: boolean;
-  children: ReactNode;
-}) {
-  // Riding on a filled row, the pill inverts to the row's own foreground — and its text then has to
-  // be the *fill*, not the text-role accent, which is a light violet that all but disappears there.
-  const fills = {
-    accent: onAccent ? "bg-fill-fg text-accent-fill" : "bg-accent-fill text-fill-fg",
-    danger: onAccent ? "bg-fill-fg text-danger-fill" : "bg-danger-fill text-fill-fg",
-  };
+export function Pill({ tone, children }: { tone: "accent" | "danger"; children: ReactNode }) {
+  const fills = { accent: "bg-accent-fill text-fill-fg", danger: "bg-danger-fill text-fill-fg" };
   return (
     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${fills[tone]}`}>{children}</span>
   );
