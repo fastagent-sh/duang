@@ -17,3 +17,14 @@ export function manualUrl(scheme: Scheme, server: string, port: string): { url: 
   return { url: `${scheme}://${host}:${number}` };
 }
 
+
+/**
+ * A saved manual proxy back into the form's fields. Read from the string, not through `URL`: the
+ * WHATWG parser reports a scheme's default port as "" (`http://proxy.corp:80`), and main always
+ * saves the port explicitly so it can be shown again. Anything else was not written by main.
+ */
+export function manualFields(url: string): { scheme: Scheme; server: string; port: string } {
+  const match = /^(https?|socks5):\/\/(.+):(\d+)$/.exec(url);
+  if (!match) throw new Error(`Saved proxy is not scheme://host:port: ${url}`);
+  return { scheme: match[1] as Scheme, server: match[2]!, port: match[3]! };
+}

@@ -12,7 +12,7 @@ import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
 import type { DuangApi, Network, Route } from "../preload/index.ts";
 import { message } from "./store.ts";
 import { Button } from "./ui.tsx";
-import { KINDS, manualUrl, type Scheme } from "./network.ts";
+import { KINDS, manualFields, manualUrl, type Scheme } from "./network.ts";
 
 const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
 
@@ -54,22 +54,24 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
       if (id === checks.current) setCheck({ error: message(error) });
     }
   };
-  const load = () =>
-    api.getSettings().then(
-      (settings) => {
-        setSaved(settings);
-        setReadError(undefined);
-        setMode(settings.network.mode);
-        if (settings.network.mode === "manual") {
-          const url = new URL(settings.network.url);
-          setScheme(url.protocol.slice(0, -1) as Scheme);
-          setServer(url.hostname);
-          setPort(url.port);
-        }
-        void runCheck();
-      },
-      (error) => setReadError(message(error)),
-    );
+  // A file whose manual proxy main did not write is reported like any other unreadable file.
+  const load = async () => {
+    try {
+      const settings = await api.getSettings();
+      const fields = settings.network.mode === "manual" ? manualFields(settings.network.url) : undefined;
+      setSaved(settings);
+      setReadError(undefined);
+      setMode(settings.network.mode);
+      if (fields) {
+        setScheme(fields.scheme);
+        setServer(fields.server);
+        setPort(fields.port);
+      }
+      void runCheck();
+    } catch (error) {
+      setReadError(message(error));
+    }
+  };
   useEffect(() => {
     // Once per opening: a file fixed by hand shows up the next time the page opens, or on Retry.
     void load();
@@ -138,7 +140,7 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
               id="network-heading"
               title="Network"
             >
-              <div role="radiogroup" aria-label="Proxy">
+              <RadioGroup label="Proxy">
                 <Option label="Automatic" checked={mode === "automatic"} onSelect={() => choose("automatic")}>
                   {state("automatic") ?? `Follow ${MAC ? "macOS" : "system"} proxy settings, including a VPN switched on later`}
                   {/* Only a terminal launch gets here, and it is the one surprise worth a line: the
@@ -153,7 +155,7 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
                 <Option label="Off" checked={mode === "off"} onSelect={() => choose("off")}>
                   {state("off") ?? "Connect directly"}
                 </Option>
-              </div>
+              </RadioGroup>
             </Group>
 
             {mode === "manual" && (
@@ -165,11 +167,11 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
                 }}
               >
                 <Group title="Manual proxy">
-                  <div role="radiogroup" aria-label="Proxy type">
+                  <RadioGroup label="Proxy type">
                     {KINDS.map((kind) => (
                       <Option key={kind.scheme} label={kind.label} checked={scheme === kind.scheme} onSelect={() => setScheme(kind.scheme)} />
                     ))}
-                  </div>
+                  </RadioGroup>
                 </Group>
                 <Group>
                   <Field label="Server" value={server} onChange={setServer} placeholder="127.0.0.1" />
@@ -222,6 +224,32 @@ function Group({ id, title, children }: { id?: string; title?: string; children:
 const row =
   "relative before:absolute before:left-4 before:right-0 before:top-0 before:h-px before:bg-stroke first:before:hidden";
 
+/**
+ * One tab stop per group, on the checked row, and the arrows move the choice — the radio group's
+ * keyboard contract, and the same single-stop rule the sidebar's roster follows (§11).
+ */
+function RadioGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      onKeyDown={(event) => {
+        const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+        if (!step) return;
+        const radios = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')];
+        const at = radios.indexOf(document.activeElement as HTMLElement);
+        if (at < 0) return;
+        event.preventDefault();
+        const next = radios[(at + step + radios.length) % radios.length]!;
+        next.focus();
+        next.click();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function Option({
   label,
   checked,
@@ -237,7 +265,7 @@ function Option({
     <div
       role="radio"
       aria-checked={checked}
-      tabIndex={0}
+      tabIndex={checked ? 0 : -1}
       onClick={onSelect}
       onKeyDown={(event) => {
         // Only the row's own keys: Enter on the refresh control inside it must refresh, not re-apply.

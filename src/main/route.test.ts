@@ -3,7 +3,7 @@ import { createServer, request as httpRequest, type Server } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { test } from "node:test";
 import { fetch, getGlobalDispatcher, setGlobalDispatcher } from "undici";
-import { commandProxyEnv, routeOf, RoutedDispatcher, tryRoute } from "./route.ts";
+import { commandProxyEnv, hasCredentials, routeOf, RoutedDispatcher, tryRoute } from "./route.ts";
 
 test("a PAC answer becomes the proxy to use, and anything unsupported is an error", () => {
   assert.equal(routeOf("DIRECT"), undefined);
@@ -20,6 +20,15 @@ test("an unusable answer is returned as its reason, so a display or the commands
   assert.deepEqual(tryRoute("SOCKS 127.0.0.1:1080"), {
     error: 'Unsupported proxy route "SOCKS 127.0.0.1:1080": only PROXY, HTTPS and SOCKS5 are',
   });
+});
+
+test("a proxy URL with a user name or password is recognised, with or without a scheme", () => {
+  assert.equal(hasCredentials("http://user:pass@proxy.corp:8080"), true);
+  assert.equal(hasCredentials("user:pass@127.0.0.1:7890"), true);
+  assert.equal(hasCredentials("socks5://user@proxy.corp:1080"), true);
+  assert.equal(hasCredentials("http://127.0.0.1:7897"), false);
+  assert.equal(hasCredentials("127.0.0.1:7890"), false);
+  assert.equal(hasCredentials("http://proxy.corp:8080/path@x"), false);
 });
 
 test("commands get one proxy with loopback direct, in both spellings, or nothing", () => {

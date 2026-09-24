@@ -40,8 +40,12 @@ request on opening and after every change: `connected · 320 ms` for any HTTP an
 checks again. A route duang cannot take (a PAC answer such as SOCKS4) shows as `unsupported proxy
 route` and fails model requests with that reason; if only the route for agent commands is
 unusable, they get no proxy variables and the page says so in red. Neither stops duang from
-starting or sending. Choices are applied one at a time in the order made. A model
-request through an unreachable proxy fails with whatever its provider SDK reports, often only a
+starting or sending. Choices are applied one at a time in the order made. A launch proxy variable
+with a user name or password (`http://user:pass@proxy:8080`) cannot be used, because duang cannot
+authenticate to a proxy yet: *Automatic* then shows `unsupported proxy route` and every request
+fails with that reason rather than the proxy's bare 407; relaunch without them, or choose *Manual*
+or *Off*. Each choice group is one tab stop on its checked row; the arrow keys move the choice.
+A model request through an unreachable proxy fails with whatever its provider SDK reports, often only a
 connection error; duang never falls back to a direct connection, which may be blocked or may
 bypass a route the person chose. A settings file that cannot be read is reported at launch and on
 the page, with Reveal and Retry, and is never shown as or overwritten with the defaults; the

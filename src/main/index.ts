@@ -27,13 +27,23 @@ import type { SessionFrame } from "../preload/index.ts";
 const settingsFile = () => join(app.getPath("userData"), "settings.json");
 let settingsChange: Promise<unknown> = Promise.resolve();
 
+/**
+ * Settings asked for with no window open. A new window's listener registers after React's first
+ * effects, which can be after `did-finish-load`, and a message sent to no listener is dropped — so
+ * the request waits here until the renderer asks for it.
+ */
+let settingsPending = false;
+
 /** Settings is a place in the window, so the menu item asks the renderer to go there. */
 function openSettings(): void {
   const existing = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-  const win = existing ?? createWindow();
-  win.show();
-  if (win.webContents.isLoading()) win.webContents.once("did-finish-load", () => win.webContents.send("app:settings"));
-  else win.webContents.send("app:settings");
+  if (existing) {
+    existing.show();
+    existing.webContents.send("app:settings");
+    return;
+  }
+  settingsPending = true;
+  createWindow();
 }
 
 /**
@@ -201,6 +211,11 @@ function register(): void {
     return run;
   });
   ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settingsFile()));
+  ipcMain.handle("app:settingsPending", () => {
+    const pending = settingsPending;
+    settingsPending = false;
+    return pending;
+  });
   ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", credentials);
   ipcMain.handle("usage:get", (_e, provider: string) => {

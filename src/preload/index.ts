@@ -98,6 +98,8 @@ const api = {
   onOpenSettings: (listener: () => void): (() => void) => {
     const handler = (): void => listener();
     ipcRenderer.on("app:settings", handler);
+    // A request made before this listener existed (⌘, with no window open) is held by main.
+    void ipcRenderer.invoke("app:settingsPending").then((pending: boolean) => pending && listener());
     return () => void ipcRenderer.off("app:settings", handler);
   },
   onSessionEvent: (listener: (frame: SessionFrame) => void): (() => void) => {

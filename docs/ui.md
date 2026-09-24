@@ -527,6 +527,7 @@ The whole list, so it lives in one place instead of being read out of the handle
 | `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
 | `Esc` | anywhere | Stop the running turn (a popover, then Settings, takes it first) |
 | `⌘,` | anywhere | Open Settings (the App menu's Settings…); again keeps it open |
+| `↑` `↓` `←` `→` | Settings, a choice group | Move the choice; the group is one tab stop, on the checked row |
 | `Tab` | anywhere | Sidebar → transcript → composer |
 | `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
 | `Home` `End` | roster | First and last row |

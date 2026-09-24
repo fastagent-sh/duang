@@ -75,8 +75,11 @@ real Codex run streamed through Clash and its `bash` tool saw the proxy variable
 not listening fails the page's connection check with `ECONNREFUSED` and the proxy's address; the
 same check reached Anthropic through Clash's SOCKS5 port. Picking up a
 system proxy switched while duang runs is expected from Chromium's configuration watcher, and the
-dispatcher asks per request, but switching one was not tested. Only the first entry of a PAC list is used and proxy authentication is
-unsupported until a real user needs either.
+dispatcher asks per request, but switching one was not tested. Only the first entry of a PAC list
+is used, and proxy authentication is unsupported until a real user needs it: Chromium's route answer
+(`PROXY h:p`) carries no credentials. A launch variable with a user name or password therefore fails
+every request with that explanation instead of the proxy's bare 407; before this route existed,
+undici read such credentials from `HTTPS_PROXY` directly, so that launch is a regression.
 
 Agent commands cannot use the dispatcher: pi's shell tool spawns with `getShellEnv()`, a copy of
 `process.env` taken at each spawn, so the only lever is main's own `process.env`, shared by every

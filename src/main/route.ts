@@ -38,6 +38,13 @@ export function tryRoute(pac: string): { proxy?: string } | { error: string } {
   }
 }
 
+/**
+ * A proxy URL with a user name or password. Chromium's route answer ("PROXY h:p") drops them, so the
+ * dispatcher could only reach such a proxy unauthenticated and be refused with a bare 407. Read from
+ * the string because a launch variable often has no scheme (`user:pass@127.0.0.1:7890`).
+ */
+export const hasCredentials = (url: string) => /^(?:[a-z][a-z0-9+.-]*:\/\/)?[^/@]*@/i.test(url);
+
 /** An agent whose every connection fails with `error`, so a routing failure reaches the caller as a request error. */
 const failing = (error: Error) =>
   new Agent({

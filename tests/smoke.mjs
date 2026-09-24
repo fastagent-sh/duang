@@ -794,6 +794,14 @@ if (!process.versions.electron) {
       await click("Use this proxy");
       await until("document.body.innerText.includes('via http://127.0.0.1:9 · manual')", "Manual applies");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:9" });
+      // A scheme's default port is saved and read back, not dropped to an empty field.
+      await fill("Port", "80");
+      await click("Use this proxy");
+      await until("document.body.innerText.includes('via http://127.0.0.1:80 · manual')", "port 80 applies");
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:80" });
+      await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
+      settingsItem.click();
+      await until("document.querySelector('input[aria-label=Port]')?.value === '80'", "the reopened form shows port 80");
       await choose("Automatic");
       await until("/· (macOS|system) settings/.test(document.body.innerText)", "Automatic follows the system");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
@@ -821,6 +829,21 @@ if (!process.versions.electron) {
       await until("/connected · \\d+ ms/.test(document.body.innerText)", "the check runs again");
       await new Promise((resolve) => setTimeout(resolve, 300));
       assert.equal((await stat(settingsFile)).mtimeMs, written, "Enter on refresh did not re-apply the setting");
+      // One tab stop per choice group, on the checked row; the arrows move the choice and wrap.
+      assert.deepEqual(
+        await evaluate(`[...document.querySelectorAll('[role=radiogroup]')].map((g) => g.querySelectorAll('[role=radio][tabindex="0"]').length)`),
+        [1],
+        "the Proxy group is one tab stop",
+      );
+      const key = (keyCode) => {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+      };
+      await evaluate(`document.querySelector('[role=radio][aria-checked=true]').focus()`);
+      key("Up");
+      await until("document.body.innerText.includes('Direct · off')", "ArrowUp from the first row wraps to Off and chooses it");
+      key("Down");
+      await until("/· (macOS|system) settings/.test(document.body.innerText) && document.activeElement?.textContent.trim().startsWith('Automatic')", "ArrowDown wraps back to Automatic");
       await writeFile(settingsFile, "{broken");
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
       await until("!document.querySelector('#network-heading')", "the close control leaves Settings");
@@ -875,6 +898,23 @@ if (!process.versions.electron) {
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
+
+      // ⌘, with every window closed opens one already on Settings: the request waits in main for
+      // the new renderer's listener instead of being sent before it exists.
+      const closed = new Promise((resolve) => win.once("closed", resolve));
+      win.close();
+      await closed;
+      Menu.getApplicationMenu().getMenuItemById("settings").click();
+      const reopened = BrowserWindow.getAllWindows()[0];
+      assert.ok(reopened, "Settings… opens a window when none is open");
+      let onSettings = false;
+      for (let i = 0; i < 200 && !onSettings; i++) {
+        onSettings = await reopened.webContents
+          .executeJavaScript("!!document.querySelector('#network-heading')", true)
+          .catch(() => false);
+        if (!onSettings) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(onSettings, "the new window lands on Settings");
       console.log(
         `Electron smoke passed (${selectedAuth === defaultAuth ? "default auth" : "explicit auth"}): local workflow, cross-provider history, missing/corrupt credentials and recovery`,
       );

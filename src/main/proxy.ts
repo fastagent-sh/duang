@@ -9,7 +9,7 @@
  */
 import { session } from "electron";
 import { setGlobalDispatcher } from "undici";
-import { commandProxyEnv, RoutedDispatcher, tryRoute } from "./route.ts";
+import { commandProxyEnv, hasCredentials, RoutedDispatcher, tryRoute } from "./route.ts";
 import type { Network } from "./settings.ts";
 
 /** Model traffic is what the route display is about. */
@@ -27,6 +27,16 @@ const LAUNCH_VARIABLES = ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"
 const launchVariable = LAUNCH_VARIABLES.find((name) => process.env[name]);
 const launchUrl = launchVariable ? process.env[launchVariable] : undefined;
 const presentAtLaunch = new Set(Object.keys(process.env));
+/**
+ * A launch proxy with credentials cannot be used: the route Chromium hands back has lost them. Said
+ * plainly, on the page and on every request, rather than as the proxy's bare 407.
+ */
+const launchCredentials =
+  launchUrl && hasCredentials(launchUrl)
+    ? `${launchVariable} carries a user name and password, and duang cannot authenticate to a proxy yet. Relaunch without them, or choose Manual with a proxy that needs none, or Off.`
+    : undefined;
+/** Automatic is using the launch proxy, and that proxy needs credentials duang cannot send. */
+const launchUnusable = () => current.mode === "automatic" && launchCredentials !== undefined;
 
 export type Source = "system" | "environment" | "manual" | "off";
 export interface Route {
@@ -63,7 +73,11 @@ export async function applyNetwork(network: Network): Promise<void> {
   await session.defaultSession.closeAllConnections();
   current = network;
   if (!installed) {
-    setGlobalDispatcher(new RoutedDispatcher((origin) => session.defaultSession.resolveProxy(origin)));
+    setGlobalDispatcher(
+      new RoutedDispatcher((origin) =>
+        launchUnusable() ? Promise.reject(new Error(launchCredentials)) : session.defaultSession.resolveProxy(origin),
+      ),
+    );
     installed = true;
   }
   await syncCommandProxy();
@@ -71,7 +85,9 @@ export async function applyNetwork(network: Network): Promise<void> {
 
 /** Never throws for an unusable route: it is something to show, and the settings file is not at fault. */
 export async function describeRoute(): Promise<Route> {
-  const route = tryRoute(await session.defaultSession.resolveProxy(MODEL_HOST));
+  const route = launchUnusable()
+    ? { error: launchCredentials! }
+    : tryRoute(await session.defaultSession.resolveProxy(MODEL_HOST));
   const source: Source = current.mode === "automatic" ? (launchUrl ? "environment" : "system") : current.mode === "manual" ? "manual" : "off";
   return {
     ...route,
