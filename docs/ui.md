@@ -106,7 +106,8 @@ feels alive — beside three lines of text. The first is the agent's name, with 
 row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
 two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
 unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
-row. The directory is in the row's tooltip and below the agent name and conversation title in the header.
+row. The directory is in the row's tooltip and below the agent name and conversation title in the
+header. When those names match, the agent name uses the full header line and retains its tooltip.
 
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last

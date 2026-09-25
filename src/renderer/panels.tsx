@@ -598,7 +598,7 @@ export function ConversationHeader({
       <div className="min-w-0 flex-1">
         {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
         <div className="pointer-events-auto flex min-w-0 items-baseline gap-1.5 drag">
-          <span className="max-w-[35%] shrink-0 truncate font-semibold">{agent}</span>
+          <span className={`${title === agent ? "max-w-full" : "max-w-[35%]"} shrink-0 truncate font-semibold`} title={agent}>{agent}</span>
           {title !== agent && <span className="min-w-0 truncate text-muted" title={title}>· {title}</span>}
         </div>
         {dir && (

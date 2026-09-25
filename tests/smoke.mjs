@@ -886,6 +886,41 @@ if (!process.versions.electron) {
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
 
+      // The agent takes the whole header when its conversation has the same name; otherwise it
+      // leaves room for the topic. Both cases retain the full agent name as a tooltip.
+      const longName = "An agent with a deliberately long descriptive name for this workspace";
+      await evaluate(`document.querySelector('button[aria-label="Smoke"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+      await until("document.querySelector('aside input[aria-label=\"Agent name\"]')", "agent rename opens");
+      await evaluate(`(() => {
+        const input = document.querySelector('aside input[aria-label="Agent name"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(longName)});
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`);
+      const headerName = `(() => {
+        const line = document.querySelector('main > header .drag.flex');
+        const name = line.firstElementChild;
+        return { width: name.getBoundingClientRect().width, available: line.clientWidth, title: name.title };
+      })()`;
+      await until(`document.querySelector('main > header .drag.flex span')?.textContent === ${JSON.stringify(longName)}`, "renamed agent in header");
+      const withTopic = await evaluate(headerName);
+      assert.ok(withTopic.width <= withTopic.available * 0.35 + 1, "the topic keeps its space");
+      assert.equal(withTopic.title, longName);
+      await showConversations();
+      await evaluate(`document.querySelector('#conversations button[aria-current="page"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+      await until("document.querySelector('#conversations input[aria-label=\"Conversation name\"]')", "conversation rename opens");
+      await evaluate(`(() => {
+        const input = document.querySelector('#conversations input[aria-label="Conversation name"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(longName)});
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`);
+      await until(`document.querySelector('main > header .drag.flex')?.childElementCount === 1`, "matching names share the header");
+      const alone = await evaluate(headerName);
+      assert.ok(alone.width > alone.available * 0.35 + 1, "the agent name uses the free width");
+      assert.ok(alone.width <= alone.available + 1, "the agent name stays inside the header");
+      assert.equal(alone.title, longName);
+
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
 
