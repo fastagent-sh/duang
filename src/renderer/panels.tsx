@@ -175,12 +175,12 @@ export function Sidebar({
     setRenaming(undefined);
   };
   return (
-    <aside className="w-[clamp(15rem,27vw,20rem)] shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
+    <aside className="sidebar-panel w-[clamp(15rem,27vw,20rem)] shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
       {/* The window controls overhang this card's top-left. The row is tall enough to hold them
           with air around it, and the wordmark is centred in the column rather than pushed along by
           them — Telegram's header, which has the same problem. */}
       <div className="relative h-12 shrink-0 flex items-center px-2 drag">
-        <span className="absolute left-1/2 -translate-x-1/2 font-medium tracking-[-0.01em]">
+        <span className="sidebar-wordmark absolute left-1/2 -translate-x-1/2 font-medium tracking-[-0.01em]">
           duang<span className="text-accent">·</span>
         </span>
         <span className="flex-1" />
@@ -188,7 +188,7 @@ export function Sidebar({
           kind="ghost"
           size={28}
           onClick={onAdd}
-          className="no-drag"
+          className="no-drag sidebar-add"
           title="Add agent directory"
           aria-label="Add agent directory"
           icon={<Plus size={16} />}
@@ -592,12 +592,15 @@ export function ConversationHeader({
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
     // only what you can actually grab, click or hover for a tooltip takes the pointer back.
-    <header className="@container pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
+    <header className="conversation-header @container pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
       {/* The same avatar as in the roster: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
         {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
-        <div className="pointer-events-auto truncate drag">{title}</div>
+        <div className="pointer-events-auto flex min-w-0 items-baseline gap-1.5 drag">
+          <span className={`${title === agent ? "max-w-full" : "max-w-[35%]"} shrink-0 truncate font-semibold`} title={agent}>{agent}</span>
+          {title !== agent && <span className="min-w-0 truncate text-muted" title={title}>· {title}</span>}
+        </div>
         {dir && (
           <button
             onClick={onReveal}
@@ -814,15 +817,16 @@ function ModelPopover({
       }}
       className="popover fixed m-0 top-auto right-auto w-80 overflow-y-auto text-text backdrop:bg-transparent"
     >
-      <div className="flex items-start gap-1 pl-2 pt-1">
-        {models && (
-          <details className="min-w-0 flex-1 text-muted text-[11px]" title={models.authPath}>
-            <summary className="cursor-pointer truncate">Credentials · {location(models.authPath)}</summary>
-            <code className="block break-all p-1 select-text">{models.authPath}</code>
-          </details>
-        )}
+      <div className="flex items-center justify-between pl-2 pt-1 pb-1">
+        <span className="text-[12px] font-semibold">Choose a model</span>
         <Button kind="ghost" size={28} onClick={close} aria-label="Close model picker" icon={<X size={14} />} />
       </div>
+      {models && (
+        <details className="mb-2 px-2 text-muted text-[11px]" title={models.authPath}>
+          <summary className="cursor-pointer truncate">Credentials · {location(models.authPath)}</summary>
+          <code className="block break-all p-1 select-text">{models.authPath}</code>
+        </details>
+      )}
       {error ? (
         <div role="alert" className="text-danger p-2 space-y-2">
           <p>{error}</p>
@@ -865,7 +869,7 @@ function ModelPopover({
                   void store.pickModel(model);
                 }}
                 aria-current={model === current ? "true" : undefined}
-                className={`flex w-full items-center gap-2 text-left px-2 py-1.5 font-mono text-[11px] rounded-card hover:bg-hover ${
+                className={`flex w-full items-center gap-2 text-left px-2 py-2 font-mono text-[12px] rounded-card hover:bg-hover ${
                   model === current ? "bg-accent-weak text-accent" : ""
                 }`}
               >
@@ -1375,7 +1379,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   }, [query]);
 
   return (
-    <div className="relative rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 py-2.5">
+    <div className="composer-card relative rounded-card bg-surface ring-1 ring-stroke focus-within:ring-accent/50 px-3 py-2.5">
       {suggestions.length > 0 && (
         <div className="popover absolute bottom-full left-0 mb-2 w-96 max-h-64 overflow-y-auto z-20">
           {suggestions.map((command, index) => (

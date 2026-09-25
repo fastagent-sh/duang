@@ -124,7 +124,7 @@ export default function Gallery() {
           <Badge tone="danger">broken</Badge>
         </Section>
 
-        <Section title="Surfaces" note="value plus a hairline, not shadow — except the one popover shadow">
+        <Section title="Surfaces" note="flat reading surfaces; soft shadows on floating chrome and popovers">
           <div className="rounded-card bg-surface px-3 h-8 grid place-items-center text-[12px]">surface (card)</div>
           <div className="rounded-card bg-surface-2 px-3 h-8 grid place-items-center text-[12px]">surface-2</div>
           <div className="rounded-card ring-1 ring-stroke px-3 h-8 grid place-items-center text-[12px]">hairline</div>

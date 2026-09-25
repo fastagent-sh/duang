@@ -1,10 +1,10 @@
 /**
  * Screenshots of the real window, for looking at the design instead of describing it.
  *
- * Same isolation as the smoke check — a temporary agent, temporary credentials, a fake model
+ * Same isolation as the smoke check — temporary agents, temporary credentials, a fake model
  * response — but it asserts nothing. It drives one conversation that contains every shape the
  * transcript has to draw, then writes dark and light shots of the result, trace, narrow window,
- * sidebar, model picker and component gallery to `out/shots/`.
+ * sidebar, model picker, settings and component gallery to `out/shots/`.
  *
  *   npm run shots && open out/shots/app-dark.png
  */
@@ -73,6 +73,7 @@ if (!process.versions.electron) {
   const { app, nativeTheme } = electron;
   const root = process.env.DUANG_SHOT_ROOT;
   const workspace = join(root, "project");
+  const second = join(root, "compass");
   const data = join(root, "user-data");
   app.setPath("userData", data);
 
@@ -80,6 +81,7 @@ if (!process.versions.electron) {
 
   async function run() {
     await mkdir(join(workspace, "fastagent"), { recursive: true });
+    await mkdir(join(second, "fastagent"), { recursive: true });
     await mkdir(join(root, ".fastagent", ".secrets"), { recursive: true });
     await mkdir(join(data, "Shared Dictionary", "cache"), { recursive: true });
     process.env.HOME = root;
@@ -90,11 +92,17 @@ if (!process.versions.electron) {
     await writeFile(GLOBAL_AUTH_PATH, JSON.stringify({ openai: { type: "api_key", key: "shot-key" } }));
     await writeFile(join(workspace, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
-    await writeFile(join(data, "agents.json"), JSON.stringify([{ id: "shot", name: "amazonseo.ai", dir: workspace }]));
+    await writeFile(join(second, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
+    await writeFile(join(data, "agents.json"), JSON.stringify([
+      { id: "shot", name: "amazonseo.ai", dir: workspace },
+      { id: "shot-2", name: "compass", dir: second },
+    ]));
 
     // Turn 1 reads a file, turn 2 fails a tool, turn 3 answers with the markdown above.
     let requests = 0;
-    globalThis.fetch = async () => {
+    globalThis.fetch = async (input, init) => {
+      // Settings checks a different host; do not consume a model turn or touch the real network.
+      if (input === "https://api.anthropic.com" && init?.method === "HEAD") return new Response(null, { status: 200 });
       requests++;
       const item =
         requests === 1
@@ -174,6 +182,8 @@ if (!process.versions.electron) {
           const box = document.querySelector('[aria-label="Transcript"]');
           if (box) box.scrollTop = ${position === "top" ? "0" : "box.scrollHeight"};
         })()`);
+        // Keep the pointer off the roster so an idle agent is not mistaken for the selected one.
+        win.webContents.sendInputEvent({ type: "mouseMove", x: 20, y: 410 });
         const image = await win.webContents.capturePage();
         const path = fileURLToPath(new URL(`../out/shots/${name}-${theme}.png`, import.meta.url));
         await writeFile(path, image.toPNG());
@@ -224,6 +234,12 @@ if (!process.versions.electron) {
     await evaluate(`document.querySelector('button[title="New conversation (⌘N)"]').click()`);
     await until(`document.body.innerText.includes('What should we work on?')`, "new conversation");
     await capture("new-conversation");
+    await evaluate(`document.querySelector('button[title="Settings (⌘,)"]').click()`);
+    await until(`document.querySelector('[role="radio"]')`, "network choices");
+    // A direct, mocked connection is deterministic even on machines with a system proxy.
+    await evaluate(`[...document.querySelectorAll('[role="radio"]')].find((row) => row.textContent.startsWith('Off')).click()`);
+    await until(`document.body.innerText.includes('connected ·')`, "mocked network check");
+    await capture("settings");
 
     // The component sheet, in the same window and the same build as the app it documents.
     // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.

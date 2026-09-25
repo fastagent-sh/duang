@@ -37,8 +37,8 @@ with and what they last worked on. Several conversations per agent are real and 
 they live one level down, in the open agent's conversation list, so the roster stays a list of
 contacts.
 
-**Glass belongs to navigation, never to content.** The sidebar is a vibrancy material; the
-transcript is opaque. This is macOS 26's own rule and it is also what keeps long text readable.
+**Floating layers belong to navigation, never to the work.** The sidebar and header lift off the
+page; the transcript stays opaque so long results remain readable.
 
 **Say status only when it costs the person something.** Not every state deserves an indicator.
 Details in §9.
@@ -77,8 +77,7 @@ made it work there, and whether that premise holds here.
   Material gesture that no macOS app makes; and ordering the list by unread first, since an agent's
   list is ordered by what is happening now.
 - **Carbon, HPE design systems, WCAG 1.4.1** — the status rules in §9.
-- **macOS 26** — glass only in the navigation layer, sidebars to the window edge, native materials
-  over simulated ones.
+- **macOS 26** — keep translucency in navigation rather than simulate glass across reading surfaces.
 
 ## 3. Structure
 
@@ -107,7 +106,8 @@ feels alive — beside three lines of text. The first is the agent's name, with 
 row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
 two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
 unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
-row. The directory is in the row's tooltip and under the header's title.
+row. The directory is in the row's tooltip and below the agent name and conversation title in the
+header. When those names match, the agent name uses the full header line and retains its tooltip.
 
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
@@ -137,7 +137,7 @@ a second copy of where sessions live.
 menu, or a double click on the row. It is stored in duang's registry; the directory and the agent's
 definition are untouched, and an empty name is not a rename.
 
-The open agent is an accent tint with normal text, not a solid fill: a filled row was the loudest
+The open agent is a soft accent tint (a subtle gradient in light mode) with normal text, not a solid fill: a filled row was the loudest
 thing on screen and competed with the transcript it points at. There is one selection mark at a
 time; while Settings shows, the Settings row at the foot of the sidebar carries it instead. Rows are
 slightly inset so the tint is a rounded shape in the column, and the hairline between them starts
@@ -176,7 +176,8 @@ translucent bar instead of a full-width strip cutting the page in two. This is T
 composition, and its premise holds here: chrome that hovers keeps the content beneath it continuous.
 What does not carry over is putting the transcript itself on a decorative canvas — theirs is bubbles
 over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
-the chrome floats, with the transcript padded so nothing important sits under the header.
+the chrome floats. The transcript starts below the header, then slides underneath it when scrolled;
+a soft lower shadow keeps the two readable without stopping the page.
 Its right edge says how much is left, in muted 11px text: the plan's windows as `5h ▬ 4% ~ 14:29`
 with a 40px bar, the week's pace as a green `▼` or red `▲` percentage, then context as
 `45.1%/1.0M`. No threshold colours: the percentage is the signal. When the header is narrower than
@@ -190,7 +191,8 @@ continuous page.
 Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
 [narrow, dark](screenshots/reading-narrow-dark.png),
 [conversation list, light](screenshots/conversation-list-light.png), and
-[model picker, light](screenshots/model-picker-light.png). Regenerate the full dark/light set with
+[model picker, light](screenshots/model-picker-light.png), and
+[settings, light](screenshots/settings-light.png). Regenerate the full dark/light set with
 `npm run shots`.
 
 Future contacts can be local, owned online or invited online at the same time: no global
@@ -218,23 +220,22 @@ display is gone comes back on an attached one.
 oklch, two modes, following the system. The neutral ramp is measured from Telegram's macOS dark
 theme — small steps, almost no chroma — with one change of relationship: the transcript's canvas is
 the darkest layer and every panel sits above it, so a panel reads as lifted rather than as a hole.
-Light mode is not that set mirrored. It follows macOS — content white, sidebar grey, as in Finder,
-Mail and WeChat — because a white sidebar against grey content reads as a window turned inside out.
-The ramp keeps a trace of the accent hue (285) so violet belongs to the family rather than sitting
-on top of a grey app.
+Light mode is not that set mirrored. A warm, nearly white reading canvas and a slightly deeper
+sidebar separate work from navigation; the code block takes a cooler neutral, while the floating
+composer remains white. Violet stays in selections and actions rather than tinting every surface.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `bg` | `oklch(0.225 0.004 285)` | `oklch(0.99 0.001 285)` | the transcript, and the canvas panels sit on |
-| `surface` | `oklch(0.27 0.005 285)` | `oklch(0.965 0.003 285)` | bubbles, cards, popovers, composer |
-| `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.955 0.003 285)` | the sidebar panel |
-| `surface-2` | `oklch(0.315 0.006 285)` | `oklch(0.93 0.004 285)` | hover, pressed, nested cards |
-| `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.89 0.005 285)` | hairlines, card borders |
-| `text` | `oklch(0.95 0.005 285)` | `oklch(0.22 0.01 285)` | body |
-| `muted` | `oklch(0.68 0.01 285)` | `oklch(0.50 0.01 285)` | metadata, timestamps |
-| `accent` | `oklch(0.72 0.16 295)` | `oklch(0.55 0.19 295)` | accent **as text**: links, badges, focus rings |
-| `accent-weak` | `accent / 15%` | `accent / 12%` | selected conversation, user bubble |
-| `accent-fill` | `oklch(0.52 0.2 295)` | same | accent **as a surface**: selected agent, primary button |
+| `bg` | `oklch(0.225 0.004 285)` | `oklch(0.992 0.004 80)` | the transcript and its canvas |
+| `surface` | `oklch(0.27 0.005 285)` | `oklch(0.986 0.004 85)` | cards and popovers; the composer is white in light mode |
+| `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.958 0.009 80)` | the sidebar panel (light mode adds a gentle gradient) |
+| `surface-2` | `oklch(0.315 0.006 285)` | `oklch(0.946 0.006 80)` | pressed and nested surfaces |
+| `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.886 0.007 80)` | hairlines and borders |
+| `text` | `oklch(0.95 0.005 285)` | `oklch(0.22 0.014 285)` | body |
+| `muted` | `oklch(0.68 0.01 285)` | `oklch(0.46 0.012 285)` | metadata and timestamps |
+| `accent` | `oklch(0.72 0.16 295)` | `oklch(0.52 0.18 300)` | accent **as text**: links, badges, focus rings |
+| `accent-weak` | `accent / 15%` | `oklch(0.72 0.09 300 / 16%)` | selected conversation, user bubble |
+| `accent-fill` | `oklch(0.52 0.2 295)` | same | accent **as a surface**: primary button |
 | `danger-fill` | `oklch(0.52 0.2 25)` | same | danger as a surface (Stop) |
 | `fill-fg` | `oklch(1 0 0)` | same | text on either fill |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
@@ -242,10 +243,9 @@ on top of a grey app.
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
 
 Accent as text and accent as a surface cannot be one value. As text it sits against the page, so
-dark mode needs it light; as a fill under white text it has to be dark, or the selected agent
-becomes the brightest object on screen. The two fills therefore do **not** change between themes:
-one selection violet in both, the way macOS and Telegram keep one selection blue. At L 0.52 white
-on it is about 4.2:1, which is where Telegram's own selected row sits.
+dark mode needs it light; as a fill under white text it must stay dark enough for primary controls
+to remain legible. The fills therefore do **not** change between themes. The agent row instead uses
+a translucent tint so it does not compete with the reading column.
 
 Every interactive role is defined as a set, not derived at the call site — Telegram's palette does
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
@@ -320,8 +320,8 @@ the generated sheet's order rather than by intent. Nothing a call site can pass 
 component; what varies is a prop.
 
 **A disabled control says why.** The `disabled` prop takes the reason rather than a boolean, so a
-control cannot be greyed out silently: it dims to 40%, keeps its shape, and carries the reason.
-"Type a message first", "Stop the turn to change the model". It is disabled with `aria-disabled`
+control cannot be greyed out silently: it dims to 40% and carries the reason. In light mode the
+composer's inactive Send button also takes a neutral fill. "Type a message first", "Stop the turn to change the model". It is disabled with `aria-disabled`
 rather than the native attribute and stays focusable, because a natively disabled button cannot be
 reached by keyboard and a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is
 dropped by the component.
@@ -336,17 +336,19 @@ live switch, so a `#gallery` link in an answer cannot unmount a running app.
 A state is a badge: a dot or icon, then the word, in the state's colour — never colour alone (§11),
 and it pulses only while the state is still happening.
 
-Popovers share one surface — `surface`, radius 14, hairline, the only shadow in the app — even
+Popovers share one surface — `surface`, a rounded hairline and a shadow — even
 though the model list is a modal dialog that takes focus and the slash completion list deliberately
-does not. The model picker puts the selected model first, shows only a short credential-file label,
+does not. The model picker labels its purpose, puts the selected model first, shows a short credential-file label,
 and expands that label to reveal the full path. Both highlight the current item with `accent-weak`.
 
 ## 7. Space, radius, elevation
 
 - Spacing scale: 4, 8, 12, 16, 24, 32.
-- Radius: 6 (badges, small controls), 10 (cards, bubbles, inputs), 14 (popovers, dialogs). A bubble's
-  trailing corner drops to 4 — that asymmetry is what makes it read as speech.
-- Elevation is value plus a hairline, not shadow. Only popovers get one soft shadow.
+- Radius: 6 (badges, small controls), 10/12 (dark/light cards, bubbles, inputs), 14/18
+  (dark/light floating panels). A bubble's trailing corner drops to 4 — that asymmetry is what
+  makes it read as speech.
+- Dark panels use value and a hairline; the header has a quiet lower shadow. In light mode the
+  sidebar, header and composer get restrained shadows, while reading content stays flat.
 - No divider between sidebar and conversation: the material change is the separation.
 
 ## 8. Message rendering
@@ -567,8 +569,8 @@ Add a shortcut only when there is an implemented search surface to focus.
 ## 12. Brand
 
 The product is `duang`, lowercase everywhere — repository, documentation, window, marketing. The
-wordmark is the name at weight 600, tracking -0.01em, followed by a single accent dot: `duang·`. The
-name is playful enough on its own; the typography does not add to it.
+wordmark is followed by a single accent dot: `duang·`. It is weight 500 with -0.01em tracking in
+dark mode, and slightly bolder (600, -0.025em) in light mode. The name is playful enough on its own.
 
 Agent avatars are circles, because the product's whole metaphor is "an agent is a contact" and the
 roster should read as one; rounded squares ("squares are programs") kept it reading as a list of
