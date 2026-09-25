@@ -63,22 +63,23 @@
  */
 @media (prefers-color-scheme: light) {
   :root {
-    /* Light mode follows macOS, not the dark set mirrored: content is white and the sidebar is the
-       grey one. Finder, Mail and WeChat all read this way, and a white sidebar against grey content
-       looks like the window is inside out. Cards sit slightly grey on the white. */
-    --color-bg: oklch(0.99 0.001 285);
-    --color-surface: oklch(0.965 0.003 285);
-    --color-surface-2: oklch(0.93 0.004 285);
-    --color-sidebar: oklch(0.955 0.003 285);
-    --color-hover: oklch(0 0 0 / 5%);
-    --color-stroke: oklch(0.89 0.005 285);
-    --color-text: oklch(0.22 0.01 285);
-    --color-muted: oklch(0.5 0.01 285);
-    --color-accent: oklch(0.55 0.19 295);
-    --color-accent-weak: oklch(0.55 0.19 295 / 12%);
+    /* Warm paper for reading, a slightly deeper sidebar, and a cooler code surface. Keep the
+       violet in the selection and actions, rather than tinting every neutral panel with it. */
+    --color-bg: oklch(0.992 0.004 80);
+    --color-surface: oklch(0.986 0.004 85);
+    --color-surface-2: oklch(0.946 0.006 80);
+    --color-sidebar: oklch(0.958 0.009 80);
+    --color-hover: oklch(0 0 0 / 4%);
+    --color-stroke: oklch(0.886 0.007 80);
+    --color-text: oklch(0.22 0.014 285);
+    --color-muted: oklch(0.46 0.012 285);
+    --color-accent: oklch(0.52 0.18 300);
+    --color-accent-weak: oklch(0.72 0.09 300 / 16%);
     --color-success: oklch(0.5 0.14 150);
     --color-warning: oklch(0.58 0.15 60);
     --color-danger: oklch(0.52 0.19 25);
+    --radius-card: 12px;
+    --radius-float: 18px;
   }
 }
 
@@ -264,6 +265,12 @@ summary:focus-visible,
   padding: 6px;
 }
 
+/* The header still floats over the transcript; its lower edge, not a hard strip across the page,
+   separates the moving text from the controls. */
+.conversation-header {
+  box-shadow: 0 12px 24px -18px oklch(0 0 0 / 70%);
+}
+
 /* The roster's hairline starts where the text does (8px row padding + 48px avatar + 12px gap) and
    gives way on both sides of a filled row, the open agent's or the one under the pointer, as
    Telegram's does: a line running into a rounded fill reads as a cut. */
@@ -411,4 +418,57 @@ summary:focus-visible,
 }
 .md li p {
   display: inline;
+}
+
+/* Light mode gives navigation, writing and code different jobs without changing the floating
+   layout. Dark mode keeps its own palette and more restrained elevation. */
+@media (prefers-color-scheme: light) {
+  .sidebar-panel {
+    background: linear-gradient(155deg, oklch(0.982 0.007 80), var(--color-sidebar) 76%);
+    box-shadow: 0 12px 34px -28px oklch(0.3 0.03 285 / 28%);
+  }
+  .sidebar-wordmark {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .sidebar-add {
+    color: var(--color-accent);
+    background: oklch(1 0 0 / 75%);
+    box-shadow: 0 1px 3px oklch(0.3 0.02 285 / 10%);
+  }
+  .sidebar-add:hover {
+    background: var(--color-accent-weak);
+  }
+  .roster-row[data-filled] > button {
+    background: linear-gradient(105deg, oklch(0.72 0.09 300 / 18%), oklch(0.9 0.06 300 / 10%));
+  }
+  .conversation-header {
+    background: oklch(0.995 0.003 80 / 94%);
+    box-shadow:
+      0 2px 5px -2px oklch(0.26 0.02 285 / 12%),
+      0 14px 26px -17px oklch(0.26 0.02 285 / 25%);
+  }
+  .composer-card {
+    background: oklch(1 0 0);
+    box-shadow: 0 14px 36px -24px oklch(0.3 0.02 285 / 26%);
+  }
+  .composer-card button[aria-label="Send"][aria-disabled="true"] {
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+  }
+  .code-block {
+    background: oklch(0.966 0.007 270);
+  }
+  .inline-code {
+    background: var(--color-surface-2);
+  }
+  .popover {
+    box-shadow:
+      0 2px 6px oklch(0.25 0.02 285 / 6%),
+      0 18px 40px -8px oklch(0.25 0.02 285 / 18%);
+  }
+  [data-streamdown="table-wrapper"] {
+    border: 1px solid var(--color-stroke);
+  }
 }
