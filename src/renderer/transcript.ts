@@ -193,6 +193,32 @@ export function firstArg(args: unknown): string {
 }
 
 /**
+ * What a roster row quotes: the newest thing said or done in a conversation, as plain text. Thinking
+ * is not output and an answer with no text yet has nothing to say, so both are passed over. Markdown
+ * loses only the marks that would show up as noise in two lines of plain text.
+ */
+export function previewOf(items: Item[]): { text: string; at: number } | undefined {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!;
+    const text =
+      item.kind === "user"
+        ? `You: ${item.text}`
+        : item.kind === "assistant" || item.kind === "note"
+          ? item.text
+          : item.kind === "tool"
+            ? `${item.name} ${firstArg(item.args)}`
+            : "";
+    const plain = text
+      .replace(/^(#{1,6}|>)\s*/gm, "")
+      .replace(/```\w*|`|\*\*/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (plain) return { text: plain, at: item.at };
+  }
+  return undefined;
+}
+
+/**
  * Thinking ends when the model starts doing something else — answering or calling a tool — not
  * when the whole message settles. The message can go on for minutes after its thinking stopped, and
  * the block's `at` is what `thinking · Ns` is measured to.

@@ -1,6 +1,6 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
-import { apply, fromEntries, type Item } from "./transcript.ts";
+import { apply, fromEntries, previewOf, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 
@@ -58,13 +58,25 @@ interface Conversation {
   runStarts: number;
   events: SessionEvent[];
 }
+/**
+ * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
+ * this window holds that conversation, read once from its history otherwise. Presentation only: it
+ * is never written anywhere, and the transcript stays the runtime's.
+ */
+export interface Preview {
+  session: string;
+  text?: string;
+  at?: number;
+  /** The history could not be read; the row says so rather than quoting something older. */
+  error?: string;
+}
 export interface View {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
-  /** Conversations per agent: the sidebar can show more than the open agent's. */
+  /** Conversations per agent: every roster row shows its agent's latest one. */
   sessions: Record<string, SessionSummary[]>;
-  /** Why an expanded agent has no list, per agent. An empty list and a failed one are not the same. */
+  /** Why an agent has no list, per agent. An empty list and a failed one are not the same. */
   sessionsError: Record<string, string>;
   model?: string;
   loading: boolean;
@@ -96,6 +108,8 @@ export interface View {
   unseen: Record<string, Record<string, "done" | "failed">>;
   /** Plan windows per provider: the last answer, or why there is none. Main decides how often to ask. */
   usage: Record<string, { data?: ProviderUsage; error?: string }>;
+  /** Per agent, what its roster row quotes. */
+  previews: Record<string, Preview>;
 }
 /** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 /** [agentId, session] pairs into one list per agent. */
@@ -145,6 +159,7 @@ export function createStore(api: DuangApi) {
     unsent: {},
     unseen: {},
     usage: {},
+    previews: {},
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
@@ -165,10 +180,36 @@ export function createStore(api: DuangApi) {
   /** One request number per agent: a slow expand must not overwrite a newer answer for that agent. */
   const listRequests = new Map<string, number>();
   let modelsRequest = 0;
+  /**
+   * Previews by agent, with the list's `updatedAt` a read was taken at: a history read again only
+   * when the conversation moved on or the row now speaks for another one.
+   */
+  const previews = new Map<string, Preview & { updatedAt?: number }>();
+  const previewRequests = new Map<string, number>();
   let commandsFor: string | undefined;
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
+  /**
+   * The conversation an agent's row speaks for: the one on screen, else the one it was left on, else
+   * its newest — the order `selectAgent` reopens it in, so the row quotes what a click would show.
+   */
+  const selectedSession = (id: string): string | undefined => {
+    if (view.conversation?.agentId === id) return view.conversation.session;
+    const list = view.sessions[id] ?? [];
+    const left = lastOpened.get(id);
+    if (left && (list.some((s) => s.session === left) || conversations.has(key(id, left)))) return left;
+    return [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0]?.session;
+  };
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
+    // A conversation this window holds is live, so its row quotes it as it streams. Read before the
+    // loop below releases anything: the last event of a settled run is what the row should keep.
+    for (const c of conversations.values())
+      if (!c.loading && selectedSession(c.agentId) === c.session)
+        previews.set(c.agentId, { session: c.session, ...previewOf(c.items) });
+    // A quote from a conversation the row no longer speaks for (deleted, or left for another) is
+    // dropped rather than shown as current; `readPreview` fetches the right one.
+    for (const [id, preview] of previews) if (selectedSession(id) !== preview.session) previews.delete(id);
+    view.previews = Object.fromEntries([...previews].map(([id, { updatedAt: _read, ...preview }]) => [id, preview]));
     // One transition point for both derived facts: the wait clock, and how long a view keeps its
     // subscription. Every way a turn can end passes through here, so no ending path has to remember.
     for (const c of conversations.values()) {
@@ -236,18 +277,50 @@ export function createStore(api: DuangApi) {
     const settle = (patch: Partial<View>) => {
       if (listRequests.get(id) === request) publish(patch);
     };
+    // Another agent's row says its setup in words, so the answer's state is kept for it. Never the
+    // open agent's: `states` drives the main panel, and `selectAgent` owns that one.
+    const state = (value: AgentState) => (id === view.agentId ? {} : { states: { ...view.states, [id]: value } });
     try {
       const result = await api.openAgent(id);
-      if (!result.ok) return settle({ sessionsError: { ...view.sessionsError, [id]: result.message } });
+      if (!result.ok)
+        return settle({
+          sessionsError: { ...view.sessionsError, [id]: result.message },
+          ...state(result.code === "failed" ? "broken" : result.code),
+        });
       const { [id]: _cleared, ...errors } = view.sessionsError;
-      settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors });
+      settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors, ...state("ready") });
+      if (listRequests.get(id) === request) await readPreview(id);
     } catch (error) {
       settle({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
     }
   }
 
+  /** Quotes the conversation an agent's row speaks for when this window does not hold it. */
+  async function readPreview(id: string) {
+    const session = selectedSession(id);
+    if (!session || conversations.has(key(id, session))) return;
+    const updatedAt = view.sessions[id]?.find((s) => s.session === session)?.updatedAt;
+    const known = previews.get(id);
+    if (known?.session === session && known.updatedAt === updatedAt && !known.error) return;
+    const request = (previewRequests.get(id) ?? 0) + 1;
+    previewRequests.set(id, request);
+    let preview: Preview;
+    try {
+      const history = await api.readSession(id, session);
+      preview = { session, ...previewOf(fromEntries(history.entries, history.leafEntryId)) };
+    } catch (error) {
+      preview = { session, error: message(error) };
+    }
+    // Only the newest read lands. A conversation opened meanwhile, or a row that moved on to another,
+    // needs nothing here: `publish` quotes the live one first and drops a quote that is not selected.
+    if (previewRequests.get(id) !== request) return;
+    previews.set(id, { ...preview, updatedAt });
+    publish();
+  }
+
   async function refreshList(id: string) {
-    if (id !== view.agentId) return;
+    // Another agent's row still shows its latest activity, so its list is re-read too.
+    if (id !== view.agentId) return listSessions(id);
     const request = ++listRequest;
     try {
       const result = await api.openAgent(id);
@@ -308,7 +381,10 @@ export function createStore(api: DuangApi) {
   async function selectAgent(id: string, session?: string) {
     const request = ++navigation;
     ++listRequest;
+    const left = view.agentId;
     leave();
+    // The agent being left stops being live on screen; its row keeps quoting what it was left on.
+    if (left && left !== id) void readPreview(left);
     // The command names belong to the agent's definition, so they do not survive the switch.
     commandsFor = undefined;
     publish({
@@ -399,6 +475,9 @@ export function createStore(api: DuangApi) {
       publish({ agents, loading: false });
       // Reopen the agent this machine was last using; a removed one falls back to the first row.
       const start = agents.find((row) => row.id === lastAgent) ?? agents[0];
+      // Every row shows its latest conversation, so every agent's list is read; that boots each
+      // runtime, the same as opening it would.
+      for (const row of agents) if (row !== start) void listSessions(row.id);
       if (start) await selectAgent(start.id);
     } catch (error) {
       publish({ loading: false, error: message(error) });
@@ -416,16 +495,25 @@ export function createStore(api: DuangApi) {
     load,
     selectAgent,
     /**
-     * Conversations for an agent the sidebar expanded but did not open. This boots that agent's
-     * runtime, the same as opening it would: FastAgent owns the session list, and duang will not
-     * keep a second copy of where sessions live.
+     * Conversations for an agent that is not open. This boots that agent's runtime, the same as
+     * opening it would: FastAgent owns the session list, and duang will not keep a second copy of
+     * where sessions live.
      *
-     * A failure belongs to the agent that was expanded, never to the transcript being read, so it
-     * is published against that agent and the sidebar says it there. It deliberately does not touch
-     * `states`: that drives the main panel, and a fold-and-expand of the open agent would otherwise
-     * put the window into "this agent is broken" with no message to show for it.
+     * A failure belongs to that agent, never to the transcript being read, so it is published
+     * against that agent and its row says it. It deliberately does not touch `states`: that drives
+     * the main panel, and a background read of the open agent would otherwise put the window into
+     * "this agent is broken" with no message to show for it.
      */
     listSessions,
+    /** duang's label for the agent; the directory keeps its name. */
+    async renameAgent(id: string, name: string) {
+      try {
+        await api.renameAgent(id, name);
+        publish({ agents: await api.listAgents() });
+      } catch (error) {
+        note(error);
+      }
+    },
     open,
     /** Read on every opening of the picker: a `fastagent login` while duang runs needs no restart. */
     async loadModels() {
@@ -586,7 +674,7 @@ export function createStore(api: DuangApi) {
         publish({
           sessions: { ...view.sessions, [id]: (view.sessions[id] ?? []).filter((s) => s.session !== session) },
         });
-        if (id !== view.agentId) return;
+        if (id !== view.agentId) return void (await readPreview(id));
         if (view.conversation?.session === session) await open(crypto.randomUUID());
         await refreshList(id);
       } catch (error) {

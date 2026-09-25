@@ -7,13 +7,23 @@ with Week 1 and subsequent UI work; later stages are **planned**, not implemente
 
 ## Shipped local workbench
 
-The window has a 240–320px sidebar combining agent rows with their explicitly expanded conversation
-rows, and a transcript with its own floating-shaped header row and composer. There is no separate agent rail. An
-agent row restores its last open conversation if still available, otherwise an active run, then
-the most recent conversation (or a new one); clicking it again or using its caret expands or
-collapses its list. Expanding a different agent can load its conversations without navigating away.
-A failed list read is shown on that agent's row, not as an empty list. Running and drafted work
-stays attached to its originating agent and conversation when navigating.
+The window has a 240–320px sidebar of agent rows, and a transcript with its own floating header
+and composer. There is no separate agent rail. Each agent row shows its name, two lines quoting the
+newest output of the conversation a click on it would show, that output's time, and a count of
+outcomes nobody has looked at yet. The quote streams while duang holds that conversation (on
+screen, or running in the background); otherwise it is read once from the conversation's history
+and again when the session list says it moved on, so a run driven from outside duang appears when
+the list is next read. While one of its conversations runs the row says `working` in place of the
+time; a setup problem or an unreadable list or history replaces the quote. Reading every row's list
+at launch boots each agent's runtime. A failed list read is shown on
+that agent's row, not as an empty list. An agent's name can be changed from its row's context menu
+or by double-clicking it; this renames duang's registry entry, never the directory.
+
+Clicking an agent row restores its last open conversation if still available, otherwise an active
+run, then the most recent conversation (or a new one). The open agent's conversations are in a list
+the header's list button shows and hides; it floats under the button, closes on a click outside or
+Escape (without stopping a run), and closes when a conversation is chosen or started. Running and
+drafted work stays attached to its originating agent and conversation when navigating.
 
 Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. A
 broken agent shows its original failure with a way to retry, reveal or remove it. Removal deletes

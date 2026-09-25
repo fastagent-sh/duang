@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ago, rows } from "./sessions.ts";
+import { ago, clock, rows, stamp } from "./sessions.ts";
 
 const summary = (session: string, updatedAt: number, extra: Record<string, unknown> = {}) =>
   ({ session, updatedAt, createdAt: 0, messageCount: 2, ...extra }) as never;
@@ -27,6 +27,18 @@ test("relative time is coarse, and falls back to a date after a week", () => {
   assert.equal(ago(now - 3 * 3600_000, now), "3h ago");
   assert.equal(ago(now - 2 * 86_400_000, now), "2d ago");
   assert.match(ago(now - 30 * 86_400_000, now), /\d/);
+});
+
+test("a list stamp is the clock today, the weekday this week, and a date before that", () => {
+  const now = new Date(2026, 0, 20, 12, 0, 0).getTime();
+  const day = 86_400_000;
+  assert.equal(stamp(now - 60_000, now), clock(now - 60_000));
+  // Yesterday late evening is not "today", however few hours ago it was.
+  const lateYesterday = new Date(2026, 0, 19, 23, 0, 0).getTime();
+  assert.equal(stamp(lateYesterday, now), new Date(lateYesterday).toLocaleDateString([], { weekday: "short" }));
+  assert.equal(stamp(now - 5 * day, now), new Date(now - 5 * day).toLocaleDateString([], { weekday: "short" }));
+  // A week back would repeat today's weekday, so it is a date.
+  assert.match(stamp(now - 7 * day, now), /\d/);
 });
 
 test("once the runtime reports it, the placeholder is gone", () => {

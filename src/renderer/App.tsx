@@ -6,6 +6,7 @@ import {
   BrokenAgent,
   Composer,
   ConversationHeader,
+  ConversationList,
   NeedsAgent,
   NewConversation,
   NoAgents,
@@ -27,6 +28,9 @@ export default function App() {
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
   // is not remembered across launches.
   const [settings, setSettings] = useState(false);
+  // Whether the conversation list is showing. The popover owns it; this mirrors it for the header
+  // button and so that the Escape closing it does not also stop a run.
+  const [listOpen, setListOpen] = useState(false);
   // Only the open agent has running and drafted conversations worth marking; another agent's list
   // is just its history.
   const rowsFor = (id: string) =>
@@ -69,17 +73,13 @@ export default function App() {
         setSettings(false);
         return;
       }
-      // The open model picker stops Escape itself, so reaching here means no dialog wanted it.
-      if (event.key === "Escape" && busy) void store.abort();
+      // The open model picker stops Escape itself; the conversation list is a native popover, which
+      // closes on this same Escape. Reaching the abort means neither wanted it.
+      if (event.key === "Escape" && busy && !listOpen) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newConversation, store, agentState, busy, view.loading, settings]);
-
-  // Which agents show their conversations — asked for, never assumed. Opening an agent puts you in
-  // its latest conversation, which the transcript already shows; unfolding the roster on top of
-  // that is a second answer to a question nobody asked.
-  const [expanded, setExpanded] = useState<string[]>([]);
+  }, [newConversation, store, agentState, busy, view.loading, settings, listOpen]);
 
   // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
   // with the draft, and messages must end above it rather than behind it. The ref is stable, or
@@ -128,51 +128,22 @@ export default function App() {
         states={states}
         running={view.running}
         unseen={view.unseen}
-        rowsFor={rowsFor}
-        session={c?.session}
-        expanded={expanded}
+        previews={view.previews}
+        latest={(id) => rowsFor(id).find((row) => !row.fresh)}
         errors={view.sessionsError}
-        disabled={agentState !== "ready" || view.loading}
+        settingsOpen={settings}
         onSelect={(id) => {
           // Any way into a conversation leaves Settings; the agent you were on comes back as it was.
-          if (settings) {
-            setSettings(false);
-            if (id === agentId) return;
-          }
-          // Clicking the row opens the agent and shows what it has been doing; clicking the agent
-          // you are already on puts that list away. The caret does the same for any other agent,
-          // which is the part the row cannot express.
-          if (id === agentId) setExpanded((ids) => (ids.includes(id) ? ids.filter((o) => o !== id) : [...ids, id]));
-          else void store.selectAgent(id);
-        }}
-        onToggle={(id) => {
-          const showing = !expanded.includes(id);
-          setExpanded((ids) => (showing ? [...ids, id] : ids.filter((other) => other !== id)));
-          // Reading a list is what needs the runtime; putting it away does not.
-          if (showing) void store.listSessions(id);
+          setSettings(false);
+          if (id !== agentId) void store.selectAgent(id);
         }}
         onAdd={() => {
           setSettings(false);
           void store.addAgent();
         }}
-        settingsOpen={settings}
         onSettings={() => setSettings(true)}
-        onOpen={(agent, id) => {
-          setSettings(false);
-          // Going to another agent's conversation is one navigation, not a switch followed by an
-          // open: the second one would land wherever the selection had moved to by then.
-          if (agent !== agentId) void store.selectAgent(agent, id);
-          else void store.open(id);
-        }}
-        onNew={() => {
-          setSettings(false);
-          newConversation();
-        }}
-        onRename={(agent, id, name) => void store.renameSession(agent, id, name)}
-        onMenu={(canRename) => duang.conversationMenu(canRename)}
-        onDelete={(agent, id) => {
-          if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent, id);
-        }}
+        onRename={(id, name) => void store.renameAgent(id, name)}
+        onMenu={duang.menu}
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
         {settings ? (
@@ -192,7 +163,28 @@ export default function App() {
                 }
                 plan={provider ? view.usage[provider] : undefined}
                 queued={pending ? pending.steering + pending.followUp : undefined}
+                list={
+                  agentState === "ready"
+                    ? { open: listOpen, unseen: Object.keys(view.unseen[agent.id] ?? {}).length }
+                    : undefined
+                }
                 onReveal={() => void store.reveal()}
+              />
+            )}
+            {agent && agentState === "ready" && (
+              <ConversationList
+                rows={sessionRows}
+                session={c?.session}
+                error={view.sessionsError[agent.id]}
+                disabled={view.loading}
+                onToggle={setListOpen}
+                onOpen={(session) => void store.open(session)}
+                onNew={newConversation}
+                onRename={(session, name) => void store.renameSession(agent.id, session, name)}
+                onDelete={(session) => {
+                  if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent.id, session);
+                }}
+                onMenu={duang.menu}
               />
             )}
             {error ? (

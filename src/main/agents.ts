@@ -12,6 +12,7 @@ export const registryFile = join(app.getPath("userData"), "agents.json");
 const registry = new AgentRegistry(registryFile);
 export const listAgents = () => registry.list();
 export const addAgent = (dir: string) => registry.add(dir);
+export const renameAgent = (id: string, name: string) => registry.rename(id, name);
 
 type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;

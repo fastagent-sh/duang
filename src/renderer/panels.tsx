@@ -14,6 +14,7 @@ import {
   GearSix,
   Globe,
   Info,
+  ListBullets,
   MagnifyingGlass,
   PencilSimple,
   Plus,
@@ -24,18 +25,13 @@ import {
 } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
-import type { AgentRow, ProviderUsage, UsageWindow } from "../preload/index.ts";
+import type { AgentRow, DuangApi, ProviderUsage, UsageWindow } from "../preload/index.ts";
 import { contextLabel, errorLine, pace, paceLabel, resetLabel } from "./usage.ts";
 import { dayLabel, firstArg, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
-import { ago, type Row } from "./sessions.ts";
+import { ago, clock, stamp, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
-import type { AgentState, Store, View } from "./store.ts";
-
-/** Clock time, for the end of a message: the day is the separator's job, not every line's. */
-// `numeric` hours, not `2-digit`: a 12-hour locale renders "01:08 AM" for the second one, and no
-// clock on the machine this runs on writes it that way.
-const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+import type { AgentState, Preview, Store, View } from "./store.ts";
 
 /** A path as a person writes it. */
 export const home = (dir: string): string => dir.replace(/^\/Users\/[^/]+/, "~");
@@ -62,44 +58,59 @@ const says: Record<AgentState, string> = {
 };
 
 /**
- * A conversation's row while it is being named. FastAgent owns the label (`update({ name })`); until
- * something sets it, a row falls back to the first message, which is why a conversation whose
- * subject moved on keeps the sentence it started with.
+ * A name being edited in place: an agent's in the roster, a conversation's in the list. Enter or
+ * leaving the field keeps it, Escape drops it.
  */
-function RenameRow({
+function RenameField({
   label,
+  value: initial,
+  className,
   onCommit,
   onCancel,
 }: {
   label: string;
+  value: string;
+  className: string;
   onCommit: (name: string) => void;
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState(label);
+  const [value, setValue] = useState(initial);
   return (
     <input
       autoFocus
-      aria-label="Conversation name"
+      aria-label={label}
       value={value}
       onChange={(event) => setValue(event.target.value)}
       onBlur={() => onCommit(value)}
       onKeyDown={(event) => {
-        // The roster's arrows and Delete belong to rows, not to a text field.
+        // The list's arrows and Delete belong to rows, not to a text field.
         event.stopPropagation();
         if (event.key === "Enter") onCommit(value);
         if (event.key === "Escape") onCancel();
       }}
-      className="my-0.5 ml-16 block w-[calc(100%-72px)] rounded-card bg-bg px-2 py-1 text-[12.5px] outline-none ring-1 ring-accent/60"
+      className={`rounded-card bg-bg px-2 py-1 outline-none ring-1 ring-accent/60 ${className}`}
     />
   );
 }
 
+/** Focus asked for by a row that is about to re-render, taken once it exists again. */
+function useRestoreFocus(find: (key: string) => HTMLElement | null | undefined) {
+  const restore = useRef<string>(undefined);
+  useEffect(() => {
+    const key = restore.current;
+    const el = key ? find(key) : undefined;
+    if (!el) return;
+    restore.current = undefined;
+    el.focus();
+  });
+  return restore;
+}
+
 /**
- * One column: who you work with, and what each of them has been talking about.
- *
- * Agents are rows rather than a strip of tiles, because a name and its state need words. Any number
- * of agents can list their conversations at once; expanding one that is not open asks the store for
- * its list, which boots that agent's runtime exactly as opening it would.
+ * The roster: who you work with, one row per agent, the way a chat client lists its contacts. A row
+ * says what the agent last worked on and when, whether it is working now, and how many outcomes
+ * landed while you were away. Conversations are one level down, in the header's list: listed here
+ * they turned contacts into folders.
  */
 export function Sidebar({
   agents,
@@ -107,19 +118,13 @@ export function Sidebar({
   states,
   running,
   unseen,
-  rowsFor,
-  session,
-  expanded,
+  previews,
+  latest,
   errors,
-  disabled,
-  onSelect,
-  onToggle,
-  onAdd,
   settingsOpen,
+  onSelect,
+  onAdd,
   onSettings,
-  onOpen,
-  onNew,
-  onDelete,
   onRename,
   onMenu,
 }: {
@@ -130,124 +135,44 @@ export function Sidebar({
   running: Record<string, string[]>;
   /** Outcomes nobody has looked at yet, per agent. The reason to come back to this window. */
   unseen: Record<string, Record<string, "done" | "failed">>;
-  rowsFor: (agentId: string) => Row[];
-  session?: string;
-  expanded: string[];
-  /** Why an expanded agent has no list. An empty list and a failed one must not look alike. */
+  /** What each row quotes: the newest output of the conversation it speaks for (`Preview`). */
+  previews: Record<string, Preview>;
+  /** The agent's most recent conversation the runtime knows about: its label stands in until a preview is read. */
+  latest: (agentId: string) => Row | undefined;
+  /** Why an agent's list could not be read. An empty list and a failed one must not look alike. */
   errors: Record<string, string>;
-  disabled: boolean;
-  onSelect: (id: string) => void;
-  onToggle: (id: string) => void;
-  onAdd: () => void;
   /** Settings is showing in the content area: it takes the one selection mark. */
   settingsOpen: boolean;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
   onSettings: () => void;
-  onOpen: (agentId: string, session: string) => void;
-  onNew: () => void;
-  onDelete: (agentId: string, session: string) => void;
-  onRename: (agentId: string, session: string, name: string) => void;
+  onRename: (id: string, name: string) => void;
   /** Raises the row's own menu — Rename lives there, which is where macOS keeps it. */
-  onMenu: (canRename: boolean) => Promise<"rename" | "delete" | undefined>;
+  onMenu: DuangApi["menu"];
 }) {
   /**
-   * One tab stop for the whole column (§11, WAI-ARIA APG): Tab reaches the list, arrows move inside
-   * it. The row controls leave the tab order with it — a caret and a delete on every row would make
-   * Tab walk the roster three times — so the keys they stand for live on the row: Right and Left
-   * expand and collapse an agent, Delete removes a conversation.
+   * One tab stop for the whole roster (§11, WAI-ARIA APG): Tab reaches it, arrows move inside it.
+   * The keyboard starts on the open agent and stays where it was last moved.
    */
-  const showNew = (id: string, rows: Row[]) =>
-    id === agentId && !disabled && !rows.some((row) => row.session === session && row.fresh && !row.draft && !row.running);
-  const rowsOnScreen: { key: string; agent: string; session?: string; fresh?: boolean }[] = [];
-  for (const agent of agents) {
-    rowsOnScreen.push({ key: `agent:${agent.id}`, agent: agent.id });
-    if (expanded.includes(agent.id)) {
-      const rows = rowsFor(agent.id);
-      for (const row of rows)
-        rowsOnScreen.push({
-          key: `conv:${agent.id}/${row.session}`,
-          agent: agent.id,
-          session: row.session,
-          fresh: row.fresh,
-        });
-      // "New conversation" is a row in the list, so the arrows reach it too; anything left tabbable
-      // inside the list would make Tab walk the roster a second time.
-      if (showNew(agent.id, rows)) rowsOnScreen.push({ key: `new:${agent.id}`, agent: agent.id });
-    }
-  }
-  /**
-   * A disabled button ignores `tabIndex` and refuses `focus()`, so the open agent's conversations
-   * drop out while it is loading. Moving over them would leave the real focus somewhere the ring is
-   * not, and Enter would then open a row nobody can see is active.
-   */
-  const focusable = rowsOnScreen.filter((row) => !(disabled && row.agent === agentId && row.session));
-  const current = session && agentId ? `conv:${agentId}/${session}` : `agent:${agentId ?? ""}`;
   const [reached, setReached] = useState<string>();
-  /**
-   * The keyboard starts where the eye is: whatever is open, until the arrows move somewhere else.
-   * Never nowhere — folding the open agent takes `current` off screen, and a list with no
-   * `tabIndex={0}` in it is a list Tab cannot enter at all.
-   */
-  const active = (
-    focusable.find((row) => row.key === reached) ??
-    focusable.find((row) => row.key === current) ??
-    // The open conversation is not listed unless its agent is unfolded; the agent itself is the
-    // next truest answer to "where am I", and only then the top of the list.
-    focusable.find((row) => row.key === `agent:${agentId ?? ""}`) ??
-    focusable[0]
-  )?.key;
+  const active = (agents.find((row) => row.id === reached) ?? agents.find((row) => row.id === agentId) ?? agents[0])?.id;
   const buttons = useRef(new Map<string, HTMLButtonElement>());
-  const go = (key: string) => {
-    setReached(key);
-    buttons.current.get(key)?.focus();
-  };
-  /**
-   * A row deleted from the keyboard takes the focus with it: the browser hands it back to the body,
-   * and the list stops being reachable without a fresh Tab. The neighbour it left behind is focused
-   * once it exists (APG's rule for deleting inside a list).
-   */
-  /** The conversation being renamed in place, if any. FastAgent owns the name; this is the edit. */
-  const [renaming, setRenaming] = useState<{ agent: string; session: string; label: string }>();
-  const restore = useRef<string>(undefined);
-  useEffect(() => {
-    const key = restore.current;
-    if (!key) return;
-    const el = buttons.current.get(key);
-    if (!el) return;
-    restore.current = undefined;
-    el.focus();
-  });
+  const [renaming, setRenaming] = useState<string>();
+  const restore = useRestoreFocus((id) => buttons.current.get(id));
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const index = focusable.findIndex((row) => row.key === active);
-    const row = focusable[index];
-    const step = (to: number) => {
-      const target = focusable[Math.max(0, Math.min(focusable.length - 1, to))];
-      if (target) {
-        event.preventDefault();
-        go(target.key);
-      }
-    };
-    if (event.key === "ArrowDown") return step(index + 1);
-    if (event.key === "ArrowUp") return step(index - 1);
-    if (event.key === "Home") return step(0);
-    if (event.key === "End") return step(focusable.length - 1);
-    if (!row) return;
-    if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && !row.session) {
-      const open = expanded.includes(row.agent);
-      if (open === (event.key === "ArrowRight")) return;
-      event.preventDefault();
-      return onToggle(row.agent);
-    }
-    // Same condition as the button: a conversation the runtime has never heard of has no delete
-    // control, and asking main to delete it earns a confirmation followed by an error.
-    if ((event.key === "Delete" || event.key === "Backspace") && row.session && !row.fresh) {
-      event.preventDefault();
-      const neighbour = focusable[index + 1] ?? focusable[index - 1];
-      if (neighbour) {
-        restore.current = neighbour.key;
-        setReached(neighbour.key);
-      }
-      return onDelete(row.agent, row.session);
-    }
+    const index = agents.findIndex((row) => row.id === active);
+    const to = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: agents.length - 1 }[event.key];
+    const target = to === undefined ? undefined : agents[Math.max(0, Math.min(agents.length - 1, to))];
+    if (!target) return;
+    event.preventDefault();
+    setReached(target.id);
+    buttons.current.get(target.id)?.focus();
+  };
+  const endRename = (id: string) => {
+    // The row's button is unmounted while the field stands in for it, so focus is taken back once
+    // it exists again.
+    restore.current = id;
+    setRenaming(undefined);
   };
   return (
     <aside className="w-[clamp(15rem,27vw,20rem)] shrink-0 flex flex-col min-h-0 rounded-float bg-sidebar ring-1 ring-stroke overflow-hidden">
@@ -270,218 +195,112 @@ export function Sidebar({
         />
       </div>
 
-      {/* One flat list, the way every chat client draws a roster: a hairline that starts where the
-          text does, and no card around anything. Cards per agent made an open one look heavy and
-          made the list read as a stack of panels.
-
-          The 6px gutter is what makes selection look drawn rather than stamped: a filled row that
-          runs into both walls of the column reads as a slab with two square corners cut by the
-          panel, which is the difference between this list and Telegram's. Inset, the fill is a
-          rounded shape sitting *in* the column. */}
+      {/* One flat list with a hairline that starts where the text does, and rows inset by 6px so a
+          selected one is a rounded shape sitting in the column rather than a slab cut by its walls. */}
       <div role="navigation" aria-label="Agents" className="flex-1 overflow-y-auto min-h-0 px-1.5" onKeyDown={onKeyDown}>
         {agents.map((agent) => {
           const selected = agent.id === agentId;
-          const open = expanded.includes(agent.id);
           const state = states[agent.id] ?? "ready";
           const busy = running[agent.id]?.length ?? 0;
           const waiting = Object.values(unseen[agent.id] ?? {});
           const failures = waiting.filter((outcome) => outcome === "failed").length;
-          const conversations = open ? rowsFor(agent.id) : [];
-          // One selection mark at a time: once the conversation being read is listed, it carries
-          // the tint and its agent row steps back to plain; while Settings shows, neither does.
-          const marked = !settingsOpen && selected && !conversations.some((row) => row.session === session);
+          const preview = previews[agent.id];
+          const last = latest(agent.id);
+          // The time of what is quoted; an empty new conversation has none to borrow from another.
+          const at = preview ? preview.at : last?.updatedAt;
+          const error = errors[agent.id] ?? preview?.error;
+          const filled = selected && !settingsOpen;
+          const status = `status-${agent.id}`;
+          const rename = () => setRenaming(agent.id);
           return (
-            <div key={agent.id}>
-              <div className="relative">
+            // `roster-row` draws the hairline above each row but the first, and drops it beside a
+            // filled row (index.css): a line running into a rounded fill reads as a cut.
+            <div key={agent.id} className="roster-row" data-filled={filled || undefined}>
+              {renaming === agent.id ? (
+                <div className="flex items-center gap-3 px-2 py-2">
+                  <Avatar name={agent.name} size={48} />
+                  <RenameField
+                    label="Agent name"
+                    value={agent.name}
+                    className="min-w-0 flex-1 text-[13.5px]"
+                    onCancel={() => endRename(agent.id)}
+                    onCommit={(name) => {
+                      endRename(agent.id);
+                      if (name.trim() && name.trim() !== agent.name) onRename(agent.id, name.trim());
+                    }}
+                  />
+                </div>
+              ) : (
                 <button
                   ref={(el) => {
-                    if (el) buttons.current.set(`agent:${agent.id}`, el);
-                    else buttons.current.delete(`agent:${agent.id}`);
+                    if (el) buttons.current.set(agent.id, el);
+                    else buttons.current.delete(agent.id);
                   }}
-                  tabIndex={active === `agent:${agent.id}` ? 0 : -1}
+                  tabIndex={active === agent.id ? 0 : -1}
                   aria-label={agent.name}
-                  aria-expanded={open}
-                  aria-current={selected && !settingsOpen ? "true" : undefined}
-                  onFocus={() => setReached(`agent:${agent.id}`)}
+                  aria-describedby={status}
+                  aria-current={filled ? "true" : undefined}
+                  onFocus={() => setReached(agent.id)}
                   onClick={() => onSelect(agent.id)}
+                  // Single click already opens, so double click is free for renaming, the way the
+                  // conversation list does it.
+                  onDoubleClick={rename}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    void onMenu([{ id: "rename", label: "Rename…" }]).then((chosen) => chosen === "rename" && rename());
+                  }}
                   title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
-                  className={`flex w-full items-center gap-3 rounded-card py-2.5 pr-10 pl-3 text-left transition-colors ${
-                    marked ? "bg-accent-weak text-text" : "hover:bg-hover"
+                  className={`flex w-full items-center gap-3 rounded-card px-2 py-2 text-left transition-colors ${
+                    filled ? "bg-accent-weak text-text" : "hover:bg-hover"
                   }`}
                 >
-                  <Avatar name={agent.name} working={busy > 0} />
+                  <Avatar name={agent.name} size={48} working={busy > 0} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
-                    <span className="block truncate text-[11px] text-muted">{location(agent.dir)}</span>
-                  </span>
-                  {/* Idle and ready is the state worth saying nothing about (§9). Everything else
-                      is said in words: a coloured dot alone leaves colour doing the work, and the
-                      count is what the agent row can say that a conversation row cannot. */}
-                  {busy > 0 ? (
-                    <Badge tone="accent" pulse className="min-w-0">
-                      <span className="truncate">{busy > 1 ? `${busy} working` : "working"}</span>
-                    </Badge>
-                  ) : waiting.length > 0 ? (
-                    // What landed while you were away, summed on the agent row and spent when the
-                    // conversation is opened. Failures are what the count is for, so they win.
-                    <Pill tone={failures ? "danger" : "accent"}>
-                      {failures ? `${failures} failed` : `${waiting.length} done`}
-                    </Pill>
-                  ) : (
-                    state !== "ready" && (
-                      <Badge tone={tones[state]} className="min-w-0">
-                        <span className="truncate">{says[state].toLowerCase()}</span>
-                      </Badge>
-                    )
-                  )}
-                </button>
-                {/* Opening an agent and looking at its conversations are two different questions, so
-                    they are two different controls. Any number of agents can be open at once. */}
-                <Button
-                  kind="ghost"
-                  size={28}
-                  tabIndex={-1}
-                  onClick={() => onToggle(agent.id)}
-                  aria-label={`${open ? "Hide" : "Show"} conversations of ${agent.name}`}
-                  title={open ? "Hide conversations" : "Show conversations"}
-                  icon={<CaretDown size={12} className={`transition-transform ${open ? "" : "-rotate-90"}`} />}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2"
-                />
-              </div>
-
-              {open && (
-                <div className="pb-1">
-                  {errors[agent.id] && (
-                    <p role="alert" className="pb-1 pr-3 pl-16 text-[11px] text-danger">
-                      {errors[agent.id]}
-                    </p>
-                  )}
-                  {conversations.map((row) => {
-                    // A conversation the runtime has never heard of can be neither renamed nor
-                    // deleted — `update()` and `delete()` both answer `no_such_session` — so it has
-                    // no menu at all, which is what the keyboard's Delete already assumed.
-                    const current = !settingsOpen && selected && row.session === session;
-                    const menu = row.fresh
-                      ? undefined
-                      : () =>
-                          void onMenu(true).then((chosen) => {
-                            if (chosen === "rename")
-                              setRenaming({ agent: agent.id, session: row.session, label: row.label });
-                            if (chosen === "delete") onDelete(agent.id, row.session);
-                          });
-                    return renaming?.agent === agent.id && renaming.session === row.session ? (
-                      <RenameRow
-                        key={row.session}
-                        label={renaming.label}
-                        onCancel={() => {
-                          // The row's button is unmounted while this input stands in for it, so the
-                          // focus is asked for and taken once it is back — the same path a deleted
-                          // row uses. Focusing here would be a no-op and leave the body focused.
-                          restore.current = `conv:${agent.id}/${row.session}`;
-                          setRenaming(undefined);
-                        }}
-                        onCommit={(name) => {
-                          restore.current = `conv:${agent.id}/${row.session}`;
-                          setRenaming(undefined);
-                          if (name.trim() && name.trim() !== renaming.label) onRename(agent.id, row.session, name);
-                        }}
-                      />
-                    ) : (
-                    <div key={row.session} className="group relative">
-                      <button
-                        ref={(el) => {
-                          if (el) buttons.current.set(`conv:${agent.id}/${row.session}`, el);
-                          else buttons.current.delete(`conv:${agent.id}/${row.session}`);
-                        }}
-                        tabIndex={active === `conv:${agent.id}/${row.session}` ? 0 : -1}
-                        onFocus={() => setReached(`conv:${agent.id}/${row.session}`)}
-                        onClick={() => onOpen(agent.id, row.session)}
-                        // Single click already opens, so double click is free for renaming the way
-                        // Notes and Safari's bookmarks do it.
-                        onDoubleClick={() => !row.fresh && setRenaming({ agent: agent.id, session: row.session, label: row.label })}
-                        onContextMenu={(event) => {
-                          if (!menu) return;
-                          event.preventDefault();
-                          menu();
-                        }}
-                        disabled={disabled && selected}
-                        aria-current={current ? "page" : undefined}
-                        className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-3 pl-16 text-left transition-colors ${
-                          current ? "bg-accent-weak text-accent" : "hover:bg-hover"
-                        }`}
-                      >
-                        <span
-                          className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
-                            row.unseen ? "font-semibold" : ""
-                          }`}
-                        >
-                          {row.label}
-                        </span>
-                        {/* Which conversation is alive is the question this row answers; the agent
-                            row above only says that one of them is. */}
-                        {row.running ? (
-                          <Badge tone="accent" pulse>
-                            working
-                          </Badge>
-                        ) : row.unseen ? (
-                          <Pill tone={row.unseen === "failed" ? "danger" : "accent"}>
-                            {row.unseen}
-                          </Pill>
-                        ) : row.draft ? (
-                          <span className="shrink-0 text-[11px] italic text-muted">
-                            unsent
-                          </span>
-                        ) : (
-                          row.updatedAt !== undefined && (
-                            <span
-                              className="shrink-0 text-[11px] text-muted group-hover:invisible"
-                            >
-                              {ago(row.updatedAt)}
-                            </span>
-                          )
-                        )}
-                      </button>
-                      {/* One way to act on a row, not a shortcut to its most destructive action:
-                          the same menu the right click raises. */}
-                      {menu && (
-                        <Button
-                          kind="ghost"
-                          size={28}
-                          tabIndex={-1}
-                          onClick={menu}
-                          title="Conversation actions"
-                          aria-label={`Actions for ${row.label}`}
-                          icon={<DotsThree size={16} weight="bold" />}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        />
+                    <span className="flex items-baseline gap-2">
+                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{agent.name}</span>
+                      {/* Busy is said in words where the time goes: the preview below is the work
+                          itself, streaming, and must not be replaced by a word about it. */}
+                      {busy > 0 ? (
+                        <Badge tone="accent" pulse className="shrink-0">
+                          {busy > 1 ? `${busy} working` : "working"}
+                        </Badge>
+                      ) : (
+                        at !== undefined && <span className="shrink-0 text-[11px] text-muted tabular-nums">{stamp(at)}</span>
                       )}
-                    </div>
-                    );
-                  })}
-                  {showNew(agent.id, conversations) && (
-                    <Button
-                      kind="ghost"
-                      size={28}
-                      ref={(el) => {
-                        if (el) buttons.current.set(`new:${agent.id}`, el);
-                        else buttons.current.delete(`new:${agent.id}`);
-                      }}
-                      tabIndex={active === `new:${agent.id}` ? 0 : -1}
-                      onFocus={() => setReached(`new:${agent.id}`)}
-                      onClick={onNew}
-                      title="New conversation (⌘N)"
-                      icon={<Plus size={14} />}
-                      className="w-full justify-start! rounded-card pl-16!"
-                    >
-                      New conversation
-                    </Button>
-                  )}
-                </div>
+                    </span>
+                    <span id={status} className="mt-0.5 flex h-[34px] items-start gap-2 text-[12.5px] leading-[17px]">
+                      {/* A setup problem beats the preview, since there is no output to quote, and
+                          is said in words, never a coloured dot alone (§9). */}
+                      {state !== "ready" ? (
+                        <Badge tone={tones[state]} className="min-w-0 flex-1">
+                          <span className="truncate">{says[state].toLowerCase()}</span>
+                        </Badge>
+                      ) : error ? (
+                        <span className="min-w-0 flex-1 line-clamp-2 break-words text-danger" title={error}>
+                          {error}
+                        </span>
+                      ) : (
+                        <span className="min-w-0 flex-1 line-clamp-2 break-words text-muted">
+                          {preview?.text ?? (preview ? "New conversation" : last?.label ?? "No conversations yet")}
+                        </span>
+                      )}
+                      {/* What landed while you were away, spent as each conversation is opened.
+                          Failures are what the count is for, so they colour it. */}
+                      {waiting.length > 0 && (
+                        <span
+                          className="shrink-0 self-end"
+                          title={`${waiting.length - failures} finished, ${failures} failed while you were away`}
+                        >
+                          <Pill tone={failures ? "danger" : "accent"}>{waiting.length}</Pill>
+                          <span className="sr-only">
+                            {failures ? `${failures} failed` : "done"} while you were away
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
               )}
-              {/* The separator starts where the text does, as it does in Telegram and WeChat. It
-                  divides agents, so the last row has none — `last:hidden` hid every one of them,
-                  because each is the last child of its own agent. */}
-              {agent.id !== agents.at(-1)?.id && <div className="my-0.5 ml-16 h-px bg-stroke" />}
             </div>
           );
         })}
@@ -502,6 +321,193 @@ export function Sidebar({
         </button>
       </div>
     </aside>
+  );
+}
+
+/**
+ * The open agent's conversations, hanging from the header's list button the way ChatGPT's panels
+ * do. A native popover: the top layer, light dismiss and Escape are the platform's, and the button
+ * shows and hides it without any state of ours.
+ */
+export function ConversationList({
+  rows,
+  session,
+  error,
+  disabled,
+  onToggle,
+  onOpen,
+  onNew,
+  onRename,
+  onDelete,
+  onMenu,
+}: {
+  rows: Row[];
+  session?: string;
+  /** Why the list could not be re-read; the rows shown are the last ones that could. */
+  error?: string;
+  /** The agent is opening: a row clicked now would land wherever the selection moves to. */
+  disabled: boolean;
+  onToggle: (open: boolean) => void;
+  onOpen: (session: string) => void;
+  onNew: () => void;
+  onRename: (session: string, name: string) => void;
+  onDelete: (session: string) => void;
+  onMenu: DuangApi["menu"];
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  const [renaming, setRenaming] = useState<Row>();
+  const restore = useRestoreFocus((key) =>
+    panel.current?.querySelector<HTMLElement>(`button[data-session="${CSS.escape(key)}"]`),
+  );
+  const endRename = (row: Row) => {
+    restore.current = row.session;
+    setRenaming(undefined);
+  };
+  // An open popover that unmounts fires no toggle event, so whoever mirrors its state is told here.
+  useEffect(() => () => onToggle(false), [onToggle]);
+  /** Choosing is what the list was opened for, so it gets out of the way of what was chosen. */
+  const close = () => panel.current?.hidePopover();
+  /**
+   * The rows are one list for the arrows, and Delete acts on the one the keyboard is on. A deleted
+   * row hands the focus to its neighbour first, so the list stays reachable after it is gone.
+   */
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const all = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-session]")];
+    const index = all.indexOf(event.target as HTMLButtonElement);
+    if (index < 0) return;
+    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+    if (step) {
+      event.preventDefault();
+      all[index + step]?.focus();
+      return;
+    }
+    const row = rows.find((candidate) => candidate.session === all[index]!.dataset.session);
+    // A conversation the runtime has never heard of has nothing to delete: `delete()` answers
+    // `no_such_session`, so it has no menu either.
+    if ((event.key === "Delete" || event.key === "Backspace") && row && !row.fresh) {
+      event.preventDefault();
+      (all[index + 1] ?? all[index - 1])?.focus();
+      onDelete(row.session);
+    }
+  };
+  return (
+    <div
+      ref={panel}
+      id="conversations"
+      popover="auto"
+      aria-label="Conversations"
+      onToggle={(event) => onToggle(event.newState === "open")}
+      className="popover w-80"
+    >
+      <div className="flex h-8 items-center justify-between pr-0.5 pl-2.5">
+        <span className="text-[12px] font-medium text-muted">Conversations</span>
+        <Button
+          kind="ghost"
+          size={28}
+          onClick={() => {
+            close();
+            onNew();
+          }}
+          disabled={disabled && "The agent is still opening"}
+          title="New conversation (⌘N)"
+          aria-label="New conversation"
+          icon={<Plus size={16} />}
+        />
+      </div>
+      {error && (
+        <p role="alert" className="px-2.5 pb-1 text-[11px] text-danger">
+          {error}
+        </p>
+      )}
+      <div className="max-h-[min(28rem,65vh)] overflow-y-auto" onKeyDown={onKeyDown}>
+        {rows.map((row) => {
+          const current = row.session === session;
+          const menu = row.fresh
+            ? undefined
+            : () =>
+                void onMenu([
+                  { id: "rename", label: "Rename…" },
+                  { id: "delete", label: "Delete Conversation" },
+                ]).then((chosen) => {
+                  if (chosen === "rename") setRenaming(row);
+                  if (chosen === "delete") onDelete(row.session);
+                });
+          return renaming?.session === row.session ? (
+            <RenameField
+              key={row.session}
+              label="Conversation name"
+              value={renaming.label}
+              className="my-0.5 block w-full text-[12.5px]"
+              onCancel={() => endRename(row)}
+              onCommit={(name) => {
+                endRename(row);
+                if (name.trim() && name.trim() !== renaming.label) onRename(row.session, name);
+              }}
+            />
+          ) : (
+            <div key={row.session} className="group relative">
+              <button
+                data-session={row.session}
+                onClick={() => {
+                  close();
+                  onOpen(row.session);
+                }}
+                onDoubleClick={() => !row.fresh && setRenaming(row)}
+                onContextMenu={(event) => {
+                  if (!menu) return;
+                  event.preventDefault();
+                  menu();
+                }}
+                disabled={disabled}
+                aria-current={current ? "page" : undefined}
+                className={`flex w-full items-baseline gap-2 rounded-card py-1.5 pr-3 pl-2.5 text-left transition-colors ${
+                  current ? "bg-accent-weak text-accent" : "hover:bg-hover"
+                }`}
+              >
+                <span
+                  className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
+                    row.unseen ? "font-semibold" : ""
+                  }`}
+                >
+                  {row.label}
+                </span>
+                {/* Which conversation is alive is the question this row answers; the agent's
+                    roster row only says that one of them is. */}
+                {row.running ? (
+                  <Badge tone="accent" pulse>
+                    working
+                  </Badge>
+                ) : row.unseen ? (
+                  <Pill tone={row.unseen === "failed" ? "danger" : "accent"}>{row.unseen}</Pill>
+                ) : row.draft ? (
+                  <span className="shrink-0 text-[11px] italic text-muted">unsent</span>
+                ) : (
+                  row.updatedAt !== undefined && (
+                    <span className="shrink-0 text-[11px] text-muted tabular-nums group-hover:invisible">
+                      {stamp(row.updatedAt)}
+                    </span>
+                  )
+                )}
+              </button>
+              {/* One way to act on a row, not a shortcut to its most destructive action: the same
+                  menu the right click raises. */}
+              {menu && (
+                <Button
+                  kind="ghost"
+                  size={28}
+                  tabIndex={-1}
+                  onClick={menu}
+                  title="Conversation actions"
+                  aria-label={`Actions for ${row.label}`}
+                  icon={<DotsThree size={16} weight="bold" />}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -569,6 +575,7 @@ export function ConversationHeader({
   context,
   plan,
   queued,
+  list,
   onReveal,
 }: {
   agent: string;
@@ -578,13 +585,15 @@ export function ConversationHeader({
   context?: { used: number; window: number };
   plan?: { data?: ProviderUsage; error?: string };
   queued?: number;
+  /** The button that shows and hides this agent's conversations; absent while it has none to list. */
+  list?: { open: boolean; unseen: number };
   onReveal: () => void;
 }) {
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
     // only what you can actually grab, click or hover for a tooltip takes the pointer back.
     <header className="@container pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
-      {/* The same tile as in the sidebar: whose work this is should not need reading. */}
+      {/* The same avatar as in the roster: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
         {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
@@ -607,6 +616,24 @@ export function ConversationHeader({
         </span>
       )}
       {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
+      {list && (
+        // Opens the `ConversationList` popover by id and anchors it (index.css). A dot says one of
+        // them finished while you were elsewhere, which is the reason to open it.
+        <Button
+          kind="ghost"
+          size={28}
+          popoverTarget="conversations"
+          aria-label={list.unseen ? `Conversations, ${list.unseen} unseen` : "Conversations"}
+          title="Conversations"
+          icon={
+            <span className="relative">
+              <ListBullets size={16} />
+              {list.unseen > 0 && <span className="absolute -top-0.5 -right-1 size-2 rounded-full bg-accent" />}
+            </span>
+          }
+          className={`conversations-anchor pointer-events-auto -mr-1.5 ${list.open ? "bg-hover" : ""}`}
+        />
+      )}
     </header>
   );
 }

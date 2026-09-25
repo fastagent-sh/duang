@@ -18,9 +18,14 @@ test("registry serializes writes in one process, survives restart and deduplicat
     assert.deepEqual(await registry.list(), []);
     const [first, second] = await Promise.all([registry.add(a), registry.add(b)]);
     assert.equal((await registry.add(alias)).id, first.id);
-    await Promise.all([registry.setModel(first.id, "provider/model"), registry.remove(second.id)]);
+    await Promise.all([
+      registry.setModel(first.id, "provider/model"),
+      registry.rename(first.id, "Reviewer"),
+      registry.remove(second.id),
+    ]);
+    await assert.rejects(registry.rename(second.id, "gone"), /unknown agent/);
     const restarted = new AgentRegistry(file);
-    assert.deepEqual(await restarted.list(), [{ ...first, model: "provider/model" }]);
+    assert.deepEqual(await restarted.list(), [{ ...first, name: "Reviewer", model: "provider/model" }]);
     assert.deepEqual(await readdir(join(root, "data")), ["agents.json"]);
     await restarted.remove(first.id);
     assert.deepEqual(await restarted.list(), []);

@@ -29,7 +29,8 @@ access boundary, not scraped from other people's chats.
 
 ## The workbench
 
-The shipped view is a 320px agent/conversation sidebar and a reading column. The renderer currently
+The shipped view is a 320px agent roster and a reading column, with the open agent's conversations
+in a list under the conversation header. The renderer currently
 shows local agents only; the layout below is the intended extension, **not a screenshot of shipped
 functionality**.
 
@@ -44,7 +45,8 @@ functionality**.
                          details open only when needed
 ```
 
-The sidebar continues to group conversations under their agent. It distinguishes **mine** from
+Conversations stay under their agent: the roster lists contacts, and each agent's conversations
+open from its header. The roster distinguishes **mine** from
 **shared with me**, and labels each agent's location; it never offers a global `Local | Cloud`
 switch, which cannot represent an owner using both locations while also talking to a visitor's
 agent. Current selection, drafts and late events remain attached to the originating agent,

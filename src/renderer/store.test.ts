@@ -45,13 +45,15 @@ function harness() {
     testNetwork: async () => ({ status: 200, ms: 1, route: { source: "system" } }),
     onOpenSettings: () => () => {},
     setUnseenCount: async () => {},
-    conversationMenu: async () => undefined,
+    menu: async () => undefined,
+    renameAgent: async () => {},
     renameSession: async () => ({ ok: true }),
     deleteSession: async () => ({ ok: true }),
     openSession: async (_id, session) => {
       opens.push(session);
       return empty();
     },
+    readSession: async () => ({ entries: [] }),
     closeSession: async (subscription) => {
       closed.push(subscription);
     },
@@ -454,7 +456,7 @@ test("the sidebar acts on the agent it names: deleting, listing and opening anot
   await store.load();
   assert.equal(store.getSnapshot().agentId, "a");
 
-  // Expanding B lists its conversations without opening it.
+  // B's row reads its conversations without opening it.
   await store.listSessions("b");
   assert.deepEqual(
     store.getSnapshot().sessions["b"]?.map((s) => s.session),
@@ -487,9 +489,12 @@ test("an agent whose list cannot be read says why, on its own row", async () => 
 
   await store.listSessions("b");
   assert.equal(store.getSnapshot().sessionsError["b"], "runtime would not start");
-  // Expanding must not touch shared agent state: that drives the main panel, and folding then
-  // expanding the open agent would otherwise declare the window broken with nothing to show.
-  assert.equal(store.getSnapshot().states.b, undefined);
+  assert.equal(store.getSnapshot().states.b, "broken", "another agent's row says its setup in words");
+  // The open agent's state drives the main panel: a background re-read must not declare the
+  // window broken with nothing to show for it.
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime would not start" });
+  await store.listSessions("a");
+  assert.equal(store.getSnapshot().states.a, "ready");
   assert.equal(
     openConversation.items.filter((item) => item.kind === "note").length,
     0,
@@ -500,6 +505,7 @@ test("an agent whose list cannot be read says why, on its own row", async () => 
   api.openAgent = async () => listed("b-1");
   await store.listSessions("b");
   assert.equal(store.getSnapshot().sessionsError["b"], undefined);
+  assert.equal(store.getSnapshot().states.b, "ready");
   assert.deepEqual(
     store.getSnapshot().sessions["b"]?.map((s) => s.session),
     ["b-1"],
@@ -663,5 +669,62 @@ test("plan usage is kept per provider, and a failed read replaces the numbers wi
     { error: "api.anthropic.com answered 429: rate limited" },
     "a stale percentage must not stay on screen as current",
   );
+  store.dispose();
+});
+
+test("a roster row quotes the newest output of the conversation it speaks for, live while it streams", async () => {
+  const { api, store, emit } = harness();
+  const reads: string[][] = [];
+  api.openAgent = async (id) => (id === "b" ? listed("b-1") : ready);
+  api.readSession = async (id, session) => {
+    reads.push([id, session]);
+    return { entries: [{ id: "e1", timestamp: 7, kind: "assistant", data: { text: "B finished the report." } }] };
+  };
+  await store.load();
+  await new Promise((resolve) => setImmediate(resolve));
+  // B is not open, so its row reads the history of the conversation a click would show, once.
+  assert.deepEqual(reads, [["b", "b-1"]]);
+  assert.deepEqual(store.getSnapshot().previews["b"], { session: "b-1", text: "B finished the report.", at: 7 });
+  await store.listSessions("b");
+  assert.equal(reads.length, 1, "a conversation that has not moved on is not read again");
+
+  // The open agent's row follows its conversation as it streams, with no read at all.
+  const a = store.getSnapshot().conversation!;
+  emit(a, "run_started");
+  emit(a, "message_delta", { channel: "text", delta: "Working on" });
+  assert.equal(store.getSnapshot().previews["a"]?.text, "Working on");
+  emit(a, "message_delta", { channel: "text", delta: " it" });
+  assert.equal(store.getSnapshot().previews["a"]?.text, "Working on it");
+  assert.ok(!reads.some(([id]) => id === "a"));
+
+  // A failed read says so on the row instead of quoting something older.
+  api.openAgent = async (id) => (id === "b" ? listed("b-2") : ready);
+  api.readSession = async () => {
+    throw new Error("history unreadable");
+  };
+  await store.listSessions("b");
+  assert.deepEqual(store.getSnapshot().previews["b"], { session: "b-2", error: "history unreadable" });
+
+  // A deleted conversation is not quoted as if it were still there.
+  await store.deleteSession("b", "b-2");
+  assert.equal(store.getSnapshot().previews["b"], undefined);
+  store.dispose();
+});
+
+test("a slow history read cannot replace a newer one", async () => {
+  const { api, store } = harness();
+  const at = (updatedAt: number) =>
+    ({ ...ready, sessions: [{ session: "b-1", updatedAt, createdAt: 0, messageCount: 2 }] }) as OpenResult;
+  const reply = (text: string) => ({ entries: [{ id: text, timestamp: 1, kind: "assistant", data: { text } }] });
+  const slow = deferred<ReturnType<typeof reply>>();
+  api.openAgent = async (id) => (id === "b" ? at(1) : ready);
+  api.readSession = () => slow.promise;
+  await store.load();
+  api.openAgent = async (id) => (id === "b" ? at(2) : ready);
+  api.readSession = async () => reply("newer");
+  await store.listSessions("b");
+  slow.resolve(reply("older"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.getSnapshot().previews["b"]?.text, "newer");
   store.dispose();
 });

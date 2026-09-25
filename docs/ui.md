@@ -33,8 +33,9 @@ the whole still read badly. The fixes for that are here, not in another round of
 ## 1. Three principles
 
 **An agent is a contact; a conversation is a topic.** The default view is a roster of who you work
-with and what they last said. Several conversations per agent are real and never hidden, but they
-stay folded until you want them.
+with and what they last worked on. Several conversations per agent are real and never hidden, but
+they live one level down, in the open agent's conversation list, so the roster stays a list of
+contacts.
 
 **Glass belongs to navigation, never to content.** The sidebar is a vibrancy material; the
 transcript is opaque. This is macOS 26's own rule and it is also what keeps long text readable.
@@ -53,7 +54,7 @@ made it work there, and whether that premise holds here.
   **Refused, with reasons:** *bubbles on both sides* — their premise is that the heavy work lives on
   the Bot's own computer panel, so the transcript carries short reports; ours is fact 5, where the
   transcript is the work. *An avatar that performs a lifecycle* — their premise is one
-  conversation per Bot plus an expressive character to animate; ours is a lettered tile and parallel
+  conversation per Bot plus an expressive character to animate; ours is a lettered avatar and parallel
   conversations, so the avatar carries agent presence as a quiet ring while the conversation rows say
   which one is running. *Pin and hide* — their premise is a roster of up to 50 Bots; ours starts with the few agents
   you actually use. Online contacts may change the size of that list later.
@@ -67,7 +68,7 @@ made it work there, and whether that premise holds here.
     at a tool's density rather than copying the numbers.
   - *Avatar colours.* `empty_userpic.cpp` picks from eight fixed colours by `order[id % 7]` with
     `order = [0, 7, 4, 1, 6, 3, 5]` — a deliberately shuffled table so that adjacent ids do not get
-    adjacent hues. We take the shuffle, not the palette: Telegram's tiles are saturated pastels
+    adjacent hues. We take the shuffle, not the palette: Telegram's avatars are saturated pastels
     against a neutral UI, and ours sit beside a violet accent, so they stay low in chroma.
   - *Token naming.* `colors.palette` defines every role as a set — `windowBg`, `windowBgOver`,
     `windowBgRipple`, `windowFg`, `windowSubTextFg`, `windowBgActive`, `windowFgActive` — instead of
@@ -86,84 +87,88 @@ specified in [design.md](design.md#the-workbench), not by reserving permanent ch
 
 ```
 ┌ sidebar 240–320 ───────────────┬ conversation ───────────────────────┐
-│ duang·                    ＋    │ floating header                       │
-│ AM  amazonseo.ai               │ turns · tool details · outcomes       │
-│     project path               │                                       │
-│   • fixing the i18n check      │                                       │
-│     working                    │ floating composer                     │
-│ EX  existing-agent             │                                       │
+│ duang·                    ＋    │ floating header            [≡]      │
+│ (AM) amazonseo.ai      3:11 PM │               ┌ Conversations  ＋ ┐ │
+│      The i18n check fails in   │               │ fixing the i18n…  │ │
+│      one place, and the ca… 2  │               │ Deploy       Tue  │ │
+│ ───────────────────────────── │               └───────────────────┘ │
+│ (EX) existing-agent  ● working │                                       │
+│      bash npm run build        │ floating composer                     │
 └────────────────────────────────┴───────────────────────────────────────┘
 ```
 
-**Sidebar rows are agents, not conversations** — one row each, with the local directory on its
-second line. An agent with a single conversation shows nothing more than a contact row until its
-conversations are explicitly expanded.
+**Sidebar rows are agents, and only agents** — a contact list in Telegram's shape. Listing each
+agent's conversations under it made the column a tree of folders, and an agent read as a directory
+of chats rather than as someone you work with.
 
-Geometry, holding Telegram's proportions at a tool's density: agent row 56 tall, avatar 40 as a
-rounded square with a two-stop gradient in its hue — flat tiles look printed, and the gradient is
-most of why Telegram's list feels alive. The open conversation is an accent tint with accent text,
-not a solid fill: a filled row was the loudest thing on screen and competed with the transcript it
-points at.
-The second line leads with the workspace directory's name and shows its parent when room permits,
-not a message preview: local identity comes from a directory, and the full path stays available on
-hover. Conversations are listed directly below. An online or invited contact
-will need a provider and location label instead; do not imply someone else's path is a local one.
-A conversation row is 32 tall, has no avatar, and indents under its agent.
+A row, holding Telegram's proportions at a tool's density: a round avatar 48 across with a two-stop
+gradient in its hue — flat avatars look printed, and the gradient is most of why Telegram's list
+feels alive — beside three lines of text. The first is the agent's name, with the time of what the
+row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
+two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
+unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
+row. The directory is in the row's tooltip and under the header's title.
 
-**Opening an agent and listing its conversations are two questions, so they are two controls.**
-The row opens the agent, which is enough to put its latest conversation on screen; clicking the
-agent you are already on lists its conversations, and clicking again puts the list away. Nothing
-unfolds by itself — opening an agent already answers "what was I doing here", and unfolding the
-roster on top of that answers a question nobody asked. The caret at the row's trailing edge does the
-same for any agent, which is the part the row cannot express: it is how a second agent's
-conversations appear without leaving the one you are reading. Any number of agents can be listed at
-once, and folding one never closes the conversation being read. Which rows are open is a view
-preference: it lives in the sidebar and is not remembered across launches.
+The conversation a row speaks for is the one a click on it would show: the one on screen for the
+open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
+thing in that conversation — the agent's answer, the tool it is running (`bash npm run build`),
+a failure note, or your own message as `You: …` — as plain text, with markdown marks dropped and
+thinking passed over. While this window holds the conversation (the one on screen, or one running
+in the background after you walked away from it), the quote follows it as it streams. Otherwise it
+is read once from the conversation's history, through FastAgent's public `entries()`, and read again
+only when the session list says the conversation moved on. Nothing of it is stored: it is
+presentation, and the transcript stays the runtime's. A run started outside duang therefore shows
+when the list is next read, not token by token. A history that cannot be read says so in the quote's
+place rather than showing something older, and a conversation deleted from under a row is no longer
+quoted.
 
-Listing an agent that is not open loads its conversations, which boots that agent's runtime the same
-way opening it would — FastAgent owns the session list and duang will not keep a second copy of
-where sessions live.
+While any of the agent's conversations runs, `working` (or `2 working`) takes the time's place: the
+quote below is the work itself and must not be replaced by a word about it. The agent's setup
+problem (`needs a model`, `no agent yet`, `broken`) or the reason its list could not be read takes
+the quote's place, since there is nothing to quote. An empty list and a list that could not be read
+are not the same answer, and the failure stays on that agent's row: a background read never changes
+what the main panel believes about the agent being read.
 
-Selection is the accent, never a grey — grey is what a row looks like under the pointer. There is
-one selection mark at a time, and it says what the content area shows: the conversation being read
-carries the tint when it is listed, its agent row carries it only while that list is folded, and
-while Settings shows, the Settings row at the foot of the sidebar carries it instead.
+Every row needs its agent's list, so at launch duang reads each agent's conversations, which boots
+each runtime the same way opening it would — FastAgent owns the session list and duang will not keep
+a second copy of where sessions live.
 
-**One flat list, no card per agent.** Slightly inset rows, a hairline that starts where the text
-does, and the open conversation filled within its row: Telegram, WeChat and Codex draw a roster this way,
-and the reason shows up as soon as two agents are listed — a card per agent turns the column into a
-stack of panels and makes an open agent look heavy. A conversation row is one line indented to the
-agent's text, with the relative time trailing and a `…` in its place on hover, so a topic is visibly
-lighter than the agent that owns it. The `…` opens the row's menu rather than being a shortcut to
-its most destructive action: one way to act on a row, and it is the same menu the right click and
-Shift+F10 raise.
+**The name is duang's label**, renamed the way macOS renames: `Rename…` in the row's native context
+menu, or a double click on the row. It is stored in duang's registry; the directory and the agent's
+definition are untouched, and an empty name is not a rename.
 
-**An expanded agent lists its conversations**, including one that is running and one holding unsent
-text, because fact 4 makes "what is alive right now" the question the sidebar exists to answer. Only
-the open agent marks which of them is running or drafted; another agent's list is its history, and
-its live work shows on its own row as a breathing ring and the word `working`. An empty new
-conversation has no second "New conversation" action beside it until there is a draft or a run to
-preserve. Creating one moves focus to its input once the new session is ready.
+The open agent is an accent tint with normal text, not a solid fill: a filled row was the loudest
+thing on screen and competed with the transcript it points at. There is one selection mark at a
+time; while Settings shows, the Settings row at the foot of the sidebar carries it instead. Rows are
+slightly inset so the tint is a rounded shape in the column, and the hairline between them starts
+where the text does, as in Telegram and WeChat. The hairlines on both sides of a filled row — the
+open agent, or the one under the pointer — give way, as Telegram's do: a line running into a rounded
+fill reads as a cut.
 
-A list that cannot be read says why on that agent's row, and only there: expanding never changes
-what the main panel believes about an agent, so folding and expanding the one you are reading cannot
-declare the window broken. An empty agent and an agent whose runtime
-would not start are not the same answer, and the failure belongs to the agent that was expanded —
-never to the transcript being read.
+**The open agent's conversations hang from the header.** A list button at the header's trailing
+edge shows and hides them in a floating panel under it, the way ChatGPT's header panels do: a
+native popover, so the top layer, a click outside and Escape closing it are the platform's, and an
+Escape that closes it does not also stop a run. The button carries a dot while one of the agent's
+conversations has an outcome you have not seen. The panel is titled `Conversations` with a `＋` for
+a new one (`⌘N` does the same), and choosing a conversation or starting one puts it away.
 
-**Presence is told at two levels, because the sidebar has two questions to answer.** The avatar
-carries the agent's own presence: while any of its conversations is working, a slow accent ring
-breathes around it, visible whether or not the group is expanded. The agent row states it in words —
-`working`, or `2 working` when several are. The conversation rows carry which one: a pulsing dot and
-the state word on the specific conversation.
+A conversation row is one line: the label, with its time trailing and a `…` in its place on hover,
+so a topic is visibly lighter than the agent that owns it. The `…` opens the row's menu rather than
+being a shortcut to its most destructive action: one way to act on a row, and it is the same menu
+the right click and Shift+F10 raise. The list includes a conversation that is running and one
+holding unsent text, because fact 4 makes "what is alive right now" a question the window must
+answer; a new conversation shows as an italic `New conversation` until its first turn lands, and
+creating one moves focus to its input once the new session is ready.
 
-Folded, that is complete: ring plus summary. Expanded, it resolves to the individual conversation.
-The ring is never the only signal, so colour is never doing the work alone (§9).
+**Presence is told at two levels.** The avatar carries the agent's own presence: while any of its
+conversations is working, a slow accent ring breathes around it, its row says `working` in words,
+and its quote streams. The conversation list carries which one: a pulsing dot and the word on that row. The ring is
+never the only signal, so colour is never doing the work alone (§9).
 
 What the avatar does not do is act. Products where the avatar performs a lifecycle — thinking,
 waiting, celebrating — have one conversation per agent, an expressive character to animate, and a
-consumer's relationship with it. Ours is two letters on a tile representing a directory; a breathing
-ring is presence, a performance would be costume.
+consumer's relationship with it. Ours is two letters standing for a directory; a breathing ring is
+presence, a performance would be costume.
 
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
 rather than a column filling them, and the conversation's header floats over the transcript as a
@@ -183,7 +188,8 @@ Both stopped text at a line, which made the conversation read as a framed box ra
 continuous page.
 
 Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
-[narrow, dark](screenshots/reading-narrow-dark.png), and
+[narrow, dark](screenshots/reading-narrow-dark.png),
+[conversation list, light](screenshots/conversation-list-light.png), and
 [model picker, light](screenshots/model-picker-light.png). Regenerate the full dark/light set with
 `npm run shots`.
 
@@ -193,9 +199,9 @@ actually loaded settings to the owner; recipients never see someone else's local
 online agent may run routines without a channel or invite. Do not add a global Activity row or a
 permanently open third column until work cannot be found in the existing roster and transcript.
 
-Removing an agent is not offered by the sidebar at all. A control on the row sat next to the fold
-caret, where one slip removes an agent, and a link at the bottom of the column belonged to nothing
-in particular. Removal lives where the problem is explained — the panel for a broken agent or a
+Removing an agent is not offered by the sidebar at all. A control on the row put one slip between
+opening an agent and removing it, and a link at the bottom of the column belonged to nothing in
+particular. Removal lives where the problem is explained — the panel for a broken agent or a
 directory with no agent in it — until there is a menu to put it in.
 
 Not included: pinning, hiding, archiving, folders. They belong to rosters of fifty agents; on a list
@@ -245,7 +251,7 @@ Every interactive role is defined as a set, not derived at the call site — Tel
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
 `fill-fg`. A component picks a role; it never computes a hover colour itself.
 
-Avatar tiles walk seven fixed hues, chosen by `ORDER[hash % 7]` with `ORDER = [0, 4, 1, 6, 3, 5, 2]`.
+Avatars walk seven fixed hues, chosen by `ORDER[hash % 7]` with `ORDER = [0, 4, 1, 6, 3, 5, 2]`.
 The shuffle is Telegram's and it exists so that agents registered one after another do not come out
 looking alike.
 
@@ -426,7 +432,7 @@ away, so "is it still working" must be answerable from the sidebar without openi
 | Tier | States | How it is shown |
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
-| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar, a pulsing dot and the word on the conversation row, elapsed time in the transcript. No sentence in the reading flow. |
+| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, elapsed time in the transcript. No sentence in the reading flow. |
 | **Nothing to do** | ready, done *(already seen)* | Show nothing. A tool that worked wears no badge; a trace where nine cards in ten say `done` is how the one that failed gets lost. |
 
 One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
@@ -443,8 +449,9 @@ it, such as a tooltip — while the third tier keeps it off the screen.
 **An outcome you were not there for is a decision, not reassurance.** Runs are long and fact 4 says
 you come back to them, so a run that settles while you are reading something else leaves a mark: the
 conversation row says `done` or `failed` as a filled pill with its label in semibold, the agent row
-sums them (`2 done`, `1 failed`, with failures winning the summary), and the dock carries the total
-so it is answerable without duang being the window in front. Tested as a tinted word first, and
+counts them in a round pill the way Telegram counts unread messages (red when any of them failed,
+and said in words for assistive technology and in the tooltip), the header's list button carries a
+dot, and the dock carries the total so it is answerable without duang being the window in front. Tested as a tinted word first, and
 missed several times in a row — this is the one mark in the interface that has to be seen from
 across the room, so it is Telegram's unread pill and nothing quieter. Opening the conversation
 spends the mark, the way an unread count is spent by reading — its whole purpose is to disappear. A run you stopped yourself leaves nothing,
@@ -461,8 +468,8 @@ person's to edit; a failed run did run, and its effects may already exist.
 the tool for the person's decision.
 
 **Presence is layered, never duplicated.** The avatar answers *is this agent busy at all* with a
-breathing ring, the agent row says it in words (`working`, `2 working`), and the conversation rows
-answer *which one* with a pulsing dot and the word. Each level adds information the one above cannot
+breathing ring, the agent row says it in words (`working`, `2 working`), and the rows of the
+conversation list answer *which one* with a pulsing dot and the word. Each level adds information the one above cannot
 give; none of them repeats the other, and none of them is colour alone. A conversation holding
 unsent text says `unsent` in the same place, because that is also work that is not finished.
 
@@ -507,17 +514,16 @@ caret and container already say it. Body contrast stays at or above 4.5:1 in bot
 follows §9; no state is colour alone.
 
 **The roster is one tab stop** (WAI-ARIA APG): Tab reaches it, arrows move inside it. Up and Down
-walk agents and their conversations as one list, Home and End jump to its ends, and Enter opens
-whatever the keyboard is on. The keyboard starts on what is open and stays where it was last moved.
+walk the agents, Home and End jump to its ends, and Enter opens the one the keyboard is on. The
+keyboard starts on the open agent and stays where it was last moved. A row's name is its label and
+its second line its description, so the unread count and `working` are read out with it.
 
-**A row's controls are keys, not tab stops.** A caret and a delete on every row would make Tab walk
-the roster three times over, so the row answers for them: Right and Left expand and collapse an
-agent, Delete or Backspace removes the conversation the keyboard is on — Backspace because on macOS
-that is the delete key on the main keyboard — and neither touches a conversation the runtime has
-never heard of, which has no delete control either. `New conversation` is a row in the list for the
-same reason. A deleted row hands the focus to its neighbour; a newly created conversation hands
-it to its composer. The controls stay clickable and keep their labels for assistive technology;
-what they lose is a place in the tab order.
+**The conversation list is reached from its button.** Tab from the header's list button enters the
+open panel; Up and Down move between conversations, and Delete or Backspace removes the one the
+keyboard is on — Backspace because on macOS that is the delete key on the main keyboard — handing
+the focus to its neighbour. Neither touches a conversation the runtime has never heard of, which
+has no delete control either. The `…` on each row is not a tab stop: the context menu (Shift+F10)
+and Delete are its keys. A newly created conversation hands the focus to its composer.
 
 **The transcript is a focusable region**, named, so it can be read and scrolled without a pointer —
 Chromium gives a scroll container the arrow keys once it has focus.
@@ -529,18 +535,21 @@ The whole list, so it lives in one place instead of being read out of the handle
 | Key | Where | Does |
 |---|---|---|
 | `⌘N` | anywhere | New conversation in the open agent; focus its composer when ready |
-| `Esc` | anywhere | Stop the running turn (a popover, then Settings, takes it first) |
+| `Esc` | anywhere | Stop the running turn (a popover or the conversation list, then Settings, takes it first) |
 | `⌘,` | anywhere | Open Settings (the App menu's Settings…); again keeps it open |
 | `↑` `↓` `←` `→` | Settings, a choice group | Move the choice; the group is one tab stop, on the checked row |
 | `Tab` | anywhere | Sidebar → transcript → composer |
-| `↓` `↑` | roster | Move between agents, their conversations and `New conversation` |
-| `Home` `End` | roster | First and last row |
-| `→` `←` | roster, on an agent | Show and hide its conversations |
-| `Enter` `Space` | roster | Open the row |
-| `Shift+F10`, `Menu` | roster, on a conversation | Its menu: `Rename…`, `Delete Conversation` |
-| `Delete` `Backspace` | roster, on a conversation | Delete it, after confirming |
-| `Enter` | renaming a conversation | Keep the name |
-| `Esc` | renaming a conversation | Drop it |
+| `↓` `↑` | roster | Move between agents |
+| `Home` `End` | roster | First and last agent |
+| `Enter` `Space` | roster | Open the agent |
+| `Shift+F10`, `Menu` | roster | Its menu: `Rename…` |
+| `Enter` `Space` | header's list button | Show or hide the conversation list |
+| `↓` `↑` | conversation list | Move between conversations |
+| `Shift+F10`, `Menu` | conversation list | Its menu: `Rename…`, `Delete Conversation` |
+| `Delete` `Backspace` | conversation list | Delete it, after confirming |
+| `Esc` | conversation list | Close it |
+| `Enter` | renaming an agent or a conversation | Keep the name |
+| `Esc` | renaming an agent or a conversation | Drop it |
 | `Enter` | composer | Send |
 | `⇧Enter` | composer | Newline |
 | `/` | composer | Command completion |
@@ -561,11 +570,12 @@ The product is `duang`, lowercase everywhere — repository, documentation, wind
 wordmark is the name at weight 600, tracking -0.01em, followed by a single accent dot: `duang·`. The
 name is playful enough on its own; the typography does not add to it.
 
-Agent avatars are rounded squares, not circles — circles are people, squares are programs, and the
-distinction earns its keep in a product whose whole metaphor is "an agent is a contact". The avatar
-shows the first two letters over a background chosen by hashing the name across eight low-saturation
-hues. Identity is the tile; presence is the ring around it (§9), never a change to the tile itself,
-so an agent looks like the same agent whether it is busy or idle.
+Agent avatars are circles, because the product's whole metaphor is "an agent is a contact" and the
+roster should read as one; rounded squares ("squares are programs") kept it reading as a list of
+tools. The avatar shows the first two letters over a background chosen by
+hashing the name across seven low-saturation hues. Identity is the avatar; presence is the ring
+around it (§9), never a change to the avatar itself, so an agent looks like the same agent whether
+it is busy or idle.
 
 ## 12b. Settings (network shipped) and connecting a provider (planned)
 

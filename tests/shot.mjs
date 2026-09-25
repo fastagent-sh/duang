@@ -201,9 +201,10 @@ if (!process.versions.electron) {
     win.setSize(820, 660);
     await capture("app-narrow");
     win.setSize(1180, 860);
-    await evaluate(`document.querySelector('button[aria-label="Show conversations of amazonseo.ai"]').click()`);
-    await until(`document.querySelector('button[aria-label="Hide conversations of amazonseo.ai"]')`, "expanded sidebar");
-    await capture("app-expanded");
+    await evaluate(`document.querySelector('main > header button[title="Conversations"]').click()`);
+    await until(`document.querySelector('#conversations:popover-open')`, "conversation list");
+    await capture("app-conversations");
+    await evaluate(`document.querySelector('#conversations').hidePopover()`);
     await evaluate(`document.querySelector('button[title="Model for this agent"]').click()`);
     await until(`document.querySelector('dialog[open]')`, "model picker");
     await capture("models");
@@ -219,7 +220,6 @@ if (!process.versions.electron) {
     await reopened;
     await until("document.body.innerText.includes('sectionsGenerated')", "the reopened conversation");
     console.log("rows animating in on reopen:", await evaluate(`document.querySelectorAll('.column > .enter').length`));
-    await evaluate(`document.querySelector('button[aria-label="Show conversations of amazonseo.ai"]').click()`);
     await until(`document.querySelector('button[title="New conversation (⌘N)"]')`, "new conversation control");
     await evaluate(`document.querySelector('button[title="New conversation (⌘N)"]').click()`);
     await until(`document.body.innerText.includes('What should we work on?')`, "new conversation");

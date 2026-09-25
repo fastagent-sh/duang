@@ -10,6 +10,7 @@ import {
   refuse,
   registryFile,
   removeAgent,
+  renameAgent,
   setAgentModel,
   withAgentRun,
   workingAgents,
@@ -187,6 +188,10 @@ function register(): void {
     if (result.ok) stopAgentStreams(id, "The agent was removed");
     return result;
   });
+  ipcMain.handle("agent:rename", async (_e, id: string, name: string) => {
+    if (typeof name !== "string" || !name.trim()) throw new Error("An agent name cannot be empty");
+    await renameAgent((await requireAgent(id)).id, name.trim());
+  });
   ipcMain.handle("agent:commands", async (_e, id: string) =>
     (await openAgent(await requireAgent(id))).control.commands(),
   );
@@ -230,17 +235,16 @@ function register(): void {
   });
 
   /**
-   * The conversation row's context menu, which is macOS's own place for Rename: a native menu, so
-   * it looks like the system's and not like one of our popovers. Chromium raises `contextmenu` for
-   * Shift+F10 and the Menu key too, so this is the keyboard path as well.
+   * A row's context menu, which is macOS's own place for Rename: a native menu, so it looks like the
+   * system's and not like one of our popovers. Chromium raises `contextmenu` for Shift+F10 and the
+   * Menu key too, so this is the keyboard path as well.
    */
-  ipcMain.handle("session:menu", async (event, canRename: boolean) => {
+  ipcMain.handle("menu:popup", async (event, items: { id: string; label: string }[]) => {
+    if (!Array.isArray(items) || items.some((item) => typeof item?.id !== "string" || typeof item.label !== "string"))
+      throw new Error("Menu items must be { id, label } strings");
     const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
     return new Promise<string | undefined>((resolve) => {
-      const menu = Menu.buildFromTemplate([
-        ...(canRename ? [{ label: "Rename…", click: () => resolve("rename") }] : []),
-        { label: "Delete Conversation", click: () => resolve("delete") },
-      ]);
+      const menu = Menu.buildFromTemplate(items.map(({ id, label }) => ({ label, click: () => resolve(id) })));
       menu.popup({ window: win, callback: () => resolve(undefined) });
     });
   });
@@ -258,6 +262,11 @@ function register(): void {
     return control.sessions.get(session).delete();
   });
   ipcMain.handle("session:close", (e, subscription: string) => stopStream(`${e.sender.id}/${subscription}`));
+  // History without a subscription: what a roster row quotes from a conversation nobody has open.
+  ipcMain.handle("session:entries", async (_e, id: string, session: string) => {
+    requireSession(session);
+    return (await openAgent(await requireAgent(id))).control.sessions.get(session).entries();
+  });
   ipcMain.handle("session:open", async (e, id: string, session: string, subscription: string) => {
     requireSession(session);
     const key = `${e.sender.id}/${subscription}`;
