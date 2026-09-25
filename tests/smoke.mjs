@@ -765,7 +765,7 @@ if (!process.versions.electron) {
       settingsItem.click();
       assert.ok(await evaluate("!!document.querySelector('#network-heading')"), "asking again keeps Settings open");
       await choose("Off");
-      await until("document.body.innerText.includes('Direct · off') && /connected · \\d+ ms/.test(document.body.innerText)", "Off applies at once and is checked");
+      await until("document.querySelector('[data-source=off] .font-mono')?.textContent === 'Direct' && /connected · \\d+ ms/.test(document.querySelector('[data-source=off]').textContent)", "Off applies at once and is checked");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "off" });
       assert.equal(await evaluate(`document.querySelector('[role=radio][aria-checked=true]').textContent.trim().split('Direct')[0]`), "Off");
       // Manual with nothing saved shows its form and applies nothing until the proxy is complete.
@@ -782,18 +782,18 @@ if (!process.versions.electron) {
       await choose("HTTP");
       await fill("Port", "9");
       await click("Use this proxy");
-      await until("document.body.innerText.includes('via http://127.0.0.1:9 · manual')", "Manual applies");
+      await until("document.querySelector('[data-source=manual] .font-mono')?.textContent === 'http://127.0.0.1:9'", "Manual applies");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:9" });
       // A scheme's default port is saved and read back, not dropped to an empty field.
       await fill("Port", "80");
       await click("Use this proxy");
-      await until("document.body.innerText.includes('via http://127.0.0.1:80 · manual')", "port 80 applies");
+      await until("document.querySelector('[data-source=manual] .font-mono')?.textContent === 'http://127.0.0.1:80'", "port 80 applies");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:80" });
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
       settingsItem.click();
       await until("document.querySelector('input[aria-label=Port]')?.value === '80'", "the reopened form shows port 80");
       await choose("Automatic");
-      await until("/· (macOS|system) settings/.test(document.body.innerText)", "Automatic follows the system");
+      await until("!!document.querySelector('[data-source=system]')", "Automatic follows the system");
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
       // Two choices in one tick are applied in order: the file, Chromium and the page end on the second.
       await evaluate(`(() => {
@@ -809,7 +809,7 @@ if (!process.versions.electron) {
       }
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
       assert.equal((await evaluate("window.duang.getSettings()")).route.source, "system", "Chromium ended on the second choice too");
-      await until("/· (macOS|system) settings[\\s·]*connected/.test(document.body.innerText)", "the page ends on the second choice");
+      await until("document.querySelector('[data-source=system]')?.textContent.includes('connected')", "the page ends on the second choice");
       // Enter on the refresh control checks again; it does not re-apply (rewrite) the choice.
       const written = (await stat(settingsFile)).mtimeMs;
       await evaluate(`document.querySelector('button[aria-label="Check the connection again"]').focus()`);
@@ -831,9 +831,9 @@ if (!process.versions.electron) {
       };
       await evaluate(`document.querySelector('[role=radio][aria-checked=true]').focus()`);
       key("Up");
-      await until("document.body.innerText.includes('Direct · off')", "ArrowUp from the first row wraps to Off and chooses it");
+      await until("!!document.querySelector('[data-source=off]')", "ArrowUp from the first row wraps to Off and chooses it");
       key("Down");
-      await until("/· (macOS|system) settings/.test(document.body.innerText) && document.activeElement?.textContent.trim().startsWith('Automatic')", "ArrowDown wraps back to Automatic");
+      await until("!!document.querySelector('[data-source=system]') && document.activeElement?.textContent.trim().startsWith('Automatic')", "ArrowDown wraps back to Automatic");
       await writeFile(settingsFile, "{broken");
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
       await until("!document.querySelector('#network-heading')", "the close control leaves Settings");
@@ -866,7 +866,7 @@ if (!process.versions.electron) {
       );
       assert.ok(!(await evaluate("document.body.innerText.includes('Fix or remove the file')")));
       await choose("Automatic");
-      await until("/· (macOS|system) settings/.test(document.body.innerText) && !document.body.innerText.includes('Agent commands get no proxy')", "choosing again recovers");
+      await until("!!document.querySelector('[data-source=system]') && !document.body.innerText.includes('Agent commands get no proxy')", "choosing again recovers");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("!document.querySelector('#network-heading')", "Escape leaves Settings again");
