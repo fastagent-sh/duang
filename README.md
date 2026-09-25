@@ -116,7 +116,7 @@ price threshold yet. Do not claim an online or shared flow has shipped based on 
 
 ```bash
 npm ci          # needs a sibling ../fastagent already built at the pinned revision
-npm run dev     # Electron + Vite
+npm run dev     # Electron + Vite; main/preload edits restart the app
 npm test        # registry, routing, selection, drafts, transcript and command regressions
 npm run test:smoke  # real Electron + IPC + FastAgent, with a fake model HTTP response
 DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine's credential file
