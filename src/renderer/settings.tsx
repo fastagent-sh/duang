@@ -16,18 +16,6 @@ import { KINDS, manualFields, manualUrl, type Scheme } from "./network.ts";
 
 const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
 
-/** "via http://127.0.0.1:7897 · macOS settings", "Direct · off". */
-export function routeLabel(route: Route): string {
-  const where = route.proxy ? `via ${route.proxy}` : "Direct";
-  const why = {
-    system: MAC ? "macOS settings" : "system settings",
-    environment: route.variable ?? "launch environment",
-    manual: "manual",
-    off: "off",
-  }[route.source];
-  return `${where} · ${why}`;
-}
-
 type Check = { checking: true } | { status: number; ms: number } | { error: string };
 
 export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void }) {
@@ -143,11 +131,6 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
               <RadioGroup label="Proxy">
                 <Option label="Automatic" checked={mode === "automatic"} onSelect={() => choose("automatic")}>
                   {state("automatic") ?? `Follow ${MAC ? "macOS" : "system"} proxy settings, including a VPN switched on later`}
-                  {/* Only a terminal launch gets here, and it is the one surprise worth a line: the
-                      variable wins over the system until duang is opened the ordinary way. */}
-                  {saved.route.source === "environment" && (
-                    <span className="block">Set at launch. Open duang from the Dock to follow {MAC ? "macOS" : "system"} settings.</span>
-                  )}
                 </Option>
                 <Option label="Manual" checked={mode === "manual"} onSelect={() => choose("manual")}>
                   {state("manual") ?? savedManual ?? "Not set"}
@@ -334,14 +317,27 @@ function Status({ route, check, onRefresh }: { route: Route; check?: Check; onRe
           )
         : <span className="text-accent" title={`api.anthropic.com answered HTTP ${check.status}`}>connected · {check.ms} ms</span>;
   return (
-    <span className="flex flex-wrap items-center gap-x-1.5">
+    <span data-source={route.source} className="flex flex-wrap items-center gap-x-1.5">
       {route.error ? (
         // The system answered with a route duang cannot take; model requests fail with this reason.
         <span className="text-danger" title={route.error}>
           unsupported proxy route
         </span>
       ) : (
-        <span className="font-mono">{routeLabel(route)}</span>
+        // The chosen row already says where the route comes from, so only the one surprise names it:
+        // a terminal launch's variable wins over the system until duang is opened the ordinary way.
+        <span className="font-mono">
+          {route.proxy ?? "Direct"}
+          {route.source === "environment" && (
+            <span
+              className="font-sans"
+              title={`duang was started from a terminal with ${route.variable ?? "a proxy variable"} set. Open duang from the Dock to follow ${MAC ? "macOS" : "system"} settings.`}
+            >
+              {" "}
+              from {route.variable ?? "the launch environment"}
+            </span>
+          )}
+        </span>
       )}
       {result && <span aria-hidden>·</span>}
       <span role="status">{result}</span>

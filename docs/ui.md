@@ -582,7 +582,7 @@ Settings                                                        ×
 NETWORK
 ╭─────────────────────────────────────────────────────────────────╮
 │ Automatic                                                     ✓ │
-│ via http://127.0.0.1:7897 · macOS settings · connected · 320 ms │
+│ http://127.0.0.1:7897 · connected · 320 ms ⟳                    │
 │   ───────────────────────────────────────────────────────────── │
 │ Manual                                                          │
 │ Not set                                                         │
@@ -601,10 +601,12 @@ MANUAL PROXY                               (only while Manual is chosen)
   fields as rows (a label, then the value) rather than one URL to spell. The chosen row carries the
   connection's state as its second line — `connected · 320 ms` in the accent, or `unreachable
   (ECONNREFUSED)` in danger with the whole error on hover — instead of a *Test connection* button.
-  No explanatory footnotes: what the rows do not need saying, and the one surprise — a terminal
-  launch whose `HTTPS_PROXY` overrides the system — is a third line on the Automatic row, shown only
-  then. Not taken from Telegram: the sidebar does not turn into a settings list, because running
-  work must stay visible; a category list will head the page once there is a second group.
+  The route is the proxy or `Direct`, nothing more: the chosen row already says where it comes
+  from. The one surprise — a terminal launch whose `HTTPS_PROXY` overrides the system — adds
+  `from HTTPS_PROXY` to it, with how to get the system's route back on hover. No explanatory
+  footnotes or third lines. Not taken from Telegram: the sidebar does not turn into a settings
+  list, because running work must stay visible; a category list will head the page once there is
+  a second group.
 - The App menu's **Settings…** (`⌘,`, where macOS apps keep app-level settings) and a Settings row
   at the foot of the sidebar open Settings in place of the conversation, 600 wide. The row is a
   gear and the word, muted, set apart from the roster by a hairline and not beside its `+`: that
