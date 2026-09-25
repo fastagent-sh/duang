@@ -44,6 +44,8 @@ const api = {
    */
   setModel: (agentId: string, model: string, session?: string): Promise<SessionResult> =>
     ipcRenderer.invoke("agent:setModel", agentId, model, session),
+  /** The roster's name for the agent. duang's label only; the directory keeps its name. */
+  renameAgent: (agentId: string, name: string): Promise<void> => ipcRenderer.invoke("agent:rename", agentId, name),
   /** Forgets duang's row. Refuses while a conversation is running; the directory is never touched. */
   removeAgent: (agentId: string): Promise<SessionResult> => ipcRenderer.invoke("agent:remove", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
@@ -69,11 +71,11 @@ const api = {
    */
   setUnseenCount: (count: number): Promise<void> => ipcRenderer.invoke("app:unseen", count),
   /**
-   * Opens the conversation row's context menu and resolves with what was chosen, or undefined if
-   * the menu was dismissed. Native, because Rename belongs in the system's own menu on macOS.
+   * Opens a row's context menu and resolves with the chosen item's id, or undefined if the menu was
+   * dismissed. Native, because Rename belongs in the system's own menu on macOS.
    */
-  conversationMenu: (canRename: boolean): Promise<"rename" | "delete" | undefined> =>
-    ipcRenderer.invoke("session:menu", canRename),
+  menu: <Id extends string>(items: { id: Id; label: string }[]): Promise<Id | undefined> =>
+    ipcRenderer.invoke("menu:popup", items),
   /**
    * Names a conversation. Until this is called a list row falls back to the first message, which is
    * why a conversation whose subject moved on keeps the sentence it started with.
@@ -89,6 +91,9 @@ const api = {
   ): Promise<{ state: SessionState; entries: SessionEntries }> =>
     ipcRenderer.invoke("session:open", agentId, session, subscription),
   closeSession: (subscription: string): Promise<void> => ipcRenderer.invoke("session:close", subscription),
+  /** A conversation's history, read once with no subscription: what a roster row quotes. */
+  readSession: (agentId: string, session: string): Promise<SessionEntries> =>
+    ipcRenderer.invoke("session:entries", agentId, session),
   /** Say this here. Steering a live run or starting a new one is decided in main, against the runtime. */
   send: (agentId: string, session: string, text: string): Promise<SessionResult> =>
     ipcRenderer.invoke("session:send", agentId, session, text),

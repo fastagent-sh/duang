@@ -264,6 +264,42 @@ summary:focus-visible,
   padding: 6px;
 }
 
+/* The roster's hairline starts where the text does (8px row padding + 48px avatar + 12px gap) and
+   gives way on both sides of a filled row, the open agent's or the one under the pointer, as
+   Telegram's does: a line running into a rounded fill reads as a cut. */
+.roster-row + .roster-row {
+  position: relative;
+  margin-top: 5px;
+}
+.roster-row + .roster-row::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 68px;
+  right: 0;
+  height: 1px;
+  background: var(--color-stroke);
+}
+.roster-row:is(:hover, [data-filled]) + .roster-row::before,
+.roster-row:is(:hover, [data-filled])::before {
+  visibility: hidden;
+}
+
+/* The conversation list hangs from the header's list button, right edges aligned. `inset` and
+   `margin` undo the UA's centred popover; `color` its CanvasText. */
+.conversations-anchor {
+  anchor-name: --conversations;
+}
+#conversations {
+  position-anchor: --conversations;
+  inset: auto;
+  top: anchor(bottom);
+  right: anchor(right);
+  margin: 8px 0 0;
+  border: 0;
+  color: var(--color-text);
+}
+
 /* The one place the frameless title bar is paid for: the rail's top gap is draggable. */
 .drag {
   -webkit-app-region: drag;

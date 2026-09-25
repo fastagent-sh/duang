@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, firstArg, foldHead, fromEntries, lines, toolText, type Item } from "./transcript.ts";
+import { apply, dayLabel, firstArg, foldHead, fromEntries, lines, previewOf, toolText, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -82,6 +82,21 @@ test("tool summaries keep the beginning of commands and the end of file paths", 
   assert.equal(firstArg({ command: longCommand }), `${longCommand.slice(0, 71)}…`);
   assert.equal(firstArg({ path: "/tmp/project/hello.txt" }), "…/project/hello.txt");
   assert.equal(firstArg({ pattern: "/api/v1/start" }), "/api/v1/start");
+});
+
+test("a preview quotes the newest output as plain text, and follows a streaming answer", () => {
+  assert.equal(previewOf([]), undefined);
+  let items: Item[] = [{ kind: "user", text: "Deploy it", at: 1 }];
+  assert.deepEqual(previewOf(items), { text: "You: Deploy it", at: 1 });
+  // An answer that has only thought so far has nothing to quote yet.
+  items = [...items, { kind: "thinking", text: "hmm", open: true, at: 2, started: 2 }];
+  assert.equal(previewOf(items)?.text, "You: Deploy it");
+  items = [...items, { kind: "tool", id: "t", name: "bash", args: { command: "npm run build" }, status: "running", at: 3 }];
+  assert.equal(previewOf(items)?.text, "bash npm run build");
+  items = apply(items, { type: "message_delta", timestamp: 4, data: { delta: "## Done\n\nThe **build**" } } as never);
+  assert.deepEqual(previewOf(items), { text: "Done The build", at: 4 });
+  items = apply(items, { type: "message_delta", timestamp: 5, data: { delta: " passed with `0` errors." } } as never);
+  assert.equal(previewOf(items)?.text, "Done The build passed with 0 errors.");
 });
 
 test("long output folds by lines and by characters, and short output does not fold", () => {

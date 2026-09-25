@@ -27,6 +27,19 @@ export function ago(ts: number, now: number = Date.now()): string {
   return days < 7 ? `${days}d ago` : new Date(ts).toLocaleDateString();
 }
 
+/** Clock time. `numeric` hours, not `2-digit`: a 12-hour locale renders "01:08 AM" for the second one. */
+export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+/** A list row's time, the way Telegram's list gives it: the clock today, the weekday this week, a date before. */
+export function stamp(ts: number, now: number = Date.now()): string {
+  const at = new Date(ts);
+  if (at.toDateString() === new Date(now).toDateString()) return clock(ts);
+  const midnight = new Date(now).setHours(0, 0, 0, 0);
+  return midnight - ts < 6 * 86_400_000
+    ? at.toLocaleDateString([], { weekday: "short" })
+    : at.toLocaleDateString([], { year: "2-digit", month: "numeric", day: "numeric" });
+}
+
 export function rows(
   summaries: SessionSummary[],
   selected?: string,

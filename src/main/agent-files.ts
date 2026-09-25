@@ -93,6 +93,15 @@ export class AgentRegistry {
     });
   }
 
+  /** The roster's name for this agent. duang's label only: the directory is not renamed. */
+  rename(id: string, name: string): Promise<void> {
+    return this.change((rows) => {
+      const row = rows.find((row) => row.id === id);
+      if (!row) throw new Error(`unknown agent ${id}`);
+      row.name = name;
+    });
+  }
+
   setModel(id: string, model: string): Promise<void> {
     return this.change((rows) => {
       const row = rows.find((row) => row.id === id);

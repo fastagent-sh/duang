@@ -77,11 +77,11 @@ export function Button({
 }
 
 /**
- * An agent's tile: a rounded square, because circles are people and squares are programs (§12).
- * The colour is the name's, so the same agent is the same tile everywhere — hues are walked in a
+ * An agent's avatar: a circle, because an agent is a contact and the roster reads as one (§12).
+ * The colour is the name's, so the same agent is the same avatar everywhere — hues are walked in a
  * shuffled order, Telegram's trick for keeping neighbours in a list distinguishable.
  *
- * Presence is the ring around it, never a change to the tile: an agent looks like the same agent
+ * Presence is the ring around it, never a change to the avatar: an agent looks like the same agent
  * whether it is busy or idle.
  */
 const HUES = [285, 150, 25, 235, 95, 330, 55] as const;
@@ -100,9 +100,8 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
       style={{
         width: size,
         height: size,
-        // A rounded square, not a circle: squares are programs. The gradient is Telegram's, and it
-        // is most of why their avatars look alive rather than printed.
-        borderRadius: Math.round(size * 0.32),
+        // The gradient is Telegram's, and it is most of why their avatars look alive rather than printed.
+        borderRadius: "50%",
         fontSize: Math.round(size * 0.34),
         backgroundImage: `linear-gradient(145deg, oklch(0.64 0.12 ${hue}), oklch(0.46 0.11 ${hue + 12}))`,
       }}
@@ -113,14 +112,18 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
 }
 
 /**
- * A filled count, Telegram's unread pill: the one thing in the sidebar that has to be seen from
+ * A filled pill, Telegram's unread mark: the one thing in the roster that has to be seen from
  * across the room. A tinted word was missed in testing, repeatedly — this is louder on purpose and
- * exists only for outcomes nobody has looked at yet (§9).
+ * exists only for outcomes nobody has looked at yet (§9). A lone count stays round, as Telegram's does.
  */
 export function Pill({ tone, children }: { tone: "accent" | "danger"; children: ReactNode }) {
   const fills = { accent: "bg-accent-fill text-fill-fg", danger: "bg-danger-fill text-fill-fg" };
   return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${fills[tone]}`}>{children}</span>
+    <span
+      className={`shrink-0 min-w-5 rounded-full px-1.5 py-0.5 text-center text-[11px] leading-4 font-semibold tabular-nums ${fills[tone]}`}
+    >
+      {children}
+    </span>
   );
 }
 

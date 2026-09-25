@@ -214,14 +214,11 @@ if (!process.versions.electron) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
     }
-    /** Conversations are listed only when asked for now, so a test that needs them asks first. */
-    async function listConversations(name) {
-      const caret = `document.querySelector('button[aria-label="Show conversations of ${name}"]')`;
-      if (await evaluate(`${caret} !== null`)) await evaluate(`${caret}.click()`);
-      await until(
-        `document.querySelector('button[aria-label="Hide conversations of ${name}"]') !== null`,
-        `${name}'s conversations are listed`,
-      );
+    /** The open agent's conversations are in the header's list, which a test opens the way a person does. */
+    const listOpen = "!!document.querySelector('#conversations:popover-open')";
+    async function showConversations() {
+      if (!(await evaluate(listOpen))) await evaluate(`document.querySelector('main > header button[title="Conversations"]').click()`);
+      await until(listOpen, "the conversation list opens");
     }
     async function message(text) {
       await evaluate(`(() => {
@@ -260,7 +257,7 @@ if (!process.versions.electron) {
       assert.equal(await readFile(join(workspace, "fastagent", "fastagent.config.ts"), "utf8"), "export default {};\n");
       await message("Read hello.txt and answer.");
       await until(
-        "document.body.innerText.includes('Smoke answer') && !document.body.innerText.includes('working…')",
+        "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main').innerText.includes('working…')",
         "stream settles",
       );
       // A tool that worked says nothing (§9, third tier): the card is finished when its result is
@@ -334,23 +331,20 @@ if (!process.versions.electron) {
       assert.ok(firstSession);
 
       // Reopen through the actual UI and verify runtime-owned history, not the optimistic echo.
-      await listConversations("Smoke");
+      await showConversations();
       await evaluate(`document.querySelector('button[title^="New conversation"]').focus()`);
       await until(`document.activeElement?.title?.startsWith('New conversation')`, "new conversation row focused");
       await evaluate(`document.activeElement.click()`);
       await until("document.body.innerText.includes('What should we work on')", "new conversation");
+      assert.equal(await evaluate(listOpen), false, "choosing from the list puts it away");
       await until(
         `document.activeElement?.getAttribute('aria-label') === 'Message' && !document.activeElement.disabled`,
         "new conversation gives focus to the ready composer",
       );
-      assert.equal(
-        await evaluate(`!!document.querySelector('button[title^="New conversation"]')`),
-        false,
-        "an empty new conversation does not repeat the new-conversation action",
-      );
+      await showConversations();
       await click("Read hello.txt and answer.");
-      await until("document.body.innerText.includes('Smoke answer')", "durable history reopens");
-      assert.equal((await evaluate("document.body.innerText")).split("Smoke answer").length - 1, 1);
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "durable history reopens");
+      assert.equal((await evaluate("document.querySelector('main').innerText")).split("Smoke answer").length - 1, 1);
 
       hold = true;
       await message("Hold this turn so I can stop it.");
@@ -362,6 +356,24 @@ if (!process.versions.electron) {
       );
       assert.match(await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').title"), /\nWorking$/);
       assert.match(await evaluate("document.querySelector('aside').innerText"), /working/, "state is readable, not hovered");
+      // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
+      // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
+      // machine delivers a real Escape inside that gap.
+      await evaluate(`(() => {
+        document.querySelector('main > header button[title="Conversations"]').click();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+      })()`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert.ok(
+        await evaluate("!!document.querySelector('button[aria-label=\"Stop the run\"]')"),
+        "an Escape the instant the list opens does not stop the run",
+      );
+      await until(listOpen, "the list is open");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until(`!${listOpen}`, "Escape closes the list over a running turn");
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert.ok(await evaluate("!!document.querySelector('button[aria-label=\"Stop the run\"]')"), "and the run keeps going");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "background run keeps going");
       const refused = await evaluate("window.duang.setModel('smoke', 'openai/gpt-4.1')");
@@ -391,31 +403,29 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('What should we work on')", "left the running conversation");
       release();
       gate = undefined;
-      await until(
-        "document.querySelector('aside').innerText.includes('done')",
-        "an outcome nobody saw is marked in the sidebar",
-      );
+      const unseenMark = "document.querySelector('aside [title$=\"while you were away\"]')";
+      await until(`${unseenMark}?.textContent.startsWith('1')`, "an outcome nobody saw is counted on its agent's row");
       assert.equal(electron.app.getBadgeCount(), 1, "and counted on the dock");
+      assert.equal(
+        await evaluate("document.querySelector('main > header button[title=\"Conversations\"]').getAttribute('aria-label')"),
+        "Conversations, 1 unseen",
+        "the list button says there is something in it to look at",
+      );
       // The message went into the conversation that was already open, so find the row by the mark
       // it is carrying rather than by a label.
+      await showConversations();
       await evaluate(`(() => {
-        // Conversation rows have no aria-label; the agent row above also ends with "1 done".
-        const row = [...document.querySelectorAll('aside button')].find(
-          (b) => !b.getAttribute('aria-label') && b.textContent.endsWith('done'),
-        );
+        const row = [...document.querySelectorAll('#conversations button[data-session]')].find((b) => b.textContent.endsWith('done'));
         if (!row) throw new Error('Missing the marked conversation row');
         row.click();
       })()`);
-      await until(
-        "!document.querySelector('aside').innerText.includes('done')",
-        "looking at it spends the mark",
-      );
+      await until(`${unseenMark} === null`, "looking at it spends the mark");
       assert.equal(electron.app.getBadgeCount(), 0, "and clears the dock");
 
       // Persisted registry and history survive reloading the renderer.
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
-      await until("document.body.innerText.includes('Smoke answer')", "history after reload");
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "history after reload");
       hold = false;
       await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
       await until(
@@ -423,7 +433,7 @@ if (!process.versions.electron) {
         "directory-configured model",
       );
       await message("Use the configured model with the selected credentials.");
-      await until("document.body.innerText.includes('Smoke answer') && !document.body.innerText.includes('working…')", "configured model uses the same credential file");
+      await until("document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main').innerText.includes('working…')", "configured model uses the same credential file");
 
       const models = await evaluate("window.duang.listModels()");
       assert.equal(models.authPath, selectedAuth);
@@ -436,7 +446,7 @@ if (!process.versions.electron) {
       await chooseModel("anthropic/claude-sonnet-4-5");
       await until("!document.querySelector('textarea').disabled && document.body.innerText.includes('anthropic/claude-sonnet-4-5')", "selected conversation changes provider");
       await message("Use the Anthropic conversation model.");
-      await until("document.body.innerText.includes('Anthropic smoke answer') && !document.body.innerText.includes('working…')", "synthetic Anthropic OAuth request");
+      await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main').innerText.includes('working…')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
       await until("/5h[\\s\\S]*4%[\\s\\S]*7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's plan windows");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
@@ -461,12 +471,12 @@ if (!process.versions.electron) {
       );
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
-      await until("document.body.innerText.includes('Smoke answer')", "reload initial agent");
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "reload initial agent");
       await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
       await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
       assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), codexModel);
       await message("Continue the historical Anthropic conversation.");
-      await until("document.body.innerText.split('Anthropic smoke answer').length === 3 && !document.body.innerText.includes('working…')", "mixed-provider history resolves its own credential");
+      await until("document.querySelector('main').innerText.split('Anthropic smoke answer').length === 3 && !document.querySelector('main').innerText.includes('working…')", "mixed-provider history resolves its own credential");
       assert.equal(anthropicRequests, 2);
 
       // A missing historical provider fails without silently switching models; fixing the file needs no restart.
@@ -511,43 +521,23 @@ if (!process.versions.electron) {
 
       // An agent with no skills must say so; silence here reads as a broken composer.
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
-      await until("document.body.innerText.includes('Smoke answer')", "back to the scaffolded agent");
-      // Opening an agent and looking at its conversations are separate controls: the caret folds
-      // the list without closing the conversation being read.
-      await listConversations("Smoke");
-      await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "back to the scaffolded agent");
+      // The roster lists agents, and each row quotes the newest output of the conversation it would
+      // open: Configured's is read from its history while Smoke's transcript is being read.
       await until(
-        "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
-        "the agent folds",
+        "document.getElementById('status-configured')?.innerText.includes('Anthropic smoke answer')",
+        "another agent's row quotes its conversation's newest output",
       );
+      assert.match(await evaluate("document.querySelector('main').innerText"), /Smoke answer/, "without opening it");
+      // Its conversations are in the header's list instead, and Escape puts the list away.
+      await showConversations();
       assert.ok(
-        !(await evaluate("document.querySelector('aside').innerText")).includes("Read hello.txt and answer."),
-        "a folded agent hides its conversations",
+        (await evaluate("document.querySelector('#conversations').innerText")).includes("Read hello.txt and answer."),
+        "the header's list holds the open agent's conversations",
       );
-      assert.match(await evaluate("document.body.innerText"), /Smoke answer/, "folding does not close the transcript");
-      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Smoke\"]').click()");
-      await until(
-        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
-        "the agent unfolds again",
-      );
-      // Expanding is per agent, so more than one roster can be open while a third is being read.
-      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Configured\"]')?.click()");
-      await until(
-        "document.querySelector('aside').innerText.includes('Use the configured model')",
-        "a second agent lists its conversations without being opened",
-      );
-      assert.deepEqual(
-        await evaluate(`(() => {
-          const aside = document.querySelector('aside').innerText;
-          return {
-            smoke: aside.includes('Read hello.txt and answer.'),
-            configured: aside.includes('Use the configured model with the selected credentials.'),
-            reading: document.body.innerText.includes('Smoke answer'),
-          };
-        })()`),
-        { smoke: true, configured: true, reading: true },
-        "two agents list their conversations at once, and neither changes the transcript",
-      );
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until(`!${listOpen}`, "Escape closes the list");
       await type("/");
       await until("document.body.innerText.includes('No commands')", "an empty command list explains itself");
       await type("");
@@ -561,8 +551,23 @@ if (!process.versions.electron) {
         "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
         "a directory that no longer exists stays removable from the panel that explains it",
       );
+      // An agent's name is duang's label, so even a broken agent can be renamed; the directory is not.
+      await evaluate(`document.querySelector('button[aria-label="Gone"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+      await until("document.querySelector('aside input[aria-label=\"Agent name\"]') !== null", "agent rename opens");
+      await evaluate(`(() => {
+        const input = document.querySelector('aside input[aria-label="Agent name"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Gone for good');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`);
+      await until("document.querySelector('button[aria-label=\"Gone for good\"]') !== null", "the roster shows the new name");
+      assert.equal(
+        JSON.parse(await readFile(join(data, "agents.json"), "utf8")).find((row) => row.id === "gone").name,
+        "Gone for good",
+        "the name is kept in the registry",
+      );
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
-      await until("document.body.innerText.includes('Smoke answer')", "the other agents are unaffected");
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "the other agents are unaffected");
 
       // The picker's own states: named for assistive technology, and honest when nothing matches.
       await click("openai/gpt-4o-mini");
@@ -595,21 +600,6 @@ if (!process.versions.electron) {
         "Settings, outside the roster, is its own tab stop",
       );
 
-      // Folding the open agent with the caret — the keyboard has not moved, so the row the keyboard
-      // started on is simply gone. The list still has to have exactly one way in, or Tab skips it.
-      await listConversations("Smoke");
-      await evaluate("document.querySelector('button[aria-label=\"Hide conversations of Smoke\"]').click()");
-      await until(
-        "document.querySelector('button[aria-label=\"Show conversations of Smoke\"]') !== null",
-        "the agent folds from its caret",
-      );
-      assert.equal((await roster()).tabbable, 1, "a folded agent does not cost the roster its tab stop");
-      await evaluate("document.querySelector('button[aria-label=\"Show conversations of Smoke\"]').click()");
-      await until(
-        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
-        "and opens again",
-      );
-
       // A real Tab, from the control before the list: the point of a roving tabindex is that Tab
       // can enter the roster at all.
       await evaluate("document.querySelector('aside button[aria-label=\"Add agent directory\"]').focus()");
@@ -628,42 +618,36 @@ if (!process.versions.electron) {
           `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
         );
       await evaluate("document.querySelector('aside [aria-label=Agents] button[tabindex=\"0\"]').focus()");
+      // The rename handed the focus back to its row, and the keyboard stays where it was last moved.
+      assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), "Gone for good");
       await press("ArrowUp");
-      await until(
-        "document.activeElement.getAttribute('aria-label') === 'Smoke'",
-        "Up reaches the agent row above the conversation",
-      );
-      // Left folds the agent, so the caret never has to be a tab stop.
-      await press("ArrowLeft");
-      await until("document.activeElement.getAttribute('aria-expanded') === 'false'", "Left folds the focused agent");
-      await press("ArrowRight");
-      await until(
-        "document.querySelector('aside').innerText.includes('Read hello.txt and answer.')",
-        "Right opens it again",
-      );
+      await until("document.activeElement.getAttribute('aria-label') === 'Configured'", "Up reaches the agent above");
+      await press("Home");
+      await until("document.activeElement.getAttribute('aria-label') === 'Smoke'", "Home reaches the first");
 
       // Naming a conversation. The menu that carries Rename is native, so the test drives what the
       // menu would: a double click on the row, which is the other way in.
+      await showConversations();
       await evaluate(`(() => {
-        const row = [...document.querySelectorAll('aside [aria-label=Agents] button')].find(
-          (b) => !b.getAttribute('aria-label') && b.textContent.includes('Read hello.txt and answer.'),
+        const row = [...document.querySelectorAll('#conversations button[data-session]')].find((b) =>
+          b.textContent.includes('Read hello.txt and answer.'),
         );
         if (!row) throw new Error('Missing the conversation row');
         row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       })()`);
-      await until("document.querySelector('aside input[aria-label=\"Conversation name\"]') !== null", "rename opens");
+      await until("document.querySelector('#conversations input[aria-label=\"Conversation name\"]') !== null", "rename opens");
       await evaluate(`(() => {
-        const input = document.querySelector('aside input[aria-label="Conversation name"]');
+        const input = document.querySelector('#conversations input[aria-label="Conversation name"]');
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'The i18n check');
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
       await until(
-        "document.querySelector('aside').innerText.includes('The i18n check')",
+        "document.querySelector('#conversations').innerText.includes('The i18n check')",
         "the runtime reports the name it was given",
       );
       assert.ok(
-        !(await evaluate("document.querySelector('aside').innerText")).includes("Read hello.txt and answer."),
+        !(await evaluate("document.querySelector('#conversations').innerText")).includes("Read hello.txt and answer."),
         "a named conversation stops falling back to its first message",
       );
 
@@ -714,14 +698,15 @@ if (!process.versions.electron) {
       // used to keep the control on screen. Reaching the actions by keyboard is the context menu's
       // job (Shift+F10) and Delete's, not the tab order's. Opacity is read after the transition
       // settles, not during it.
+      await showConversations();
       const actionsOpacity = `(() => {
-        const actions = [...document.querySelectorAll('aside button[title="Conversation actions"]')][0];
+        const actions = [...document.querySelectorAll('#conversations button[title="Conversation actions"]')][0];
         return getComputedStyle(actions).opacity;
       })()`;
-      await evaluate("[...document.querySelectorAll('aside button[title=\"Conversation actions\"]')][0].focus()");
+      await evaluate("[...document.querySelectorAll('#conversations button[title=\"Conversation actions\"]')][0].focus()");
       await until(`${actionsOpacity} === '1'`, "a focused actions control is visible");
       await evaluate(
-        "[...document.querySelectorAll('aside button[title=\"Conversation actions\"]')][0].closest('.group').querySelector('button').focus()",
+        "[...document.querySelectorAll('#conversations button[title=\"Conversation actions\"]')][0].closest('.group').querySelector('button').focus()",
       );
       await until(`${actionsOpacity} === '0'`, "and hides again when the row takes the focus back");
 
@@ -870,10 +855,10 @@ if (!process.versions.electron) {
         pacScript: `data:application/x-ns-proxy-autoconfig,${encodeURIComponent('function FindProxyForURL() { return "SOCKS 127.0.0.1:1080"; }')}`,
       });
       assert.equal(await electron.session.defaultSession.resolveProxy("https://github.com"), "SOCKS 127.0.0.1:1080");
-      const answers = () => evaluate("document.body.innerText.split('Smoke answer').length");
+      const answers = () => evaluate("document.querySelector('main').innerText.split('Smoke answer').length");
       const before = await answers();
       await message("Send through a SOCKS4 PAC answer.");
-      await until(`document.body.innerText.split('Smoke answer').length > ${before} && !document.body.innerText.includes('working…')`, "a send is not stopped by the commands' route");
+      await until(`document.querySelector('main').innerText.split('Smoke answer').length > ${before} && !document.querySelector('main').innerText.includes('working…')`, "a send is not stopped by the commands' route");
       settingsItem.click();
       await until(
         "document.body.innerText.includes('unsupported proxy route') && document.body.innerText.includes('Agent commands get no proxy: Unsupported proxy route \"SOCKS 127.0.0.1:1080\"')",
@@ -898,7 +883,7 @@ if (!process.versions.electron) {
       assert.ok(registryFailure.includes("Reveal agents.json"), "the person is shown where to fix it");
       await writeFile(registry, savedRegistry);
       await click("Retry");
-      await until("document.body.innerText.includes('Smoke answer')", "Retry recovers the registry");
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
