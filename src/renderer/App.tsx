@@ -28,8 +28,8 @@ export default function App() {
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
   // is not remembered across launches.
   const [settings, setSettings] = useState(false);
-  // Whether the conversation list is showing. The popover owns it; this mirrors it for the header
-  // button and so that the Escape closing it does not also stop a run.
+  // Whether the conversation list is showing, for the header button's pressed look. The popover owns
+  // the fact; this mirror arrives a task later, with the popover's `toggle` event.
   const [listOpen, setListOpen] = useState(false);
   // Only the open agent has running and drafted conversations worth marking; another agent's list
   // is just its history.
@@ -74,12 +74,14 @@ export default function App() {
         return;
       }
       // The open model picker stops Escape itself; the conversation list is a native popover, which
-      // closes on this same Escape. Reaching the abort means neither wanted it.
-      if (event.key === "Escape" && busy && !listOpen) void store.abort();
+      // closes on this same Escape. Asked of the popover itself, not of `listOpen`: an Escape the
+      // instant after the list opens arrives before that mirror does, and would stop the run.
+      const listShowing = document.getElementById("conversations")?.matches(":popover-open");
+      if (event.key === "Escape" && busy && !listShowing) void store.abort();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newConversation, store, agentState, busy, view.loading, settings, listOpen]);
+  }, [newConversation, store, agentState, busy, view.loading, settings]);
 
   // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
   // with the draft, and messages must end above it rather than behind it. The ref is stable, or

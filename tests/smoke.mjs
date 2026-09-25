@@ -356,8 +356,19 @@ if (!process.versions.electron) {
       );
       assert.match(await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').title"), /\nWorking$/);
       assert.match(await evaluate("document.querySelector('aside').innerText"), /working/, "state is readable, not hovered");
-      // Escape on the open list closes the list; it is not also a Stop.
-      await showConversations();
+      // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
+      // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
+      // machine delivers a real Escape inside that gap.
+      await evaluate(`(() => {
+        document.querySelector('main > header button[title="Conversations"]').click();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+      })()`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert.ok(
+        await evaluate("!!document.querySelector('button[aria-label=\"Stop the run\"]')"),
+        "an Escape the instant the list opens does not stop the run",
+      );
+      await until(listOpen, "the list is open");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until(`!${listOpen}`, "Escape closes the list over a running turn");
