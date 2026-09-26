@@ -587,6 +587,8 @@ test("a message sent into a running turn is marked as having joined it", async (
   emit(c, "run_started");
   store.setDraft("and also this");
   await store.send();
+  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  emit(c, "queue_changed", { steering: 0, followUp: 0 });
   assert.equal(c.items.filter((item) => item.kind === "user").at(-1)?.steered, true);
 
   // Compaction is not a run: a message sent while the context is being compacted starts a turn.
@@ -599,6 +601,58 @@ test("a message sent into a running turn is marked as having joined it", async (
     false,
     "compacting is not a run to join",
   );
+  store.dispose();
+});
+
+test("a steer lands where the model read it, and one the run never read returns to the draft", async () => {
+  const { store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const said = () => c.items.map((item) => (item.kind === "user" || item.kind === "assistant" ? item.text : item.kind));
+
+  store.setDraft("start");
+  await store.send();
+  emit(c, "run_started");
+  store.setDraft("wait");
+  await store.send();
+  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  assert.deepEqual(c.queued.map((item) => item.text), ["wait"], "sent, but not read yet");
+  // The model keeps working without it until the next turn boundary.
+  emit(c, "message_delta", { channel: "text", delta: "still on the old plan" });
+  emit(c, "message_finished");
+  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  emit(c, "message_delta", { channel: "text", delta: "stopping" });
+  assert.deepEqual(said(), ["start", "still on the old plan", "wait", "stopping"]);
+  assert.equal(c.queued.length, 0);
+
+  // Walking away and back during the run keeps a waiting steer on screen.
+  store.setDraft("later");
+  await store.send();
+  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  await store.newConversation();
+  await store.open(c.session);
+  assert.equal(store.getSnapshot().conversation, c, "a running conversation is reused, not reloaded");
+  assert.deepEqual(c.queued.map((item) => item.text), ["later"]);
+  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+
+  // Stopped before the model read it: the run took the message with it.
+  store.setDraft("too late");
+  await store.send();
+  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  emit(c, "run_settled", { status: "aborted" });
+  assert.equal(c.queued.length, 0);
+  assert.equal(said().includes("too late"), false, "never shown as delivered");
+  assert.equal(c.draft, "too late");
+
+  // Sent as the run ended, before the runtime counted it: main starts a new turn with it.
+  c.draft = "";
+  emit(c, "run_started");
+  store.setDraft("raced");
+  await store.send();
+  emit(c, "run_settled", { status: "completed" });
+  const raced = c.items.at(-1);
+  assert.equal(raced?.kind === "user" && raced.text, "raced");
+  assert.equal(raced?.kind === "user" && raced.steered, false, "it started a turn rather than joining one");
   store.dispose();
 });
 

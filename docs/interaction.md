@@ -80,7 +80,7 @@ to cancel a non-cancellable tool.
 The composer sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
 the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
-run. While a run is live the composer steers it; the runtime decides the actual admission. A refused send is not shown as delivered. The roster is one tab stop with arrow
+run. While a run is live the composer steers it; the runtime decides the actual admission. A steer shows as queued below the output until the model reads it, and one the run ends without reading returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow
 navigation, and the transcript is focusable. Scrolling up suspends tail-follow; a control returns
 to the latest turn. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.

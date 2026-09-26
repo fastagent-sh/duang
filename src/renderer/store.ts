@@ -57,7 +57,16 @@ interface Conversation {
   sends: number;
   runStarts: number;
   events: SessionEvent[];
+  /**
+   * Messages sent into a live run that the model has not read yet, oldest first. A steer waits for
+   * the run's next turn boundary, so showing it in `items` at send time puts it above output the
+   * model produced without it. It moves into `items` when the runtime's steering count drops.
+   */
+  queued: UserItem[];
+  /** How many of `queued`, from the oldest, the runtime's steering count includes. */
+  acked: number;
 }
+type UserItem = Extract<Item, { kind: "user" }>;
 /**
  * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
  * this window holds that conversation, read once from its history otherwise. Presentation only: it
@@ -356,6 +365,8 @@ export function createStore(api: DuangApi) {
       sends: 0,
       runStarts: 0,
       events: [],
+      queued: [],
+      acked: 0,
     };
     conversations.set(key(agentId, session), c);
     publish({ conversation: c, error: undefined });
@@ -445,11 +456,36 @@ export function createStore(api: DuangApi) {
         unseen.set(key(c.agentId, c.session), data.status === "completed" ? "done" : "failed");
       void refreshList(c.agentId);
     } else if (event.type === "queue_changed") {
-      c.state = { ...state, pending: data as unknown as SessionState["pending"] };
+      const pending = data as unknown as SessionState["pending"];
+      const change = pending.steering - state.pending.steering;
+      if (change > 0) c.acked = Math.min(c.queued.length, c.acked + change);
+      // A steer leaves the runtime's queue when the model reads it; that moment is where it belongs.
+      const read = change < 0 ? c.queued.slice(0, Math.min(-change, c.acked)) : [];
+      c.queued = c.queued.slice(read.length);
+      c.acked -= read.length;
+      for (const item of read) item.at = event.timestamp;
+      c.items = [...c.items, ...read];
+      c.state = { ...state, pending };
     } else if (event.type === "state_changed") {
       c.state = { ...state, ...data };
     }
     c.items = apply(c.items, event);
+    if (event.type === "run_settled") settleQueue(c);
+  }
+  /**
+   * The run is gone, and steers it counted but never read went with it: they return to the draft
+   * rather than stay on screen as if delivered. The rest never reached this run; main is starting a
+   * new turn with them, so they are ordinary messages now, after the run's closing note.
+   */
+  function settleQueue(c: Conversation) {
+    const dropped = c.queued.slice(0, c.acked);
+    const unsent = c.queued.slice(c.acked);
+    c.queued = [];
+    c.acked = 0;
+    if (dropped.length) c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
+    // Changed in place: a send that fails later finds and removes its message by identity.
+    for (const item of unsent) item.steered = false;
+    c.items = [...c.items, ...unsent];
   }
   const unsubscribe = api.onSessionEvent((frame: SessionFrame) => {
     const c = conversations.get(key(frame.agentId, frame.session));
@@ -694,12 +730,14 @@ export function createStore(api: DuangApi) {
       // A run in flight, not `busy(c)`: that predicate also covers compaction, and a message sent
       // while the context is being compacted starts a turn rather than joining one.
       const joining = c.state?.status === "running" || c.sends > 0;
-      c.items = [...c.items, { kind: "user", text, at: Date.now(), steered: joining }];
-      const echo = c.items.at(-1);
+      const echo: UserItem = { kind: "user", text, at: Date.now(), steered: joining };
+      if (joining) c.queued = [...c.queued, echo];
+      else c.items = [...c.items, echo];
       const runStarts = c.runStarts;
       const restoreRejected = () => {
         if (c.runStarts !== runStarts) return;
         c.items = c.items.filter((item) => item !== echo);
+        c.queued = c.queued.filter((item) => item !== echo);
         c.draft = c.draft ? `${text}\n${c.draft}` : text;
       };
       c.sends++;
