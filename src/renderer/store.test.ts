@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { SessionResult } from "@fastagent-sh/fastagent/session";
+import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
 import type { DuangApi, OpenResult, SessionFrame } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 
@@ -180,6 +180,23 @@ test("unreadable drafts are moved aside, not overwritten by the next write", asy
     console.error = error;
     Reflect.deleteProperty(globalThis, "localStorage");
   }
+});
+
+test("a conversation opened mid-run shows its unanswered calls as running, not stopped", async () => {
+  const { api, store } = harness();
+  const entries: SessionEntry[] = [
+    { id: "u", timestamp: 1, kind: "user", data: { text: "go" } },
+    { id: "a", parentId: "u", timestamp: 2, kind: "assistant", data: { toolCalls: [{ id: "t", name: "bash" }] } },
+  ];
+  api.openSession = async () => ({
+    state: { status: "running" as const, activeRunId: "run", pending: { steering: [], followUp: [] } },
+    entries: { entries, leafEntryId: "a" },
+  });
+  await store.load();
+  const tool = store.getSnapshot().conversation!.items.find((item) => item.kind === "tool");
+  assert.equal(tool?.kind === "tool" && tool.status, "running");
+  assert.equal(tool?.kind === "tool" && tool.started, undefined, "when it began is not in history");
+  store.dispose();
 });
 
 test("a restart reopens the agent and conversation the window was left on", async () => {

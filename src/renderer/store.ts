@@ -1,6 +1,6 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
-import { apply, fromEntries, previewOf, type Item } from "./transcript.ts";
+import { apply, fromEntries, previewOf, resumeRunning, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 
@@ -391,6 +391,7 @@ export function createStore(api: DuangApi) {
       const result = await api.openSession(agentId, session, c.subscription);
       if (conversations.get(key(agentId, session)) !== c) return;
       c.items = fromEntries(result.entries.entries, result.entries.leafEntryId);
+      if (result.state.status === "running") c.items = resumeRunning(c.items);
       c.state = result.state;
       c.queued = result.state.pending.steering.map((text) => steer(text, Date.now()));
       c.loading = false;

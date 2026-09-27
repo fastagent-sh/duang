@@ -140,6 +140,18 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
 }
 
 /**
+ * History read while a run is still going. A call with no result is interrupted in a finished
+ * conversation, but in the running one the calls after the last user message are the active run's,
+ * still executing. They get no `started`: when they began is not in the history, so they show no clock.
+ */
+export function resumeRunning(items: Item[]): Item[] {
+  const turn = items.findLastIndex((item) => item.kind === "user");
+  return items.map((item, index) =>
+    index > turn && item.kind === "tool" && item.status === "interrupted" ? { ...item, status: "running" } : item,
+  );
+}
+
+/**
  * What a tool printed, out of the envelope it arrived in. A result reaches us as MCP-shaped content
  * (`{ content: [{ type: "text", text }] }`, sometimes nested once more), and dumping that verbatim
  * shows the person the protocol instead of the output — quoted, escaped, and three braces deep.
