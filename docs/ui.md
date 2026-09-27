@@ -329,7 +329,7 @@ dropped by the component.
 `npm run shots` writes the sheet of every control in both colour modes to
 `out/shots/components-{dark,light}.png`, from the same build as the app; loading the window at
 `#gallery` opens it. It is how "what do we have" gets answered by looking. Sections it marks as
-sketches are copies of markup that still lives in `panels.tsx` and will not follow a change there —
+sketches are copies of markup that still lives in `rows.tsx` and `transcript-view.tsx` and will not follow a change there —
 only the unmarked ones are the components themselves. The hash is read once at load and is not a
 live switch, so a `#gallery` link in an answer cannot unmount a running app.
 

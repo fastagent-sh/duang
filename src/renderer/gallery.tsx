@@ -4,13 +4,13 @@
  *
  * Shown at `#gallery`; `npm run shots` captures it in both colour modes. Not a component framework:
  * the sections marked `real` render the components from `ui.tsx` and `code.tsx` with fixed props,
- * and the ones marked `sketch` are copies of markup that still lives in `panels.tsx` — they show
+ * and the ones marked `sketch` are copies of markup that still lives in `rows.tsx` and `transcript-view.tsx` — they show
  * the intended look and will not follow a change made there.
  */
 import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { CodeBlock } from "./code.tsx";
-import { PlanUsage } from "./panels.tsx";
+import { PlanUsage } from "./header.tsx";
 import { contextLabel } from "./usage.ts";
 
 function Section({
@@ -48,7 +48,7 @@ export default function Gallery() {
           </h1>
           <p className="text-muted text-[12px]">
             docs/ui.md §6b. Unmarked sections are the real components; marked ones are copies of
-            markup that still lives in panels.tsx.
+            markup that still lives in rows.tsx and transcript-view.tsx.
           </p>
         </header>
 
@@ -150,7 +150,7 @@ export default function Gallery() {
           </div>
         </Section>
 
-        <Section title="Transcript pieces" note="the code block is real; the rest is markup from panels.tsx" sketch>
+        <Section title="Transcript pieces" note="the code block is real; the rest is markup from transcript-view.tsx" sketch>
           <div className="w-full space-y-4">
             <div className="flex justify-end">
               <div className="max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2">

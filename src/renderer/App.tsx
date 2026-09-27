@@ -2,18 +2,11 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
-import {
-  BrokenAgent,
-  Composer,
-  ConversationHeader,
-  ConversationList,
-  NeedsAgent,
-  NewConversation,
-  NoAgents,
-  Sidebar,
-  Transcript,
-  UnreadableRegistry,
-} from "./panels.tsx";
+import { BrokenAgent, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
+import { ConversationList, Sidebar } from "./rows.tsx";
+import { ConversationHeader } from "./header.tsx";
+import { Transcript } from "./transcript-view.tsx";
+import { Composer } from "./composer.tsx";
 import { Settings } from "./settings.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
