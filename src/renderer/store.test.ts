@@ -656,6 +656,64 @@ test("a steer lands where the model read it, and one the run never read returns 
   store.dispose();
 });
 
+test("a message joins only a run that is going or about to start, not one that just ended", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const first = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  api.send = () => first.promise;
+
+  store.setDraft("start");
+  const sending = store.send();
+  // Sent before the first message's run has started: main steers it into that run.
+  api.send = async () => ({ ok: true });
+  store.setDraft("early");
+  await store.send();
+  assert.deepEqual(c.queued.map((item) => item.text), ["early"]);
+  emit(c, "run_started");
+  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  emit(c, "run_settled", { status: "completed" });
+
+  // The run is over but its send has not returned yet: main starts a new turn with this one.
+  store.setDraft("next");
+  await store.send();
+  assert.equal(c.queued.length, 0, "nothing to wait for");
+  const next = c.items.at(-1);
+  assert.equal(next?.kind === "user" && next.text, "next");
+  assert.equal(next?.kind === "user" && next.steered, false);
+  emit(c, "run_started");
+  emit(c, "message_delta", { channel: "text", delta: "answer to next" });
+  assert.deepEqual(
+    c.items.slice(-2).map((item) => (item.kind === "user" || item.kind === "assistant" ? item.text : item.kind)),
+    ["next", "answer to next"],
+    "the message sits above its own answer",
+  );
+  first.resolve({ ok: true });
+  await sending;
+  store.dispose();
+});
+
+test("steers queued before this window opened are read before its own", async () => {
+  const { api, store, emit } = harness();
+  api.openSession = async () => ({
+    state: { status: "running" as const, activeRunId: "run", pending: { steering: 1, followUp: 0 } },
+    entries: { entries: [] },
+  });
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  store.setDraft("mine");
+  await store.send();
+  emit(c, "queue_changed", { steering: 2, followUp: 0 });
+  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  assert.deepEqual(c.queued.map((item) => item.text), ["mine"], "the older, unseen steer was the one read");
+  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  assert.equal(c.queued.length, 0);
+  const mine = c.items.at(-1);
+  assert.equal(mine?.kind === "user" && mine.text, "mine");
+  store.dispose();
+});
+
 test("a renamed conversation takes the label the runtime reports, and a refusal stays in its own transcript", async () => {
   const { api, store } = harness();
   const renames: string[][] = [];

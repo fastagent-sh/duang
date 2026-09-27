@@ -65,6 +65,17 @@ interface Conversation {
   queued: UserItem[];
   /** How many of `queued`, from the oldest, the runtime's steering count includes. */
   acked: number;
+  /**
+   * Steers the runtime counts that this window did not send, such as ones queued before a reload.
+   * They were queued first, so they are read first.
+   */
+  foreign: number;
+  /**
+   * A message that starts a turn has been sent and its run has not started yet. A message sent now
+   * joins that run. It is cleared at `run_started`: once the run is going, `status` says it, and
+   * after it settles a new message starts a turn even while the first send is still returning.
+   */
+  starting: boolean;
 }
 type UserItem = Extract<Item, { kind: "user" }>;
 /**
@@ -367,6 +378,8 @@ export function createStore(api: DuangApi) {
       events: [],
       queued: [],
       acked: 0,
+      foreign: 0,
+      starting: false,
     };
     conversations.set(key(agentId, session), c);
     publish({ conversation: c, error: undefined });
@@ -375,6 +388,7 @@ export function createStore(api: DuangApi) {
       if (conversations.get(key(agentId, session)) !== c) return;
       c.items = fromEntries(result.entries.entries, result.entries.leafEntryId);
       c.state = result.state;
+      c.foreign = result.state.pending.steering;
       c.loading = false;
       // New sends are disabled until backfill finishes. An already-running local turn retains its
       // subscription and view across navigation, so its deltas are never reconstructed from history.
@@ -447,6 +461,7 @@ export function createStore(api: DuangApi) {
     const data = event.data as Record<string, unknown>;
     if (event.type === "run_started") {
       c.runStarts++;
+      c.starting = false;
       c.state = { ...state, status: "running", activeRunId: event.runId };
     } else if (event.type === "run_settled") {
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: 0, followUp: 0 } };
@@ -458,9 +473,15 @@ export function createStore(api: DuangApi) {
     } else if (event.type === "queue_changed") {
       const pending = data as unknown as SessionState["pending"];
       const change = pending.steering - state.pending.steering;
-      if (change > 0) c.acked = Math.min(c.queued.length, c.acked + change);
+      if (change > 0) {
+        const mine = Math.min(c.queued.length - c.acked, change);
+        c.acked += mine;
+        c.foreign += change - mine;
+      }
       // A steer leaves the runtime's queue when the model reads it; that moment is where it belongs.
-      const read = change < 0 ? c.queued.slice(0, Math.min(-change, c.acked)) : [];
+      const readForeign = change < 0 ? Math.min(-change, c.foreign) : 0;
+      c.foreign -= readForeign;
+      const read = change < 0 ? c.queued.slice(0, Math.min(-change - readForeign, c.acked)) : [];
       c.queued = c.queued.slice(read.length);
       c.acked -= read.length;
       for (const item of read) item.at = event.timestamp;
@@ -482,6 +503,7 @@ export function createStore(api: DuangApi) {
     const unsent = c.queued.slice(c.acked);
     c.queued = [];
     c.acked = 0;
+    c.foreign = 0;
     if (dropped.length) c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
     // Changed in place: a send that fails later finds and removes its message by identity.
     for (const item of unsent) item.steered = false;
@@ -729,10 +751,13 @@ export function createStore(api: DuangApi) {
       // distinguishes it from one that started a turn (§8), so the fact is recorded now.
       // A run in flight, not `busy(c)`: that predicate also covers compaction, and a message sent
       // while the context is being compacted starts a turn rather than joining one.
-      const joining = c.state?.status === "running" || c.sends > 0;
+      const joining = c.state?.status === "running" || c.starting;
       const echo: UserItem = { kind: "user", text, at: Date.now(), steered: joining };
       if (joining) c.queued = [...c.queued, echo];
-      else c.items = [...c.items, echo];
+      else {
+        c.items = [...c.items, echo];
+        c.starting = true;
+      }
       const runStarts = c.runStarts;
       const restoreRejected = () => {
         if (c.runStarts !== runStarts) return;
@@ -757,6 +782,8 @@ export function createStore(api: DuangApi) {
         note(error, c);
         restoreRejected();
       } finally {
+        // A turn that never started (refused, or failed before its run) leaves nothing to join.
+        if (!joining && c.runStarts === runStarts) c.starting = false;
         c.sends--;
         publish();
       }
