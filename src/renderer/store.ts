@@ -522,6 +522,12 @@ export function createStore(api: DuangApi) {
       // Nothing will report the end of a run this view can no longer hear, so stop waiting for one.
       // Retry re-opens and re-reads the runtime's real state.
       if (c.state) c.state = { ...c.state, status: "idle", activeRunId: undefined };
+      // A tool's clock is a claim that it is still being watched. It stops where this view stopped
+      // hearing; how long the tool really ran is no longer knowable here.
+      const now = Date.now();
+      c.items = c.items.map((item) =>
+        item.kind === "tool" && item.status === "running" && item.ended === undefined ? { ...item, ended: now } : item,
+      );
       if (frame.ended.expected) c.ended = frame.ended.reason;
       else c.error = frame.ended.reason;
       publish();

@@ -107,7 +107,7 @@ export default function Gallery() {
 
         <Section title="Badges — the one status vocabulary" note="a mark and a word, never colour alone; pulse means still happening">
           <Badge tone="accent" pulse>
-            working… 12s
+            working…
           </Badge>
           <Badge tone="accent" pulse>
             2 working

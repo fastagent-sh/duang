@@ -373,9 +373,7 @@ Everything else follows from those two:
 
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
   tool's name, the command, and the state immediately after the command rather than pushed to the
-  far right where it loses its subject, followed by how long the tool ran (ticking while it runs,
-  in pi's format: `3.2s`, `2m 5s`). Only a call this window watched run has a time; history records
-  when a call was announced and answered, not how long it ran, so a reopened call shows none — on no fill and behind no border, the same weight as the
+  far right where it loses its subject — on no fill and behind no border, the same weight as the
   `thinking` line beside it. Boxing a closed call is wrong in both directions: full width it is a
   grey slab, shrunk to its text it reads as a button dropped into the prose. A path argument shows
   its useful tail; a command keeps its beginning, even when it starts with `/`. The surface arrives
@@ -384,7 +382,10 @@ Everything else follows from those two:
   lines or 1500 characters, whichever comes first — one minified line has no line ceiling — to a
   footer row that spans the card, rather than into its own scroll region. Argument values fold at
   the same limits, because a `write` carries the whole file it writes. A shape we cannot
-  unwrap keeps its JSON: a result nobody can see is worse than an ugly one.
+  unwrap keeps its JSON: a result nobody can see is worse than an ugly one. After the state comes
+  how long the tool ran, ticking while it runs, in pi's format (`3.2s`, `2m 5s`). Only a call this
+  window watched has a time: history records when a call was announced and answered, not how long
+  it ran, so a reopened call shows none. The clock stops when this view stops hearing the run.
 - **Thinking** collapses to one muted line (`thinking · 3s`, trailed by the line it is on) and
   expands into a quoted block.
 - **System events are one centred muted line**: model changed, run stopped, a send refused. They are

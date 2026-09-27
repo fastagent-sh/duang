@@ -974,8 +974,9 @@ export function Transcript({
   // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
   const last = items.at(-1);
   const streaming = last?.kind === "assistant" || last?.kind === "thinking" ? last.open : false;
-  // A running tool already says the run is alive, with its own clock.
-  const silent = !streaming && !(last?.kind === "tool" && last.status === "running");
+  // A running tool already says the run is alive, with its own clock, wherever it sits: a parallel
+  // call can still run above one that finished.
+  const silent = !streaming && !items.some((item) => item.kind === "tool" && item.status === "running");
 
   const shown = lines(items);
   /**
