@@ -134,7 +134,7 @@ test("drafts stay with conversations; rejected sends preserve text and report th
   await store.send();
   const c = store.getSnapshot().conversation!;
   assert.equal(c.draft, "unsent first");
-  assert.equal(c.busySince, undefined);
+  assert.equal(store.getSnapshot().busy, false);
   assert.ok(
     c.items.every((item) => item.kind !== "user"),
     "a refused send must not look delivered",
@@ -268,7 +268,7 @@ test("background turns retain their stream and transcript, then release it after
   await sending;
   assert.equal(c.state?.status, "idle");
   assert.deepEqual(c.state?.pending.steering, []);
-  assert.equal(c.busySince, undefined);
+  assert.equal(store.getSnapshot().busy, false);
   await store.newConversation();
   assert.ok(closed.includes(c.subscription), "an idle conversation nobody is looking at releases its stream");
   store.dispose();
@@ -310,10 +310,13 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   emit(old, "message_delta", { delta: "stale" });
   assert.deepEqual(current.items, []);
   emit(current, "run_started");
+  emit(current, "tool_started", { id: "t", name: "bash" });
   assert.equal(store.getSnapshot().busy, true);
   // A dead subscription reports nothing further, so the run controls must not wait for `run_settled`.
   end(current, "stream disconnected", false);
   assert.equal(store.getSnapshot().busy, false);
+  const tool = store.getSnapshot().conversation!.items.find((item) => item.kind === "tool");
+  assert.notEqual(tool?.kind === "tool" && tool.ended, undefined, "the tool's clock stops with the stream");
   store.setDraft("keep me");
   assert.equal(store.getSnapshot().blocked, "reconnect before sending");
   await assert.rejects(() => store.send(), /reconnect before sending/, "a blocked send is a bug, not a no-op");

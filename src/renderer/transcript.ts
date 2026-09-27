@@ -25,6 +25,12 @@ export type Item = At &
       result?: unknown;
       isError?: boolean;
       status: "running" | "done" | "interrupted";
+      /**
+       * When it ran, from the live events only. History carries when the call was announced and when
+       * its result was written, which is not how long the tool ran, so a reopened call shows no time.
+       */
+      started?: number;
+      ended?: number;
     }
   /**
    * A fact about the session rather than something anyone said. `tone` decides whether it reads as
@@ -175,6 +181,20 @@ export function foldHead(text: string): string | undefined {
   return head.length < text.length ? head : undefined;
 }
 
+/**
+ * How long a tool ran, in pi's words for it: tenths under a minute, then minutes and hours. A running
+ * clock ticks once a second, so it gets whole seconds: tenths that only move with the second would
+ * claim a precision it does not have.
+ */
+export function duration(ms: number, running = false): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return running ? `${Math.floor(seconds)}s` : `${seconds.toFixed(1)}s`;
+  const total = Math.floor(seconds);
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return `${minutes}m ${total % 60}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${total % 60}s`;
+}
+
 /** Tool payloads are JSON, except when the runtime already handed us a string. */
 export function stringify(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -267,6 +287,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           args: data.args,
           status: "running",
           at: event.timestamp,
+          started: event.timestamp,
         },
       ];
     case "tool_progress":
@@ -277,14 +298,15 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       const tool = items[index] as Extract<Item, { kind: "tool" }>;
       const updated: Item =
         event.type === "tool_finished"
-          ? { ...tool, result: data.content, isError: Boolean(data.isError), status: "done" }
+          ? { ...tool, result: data.content, isError: Boolean(data.isError), status: "done", ended: event.timestamp }
           : { ...tool, result: data.partialResult };
       return [...items.slice(0, index), updated, ...items.slice(index + 1)];
     }
     case "run_settled": {
       items = items.map((item): Item => {
         if (item.kind === "assistant" || item.kind === "thinking") return { ...item, open: false };
-        if (item.kind === "tool" && item.status === "running") return { ...item, status: "interrupted" };
+        if (item.kind === "tool" && item.status === "running")
+          return { ...item, status: "interrupted", ended: event.timestamp };
         return item;
       });
       if (data.status === "completed") return items;

@@ -27,7 +27,7 @@ import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
 import type { AgentRow, DuangApi, ProviderUsage, UsageWindow } from "../preload/index.ts";
 import { contextLabel, errorLine, pace, paceLabel, resetLabel } from "./usage.ts";
-import { dayLabel, firstArg, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
+import { dayLabel, duration, firstArg, foldHead, lines, stringify, toolText, type Item, type Line } from "./transcript.ts";
 import { ago, clock, stamp, type Row } from "./sessions.ts";
 import { complete, completionQuery, matches } from "./commands.ts";
 import { Avatar, Badge, Button, Pill, type Tone } from "./ui.tsx";
@@ -899,22 +899,30 @@ export function NewConversation({ children }: { children: React.ReactNode }) {
 
 /**
  * The gap this fills is real work with nothing to show: from pressing send until the first token,
- * the model is thinking and the transcript has nothing to say. Silence there reads as a hang, so the
- * elapsed seconds are the message — they are also how someone tells slow from stuck.
+ * the model is thinking and the transcript has nothing to say, and silence there reads as a hang.
+ * It carries no clock: how long the whole turn has taken says little, and a running tool times
+ * itself on its own row.
  */
-function Working({ since }: { since: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+function Working() {
   return (
     <Badge tone="accent" pulse className="enter">
       {/* The sweep is on the words, not on their opacity: this sits on screen for minutes at a time,
           and a blinking label is the first thing that makes an interface look cheap. */}
-      <span className="shimmer">working… {Math.max(0, Math.round((now - since) / 1000))}s</span>
+      <span className="shimmer">working…</span>
     </Badge>
   );
+}
+
+/** How long a live tool has run, ticking each second while it runs; nothing for one read back from history. */
+function useElapsed(started: number | undefined, ended: number | undefined): string | undefined {
+  const [now, setNow] = useState(Date.now());
+  const live = started !== undefined && ended === undefined;
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [live]);
+  return started === undefined ? undefined : duration(Math.max(0, (ended ?? now) - started), live);
 }
 
 /**
@@ -936,13 +944,13 @@ function gap(previous: Line | undefined, line: Line): string {
 export function Transcript({
   items,
   queued,
-  busySince,
+  busy,
   bottomGap,
 }: {
   items: Item[];
   /** Sent into the run but not read by the model yet: they sit below the output until it does. */
   queued: Item[];
-  busySince?: number;
+  busy: boolean;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
 }) {
@@ -966,6 +974,9 @@ export function Transcript({
   // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
   const last = items.at(-1);
   const streaming = last?.kind === "assistant" || last?.kind === "thinking" ? last.open : false;
+  // A running tool already says the run is alive, with its own clock, wherever it sits: a parallel
+  // call can still run above one that finished.
+  const silent = !streaming && !items.some((item) => item.kind === "tool" && item.status === "running");
 
   const shown = lines(items);
   /**
@@ -980,7 +991,7 @@ export function Transcript({
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
     check();
-  }, [items, queued, busySince, streaming]);
+  }, [items, queued, busy, streaming]);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -1040,9 +1051,9 @@ export function Transcript({
             </div>
           ),
         )}
-        {busySince !== undefined && !streaming && (
+        {busy && silent && (
           <div className="pt-6">
-            <Working since={busySince} />
+            <Working />
           </div>
         )}
         {queued.map((item, index) => (
@@ -1219,6 +1230,7 @@ function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone:
 function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   const summary = firstArg(item.args);
   const state = toolState(item);
+  const elapsed = useElapsed(item.started, item.ended);
   const Icon = toolIcons[item.name] ?? Terminal;
   // The icon carries the state too: a failed call is red before the badge beside it is read.
   const mark = item.isError ? "text-danger" : item.status === "running" ? "text-accent" : "text-muted";
@@ -1244,6 +1256,7 @@ function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
             {state.word}
           </Badge>
         )}
+        {elapsed && <span className="shrink-0 text-muted tabular-nums">{elapsed}</span>}
       </summary>
       <div className="border-t border-stroke px-2.5 py-2.5 space-y-2.5 text-[12px]">
         <Args args={item.args} summary={summary} />

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, firstArg, foldHead, fromEntries, lines, previewOf, toolText, type Item } from "./transcript.ts";
+import { apply, dayLabel, duration, firstArg, foldHead, fromEntries, lines, previewOf, toolText, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -57,6 +57,33 @@ test("a tool result lands on the call it belongs to", () => {
   const second = items[1] as Extract<Item, { kind: "tool" }>;
   assert.equal(first.result, "ok");
   assert.equal(second.result, undefined);
+});
+
+test("a live tool keeps when it ran; one read from history has no time", () => {
+  const at = (type: string, timestamp: number, data: Record<string, unknown>) => ({ type, timestamp, data }) as never;
+  let items: Item[] = [];
+  items = apply(items, at("tool_started", 1_000, { id: "a", name: "bash" }));
+  items = apply(items, at("tool_started", 2_000, { id: "b", name: "bash" }));
+  items = apply(items, at("tool_finished", 4_500, { id: "a", isError: false, content: "ok" }));
+  items = apply(items, at("run_settled", 9_000, { status: "aborted" }));
+  const [done, stopped] = items as Extract<Item, { kind: "tool" }>[];
+  assert.deepEqual([done!.started, done!.ended], [1_000, 4_500]);
+  assert.deepEqual([stopped!.status, stopped!.started, stopped!.ended], ["interrupted", 2_000, 9_000]);
+  const [history] = fromEntries([
+    { id: "1", timestamp: 0, kind: "assistant", data: { toolCalls: [{ id: "t", name: "bash" }] } },
+    { id: "2", parentId: "1", timestamp: 5, kind: "tool", data: { toolCallId: "t", toolName: "bash", text: "ok" } },
+  ]) as Extract<Item, { kind: "tool" }>[];
+  assert.equal(history!.started, undefined);
+});
+
+test("a duration reads as pi writes it", () => {
+  assert.equal(duration(3_240), "3.2s");
+  assert.equal(duration(59_990), "60.0s");
+  assert.equal(duration(125_000), "2m 5s");
+  assert.equal(duration(3_725_000), "1h 2m 5s");
+  // Still running, the clock ticks by the second, so it does not show tenths it cannot track.
+  assert.equal(duration(2_400, true), "2s");
+  assert.equal(duration(125_000, true), "2m 5s");
 });
 
 test("only a failed run leaves a note", () => {

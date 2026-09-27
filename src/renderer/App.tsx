@@ -231,7 +231,7 @@ export default function App() {
               // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
               // run streams, so this gap *is* where the newest line lands. At 16 the line you are
               // reading sat on the composer's edge, half under the fade.
-              <Transcript key={c.subscription} items={c.items} queued={[...c.queued, ...c.unlisted]} busySince={c.busySince} bottomGap={composerHeight + 64} />
+              <Transcript key={c.subscription} items={c.items} queued={[...c.queued, ...c.unlisted]} busy={busy} bottomGap={composerHeight + 64} />
             )}
             {agentId && agentState === "ready" && c && c.items.length > 0 && (
               // Floating, not stacked: the transcript runs the full height of the pane and passes
