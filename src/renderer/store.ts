@@ -112,8 +112,7 @@ export interface View {
   blocked?: string;
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
-  /** Selected agent's conversations holding unsent text, so a draft never becomes unreachable. */
-  /** Conversations holding unsent text, per agent. */
+  /** Conversations holding unsent text, per agent, so a draft never becomes unreachable. */
   unsent: Record<string, string[]>;
   /**
    * Outcomes that landed while the person was not looking at that conversation, per agent. Fact 4:
@@ -126,7 +125,6 @@ export interface View {
   /** Per agent, what its roster row quotes. */
   previews: Record<string, Preview>;
 }
-/** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 /** [agentId, session] pairs into one list per agent. */
 const group = (pairs: [string, string][]): Record<string, string[]> => {
   const out: Record<string, string[]> = {};
@@ -134,6 +132,7 @@ const group = (pairs: [string, string][]): Record<string, string[]> => {
   return out;
 };
 
+/** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
 
 /**

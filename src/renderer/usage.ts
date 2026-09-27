@@ -34,7 +34,7 @@ export const paceLabel = (diff: number) => `${diff > 0 ? "▲" : "▼"}${Math.ab
 export const errorLine = (error: string) => error.split("\n", 1)[0]!.trim();
 
 /** "1.0M", "200K": a context window's size, the way model pages print it. */
-export function tokens(n: number): string {
+function tokens(n: number): string {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
 }
 
