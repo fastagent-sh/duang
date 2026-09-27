@@ -11,17 +11,35 @@ export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
  */
 const SELECTION_KEY = "duang.selection";
 const DRAFTS_KEY = "duang.drafts";
+/** Where an unreadable drafts value is moved, so the next write does not replace the person's text. */
+const UNREADABLE_DRAFTS_KEY = "duang.drafts.unreadable";
 interface Selection {
   agentId?: string;
   perAgent: [string, string][];
 }
-/** Unsent text, kept until it is sent, cleared, or its conversation or agent goes away. */
+/**
+ * Unsent text, kept until it is sent, cleared, or its conversation or agent goes away. Unlike the
+ * selection it is the person's own words: a value that cannot be read is moved aside and reported,
+ * not dropped, because the first write after this would otherwise replace it for good.
+ */
 function readDrafts(): [string, string][] {
+  let stored: string | null | undefined;
   try {
-    const stored = globalThis.localStorage?.getItem(DRAFTS_KEY);
-    const parsed = stored ? (JSON.parse(stored) as [string, string][]) : undefined;
-    return Array.isArray(parsed) ? parsed.filter(([k, v]) => typeof k === "string" && typeof v === "string") : [];
+    stored = globalThis.localStorage?.getItem(DRAFTS_KEY);
   } catch {
+    // Storage that cannot be read at all (disabled) has nothing to lose, only nothing to restore.
+    return [];
+  }
+  if (!stored) return [];
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    const pair = (entry: unknown) =>
+      Array.isArray(entry) && entry.length === 2 && typeof entry[0] === "string" && typeof entry[1] === "string";
+    if (Array.isArray(parsed) && parsed.every(pair)) return parsed as [string, string][];
+    throw new Error("expected a list of [conversation, text] pairs");
+  } catch (error) {
+    writeStored(UNREADABLE_DRAFTS_KEY, stored);
+    console.error(`duang: unreadable drafts moved to ${UNREADABLE_DRAFTS_KEY}:`, error);
     return [];
   }
 }

@@ -110,7 +110,8 @@ derived from our own writes.
 directory and optional model override. Reads validate the file; only a missing file means an empty
 registry. Writes serialize read/modify/rename, so concurrent changes do not lose rows and a failed
 write never publishes an in-memory success. Conversations remain the runtime's files. The renderer
-persists drafts and selection in localStorage; live output and attention marks are presentation
+persists drafts and selection in localStorage (a drafts value it cannot read is moved to
+`duang.drafts.unreadable` and reported, never overwritten); live output and attention marks are presentation
 state, not a second durable transcript. Remote contacts and credentials are future work: never
 store access tokens alongside contact metadata; use OS-backed secure storage for secrets. Model
 credentials are not duang's: they stay in FastAgent's credential file. Planned app preferences

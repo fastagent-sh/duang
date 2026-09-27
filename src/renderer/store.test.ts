@@ -161,6 +161,27 @@ test("a rejected send returns its text without eating what was typed meanwhile",
   store.dispose();
 });
 
+test("unreadable drafts are moved aside, not overwritten by the next write", async () => {
+  const values = new Map<string, string>([["duang.drafts", "{not json"]]);
+  Object.defineProperty(globalThis, "localStorage", {
+    value: { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => void values.set(k, v) },
+    configurable: true,
+  });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    const { store } = harness();
+    await store.load();
+    store.setDraft("new text");
+    assert.equal(values.get("duang.drafts.unreadable"), "{not json", "the person's old text survives the write");
+    assert.match(values.get("duang.drafts") ?? "", /new text/);
+    store.dispose();
+  } finally {
+    console.error = error;
+    Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
+
 test("a restart reopens the agent and conversation the window was left on", async () => {
   const values = new Map<string, string>();
   const localStorage = {
