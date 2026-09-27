@@ -1,5 +1,5 @@
 /** Fold session entries and live events into what the transcript shows. Pure, so it is testable. */
-import type { SessionEntry, SessionEvent } from "@fastagent-sh/fastagent/session";
+import type { KnownSessionEvent, ServingErrorEvent, SessionEntry, SessionEvent } from "@fastagent-sh/fastagent/session";
 
 /**
  * When it happened. Required on every item, because both the day separators and the time under a
@@ -259,14 +259,22 @@ function stopThinking(items: Item[], at: number): Item[] {
   return items.map((item) => (item.kind === "thinking" && item.open ? { ...item, open: false, at } : item));
 }
 
+/**
+ * The events this app reads, by the contract's own types. The one cast is here: a stream of
+ * `SessionEvent` is narrowed by its `type`, so a field the contract renames fails to compile rather
+ * than reading as `undefined` at run time. Types outside the union reach `default` untouched.
+ */
+export type ReadEvent = KnownSessionEvent | ServingErrorEvent;
+export const known = (event: SessionEvent) => event as ReadEvent;
+
 /** One live event applied to the list. Returns a new list; unknown event types change nothing. */
 export function apply(items: Item[], event: SessionEvent): Item[] {
-  const data = event.data as Record<string, unknown>;
-  switch (event.type) {
+  const e = known(event);
+  switch (e.type) {
     case "message_delta": {
       const last = items.at(-1);
-      const delta = String(data.delta ?? "");
-      if (data.channel === "thinking") {
+      const delta = e.data.delta;
+      if (e.data.channel === "thinking") {
         if (last?.kind === "thinking" && last.open) {
           return [...items.slice(0, -1), { ...last, text: last.text + delta }];
         }
@@ -294,9 +302,9 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         ...stopThinking(items, event.timestamp),
         {
           kind: "tool",
-          id: String(data.id),
-          name: String(data.name),
-          args: data.args,
+          id: e.data.id,
+          name: e.data.name,
+          args: e.data.args,
           status: "running",
           at: event.timestamp,
           started: event.timestamp,
@@ -304,14 +312,14 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       ];
     case "tool_progress":
     case "tool_finished": {
-      const id = String(data.id);
+      const id = e.data.id;
       const index = items.findLastIndex((item) => item.kind === "tool" && item.id === id);
       if (index < 0) return items;
       const tool = items[index] as Extract<Item, { kind: "tool" }>;
       const updated: Item =
-        event.type === "tool_finished"
-          ? { ...tool, result: data.content, isError: Boolean(data.isError), status: "done", ended: event.timestamp }
-          : { ...tool, result: data.partialResult };
+        e.type === "tool_finished"
+          ? { ...tool, result: e.data.content, isError: e.data.isError, status: "done", ended: event.timestamp }
+          : { ...tool, result: e.data.partialResult };
       return [...items.slice(0, index), updated, ...items.slice(index + 1)];
     }
     case "run_settled": {
@@ -321,12 +329,12 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           return { ...item, status: "interrupted", ended: event.timestamp };
         return item;
       });
-      if (data.status === "completed") return items;
-      const stopped = data.status === "aborted";
+      if (e.data.status === "completed") return items;
+      const stopped = e.data.status === "aborted";
       // An aborted run carries the abort machinery's own words ("This operation was aborted",
       // "Request aborted"). The person pressed Stop; that is the whole explanation. Only a FAILED
       // run has a reason they could not already know, so only that one keeps its message.
-      const error = stopped ? undefined : (data.error as { message?: string } | undefined);
+      const error = stopped ? undefined : e.data.error;
       return [
         ...items,
         {
@@ -335,7 +343,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           tone: stopped ? "info" : "error",
           // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
           // `aborted`, and never `failed` — that word blames the run for their decision.
-          text: `run ${stopped ? "stopped" : String(data.status)}${error?.message ? `: ${error.message}` : ""}`,
+          text: `run ${stopped ? "stopped" : e.data.status}${error?.message ? `: ${error.message}` : ""}`,
         },
       ];
     }
@@ -346,11 +354,11 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           kind: "note",
           tone: "error",
           at: event.timestamp,
-          text: `retrying ${String(data.attempt)}/${String(data.maxAttempts)}: ${String(data.error ?? "")}`,
+          text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${e.data.error}`,
         },
       ];
     case "serving_error":
-      return [...items, { kind: "note", tone: "error", text: String(data.message), at: event.timestamp }];
+      return [...items, { kind: "note", tone: "error", text: e.data.message, at: event.timestamp }];
     default:
       return items;
   }

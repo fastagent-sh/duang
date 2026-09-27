@@ -1,6 +1,6 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
-import { apply, fromEntries, previewOf, resumeRunning, type Item } from "./transcript.ts";
+import { apply, fromEntries, known, previewOf, resumeRunning, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 
@@ -463,8 +463,8 @@ export function createStore(api: DuangApi) {
 
   function fold(c: Conversation, event: SessionEvent) {
     const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
-    const data = event.data as Record<string, unknown>;
-    if (event.type === "run_started") {
+    const e = known(event);
+    if (e.type === "run_started") {
       c.runStarts++;
       // No message of ours was waiting for a run, so this one belongs to the oldest unlisted
       // message: main found the runtime idle (the turn it meant to join never started) and started
@@ -477,20 +477,19 @@ export function createStore(api: DuangApi) {
         c.items = [...c.items, opening];
       }
       c.starting = false;
-      c.state = { ...state, status: "running", activeRunId: event.runId };
-    } else if (event.type === "run_settled") {
+      c.state = { ...state, status: "running", activeRunId: e.runId };
+    } else if (e.type === "run_settled") {
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
       // A run that ends while you are reading something else is the thing you came back for. A run
       // you stopped yourself is not news.
-      if (c !== view.conversation && data.status !== "aborted")
-        unseen.set(key(c.agentId, c.session), data.status === "completed" ? "done" : "failed");
+      if (c !== view.conversation && e.data.status !== "aborted")
+        unseen.set(key(c.agentId, c.session), e.data.status === "completed" ? "done" : "failed");
       void refreshList(c.agentId);
-    } else if (event.type === "queue_changed") {
-      const pending = data as unknown as SessionState["pending"];
-      requeue(c, pending.steering, event.timestamp);
-      c.state = { ...state, pending };
-    } else if (event.type === "state_changed") {
-      c.state = { ...state, ...data };
+    } else if (e.type === "queue_changed") {
+      requeue(c, e.data.steering, e.timestamp);
+      c.state = { ...state, pending: e.data };
+    } else if (e.type === "state_changed") {
+      c.state = { ...state, ...e.data };
     }
     c.items = apply(c.items, event);
     if (event.type === "run_settled") settleQueue(c);
