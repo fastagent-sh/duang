@@ -7,57 +7,37 @@
  * card, rows divided by hairlines that start where the text does, the choice marked by a trailing
  * check, and the connection's state written on the chosen row instead of behind a button.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
-import type { DuangApi, Network, Route } from "../preload/index.ts";
-import { message } from "./store.ts";
+import type { Network, Route } from "../preload/index.ts";
+import type { Connection, Store, View } from "./store.ts";
 import { Button } from "./ui.tsx";
 import { KINDS, manualFields, manualUrl, type Scheme } from "./network.ts";
 
 const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
 
-type Check = { checking: true } | { status: number; ms: number } | { error: string };
-
-export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void }) {
-  const [saved, setSaved] = useState<{ network: Network; route: Route }>();
-  const [readError, setReadError] = useState<string>();
+/**
+ * The store reads, saves and checks; this page holds only the form being filled in and what is wrong
+ * with it.
+ */
+export function Settings({ view, store, onClose }: { view: View; store: Store; onClose: () => void }) {
+  const saved = view.settings;
   const [mode, setMode] = useState<Network["mode"]>("automatic");
   const [scheme, setScheme] = useState<Scheme>("http");
   const [server, setServer] = useState("");
   const [port, setPort] = useState("");
   const [problem, setProblem] = useState<string>();
-  const [check, setCheck] = useState<Check>();
-  // A slow answer for a route that has since changed must not land on the new one.
-  const checks = useRef(0);
-  // Nor may an earlier choice's answer land after a later one's.
-  const applies = useRef(0);
 
-  const runCheck = async () => {
-    const id = ++checks.current;
-    setCheck({ checking: true });
-    try {
-      const result = await api.testNetwork();
-      if (id === checks.current) setCheck(result);
-    } catch (error) {
-      if (id === checks.current) setCheck({ error: message(error) });
-    }
-  };
   // A file whose manual proxy main did not write is reported like any other unreadable file.
   const load = async () => {
-    try {
-      const settings = await api.getSettings();
-      const fields = settings.network.mode === "manual" ? manualFields(settings.network.url) : undefined;
-      setSaved(settings);
-      setReadError(undefined);
-      setMode(settings.network.mode);
-      if (fields) {
-        setScheme(fields.scheme);
-        setServer(fields.server);
-        setPort(fields.port);
-      }
-      void runCheck();
-    } catch (error) {
-      setReadError(message(error));
+    const settings = await store.loadSettings();
+    if (!settings) return;
+    setMode(settings.network.mode);
+    if (settings.network.mode === "manual") {
+      const fields = manualFields(settings.network.url);
+      setScheme(fields.scheme);
+      setServer(fields.server);
+      setPort(fields.port);
     }
   };
   useEffect(() => {
@@ -66,16 +46,9 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
   }, []);
 
   const apply = async (network: Network) => {
-    const id = ++applies.current;
     setProblem(undefined);
-    try {
-      const route = await api.setNetwork(network);
-      if (id !== applies.current) return;
-      setSaved({ network, route });
-      void runCheck();
-    } catch (error) {
-      if (id === applies.current) setProblem(message(error));
-    }
+    const failed = await store.setNetwork(network);
+    if (failed) setProblem(failed);
   };
   const choose = (next: Network["mode"]) => {
     setMode(next);
@@ -94,7 +67,7 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
   const savedManual = saved?.network.mode === "manual" ? saved.network.url : undefined;
   const state = (option: Network["mode"]) =>
     option === current && saved ? (
-      <Status route={saved.route} check={check} onRefresh={() => void runCheck()} />
+      <Status route={saved.route} check={view.connection} onRefresh={() => void store.checkConnection()} />
     ) : undefined;
 
   return (
@@ -105,14 +78,14 @@ export function Settings({ api, onClose }: { api: DuangApi; onClose: () => void 
           <Button kind="ghost" size={28} onClick={onClose} aria-label="Close settings" title="Close (Esc)" icon={<X size={14} />} />
         </div>
 
-        {readError ? (
+        {view.settingsError ? (
           <div role="alert" className="space-y-3">
-            <p className="text-danger whitespace-pre-wrap break-words">{readError}</p>
+            <p className="text-danger whitespace-pre-wrap break-words">{view.settingsError}</p>
             <p className="text-muted text-[12px]">
               Fix or remove the file, then retry. Until then the network follows the system proxy.
             </p>
             <div className="flex gap-2">
-              <Button onClick={() => void api.revealSettings()}>Reveal in Finder</Button>
+              <Button onClick={() => void store.revealSettings()}>Reveal in Finder</Button>
               <Button kind="ghost" onClick={() => void load()}>
                 Retry
               </Button>
@@ -302,7 +275,7 @@ function Field({
 const errorCode = (error: string) => /: ([A-Z][A-Z_]+):/.exec(error)?.[1];
 
 /** The chosen row's second line: where requests go, and whether they get there. */
-function Status({ route, check, onRefresh }: { route: Route; check?: Check; onRefresh: () => void }) {
+function Status({ route, check, onRefresh }: { route: Route; check?: Connection; onRefresh: () => void }) {
   const result = !check
     ? null
     : "checking" in check
