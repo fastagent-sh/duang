@@ -211,7 +211,7 @@ const markdownComponents = { code: MarkdownCode };
 /** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 
-function Message({ item, queued }: { item: Item; queued?: boolean }) {
+export function Message({ item, queued }: { item: Item; queued?: boolean }) {
   switch (item.kind) {
     case "user":
       // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
@@ -363,7 +363,7 @@ function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone:
   return undefined;
 }
 
-function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
+export function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   const summary = firstArg(item.args);
   const state = toolState(item);
   const elapsed = useElapsed(item.started, item.ended);

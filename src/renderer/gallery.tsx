@@ -3,34 +3,25 @@
  * answered by looking rather than by reading docs/ui.md.
  *
  * Shown at `#gallery`; `npm run shots` captures it in both colour modes. Not a component framework:
- * the sections marked `real` render the components from `ui.tsx` and `code.tsx` with fixed props,
- * and the ones marked `sketch` are copies of markup that still lives in `rows.tsx` and `transcript-view.tsx` — they show
- * the intended look and will not follow a change made there.
+ * every section renders the app's own components with fixed props, so a change to one shows here.
+ * Surfaces that need live state (the lists, the header, the composer) are captured by the shots of
+ * the running app instead.
  */
 import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { CodeBlock } from "./code.tsx";
 import { PlanUsage } from "./header.tsx";
+import { Message, Tool } from "./transcript-view.tsx";
+
+/** One instant for every fixed item, so the page renders the same in each shot. */
+const FIXED = new Date(2026, 0, 5, 9, 41).getTime();
 import { contextLabel } from "./usage.ts";
 
-function Section({
-  title,
-  note,
-  sketch,
-  children,
-}: {
-  title: string;
-  note?: string;
-  sketch?: boolean;
-  children: React.ReactNode;
-}) {
+function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="font-medium flex items-center gap-2">
-          {title}
-          {sketch && <Badge tone="muted">sketch, not a component</Badge>}
-        </h2>
+        <h2 className="font-medium">{title}</h2>
         {note && <p className="text-muted text-[11px]">{note}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
@@ -46,10 +37,7 @@ export default function Gallery() {
           <h1 className="text-[20px] font-medium">
             duang<span className="text-accent">·</span> components
           </h1>
-          <p className="text-muted text-[12px]">
-            docs/ui.md §6b. Unmarked sections are the real components; marked ones are copies of
-            markup that still lives in rows.tsx and transcript-view.tsx.
-          </p>
+          <p className="text-muted text-[12px]">docs/ui.md §6b. Every section renders the real components.</p>
         </header>
 
         <Section
@@ -134,41 +122,45 @@ export default function Gallery() {
           <div className="popover px-3 h-8 grid place-items-center text-[12px]">popover</div>
         </Section>
 
-        <Section title="Conversation rows" note="one line, time trailing; selected is a tint, not a fill" sketch>
-          <div className="w-72 space-y-0.5">
-            <div className="flex items-baseline gap-2 rounded-card bg-accent-weak py-1.5 pr-3 pl-4 text-accent">
-              <span className="min-w-0 flex-1 truncate text-[12.5px]">Explain the ListingResult component</span>
-              <span className="shrink-0 text-[11px] text-muted">just now</span>
-            </div>
-            <div className="flex items-baseline gap-2 rounded-card py-1.5 pr-3 pl-4">
-              <span className="min-w-0 flex-1 truncate text-[12.5px]">Run the i18n check</span>
-              <span className="shrink-0 text-[11px] text-muted">2h ago</span>
-            </div>
-            <div className="flex items-baseline gap-2 rounded-card py-1.5 pr-3 pl-4">
-              <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted italic">New conversation</span>
-            </div>
-          </div>
-        </Section>
-
-        <Section title="Transcript pieces" note="the code block is real; the rest is markup from transcript-view.tsx" sketch>
+        <Section title="Transcript pieces" note="a message each way, a finished and a failed tool call, a system line">
           <div className="w-full space-y-4">
-            <div className="flex justify-end">
-              <div className="max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2">
-                Run the i18n check and explain what broke
-              </div>
-            </div>
-            <div className="leading-relaxed">
-              The check fails in one place, and the cause is a missing key rather than the component.
-            </div>
-            <details className="group rounded-card open:bg-surface open:ring-1 open:ring-stroke">
-              <summary className="cursor-default select-none flex items-center gap-2 rounded-card px-2.5 h-8 text-[12px] hover:bg-hover group-open:rounded-b-none">
-                <span className="font-mono">bun run i18n:check</span>
-                <Badge tone="danger">failed</Badge>
-              </summary>
-            </details>
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted">
-              <span className="font-mono">model changed to anthropic/claude-sonnet-5</span>
-            </div>
+            <Message item={{ kind: "user", text: "Run the i18n check and explain what broke", at: FIXED }} />
+            <Message
+              item={{
+                kind: "assistant",
+                text: "The check fails in one place, and the cause is a missing key rather than the component.",
+                open: false,
+                at: FIXED,
+              }}
+            />
+            <Tool
+              item={{
+                kind: "tool",
+                id: "a",
+                name: "bash",
+                args: { command: "bun run i18n:check" },
+                result: "1 missing key",
+                status: "done",
+                at: FIXED,
+                started: FIXED,
+                ended: FIXED + 3_240,
+              }}
+            />
+            <Tool
+              item={{
+                kind: "tool",
+                id: "b",
+                name: "bash",
+                args: { command: "bun run build" },
+                result: "exit 1",
+                isError: true,
+                status: "done",
+                at: FIXED,
+                started: FIXED,
+                ended: FIXED + 61_000,
+              }}
+            />
+            <Message item={{ kind: "note", tone: "info", text: "model changed to anthropic/claude-sonnet-5", at: FIXED }} />
             <CodeBlock language="typescript" code={'const t = useTranslations("AmazonListing");\nreturn t("heading");'} />
           </div>
         </Section>
