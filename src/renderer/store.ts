@@ -208,9 +208,16 @@ export function createStore(api: DuangApi) {
   const unseen = new Map<string, "done" | "failed">();
   let lastAgent = stored?.agentId;
   let navigation = 0;
-  let listRequest = 0;
-  /** One request number per agent: a slow expand must not overwrite a newer answer for that agent. */
+  /**
+   * One request number per agent for its conversation list, taken by every read that writes it:
+   * opening the agent and re-reading the list. A slow answer must not overwrite a newer one.
+   */
   const listRequests = new Map<string, number>();
+  const listTicket = (id: string) => {
+    const request = (listRequests.get(id) ?? 0) + 1;
+    listRequests.set(id, request);
+    return () => listRequests.get(id) === request;
+  };
   let modelsRequest = 0;
   /**
    * Previews by agent, with the list's `updatedAt` a read was taken at: a history read again only
@@ -292,29 +299,30 @@ export function createStore(api: DuangApi) {
   const leave = () => publish({ conversation: undefined });
 
   /**
-   * Re-reads one agent's conversations. Ordered per agent, so a slow answer cannot overwrite a
-   * newer one, and a failure lands on that agent's row instead of nowhere: an empty list and a list
-   * that could not be read are not the same answer.
+   * Re-reads one agent's conversations, the open agent's included. A failure lands on that agent's
+   * row, where the sidebar and the conversation list both say it: an empty list and a list that
+   * could not be read are not the same answer.
    */
   async function listSessions(id: string) {
-    const request = (listRequests.get(id) ?? 0) + 1;
-    listRequests.set(id, request);
+    const current = listTicket(id);
     const settle = (patch: Partial<View>) => {
-      if (listRequests.get(id) === request) publish(patch);
+      if (current()) publish(patch);
     };
     // Another agent's row says its setup in words, so the answer's state is kept for it. Never the
-    // open agent's: `states` drives the main panel, and `selectAgent` owns that one.
-    const state = (value: AgentState) => (id === view.agentId ? {} : { states: { ...view.states, [id]: value } });
+    // open agent's: `states` drives the main panel, and `selectAgent` owns that one. The open
+    // agent's model is what the composer shows, so the answer refreshes it.
+    const own = (value: AgentState, model?: string) =>
+      id === view.agentId ? (model ? { model } : {}) : { states: { ...view.states, [id]: value } };
     try {
       const result = await api.openAgent(id);
       if (!result.ok)
         return settle({
           sessionsError: { ...view.sessionsError, [id]: result.message },
-          ...state(result.code === "failed" ? "broken" : result.code),
+          ...own(result.code === "failed" ? "broken" : result.code),
         });
       const { [id]: _cleared, ...errors } = view.sessionsError;
-      settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors, ...state("ready") });
-      if (listRequests.get(id) === request) await readPreview(id);
+      settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors, ...own("ready", result.model) });
+      if (current()) await readPreview(id);
     } catch (error) {
       settle({ sessionsError: { ...view.sessionsError, [id]: message(error) } });
     }
@@ -341,20 +349,6 @@ export function createStore(api: DuangApi) {
     if (previewRequests.get(id) !== request) return;
     previews.set(id, { ...preview, updatedAt });
     publish();
-  }
-
-  async function refreshList(id: string) {
-    // Another agent's row still shows its latest activity, so its list is re-read too.
-    if (id !== view.agentId) return listSessions(id);
-    const request = ++listRequest;
-    try {
-      const result = await api.openAgent(id);
-      if (id !== view.agentId || request !== listRequest) return;
-      if (!result.ok) throw new Error(result.message);
-      publish({ sessions: { ...view.sessions, [id]: result.sessions }, model: result.model });
-    } catch (error) {
-      if (id === view.agentId && request === listRequest) note(error);
-    }
   }
 
   async function open(session: string) {
@@ -410,7 +404,7 @@ export function createStore(api: DuangApi) {
 
   async function selectAgent(id: string, session?: string) {
     const request = ++navigation;
-    ++listRequest;
+    const listCurrent = listTicket(id);
     const left = view.agentId;
     leave();
     // The agent being left stops being live on screen; its row keeps quoting what it was left on.
@@ -436,7 +430,8 @@ export function createStore(api: DuangApi) {
       publish({
         loading: false,
         model: result.model,
-        sessions: { ...view.sessions, [id]: result.sessions },
+        // A re-read that started after this one already wrote a newer list.
+        ...(listCurrent() ? { sessions: { ...view.sessions, [id]: result.sessions } } : {}),
         states: { ...view.states, [id]: "ready" },
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
@@ -484,7 +479,7 @@ export function createStore(api: DuangApi) {
       // you stopped yourself is not news.
       if (c !== view.conversation && e.data.status !== "aborted")
         unseen.set(key(c.agentId, c.session), e.data.status === "completed" ? "done" : "failed");
-      void refreshList(c.agentId);
+      void listSessions(c.agentId);
     } else if (e.type === "queue_changed") {
       requeue(c, e.data.steering, e.timestamp);
       c.state = { ...state, pending: e.data };
@@ -756,14 +751,13 @@ export function createStore(api: DuangApi) {
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
-        // The runtime confirmed the deletion, so the row goes whether or not this agent is the one
-        // on screen — refreshList only ever looks at the open agent's list.
+        // The runtime confirmed the deletion, so the row goes now, whichever agent it belongs to.
         publish({
           sessions: { ...view.sessions, [id]: (view.sessions[id] ?? []).filter((s) => s.session !== session) },
         });
         if (id !== view.agentId) return void (await readPreview(id));
         if (view.conversation?.session === session) await open(crypto.randomUUID());
-        await refreshList(id);
+        await listSessions(id);
       } catch (error) {
         note(error);
       }

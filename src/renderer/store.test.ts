@@ -795,6 +795,38 @@ test("a message left waiting by a refused first message opens its own run above 
   store.dispose();
 });
 
+test("the open agent's list keeps the newest answer, and a failed re-read lands on its row", async () => {
+  const { api, store, emit } = harness();
+  api.openAgent = async () => listed("s1");
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const older = deferred<OpenResult>();
+  const newer = deferred<OpenResult>();
+  const answers = [older.promise, newer.promise];
+  api.openAgent = () => answers.shift()!;
+  // A rename re-reads the list; the run settling while that read is out re-reads it again.
+  const renamed = store.listSessions("a");
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "completed" });
+  newer.resolve({
+    ok: true,
+    model: "provider/model",
+    sessions: [{ session: "s1", name: "Newest", updatedAt: 9, createdAt: 0, messageCount: 4 }],
+  } as never);
+  await new Promise((resolve) => setImmediate(resolve));
+  older.resolve(listed("s1"));
+  await renamed;
+  assert.equal(store.getSnapshot().sessions["a"]?.[0]?.name, "Newest", "the slower, older answer does not win");
+
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime gone" });
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "completed" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.getSnapshot().sessionsError["a"], "runtime gone");
+  assert.ok(!c.items.some((item) => item.kind === "note" && item.text === "runtime gone"), "said on the row, once");
+  store.dispose();
+});
+
 test("a renamed conversation takes the label the runtime reports, and a refusal stays in its own transcript", async () => {
   const { api, store } = harness();
   const renames: string[][] = [];
