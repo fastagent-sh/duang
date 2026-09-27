@@ -935,10 +935,13 @@ function gap(previous: Line | undefined, line: Line): string {
 
 export function Transcript({
   items,
+  queued,
   busySince,
   bottomGap,
 }: {
   items: Item[];
+  /** Sent into the run but not read by the model yet: they sit below the output until it does. */
+  queued: Item[];
   busySince?: number;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
@@ -977,7 +980,7 @@ export function Transcript({
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
     check();
-  }, [items, busySince, streaming]);
+  }, [items, queued, busySince, streaming]);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -1042,6 +1045,11 @@ export function Transcript({
             <Working since={busySince} />
           </div>
         )}
+        {queued.map((item, index) => (
+          <div key={index} className="enter pt-6">
+            <Message item={item} queued />
+          </div>
+        ))}
       </div>
     </div>
     </div>
@@ -1056,7 +1064,7 @@ const markdownComponents = { code: MarkdownCode };
 /** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 
-function Message({ item }: { item: Item }) {
+function Message({ item, queued }: { item: Item; queued?: boolean }) {
   switch (item.kind) {
     case "user":
       // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
@@ -1066,15 +1074,21 @@ function Message({ item }: { item: Item }) {
           <div
             className={`bubble max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 whitespace-pre-wrap ${
               item.steered ? "border-r-2 border-accent" : ""
-            }`}
+            } ${queued ? "opacity-60" : ""}`}
           >
             {item.text}
           </div>
           {/* After the fact nothing else distinguishes a message that joined a run from one that
               started it (§8). */}
           <div className="flex items-center gap-2 text-[11px] text-muted">
-            {item.steered && <span className="text-accent">joined the run</span>}
-            <span>{clock(item.at)}</span>
+            {queued ? (
+              <span>queued</span>
+            ) : (
+              <>
+                {item.steered && <span className="text-accent">joined the run</span>}
+                <span>{clock(item.at)}</span>
+              </>
+            )}
           </div>
         </div>
       );

@@ -387,8 +387,12 @@ Everything else follows from those two:
   expands into a quoted block.
 - **System events are one centred muted line**: model changed, run stopped, a send refused. They are
   facts about the session, not things anyone said.
-- **A steered message** keeps its bubble and adds an accent rule down its leading edge with the
-  label `joined the run`, because after the fact nothing else distinguishes it from a message that
+- **A steered message** waits below the live output, dimmed and labelled `queued`, until it leaves
+  the runtime's steering list (`pending.steering`), which FastAgent defines as entering the
+  conversation; only then does it take its place in the transcript. The list is the runtime's, so a
+  steer queued before a reload still shows. A steer still listed when the run ends was dropped: it
+  returns to the draft instead of staying on screen as delivered. Once placed it keeps its bubble and adds an accent
+  rule down its leading edge with the label `joined the run`, because after the fact nothing else distinguishes it from a message that
   started one. *Only in the live view:* the fact is recorded when the message is sent, and FastAgent's
   session entries carry the text without saying a run was in flight, so a reopened conversation shows
   the bubble without the label. Deriving it would mean keeping a second record of the transcript,
