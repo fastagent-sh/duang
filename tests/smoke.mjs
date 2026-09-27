@@ -241,6 +241,12 @@ if (!process.versions.electron) {
       });
       await import("../out/main/index.js");
       await loaded;
+      // The keyboard and focus checks below need a focused window. A local run once failed three
+      // times in a row at the roster-focus check (the renamed row lost focus to `Smoke`), on `main`
+      // too, and passed with this. Bringing Finder or another duang window to the front did not
+      // reproduce it afterwards, so the condition that leaves this window unfocused is not pinned down.
+      app.focus({ steal: true });
+      win.focus();
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
       assert.ok(
         !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
