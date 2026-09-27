@@ -913,7 +913,7 @@ function Working() {
   );
 }
 
-/** How long a live tool has run, ticking while it runs; nothing for one read back from history. */
+/** How long a live tool has run, ticking each second while it runs; nothing for one read back from history. */
 function useElapsed(started: number | undefined, ended: number | undefined): string | undefined {
   const [now, setNow] = useState(Date.now());
   const live = started !== undefined && ended === undefined;
@@ -922,7 +922,7 @@ function useElapsed(started: number | undefined, ended: number | undefined): str
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [live]);
-  return started === undefined ? undefined : duration(Math.max(0, (ended ?? now) - started));
+  return started === undefined ? undefined : duration(Math.max(0, (ended ?? now) - started), live);
 }
 
 /**

@@ -81,6 +81,9 @@ test("a duration reads as pi writes it", () => {
   assert.equal(duration(59_990), "60.0s");
   assert.equal(duration(125_000), "2m 5s");
   assert.equal(duration(3_725_000), "1h 2m 5s");
+  // Still running, the clock ticks by the second, so it does not show tenths it cannot track.
+  assert.equal(duration(2_400, true), "2s");
+  assert.equal(duration(125_000, true), "2m 5s");
 });
 
 test("only a failed run leaves a note", () => {

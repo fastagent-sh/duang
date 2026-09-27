@@ -181,10 +181,14 @@ export function foldHead(text: string): string | undefined {
   return head.length < text.length ? head : undefined;
 }
 
-/** How long a tool ran, in pi's words for it: tenths under a minute, then minutes and hours. */
-export function duration(ms: number): string {
+/**
+ * How long a tool ran, in pi's words for it: tenths under a minute, then minutes and hours. A running
+ * clock ticks once a second, so it gets whole seconds: tenths that only move with the second would
+ * claim a precision it does not have.
+ */
+export function duration(ms: number, running = false): string {
   const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  if (seconds < 60) return running ? `${Math.floor(seconds)}s` : `${seconds.toFixed(1)}s`;
   const total = Math.floor(seconds);
   const minutes = Math.floor(total / 60);
   if (minutes < 60) return `${minutes}m ${total % 60}s`;
