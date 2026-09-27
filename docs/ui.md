@@ -373,7 +373,9 @@ Everything else follows from those two:
 
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
   tool's name, the command, and the state immediately after the command rather than pushed to the
-  far right where it loses its subject — on no fill and behind no border, the same weight as the
+  far right where it loses its subject, followed by how long the tool ran (ticking while it runs,
+  in pi's format: `3.2s`, `2m 5s`). Only a call this window watched run has a time; history records
+  when a call was announced and answered, not how long it ran, so a reopened call shows none — on no fill and behind no border, the same weight as the
   `thinking` line beside it. Boxing a closed call is wrong in both directions: full width it is a
   grey slab, shrunk to its text it reads as a button dropped into the prose. A path argument shows
   its useful tail; a command keeps its beginning, even when it starts with `/`. The surface arrives
@@ -438,7 +440,7 @@ away, so "is it still working" must be answerable from the sidebar without openi
 | Tier | States | How it is shown |
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
-| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, elapsed time in the transcript. No sentence in the reading flow. |
+| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, each running tool's elapsed time in the transcript; the turn as a whole carries no clock. No sentence in the reading flow. |
 | **Nothing to do** | ready, done *(already seen)* | Show nothing. A tool that worked wears no badge; a trace where nine cards in ten say `done` is how the one that failed gets lost. |
 
 One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
@@ -497,7 +499,7 @@ polish, and a large set used occasionally is what reads as a demo.
 |---|---|---|
 | `enter` | opacity plus a 6px rise, 180ms | anything arriving in the transcript: a message, a tool call, the working indicator. Not history — opening a conversation shows its backlog still |
 | `pop` | opacity plus scale from 0.96, 160ms | something appearing in place rather than arriving: `back to the latest` |
-| `shimmer` | a highlight swept across the words, 2.4s, looping | work in progress with nothing to show yet: `working… 12s`, `thinking` while it streams |
+| `shimmer` | a highlight swept across the words, 2.4s, looping | work in progress with nothing to show yet: `working…`, `thinking` while it streams |
 
 `shimmer` replaces blinking a label's opacity, which is the cheapest-looking thing an interface can
 do and which sits on screen for minutes at a time here.

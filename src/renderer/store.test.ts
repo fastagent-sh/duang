@@ -134,7 +134,7 @@ test("drafts stay with conversations; rejected sends preserve text and report th
   await store.send();
   const c = store.getSnapshot().conversation!;
   assert.equal(c.draft, "unsent first");
-  assert.equal(c.busySince, undefined);
+  assert.equal(store.getSnapshot().busy, false);
   assert.ok(
     c.items.every((item) => item.kind !== "user"),
     "a refused send must not look delivered",
@@ -268,7 +268,7 @@ test("background turns retain their stream and transcript, then release it after
   await sending;
   assert.equal(c.state?.status, "idle");
   assert.deepEqual(c.state?.pending.steering, []);
-  assert.equal(c.busySince, undefined);
+  assert.equal(store.getSnapshot().busy, false);
   await store.newConversation();
   assert.ok(closed.includes(c.subscription), "an idle conversation nobody is looking at releases its stream");
   store.dispose();

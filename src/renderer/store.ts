@@ -52,8 +52,6 @@ interface Conversation {
   error?: string;
   /** Main ended this subscription on purpose. Nothing broke; this view just stopped listening. */
   ended?: string;
-  /** Derived in `publish` from the busy transition, never assigned by the code that causes it. */
-  busySince?: number;
   sends: number;
   runStarts: number;
   events: SessionEvent[];
@@ -227,17 +225,10 @@ export function createStore(api: DuangApi) {
     // dropped rather than shown as current; `readPreview` fetches the right one.
     for (const [id, preview] of previews) if (selectedSession(id) !== preview.session) previews.delete(id);
     view.previews = Object.fromEntries([...previews].map(([id, { updatedAt: _read, ...preview }]) => [id, preview]));
-    // One transition point for both derived facts: the wait clock, and how long a view keeps its
-    // subscription. Every way a turn can end passes through here, so no ending path has to remember.
-    for (const c of conversations.values()) {
-      if (busy(c)) c.busySince ??= Date.now();
-      else {
-        c.busySince = undefined;
-        // A conversation nobody is looking at is retained only while it can still produce something
-        // this view needs: its own backfill, or a turn in flight.
-        if (c !== view.conversation && !c.loading) close(c);
-      }
-    }
+    // How long a view keeps its subscription is decided here, where every way a turn can end passes,
+    // so no ending path has to remember. A conversation nobody is looking at is retained only while
+    // it can still produce something this view needs: its own backfill, or a turn in flight.
+    for (const c of conversations.values()) if (!busy(c) && c !== view.conversation && !c.loading) close(c);
     const running = [...conversations.values()].filter(busy);
     view.busy = !!view.conversation && busy(view.conversation);
     view.running = group(running.map((c) => [c.agentId, c.session]));
