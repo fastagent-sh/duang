@@ -387,12 +387,11 @@ Everything else follows from those two:
   expands into a quoted block.
 - **System events are one centred muted line**: model changed, run stopped, a send refused. They are
   facts about the session, not things anyone said.
-- **A steered message** waits below the live output, dimmed and labelled `queued`, until the model
-  reads it at the run's next turn boundary (the runtime's steering count drops); only then does it
-  take its place in the transcript. A steer the run ends without reading returns to the draft
-  instead of staying on screen as delivered. The waiting text is this window's own copy: FastAgent
-  reports how many steers wait, not which, so after a reload the header says `1 queued` with no
-  bubble, and the message shows only once the conversation is reopened from history; asked upstream in [fastagent#634](https://github.com/fastagent-sh/fastagent/issues/634). Once placed it keeps its bubble and adds an accent
+- **A steered message** waits below the live output, dimmed and labelled `queued`, until it leaves
+  the runtime's steering list (`pending.steering`), which FastAgent defines as entering the
+  conversation; only then does it take its place in the transcript. The list is the runtime's, so a
+  steer queued before a reload still shows. A steer still listed when the run ends was dropped: it
+  returns to the draft instead of staying on screen as delivered. Once placed it keeps its bubble and adds an accent
   rule down its leading edge with the label `joined the run`, because after the fact nothing else distinguishes it from a message that
   started one. *Only in the live view:* the fact is recorded when the message is sent, and FastAgent's
   session entries carry the text without saying a run was in flight, so a reopened conversation shows

@@ -58,18 +58,14 @@ interface Conversation {
   runStarts: number;
   events: SessionEvent[];
   /**
-   * Messages sent into a live run that the model has not read yet, oldest first. A steer waits for
-   * the run's next turn boundary, so showing it in `items` at send time puts it above output the
-   * model produced without it. It moves into `items` when the runtime's steering count drops.
+   * The runtime's steering queue (`pending.steering`), oldest first, as bubbles. A steer waits for the
+   * run's next turn boundary, so showing it in `items` at send time puts it above output the model
+   * produced without it. It moves into `items` when it leaves the runtime's list, which FastAgent
+   * defines as entering the conversation.
    */
   queued: UserItem[];
-  /** How many of `queued`, from the oldest, the runtime's steering count includes. */
-  acked: number;
-  /**
-   * Steers the runtime counts that this window did not send, such as ones queued before a reload.
-   * They were queued first, so they are read first.
-   */
-  foreign: number;
+  /** Sent as steers from this window, not listed by the runtime yet. */
+  unlisted: UserItem[];
   /**
    * A message that starts a turn has been sent and its run has not started yet. A message sent now
    * joins that run. It is cleared at `run_started`: once the run is going, `status` says it, and
@@ -78,6 +74,7 @@ interface Conversation {
   starting: boolean;
 }
 type UserItem = Extract<Item, { kind: "user" }>;
+const steer = (text: string, at: number): UserItem => ({ kind: "user", text, at, steered: true });
 /**
  * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
  * this window holds that conversation, read once from its history otherwise. Presentation only: it
@@ -377,8 +374,7 @@ export function createStore(api: DuangApi) {
       runStarts: 0,
       events: [],
       queued: [],
-      acked: 0,
-      foreign: 0,
+      unlisted: [],
       starting: false,
     };
     conversations.set(key(agentId, session), c);
@@ -388,7 +384,7 @@ export function createStore(api: DuangApi) {
       if (conversations.get(key(agentId, session)) !== c) return;
       c.items = fromEntries(result.entries.entries, result.entries.leafEntryId);
       c.state = result.state;
-      c.foreign = result.state.pending.steering;
+      c.queued = result.state.pending.steering.map((text) => steer(text, Date.now()));
       c.loading = false;
       // New sends are disabled until backfill finishes. An already-running local turn retains its
       // subscription and view across navigation, so its deltas are never reconstructed from history.
@@ -457,14 +453,24 @@ export function createStore(api: DuangApi) {
   }
 
   function fold(c: Conversation, event: SessionEvent) {
-    const state = c.state ?? { status: "idle", pending: { steering: 0, followUp: 0 } };
+    const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
     const data = event.data as Record<string, unknown>;
     if (event.type === "run_started") {
       c.runStarts++;
+      // No message of ours was waiting for a run, so this one belongs to the oldest unlisted
+      // message: main found the runtime idle (the turn it meant to join never started) and started
+      // a turn with it. It opens this run, so it goes above the run's output.
+      const [opening] = c.unlisted;
+      if (!c.starting && opening) {
+        opening.steered = false;
+        opening.at = event.timestamp;
+        c.unlisted = c.unlisted.slice(1);
+        c.items = [...c.items, opening];
+      }
       c.starting = false;
       c.state = { ...state, status: "running", activeRunId: event.runId };
     } else if (event.type === "run_settled") {
-      c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: 0, followUp: 0 } };
+      c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
       // A run that ends while you are reading something else is the thing you came back for. A run
       // you stopped yourself is not news.
       if (c !== view.conversation && data.status !== "aborted")
@@ -472,20 +478,7 @@ export function createStore(api: DuangApi) {
       void refreshList(c.agentId);
     } else if (event.type === "queue_changed") {
       const pending = data as unknown as SessionState["pending"];
-      const change = pending.steering - state.pending.steering;
-      if (change > 0) {
-        const mine = Math.min(c.queued.length - c.acked, change);
-        c.acked += mine;
-        c.foreign += change - mine;
-      }
-      // A steer leaves the runtime's queue when the model reads it; that moment is where it belongs.
-      const readForeign = change < 0 ? Math.min(-change, c.foreign) : 0;
-      c.foreign -= readForeign;
-      const read = change < 0 ? c.queued.slice(0, Math.min(-change - readForeign, c.acked)) : [];
-      c.queued = c.queued.slice(read.length);
-      c.acked -= read.length;
-      for (const item of read) item.at = event.timestamp;
-      c.items = [...c.items, ...read];
+      requeue(c, pending.steering, event.timestamp);
       c.state = { ...state, pending };
     } else if (event.type === "state_changed") {
       c.state = { ...state, ...data };
@@ -494,16 +487,38 @@ export function createStore(api: DuangApi) {
     if (event.type === "run_settled") settleQueue(c);
   }
   /**
-   * The run is gone, and steers it counted but never read went with it: they return to the draft
-   * rather than stay on screen as if delivered. The rest never reached this run; main is starting a
-   * new turn with them, so they are ordinary messages now, after the run's closing note.
+   * Follow the runtime's steering list. The queue only loses entries at its head (they entered the
+   * conversation, so they move into `items` now) and gains them at its tail. A new entry is this
+   * window's own message when one was sent with that text; a slash command is listed expanded, so an
+   * unmatched entry takes the oldest command sent. Anything else was queued elsewhere, or before a
+   * reload, and still shows.
+   */
+  function requeue(c: Conversation, next: string[], at: number) {
+    let read = 0;
+    while (!c.queued.slice(read).every((item, i) => next[i] === item.text)) read++;
+    const entered = c.queued.slice(0, read);
+    for (const item of entered) item.at = at;
+    c.items = [...c.items, ...entered];
+    const kept = c.queued.slice(read);
+    const added = next.slice(kept.length).map((text) => {
+      const own = c.unlisted.find((item) => item.text === text) ?? c.unlisted.find((item) => item.text.startsWith("/"));
+      if (!own) return steer(text, at);
+      c.unlisted = c.unlisted.filter((item) => item !== own);
+      return own;
+    });
+    c.queued = [...kept, ...added];
+  }
+  /**
+   * The run is gone. What its queue still listed never entered the conversation and was dropped:
+   * it returns to the draft rather than stay on screen as if delivered. Messages the runtime never
+   * listed did not reach this run; main is starting a new turn with them, so they are ordinary
+   * messages now, after the run's closing note.
    */
   function settleQueue(c: Conversation) {
-    const dropped = c.queued.slice(0, c.acked);
-    const unsent = c.queued.slice(c.acked);
+    const dropped = c.queued;
+    const unsent = c.unlisted;
     c.queued = [];
-    c.acked = 0;
-    c.foreign = 0;
+    c.unlisted = [];
     if (dropped.length) c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
     // Changed in place: a send that fails later finds and removes its message by identity.
     for (const item of unsent) item.steered = false;
@@ -753,7 +768,7 @@ export function createStore(api: DuangApi) {
       // while the context is being compacted starts a turn rather than joining one.
       const joining = c.state?.status === "running" || c.starting;
       const echo: UserItem = { kind: "user", text, at: Date.now(), steered: joining };
-      if (joining) c.queued = [...c.queued, echo];
+      if (joining) c.unlisted = [...c.unlisted, echo];
       else {
         c.items = [...c.items, echo];
         c.starting = true;
@@ -762,7 +777,7 @@ export function createStore(api: DuangApi) {
       const restoreRejected = () => {
         if (c.runStarts !== runStarts) return;
         c.items = c.items.filter((item) => item !== echo);
-        c.queued = c.queued.filter((item) => item !== echo);
+        c.unlisted = c.unlisted.filter((item) => item !== echo);
         c.draft = c.draft ? `${text}\n${c.draft}` : text;
       };
       c.sends++;

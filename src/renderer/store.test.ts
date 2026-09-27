@@ -17,7 +17,7 @@ const ready: OpenResult = { ok: true, model: "provider/model", sessions: [] };
 const listed = (session: string): OpenResult =>
   ({ ok: true, model: "provider/model", sessions: [{ session, updatedAt: 5, createdAt: 0, messageCount: 2 }] }) as never;
 const empty = () => ({
-  state: { status: "idle" as const, pending: { steering: 0, followUp: 0 } },
+  state: { status: "idle" as const, pending: { steering: [], followUp: [] } },
   entries: { entries: [] },
 });
 function harness() {
@@ -252,8 +252,8 @@ test("background turns retain their stream and transcript, then release it after
   store.setDraft("hello");
   const sending = store.send();
   emit(c, "run_started");
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
-  assert.equal(c.state?.pending.steering, 1);
+  emit(c, "queue_changed", { steering: ["queued elsewhere"], followUp: [] });
+  assert.deepEqual(c.state?.pending.steering, ["queued elsewhere"]);
   await store.newConversation();
   assert.deepEqual(store.getSnapshot().running["a"] ?? [], [c.session], "the running conversation is named under its agent");
   assert.equal(closed.includes(c.subscription), false);
@@ -267,7 +267,7 @@ test("background turns retain their stream and transcript, then release it after
   sent.resolve({ ok: true });
   await sending;
   assert.equal(c.state?.status, "idle");
-  assert.equal(c.state?.pending.steering, 0);
+  assert.deepEqual(c.state?.pending.steering, []);
   assert.equal(c.busySince, undefined);
   await store.newConversation();
   assert.ok(closed.includes(c.subscription), "an idle conversation nobody is looking at releases its stream");
@@ -587,8 +587,8 @@ test("a message sent into a running turn is marked as having joined it", async (
   emit(c, "run_started");
   store.setDraft("and also this");
   await store.send();
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
-  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  emit(c, "queue_changed", { steering: ["and also this"], followUp: [] });
+  emit(c, "queue_changed", { steering: [], followUp: [] });
   assert.equal(c.items.filter((item) => item.kind === "user").at(-1)?.steered, true);
 
   // Compaction is not a run: a message sent while the context is being compacted starts a turn.
@@ -615,12 +615,14 @@ test("a steer lands where the model read it, and one the run never read returns 
   emit(c, "run_started");
   store.setDraft("wait");
   await store.send();
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  assert.deepEqual(c.unlisted.map((item) => item.text), ["wait"], "sent, not listed by the runtime yet");
+  emit(c, "queue_changed", { steering: ["wait"], followUp: [] });
+  assert.equal(c.unlisted.length, 0);
   assert.deepEqual(c.queued.map((item) => item.text), ["wait"], "sent, but not read yet");
   // The model keeps working without it until the next turn boundary.
   emit(c, "message_delta", { channel: "text", delta: "still on the old plan" });
   emit(c, "message_finished");
-  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  emit(c, "queue_changed", { steering: [], followUp: [] });
   emit(c, "message_delta", { channel: "text", delta: "stopping" });
   assert.deepEqual(said(), ["start", "still on the old plan", "wait", "stopping"]);
   assert.equal(c.queued.length, 0);
@@ -628,23 +630,23 @@ test("a steer lands where the model read it, and one the run never read returns 
   // Walking away and back during the run keeps a waiting steer on screen.
   store.setDraft("later");
   await store.send();
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  emit(c, "queue_changed", { steering: ["later"], followUp: [] });
   await store.newConversation();
   await store.open(c.session);
   assert.equal(store.getSnapshot().conversation, c, "a running conversation is reused, not reloaded");
   assert.deepEqual(c.queued.map((item) => item.text), ["later"]);
-  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  emit(c, "queue_changed", { steering: [], followUp: [] });
 
   // Stopped before the model read it: the run took the message with it.
   store.setDraft("too late");
   await store.send();
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
+  emit(c, "queue_changed", { steering: ["too late"], followUp: [] });
   emit(c, "run_settled", { status: "aborted" });
   assert.equal(c.queued.length, 0);
   assert.equal(said().includes("too late"), false, "never shown as delivered");
   assert.equal(c.draft, "too late");
 
-  // Sent as the run ended, before the runtime counted it: main starts a new turn with it.
+  // Sent as the run ended, before the runtime listed it: main starts a new turn with it.
   c.draft = "";
   emit(c, "run_started");
   store.setDraft("raced");
@@ -669,16 +671,17 @@ test("a message joins only a run that is going or about to start, not one that j
   api.send = async () => ({ ok: true });
   store.setDraft("early");
   await store.send();
-  assert.deepEqual(c.queued.map((item) => item.text), ["early"]);
+  assert.deepEqual(c.unlisted.map((item) => item.text), ["early"]);
   emit(c, "run_started");
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
-  emit(c, "queue_changed", { steering: 0, followUp: 0 });
+  assert.deepEqual(c.unlisted.map((item) => item.text), ["early"], "the run is the first message's, so it still waits");
+  emit(c, "queue_changed", { steering: ["early"], followUp: [] });
+  emit(c, "queue_changed", { steering: [], followUp: [] });
   emit(c, "run_settled", { status: "completed" });
 
   // The run is over but its send has not returned yet: main starts a new turn with this one.
   store.setDraft("next");
   await store.send();
-  assert.equal(c.queued.length, 0, "nothing to wait for");
+  assert.equal(c.unlisted.length, 0, "nothing to wait for");
   const next = c.items.at(-1);
   assert.equal(next?.kind === "user" && next.text, "next");
   assert.equal(next?.kind === "user" && next.steered, false);
@@ -694,23 +697,60 @@ test("a message joins only a run that is going or about to start, not one that j
   store.dispose();
 });
 
-test("steers queued before this window opened are read before its own", async () => {
+test("steers the runtime lists from elsewhere show, land in order, and a slash command matches its expansion", async () => {
   const { api, store, emit } = harness();
+  // Queued before a reload: this window never sent it, and still shows it.
   api.openSession = async () => ({
-    state: { status: "running" as const, activeRunId: "run", pending: { steering: 1, followUp: 0 } },
+    state: { status: "running" as const, activeRunId: "run", pending: { steering: ["before reload"], followUp: [] } },
     entries: { entries: [] },
   });
   await store.load();
   const c = store.getSnapshot().conversation!;
+  const lastUser = () => c.items.findLast((item) => item.kind === "user")?.text;
+  assert.deepEqual(c.queued.map((item) => [item.text, item.steered]), [["before reload", true]]);
   store.setDraft("mine");
   await store.send();
-  emit(c, "queue_changed", { steering: 2, followUp: 0 });
-  emit(c, "queue_changed", { steering: 1, followUp: 0 });
-  assert.deepEqual(c.queued.map((item) => item.text), ["mine"], "the older, unseen steer was the one read");
-  emit(c, "queue_changed", { steering: 0, followUp: 0 });
-  assert.equal(c.queued.length, 0);
-  const mine = c.items.at(-1);
-  assert.equal(mine?.kind === "user" && mine.text, "mine");
+  emit(c, "queue_changed", { steering: ["before reload", "mine"], followUp: [] });
+  emit(c, "queue_changed", { steering: ["mine"], followUp: [] });
+  assert.deepEqual(c.queued.map((item) => item.text), ["mine"], "the older steer was the one read");
+  assert.equal(lastUser(), "before reload");
+  emit(c, "queue_changed", { steering: [], followUp: [] });
+  assert.equal(lastUser(), "mine");
+
+  // The runtime lists a slash command expanded; it is still the message this window sent.
+  store.setDraft("/skill:demo");
+  await store.send();
+  emit(c, "queue_changed", { steering: ["Say demo."], followUp: [] });
+  assert.equal(c.unlisted.length, 0);
+  assert.deepEqual(c.queued.map((item) => item.text), ["/skill:demo"], "one bubble, in the words that were typed");
+  store.dispose();
+});
+
+test("a message left waiting by a refused first message opens its own run above its answer", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const first = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  api.send = () => first.promise;
+  store.setDraft("A");
+  const sending = store.send();
+  api.send = async () => ({ ok: true });
+  store.setDraft("B");
+  await store.send();
+  assert.deepEqual(c.unlisted.map((item) => item.text), ["B"], "B was meant to join A's run");
+  first.resolve({ ok: false, error: { code: "refused", message: "no", retryable: false } });
+  await sending;
+  // A's run never started, so main found the runtime idle and started a turn with B.
+  emit(c, "run_started");
+  emit(c, "message_delta", { channel: "text", delta: "answer to B" });
+  assert.equal(c.unlisted.length, 0);
+  assert.deepEqual(
+    c.items.slice(-2).map((item) => [item.kind, item.kind === "user" ? item.steered : undefined, "text" in item ? item.text : ""]),
+    [
+      ["user", false, "B"],
+      ["assistant", undefined, "answer to B"],
+    ],
+  );
   store.dispose();
 });
 
