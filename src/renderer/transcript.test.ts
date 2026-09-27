@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, duration, firstArg, foldHead, fromEntries, lines, previewOf, toolText, type Item } from "./transcript.ts";
+import { apply, dayLabel, duration, firstArg, foldHead, fromEntries, lines, previewOf, resumeRunning, toolText, type Item } from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -74,6 +74,18 @@ test("a live tool keeps when it ran; one read from history has no time", () => {
     { id: "2", parentId: "1", timestamp: 5, kind: "tool", data: { toolCallId: "t", toolName: "bash", text: "ok" } },
   ]) as Extract<Item, { kind: "tool" }>[];
   assert.equal(history!.started, undefined);
+});
+
+test("only the active run's unanswered calls resume as running", () => {
+  const items = fromEntries([
+    { id: "1", timestamp: 0, kind: "user", data: { text: "earlier" } },
+    { id: "2", parentId: "1", timestamp: 1, kind: "assistant", data: { toolCalls: [{ id: "old", name: "bash" }] } },
+    { id: "3", parentId: "2", timestamp: 2, kind: "user", data: { text: "now" } },
+    { id: "4", parentId: "3", timestamp: 3, kind: "assistant", data: { toolCalls: [{ id: "new", name: "bash" }] } },
+  ]);
+  const status = (id: string) => (resumeRunning(items).find((item) => item.kind === "tool" && item.id === id) as { status: string }).status;
+  assert.equal(status("old"), "interrupted", "an earlier run's unanswered call stays stopped");
+  assert.equal(status("new"), "running");
 });
 
 test("a duration reads as pi writes it", () => {

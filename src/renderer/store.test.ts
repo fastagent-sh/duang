@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { SessionResult } from "@fastagent-sh/fastagent/session";
+import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
 import type { DuangApi, OpenResult, SessionFrame } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 
@@ -158,6 +158,44 @@ test("a rejected send returns its text without eating what was typed meanwhile",
   refusal.resolve({ ok: false, error: { code: "refused", message: "no", retryable: true } });
   await sending;
   assert.equal(store.getSnapshot().conversation?.draft, "first message\ntyped while waiting");
+  store.dispose();
+});
+
+test("unreadable drafts are moved aside, not overwritten by the next write", async () => {
+  const values = new Map<string, string>([["duang.drafts", "{not json"]]);
+  Object.defineProperty(globalThis, "localStorage", {
+    value: { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => void values.set(k, v) },
+    configurable: true,
+  });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    const { store } = harness();
+    await store.load();
+    store.setDraft("new text");
+    assert.equal(values.get("duang.drafts.unreadable"), "{not json", "the person's old text survives the write");
+    assert.match(values.get("duang.drafts") ?? "", /new text/);
+    store.dispose();
+  } finally {
+    console.error = error;
+    Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
+
+test("a conversation opened mid-run shows its unanswered calls as running, not stopped", async () => {
+  const { api, store } = harness();
+  const entries: SessionEntry[] = [
+    { id: "u", timestamp: 1, kind: "user", data: { text: "go" } },
+    { id: "a", parentId: "u", timestamp: 2, kind: "assistant", data: { toolCalls: [{ id: "t", name: "bash" }] } },
+  ];
+  api.openSession = async () => ({
+    state: { status: "running" as const, activeRunId: "run", pending: { steering: [], followUp: [] } },
+    entries: { entries, leafEntryId: "a" },
+  });
+  await store.load();
+  const tool = store.getSnapshot().conversation!.items.find((item) => item.kind === "tool");
+  assert.equal(tool?.kind === "tool" && tool.status, "running");
+  assert.equal(tool?.kind === "tool" && tool.started, undefined, "when it began is not in history");
   store.dispose();
 });
 
