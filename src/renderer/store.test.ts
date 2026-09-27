@@ -827,6 +827,54 @@ test("the open agent's list keeps the newest answer, and a failed re-read lands 
   store.dispose();
 });
 
+test("settings are read fresh each time, and only the newest change and check land", async () => {
+  const { api, store } = harness();
+  type Checked = Awaited<ReturnType<DuangApi["testNetwork"]>>;
+  type Routed = Awaited<ReturnType<DuangApi["setNetwork"]>>;
+  api.getSettings = async () => {
+    throw new Error("settings.json: Unexpected token");
+  };
+  assert.equal(await store.loadSettings(), undefined);
+  assert.equal(store.getSnapshot().settingsError, "settings.json: Unexpected token");
+  assert.equal(store.getSnapshot().settings, undefined, "an unreadable file is not shown as the defaults");
+
+  const staleCheck = deferred<Checked>();
+  const freshCheck = deferred<Checked>();
+  const checks = [staleCheck.promise, freshCheck.promise];
+  api.testNetwork = () => checks.shift()!;
+  api.getSettings = async () => ({ network: { mode: "automatic" }, route: { source: "system" } });
+  assert.deepEqual((await store.loadSettings())?.network, { mode: "automatic" });
+  assert.equal(store.getSnapshot().settingsError, undefined);
+  assert.deepEqual(store.getSnapshot().connection, { checking: true });
+
+  // Two quick choices: the first answer arrives last. It must not win, and it reports nothing.
+  const slow = deferred<Routed>();
+  const fast = deferred<Routed>();
+  const routes = [slow.promise, fast.promise];
+  api.setNetwork = () => routes.shift()!;
+  const manual = store.setNetwork({ mode: "manual", url: "http://127.0.0.1:7890" });
+  const off = store.setNetwork({ mode: "off" });
+  fast.resolve({ source: "off" });
+  assert.equal(await off, undefined);
+  slow.reject(new Error("proxy refused"));
+  assert.equal(await manual, undefined, "a superseded choice's failure is not the page's problem");
+  assert.deepEqual(store.getSnapshot().settings, { network: { mode: "off" }, route: { source: "off" } });
+
+  // The check started for the old route answers after the one for the new route.
+  freshCheck.resolve({ status: 200, ms: 12, route: { source: "off" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  staleCheck.resolve({ status: 407, ms: 3, route: { source: "system" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(store.getSnapshot().connection, { status: 200, ms: 12, route: { source: "off" } });
+
+  // A choice that fails on its own says why, to the form that made it.
+  api.setNetwork = async () => {
+    throw new Error("Not a URL: nope");
+  };
+  assert.equal(await store.setNetwork({ mode: "manual", url: "nope" }), "Not a URL: nope");
+  store.dispose();
+});
+
 test("a renamed conversation takes the label the runtime reports, and a refusal stays in its own transcript", async () => {
   const { api, store } = harness();
   const renames: string[][] = [];

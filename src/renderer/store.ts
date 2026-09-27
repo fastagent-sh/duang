@@ -1,8 +1,9 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
-import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
+import type { AgentRow, DuangApi, Models, Network, ProviderUsage, Route, SessionFrame } from "../preload/index.ts";
 import { apply, fromEntries, known, previewOf, resumeRunning, type Item } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
+export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
 
 /**
  * Where the window was last left. Navigation, not conversation data: the transcript belongs to the
@@ -120,6 +121,12 @@ export interface View {
   /** The `/` completion list for the selected agent. */
   commands: AgentCommand[];
   commandsError?: string;
+  /** The Settings page: the saved network choice and the route it gives, read each time it opens. */
+  settings?: { network: Network; route: Route };
+  /** Why the settings file could not be read. The page says so rather than show the defaults. */
+  settingsError?: string;
+  /** The last check of the model route, or the one still running. */
+  connection?: Connection;
   conversation?: Conversation;
   /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
   busy: boolean;
@@ -158,7 +165,7 @@ const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" |
  * throw across IPC, and Electron wraps those as "Error invoking remote method 'x': Error: <what main
  * said>"; expected refusals arrive as values and never come through here.
  */
-export const message = (error: unknown): string =>
+const message = (error: unknown): string =>
   (error instanceof Error ? error.message : String(error)).replace(
     /^Error invoking remote method '[^']*': (Error: )?/,
     "",
@@ -219,6 +226,10 @@ export function createStore(api: DuangApi) {
     return () => listRequests.get(id) === request;
   };
   let modelsRequest = 0;
+  // A slow check for a route that has since changed must not land on the new one, nor an earlier
+  // network choice's answer after a later one's.
+  let connectionRequest = 0;
+  let networkRequest = 0;
   /**
    * Previews by agent, with the list's `updatedAt` a read was taken at: a history read again only
    * when the conversation moved on or the row now speaks for another one.
@@ -550,6 +561,21 @@ export function createStore(api: DuangApi) {
     publish();
   });
 
+  /**
+   * One request over the model route. Asked after every read or change of the network, and from the
+   * Settings page's refresh control; only the newest answer lands.
+   */
+  async function checkConnection() {
+    const request = ++connectionRequest;
+    publish({ connection: { checking: true } });
+    try {
+      const result = await api.testNetwork();
+      if (request === connectionRequest) publish({ connection: result });
+    } catch (error) {
+      if (request === connectionRequest) publish({ connection: { error: message(error) } });
+    }
+  }
+
   async function load() {
     publish({ loading: true, error: undefined });
     try {
@@ -619,6 +645,43 @@ export function createStore(api: DuangApi) {
         publish({ usage: { ...view.usage, [provider]: { data } } });
       } catch (error) {
         publish({ usage: { ...view.usage, [provider]: { error: message(error) } } });
+      }
+    },
+    checkConnection,
+    /**
+     * Read once per opening of the page, from nothing: a file fixed by hand shows up the next time it
+     * opens, and nothing from the last visit is shown as current. Returns what was read, for the
+     * page's form to start from.
+     */
+    async loadSettings(): Promise<{ network: Network; route: Route } | undefined> {
+      publish({ settings: undefined, settingsError: undefined, connection: undefined });
+      try {
+        const settings = await api.getSettings();
+        publish({ settings });
+        void checkConnection();
+        return settings;
+      } catch (error) {
+        publish({ settingsError: message(error) });
+      }
+    },
+    /** Saves and applies a network choice. Returns why it failed, for the form that asked. */
+    async setNetwork(network: Network): Promise<string | undefined> {
+      const request = ++networkRequest;
+      try {
+        const route = await api.setNetwork(network);
+        if (request !== networkRequest) return;
+        publish({ settings: { network, route } });
+        void checkConnection();
+      } catch (error) {
+        if (request === networkRequest) return message(error);
+      }
+    },
+    /** The file to open when it cannot be read. A failure to reveal it is said where the read failure is. */
+    async revealSettings() {
+      try {
+        await api.revealSettings();
+      } catch (error) {
+        publish({ settingsError: message(error) });
       }
     },
     /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
