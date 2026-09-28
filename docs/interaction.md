@@ -113,8 +113,10 @@ nothing connected it says so and offers **Connect a provider**; otherwise it end
 providers…**. Both open Settings. Returning from a successful connection reopens the picker without
 choosing a model for the person.
 
-**Choosing.** A list of providers first, then how to connect (subscription or API key) when the
-provider offers both; one way goes straight into its flow. A provider already connected says how,
+**Choosing.** Connecting is a dialog, so Escape cancels it like the model picker. It lists providers
+first, by pi's names and filterable, then how to connect (subscription or API key) when the provider
+offers both, each by FastAgent's own label (`Anthropic (Claude Pro/Max)`, `Anthropic API key`); one
+way goes straight into its flow. A provider already connected says how,
 and connecting it the other way says first that it will replace that credential.
 
 **Connecting.** The flow is driven by FastAgent's `login`

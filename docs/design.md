@@ -88,7 +88,10 @@ recipient, who brings their own credentials and need not install developer tools
 to connect when there is more than one way: **Subscription** (OAuth: Claude Pro/Max, ChatGPT/Codex,
 Copilot and the other flows FastAgent supports, signed in in the system browser) or **API key**
 (verified once when saved, sent only to that provider's own endpoint). A provider with one way goes
-straight into it. The list is FastAgent's `loginOptions()`, grouped by provider.
+straight into it. The list is FastAgent's `loginOptions()`, grouped by provider id and named as
+pi names each provider; duang adds no names or groupings of its own, so a vendor that pi splits
+shows as two rows (`OpenAI` for API keys, `OpenAI Codex` for a ChatGPT subscription). Common
+providers come first and the list can be filtered, since pi offers about forty.
 
 A *Connected* list shows each provider with every source that authenticates it, Reconnect and
 Disconnect. A provider-supplied environment variable (such as `ANTHROPIC_API_KEY`) is shown as a
