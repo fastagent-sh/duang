@@ -653,7 +653,7 @@ test("a message is placed where the runtime says it entered, and joins only a ru
   const sending = store.send();
   api.send = async () => ({ ok: true });
   assert.deepEqual(said(c), [], "sent, not yet in the conversation");
-  assert.deepEqual(c.waiting.map((item) => item.text), ["start"]);
+  assert.deepEqual(c.waiting.map((item) => [item.text, item.opens]), [["start", true]], "from idle, it opens the run");
   emit(c, "run_started");
   entered(emit, c, "start");
   emit(c, "message_delta", { channel: "text", delta: "on the old plan" });
@@ -662,6 +662,7 @@ test("a message is placed where the runtime says it entered, and joins only a ru
   // A steer waits below the output: the model keeps working without it until the next turn boundary.
   store.setDraft("wait");
   await store.send();
+  assert.equal(c.waiting[0]?.opens, false, "a run that has its message is joined");
   emit(c, "queue_changed", { steering: ["wait"], followUp: [] });
   assert.deepEqual(queueView(c.waiting, c.state!.pending.steering).map(({ item, listed }) => [item.text, listed]), [["wait", true]]);
   emit(c, "message_delta", { channel: "text", delta: "still going" });
@@ -690,6 +691,7 @@ test("a message is placed where the runtime says it entered, and joins only a ru
   api.send = () => next.promise;
   store.setDraft("after compaction");
   const compacting = store.send();
+  assert.equal(c.waiting[0]?.opens, false, "not the compaction's message: it waits below its working mark");
   emit(c, "run_started");
   entered(emit, c, "after compaction");
   assert.equal(said(c).at(-1), "you:after compaction");
