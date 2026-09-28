@@ -641,8 +641,10 @@ MANUAL PROXY                               (only while Manual is chosen)
   header acts on the agent list, Settings is app-level and rarely used, and it is a place rather
   than an action, so it takes the selection mark while open. It is its own tab stop after the
   roster. Escape or the close control returns to the conversation.
-- Planned: provider rows use the conversation-row rhythm; the authentication kind is a neutral
-  badge, and a failure is a `danger` badge with its reason, never colour alone (§9).
+- Provider rows follow the Network group's inset rows: the provider's name over a muted line of its
+  sources (`Subscription`, `API key`, an environment variable's name), with `ghost` Reconnect (or
+  Connect, when only a variable serves it) and `danger` Disconnect. An unreadable credential file
+  replaces the rows with its error, Reveal and Retry, never an empty group (§9).
 - *Connect a provider* opens the connect dialog: the modal dialog surface (§6b), about 420 wide, one
   `primary` action per step. It lists providers by pi's own names, common ones first and
   filterable; a provider with more than one way to connect then lists those ways by FastAgent's
