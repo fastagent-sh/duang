@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent } from "electron";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
   addAgent,
   createAgentIn,
@@ -17,6 +18,7 @@ import {
   type AgentRow,
 } from "./agents.ts";
 import { authPath, modelsFor } from "./credentials.ts";
+import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
 import { providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
@@ -106,7 +108,11 @@ function createWindow(): BrowserWindow {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => event.preventDefault());
   const senderId = win.webContents.id;
-  win.webContents.on("destroyed", () => stopWindowStreams(senderId));
+  win.webContents.on("destroyed", () => {
+    stopWindowStreams(senderId);
+    // Closing the window ends its sign-in, which also closes the provider's callback server.
+    if (signIn?.senderId === senderId) signIn.flow.cancel();
+  });
   win.webContents.on("did-start-loading", () => stopWindowStreams(senderId));
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
@@ -127,6 +133,9 @@ async function requireAgent(agentId: string): Promise<AgentRow> {
 function requireSession(session: string): void {
   if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
 }
+
+/** The one sign-in in progress, and the window it belongs to. */
+let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
 
 type Stream = {
   senderId: number;
@@ -223,6 +232,50 @@ function register(): void {
   });
   ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
+  // Model providers, in duang's own credential file. `empty` is never written: it is where a provider's
+  // environment variable is read with no stored credential in front of it.
+  const empty = join(app.getPath("temp"), "duang-no-credentials.json");
+  ipcMain.handle("providers:list", () => listProviders(authPath, empty));
+  // Before anything is connected the file does not exist yet; its folder is the place to show.
+  ipcMain.handle("providers:reveal", () =>
+    existsSync(authPath) ? shell.showItemInFolder(authPath) : shell.openPath(dirname(authPath)),
+  );
+  ipcMain.handle("providers:disconnect", (_e, provider: string) => {
+    if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
+    return disconnect(authPath, provider);
+  });
+  ipcMain.handle("providers:login", async (e, provider: string, method: LoginMethod): Promise<LoginOutcome> => {
+    if (typeof provider !== "string" || (method !== "oauth" && method !== "api_key"))
+      throw new Error("A sign-in names a provider and oauth or api_key");
+    // One flow at a time: a second callback server, or a second masked field, would be ambiguous.
+    if (signIn) return { ok: false, error: "Another sign-in is in progress." };
+    const flow = startLogin({
+      provider,
+      method,
+      authPath,
+      send: (step) => {
+        if (!e.sender.isDestroyed()) e.sender.send("providers:step", step);
+      },
+      open: (url) => void shell.openExternal(url),
+    });
+    signIn = { senderId: e.sender.id, flow };
+    try {
+      return await flow.result;
+    } finally {
+      signIn = undefined;
+    }
+  });
+  ipcMain.handle("providers:answer", (e, id: string, value: string) => {
+    if (typeof id !== "string" || typeof value !== "string") throw new Error("An answer is a prompt id and a string");
+    if (signIn?.senderId === e.sender.id) signIn.flow.answer(id, value);
+  });
+  ipcMain.handle("providers:cancel", (e) => {
+    if (signIn?.senderId === e.sender.id) signIn.flow.cancel();
+  });
+  ipcMain.handle("providers:open", (e, url: string) => {
+    if (signIn?.senderId !== e.sender.id) throw new Error("No sign-in is in progress");
+    signIn.flow.reopen(url);
+  });
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
     return providerUsage(provider, authPath);

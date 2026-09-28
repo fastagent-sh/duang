@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
-import type { DuangApi, OpenResult, SessionFrame } from "../preload/index.ts";
+import type { DuangApi, LoginOutcome, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { queueView } from "./transcript.ts";
 
@@ -23,6 +23,7 @@ const empty = () => ({
 });
 function harness() {
   let listener!: (frame: SessionFrame) => void;
+  let stepListener!: (step: LoginStep) => void;
   const closed: string[] = [];
   const opens: string[] = [];
   const api: DuangApi = {
@@ -64,6 +65,17 @@ function harness() {
       listener = fn;
       return () => {};
     },
+    listProviders: async () => [],
+    revealProviders: async () => {},
+    disconnect: async () => {},
+    login: async () => ({ ok: true, verified: "n/a" }),
+    answerLogin: async () => {},
+    cancelLogin: async () => {},
+    openLoginUrl: async () => {},
+    onLoginStep: (fn) => {
+      stepListener = fn;
+      return () => {};
+    },
   };
   const store = createStore(api);
   const emit = (c: NonNullable<ReturnType<typeof store.getSnapshot>["conversation"]>, type: string, data = {}) => {
@@ -81,7 +93,8 @@ function harness() {
   ) => {
     listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, expected } });
   };
-  return { api, store, emit, end, closed, opens };
+  const step = (s: LoginStep) => stepListener(s);
+  return { api, store, emit, end, step, closed, opens };
 }
 
 test("first model selection unlocks a new conversation; configured models come from the runtime", async () => {
@@ -1039,5 +1052,67 @@ test("a slow history read cannot replace a newer one", async () => {
   slow.resolve(reply("older"));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(store.getSnapshot().previews["b"]?.text, "newer");
+  store.dispose();
+});
+
+test("a sign-in shows what its flow asks, sends the answer once, and ends by its outcome", async () => {
+  const { api, store, step } = harness();
+  const anthropic: ProviderRow = {
+    id: "anthropic",
+    name: "Anthropic",
+    ways: [
+      { method: "oauth", label: "Anthropic (Claude Pro/Max)", subscription: true },
+      { method: "api_key", label: "Anthropic API key", subscription: false },
+    ],
+  };
+  const lists = [[anthropic], [{ ...anthropic, stored: "api_key" as const }]];
+  api.listProviders = async () => lists.shift()!;
+  await store.loadProviders();
+  const answers: [string, string][] = [];
+  api.answerLogin = async (id, value) => void answers.push([id, value]);
+  const done = deferred<LoginOutcome>();
+  api.login = () => done.promise;
+
+  const connecting = store.connect(anthropic, anthropic.ways[1]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Anthropic API key" } });
+  step({ type: "progress", message: "Checking the key…" });
+  assert.equal(store.getSnapshot().signIn?.prompt?.prompt.type, "secret");
+  await store.answerSignIn("sk-ant-typed");
+  assert.deepEqual(answers, [["1", "sk-ant-typed"]]);
+  assert.equal(store.getSnapshot().signIn?.prompt, undefined, "the field, and what was typed, is gone");
+  assert.equal(store.getSnapshot().signIn?.progress, "Checking the key…");
+  done.resolve({ ok: true, verified: "ok" });
+  await connecting;
+  assert.deepEqual(store.getSnapshot().signIn?.outcome, { ok: true, verified: "ok" });
+  assert.equal(store.getSnapshot().providers?.[0]?.stored, "api_key", "the list is re-read after it lands");
+  step({ type: "progress", message: "late" });
+  assert.equal(store.getSnapshot().signIn?.progress, "Checking the key…", "a finished flow takes no more steps");
+  await store.closeSignIn();
+  assert.equal(store.getSnapshot().signIn, undefined);
+  store.dispose();
+});
+
+test("cancelling a sign-in closes it with nothing to say; any other end keeps its reason", async () => {
+  const { api, store, step } = harness();
+  const openai: ProviderRow = { id: "openai", name: "OpenAI", ways: [{ method: "api_key", label: "OpenAI API key", subscription: false }] };
+  const running = deferred<LoginOutcome>();
+  api.login = () => running.promise;
+  api.cancelLogin = async () => running.resolve({ ok: false, cancelled: true });
+  const first = store.connect(openai, openai.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Key" } });
+  await store.closeSignIn();
+  await first;
+  assert.equal(store.getSnapshot().signIn, undefined, "a decision, not a failure");
+
+  api.login = async () => ({ ok: false, error: "EADDRINUSE: port 1455" });
+  await store.connect(openai, openai.ways[0]!);
+  assert.deepEqual(store.getSnapshot().signIn?.outcome, { ok: false, error: "EADDRINUSE: port 1455" });
+
+  api.listProviders = async () => {
+    throw new Error("auth.json: corrupt auth file");
+  };
+  await store.loadProviders();
+  assert.equal(store.getSnapshot().providersError, "auth.json: corrupt auth file");
+  assert.equal(store.getSnapshot().providers, undefined, "never shown as nothing connected");
   store.dispose();
 });

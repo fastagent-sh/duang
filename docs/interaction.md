@@ -101,9 +101,9 @@ FastAgent and relevant files/diffs; if runtime discovery is unavailable, say so.
 shown in this view is **declared**, not guaranteed to run while the app is closed. Compact and
 branching are conditional on demonstrated long-conversation needs, not a checklist of Pi commands.
 
-## Planned: connecting model providers (stage 1)
+## Connecting model providers (stage 1, first version shipped)
 
-Scope of the first version ([#84](https://github.com/fastagent-sh/duang/issues/84)): subscription
+The first version ([#84](https://github.com/fastagent-sh/duang/issues/84)) covers subscription
 sign-in and API keys for pi's built-in providers, disconnecting, and the picker's way in. Custom endpoints come after it
 ([design](design.md)). Reasoning effort is its own feature
 ([#83](https://github.com/fastagent-sh/duang/issues/83)).

@@ -12,11 +12,14 @@ function ModelPopover({
   store,
   current,
   onClose,
+  onProviders,
 }: {
   view: View;
   store: Store;
   current?: string;
   onClose: () => void;
+  /** Opens Settings → Model providers; `connect` brings the connect dialog up straight away. */
+  onProviders: (connect: boolean) => void;
 }) {
   const { models, modelsError: error } = view;
   const onRetry = () => void store.loadModels();
@@ -90,13 +93,9 @@ function ModelPopover({
         </div>
       ) : models?.specs.length === 0 ? (
         <div className="text-muted text-[12px] p-2 leading-relaxed space-y-2">
-          <p>
-            No provider is connected. duang reads only the file above. Until providers can be connected
-            here (#84), sign in with <span className="font-mono">fastagent login</span> run with
-            <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to that file, then retry.
-          </p>
-          <Button kind="ghost" size={28} onClick={onRetry}>
-            Retry
+          <p>No provider is connected yet. Sign in with a subscription or paste an API key.</p>
+          <Button kind="primary" size={28} onClick={() => onProviders(true)}>
+            Connect a provider
           </Button>
         </div>
       ) : (
@@ -134,6 +133,15 @@ function ModelPopover({
             ))}
             {models && matches.length === 0 && <p className="text-muted text-[11px] px-2 py-1.5">Nothing matches.</p>}
           </div>
+          {models && (
+            <button
+              type="button"
+              onClick={() => onProviders(false)}
+              className="mt-1 w-full rounded-card border-t border-stroke px-2 py-2 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+            >
+              Manage providers…
+            </button>
+          )}
         </>
       )}
     </dialog>
@@ -146,7 +154,15 @@ function ModelPopover({
  *
  * Enter sends, Shift+Enter breaks the line; when it cannot send, the placeholder says why.
  */
-export function Composer({ view, store }: { view: View; store: Store }) {
+export function Composer({
+  view,
+  store,
+  onProviders,
+}: {
+  view: View;
+  store: Store;
+  onProviders: (connect: boolean) => void;
+}) {
   const { agentId, conversation: c, busy } = view;
   const agent = view.agents.find((row) => row.id === agentId);
   const state = agentId ? view.states[agentId] : undefined;
@@ -176,6 +192,11 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   const [picking, setPicking] = useState(false);
   // An agent with no model cannot start: open the list rather than leave the person guessing.
   useEffect(() => setPicking(needsModel), [agentId, needsModel]);
+  // Back from connecting a provider that was started here: the picker comes up again, with the new
+  // provider's models in it, and nothing chosen for the person.
+  useEffect(() => {
+    if (store.takePickerRequest()) setPicking(true);
+  }, [store]);
   // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
   // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
@@ -278,7 +299,16 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             <CaretDown size={12} />
           </Button>
           {picking && agentId && !busy && !modelDisabled && (
-            <ModelPopover view={view} store={store} current={model} onClose={() => setPicking(false)} />
+            <ModelPopover
+              view={view}
+              store={store}
+              current={model}
+              onClose={() => setPicking(false)}
+              onProviders={(connect) => {
+                setPicking(false);
+                onProviders(connect);
+              }}
+            />
           )}
         </div>
         {/* While a turn runs, the button that sent it is the button that stops it — stopping is where

@@ -22,6 +22,9 @@ export default function App() {
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
   // is not remembered across launches.
   const [settings, setSettings] = useState(false);
+  // How Settings was reached from the model picker: its "Connect a provider" opens the connect dialog
+  // at once, and a connection made from there returns to the picker.
+  const [fromPicker, setFromPicker] = useState<{ connect: boolean }>();
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
   const [listOpen, setListOpen] = useState(false);
@@ -98,7 +101,20 @@ export default function App() {
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
-  const composer = <Composer view={view} store={store} />;
+  const composer = (
+    <Composer
+      view={view}
+      store={store}
+      onProviders={(connect) => {
+        setFromPicker({ connect });
+        setSettings(true);
+      }}
+    />
+  );
+  const closeSettings = () => {
+    setSettings(false);
+    setFromPicker(undefined);
+  };
   // States whose own panel already explains the setup problem and offers the fix. Repeating the
   // runtime's prose above them contradicts it: a plain project is told to run `fastagent init`
   // while duang is offering to scaffold it.
@@ -144,7 +160,17 @@ export default function App() {
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
         {settings ? (
-          <Settings view={view} store={store} onClose={() => setSettings(false)} />
+          <Settings
+            view={view}
+            store={store}
+            connectOnOpen={fromPicker?.connect}
+            onConnected={() => {
+              if (!fromPicker) return;
+              store.requestPicker();
+              closeSettings();
+            }}
+            onClose={closeSettings}
+          />
         ) : (
           <>
             {agent && (

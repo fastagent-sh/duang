@@ -95,6 +95,7 @@ if (!process.versions.electron) {
     let gate;
     let anthropicRequests = 0;
     let usageRequests = 0;
+    const deepseekKeys = [];
     globalThis.fetch = async (url, options = {}) => {
       const target = String(url instanceof Request ? url.url : url);
       const headers = new Headers(options.headers ?? (url instanceof Request ? url.headers : undefined));
@@ -123,6 +124,19 @@ if (!process.versions.electron) {
           { type: "message_stop" },
         ];
         return new Response(events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), {
+          headers: { "content-type": "text/event-stream" },
+        });
+      }
+      if (target.startsWith("https://api.deepseek.com/")) {
+        // The one-request check of a key being connected: 401 rejects it, a completion accepts it.
+        deepseekKeys.push(headers.get("authorization"));
+        if (headers.get("authorization") !== "Bearer sk-good")
+          return Response.json({ error: { message: "Authentication Fails (invalid key)" } }, { status: 401 });
+        const chunks = [
+          { id: "c", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content: "pong" }, finish_reason: null }] },
+          { id: "c", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } },
+        ];
+        return new Response(`${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`, {
           headers: { "content-type": "text/event-stream" },
         });
       }
@@ -871,6 +885,59 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("!document.querySelector('#network-heading') && document.querySelector('textarea')", "Escape leaves Settings");
 
+      // Model providers: what duang's file holds, then a key connected through the dialog — rejected
+      // once, asked again, accepted — and disconnected. Everything lands in duang's file only.
+      await click("Settings");
+      await until(
+        "document.querySelector('#providers-heading') && document.body.innerText.includes('OpenAI Codex')",
+        "the providers in duang's file are listed by pi's names",
+      );
+      await click("Connect a provider…");
+      await until("document.querySelector('dialog[aria-label=\"Connect a provider\"]')", "the connect dialog opens");
+      await evaluate(`(() => {
+        const input = document.querySelector('dialog input[aria-label="Filter providers"]');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'deep');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.startsWith('DeepSeek')).click()`);
+      const answer = async (value) => {
+        await until("document.querySelector('dialog input[type=password]')", "the key field");
+        await evaluate(`(() => {
+          const input = document.querySelector('dialog input[type=password]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.form.requestSubmit();
+        })()`);
+      };
+      await answer("sk-bad");
+      await until(
+        "document.querySelector('dialog input[type=password]') && document.querySelector('dialog').innerText.includes('Authentication Fails')",
+        "a rejected key is asked for again, with the provider's reason",
+      );
+      await answer("sk-good");
+      await until("document.querySelector('dialog')?.innerText.includes('Connected DeepSeek API key')", "the checked key is connected");
+      assert.deepEqual(deepseekKeys, ["Bearer sk-bad", "Bearer sk-good"], "each key was checked once, with the provider itself");
+      let saved = JSON.parse(await readFile(selectedAuth, "utf8"));
+      assert.deepEqual(saved.deepseek, { type: "api_key", key: "sk-good" }, "written to duang's own file");
+      assert.equal(JSON.parse(await readFile(GLOBAL_AUTH_PATH, "utf8")).deepseek, undefined, "never to the CLI's");
+      await click("Done");
+      await until(
+        "!document.querySelector('dialog') && [...document.querySelectorAll('#providers-heading ~ div div')].some((row) => row.innerText.startsWith('DeepSeek'))",
+        "the connected provider is listed",
+      );
+      await evaluate("(window.confirm = () => true, true)");
+      await evaluate(`[...document.querySelectorAll('#providers-heading ~ div > div')].find((row) => row.innerText.startsWith('DeepSeek')).querySelector('button:last-child').click()`);
+      await until(
+        "![...document.querySelectorAll('#providers-heading ~ div > div')].some((row) => row.innerText.startsWith('DeepSeek'))",
+        "a disconnected provider leaves the list",
+      );
+      saved = JSON.parse(await readFile(selectedAuth, "utf8"));
+      assert.equal(saved.deepseek, undefined);
+      assert.ok(saved.anthropic && saved.openai, "disconnecting one provider keeps the others");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
+
       // A route duang cannot take (SOCKS4, from a PAC file) is shown, not fatal: a send still goes
       // out, agent commands just get no proxy, and the page says both. Choosing again recovers.
       await electron.session.defaultSession.setProxy({
@@ -964,7 +1031,7 @@ if (!process.versions.electron) {
       }
       assert.ok(onSettings, "the new window lands on Settings");
       console.log(
-        "Electron smoke passed: local workflow, duang's own credential file, cross-provider history, missing/corrupt credentials and recovery",
+        "Electron smoke passed: local workflow, duang's own credential file, connecting and disconnecting a provider, cross-provider history, missing/corrupt credentials and recovery",
       );
     } catch (error) {
       console.error(error);
