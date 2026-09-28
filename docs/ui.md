@@ -598,7 +598,7 @@ it is busy or idle.
 ## 12b. Settings (network shipped) and connecting a provider (planned)
 
 Behaviour is in interaction.md: [Settings and Network](interaction.md#shipped-local-workbench)
-(shipped) and [providers](interaction.md#planned-providers-and-reasoning-effort-stage-1) (planned);
+(shipped) and [providers](interaction.md#planned-connecting-model-providers-stage-1) (planned);
 this is how it should read. References: Zed's AI settings, which name subscriptions and API access
 as different things; OpenCode's connect-provider dialog, one dialog walking method, prompt, waiting
 and result; Codex's "Sign in with ChatGPT / API key" pair. Refused: Cherry Studio's dense
