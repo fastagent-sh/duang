@@ -80,29 +80,47 @@ row at the foot of the sidebar; planned: the model picker's **Manage providersâ€
 running work remains in view. One page, two groups, no empty categories; until in-app sign-in
 exists (fastagent#602) the page holds only Network.
 
-**Model providers.** A *Connected* list shows each provider with every source that authenticates
-it (subscription, API key, custom endpoint, environment variable) and offers Reconnect and
-Disconnect. An environment variable cannot be removed from duang; the row names it, and a provider
-with both a stored credential and a variable shows both. *Add a provider* offers three ways in:
+**Model providers.** The goal: on a new machine, from installing duang to the first answer
+without opening a terminal. It serves the owner on a new machine and, above all, a preset
+recipient, who brings their own credentials and need not install developer tools.
 
-- **Subscription** (OAuth): Claude Pro/Max, ChatGPT/Codex, GitHub Copilot and the other flows
-  FastAgent supports. Sign-in happens in the system browser.
-- **API key** for a built-in provider, verified once when saved, sent only to that provider's own
-  endpoint.
-- **Custom endpoint**, in pi's `models.json` schema: name, API type, base URL, optional key and the
-  model ids (fetched from the endpoint when it lists them, otherwise typed). Ollama and LM Studio
-  are prefills, not separate integrations. A relay or gateway in front of Anthropic or OpenAI is a
-  custom endpoint too, under its own provider id: duang never redirects a built-in provider's
-  `baseUrl`, so a subscription token or official key cannot be sent to a third party by a setting
-  left behind from another credential.
+*Connect a provider* starts with the provider (Anthropic, OpenAI, GitHub Copilot, â€¦), then asks how
+to connect when there is more than one way: **Subscription** (OAuth: Claude Pro/Max, ChatGPT/Codex,
+Copilot and the other flows FastAgent supports, signed in in the system browser) or **API key**
+(verified once when saved, sent only to that provider's own endpoint). A provider with one way goes
+straight into it. The list is FastAgent's `loginOptions()`, grouped by provider id and named as
+pi names each provider; duang adds no names or groupings of its own, so a vendor that pi splits
+shows as two rows (`OpenAI` for API keys, `OpenAI Codex` for a ChatGPT subscription). Common
+providers come first and the list can be filtered, since pi offers about forty.
 
-Keys go to the application's FastAgent credential file, shared with the `fastagent` CLI and every
-agent on the machine; the page shows that path. A provider holds one stored credential, so an API
-key replaces a subscription login for the same provider and vice versa, and the page says so before
-it happens. Custom endpoints need a machine-level models file that every agent reads
-([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)); a definition's own
-`models.json` still wins for that agent. Such an endpoint is local to this machine and does not
-travel with a preset or deployment.
+A *Connected* list shows each provider with every source that authenticates it, Reconnect and
+Disconnect. A provider-supplied environment variable (such as `ANTHROPIC_API_KEY`) is shown as a
+source too, and cannot be removed from duang.
+
+**duang's own credential file.** Connections are written to one file that only duang reads:
+`auth.json` in the app's data directory, beside `agents.json` and `settings.json` (Electron's
+`userData`: `~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
+`~/.config/duang/` on Linux). duang does not read the `fastagent` CLI's or pi's stores, and
+`FASTAGENT_AUTH_PATH` no longer points it elsewhere. Sharing a file, or copying a login between
+files, puts one OAuth grant in two places: some providers (Anthropic, OpenAI Codex) rotate the
+refresh token on every refresh, so one copy's refresh silently invalidates the other. So a login made in a terminal is made again in
+duang, as its own grant, and nothing duang connects, replaces or disconnects reaches the CLI. The
+file holds one credential per provider: an API key replaces a subscription login for the same
+provider, and the reverse, and duang says so before it happens.
+
+Known limitation: the file is plain JSON with mode `0600`, as FastAgent writes it. Desktop apps
+usually keep secrets in the OS keychain (VS Code, GitHub Desktop, Docker Desktop, Zed). FastAgent's
+runtime and login read and write a file today; storing them in the keychain needs a pluggable
+credential store upstream ([fastagent#652](https://github.com/fastagent-sh/fastagent/issues/652)).
+
+**Custom endpoints (after the first version).** Ollama, LM Studio or a gateway, in pi's
+`models.json` schema: name, API type, base URL, optional key and the model ids. Ollama and LM Studio
+are prefills, not separate integrations. A relay in front of Anthropic or OpenAI is a custom endpoint
+under its own provider id: duang never redirects a built-in provider's `baseUrl`, so a subscription
+token or official key cannot be sent to a third party by a setting left behind from another
+credential. An agent's own `fastagent/models.json` already works (#59). Where duang writes the
+endpoint definitions it adds is still open: the machine-level `~/.fastagent/models.json` is shared
+with the CLI, which the credential decision above avoids for keys.
 
 **Network (shipped).** *Automatic* is the default and needs no setup: model and sign-in requests
 follow the system proxy per request, including its bypass list and PAC rules, and pick up a VPN
@@ -122,8 +140,8 @@ and accounts are not settings until a shipped feature needs them.
 
 ## Paths through the product
 
-**Daily local use (current foundation).** Connect a model provider (planned in-app; today
-`fastagent login`), add an agent directory, choose a model, start work,
+**Daily local use (current foundation).** Connect a model provider (planned in-app, into duang's
+own credential file; today `fastagent login`), add an agent directory, choose a model, start work,
 switch away, return to the real outcome, continue. Stage 1 strengthens the return-to-work flow,
 loaded-definition visibility and relevant local change review, using real tasks before adding
 compact, fork or a complete file tree. The current client already covers the basic chat, history,
