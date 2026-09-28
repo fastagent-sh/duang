@@ -86,7 +86,6 @@ export default function Gallery() {
               <div className="space-y-2">
                 <PlanUsage plan={plan(18)} now={now} />
                 <PlanUsage plan={plan(88)} now={now} />
-                <PlanUsage plan={{ error: "api.anthropic.com answered 429: rate limited" }} now={now} />
                 <span className="block text-[11px] text-muted tabular-nums">{contextLabel(451_000, 1_000_000)}</span>
               </div>
             );

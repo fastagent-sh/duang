@@ -1,7 +1,7 @@
 /** The bar over a conversation: who it is with, where it runs, and what it costs. */
 import { ListBullets } from "@phosphor-icons/react";
 import type { ProviderUsage, UsageWindow } from "../preload/index.ts";
-import { contextLabel, errorLine, pace, paceLabel, resetLabel } from "./usage.ts";
+import { contextLabel, pace, paceLabel, resetLabel } from "./usage.ts";
 import { ago } from "./sessions.ts";
 import { Avatar, Badge, Button } from "./ui.tsx";
 import { location } from "./paths.ts";
@@ -9,7 +9,8 @@ import { location } from "./paths.ts";
 /**
  * What is left of the plan paying for this conversation: each window's share used, when it resets,
  * and for the week whether it is burning faster than the clock (▲) or slower (▼). Nothing for an API
- * key; a failed read says so instead of leaving old numbers up.
+ * key, and nothing for a failed read either: the numbers are a glance, not a status to act on, and a
+ * failure never leaves old ones up (the store replaces them).
  */
 export function PlanUsage({
   plan,
@@ -21,12 +22,6 @@ export function PlanUsage({
   /** Used and when it resets, beside a name that must stay readable; the pace stays in the tooltip. */
   brief?: boolean;
 }) {
-  if (plan?.error)
-    return (
-      <span className="pointer-events-auto shrink-0 text-[11px] text-muted" title={errorLine(plan.error)}>
-        usage unavailable
-      </span>
-    );
   const windows = plan?.data?.windows;
   if (!windows?.length) return null;
   const detail = [

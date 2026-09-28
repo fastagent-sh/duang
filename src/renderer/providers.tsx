@@ -248,11 +248,7 @@ export function ProvidersSection({
                 header={{
                   trailing: (
                     <>
-                      {/* Only what was read: here usage is a glance beside the connection, and a failed
-                          read is the header's to report, where the plan is paying for the work. */}
-                      {provider.stored === "oauth" && view.usage[provider.id]?.data && (
-                        <PlanUsage plan={view.usage[provider.id]} brief />
-                      )}
+                      {provider.stored === "oauth" && <PlanUsage plan={view.usage[provider.id]} brief />}
                       {landed?.id === provider.id && (
                         <Badge tone={landed.unchecked ? "warning" : "success"} className="enter">
                           {landed.unchecked ? "saved · key not checked" : "connected"}

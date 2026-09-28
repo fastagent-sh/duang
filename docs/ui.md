@@ -675,7 +675,7 @@ MANUAL PROXY                               (only while Manual is chosen)
   when there is none), because names alone blur together (OpenAI, OpenAI Codex, OpenRouter).
   *Model providers* lists what serves each one now, in the person's words (`Claude Pro/Max`,
   `API key`, `from GEMINI_API_KEY`); a subscription adds its plan windows, used and when each
-  resets, only once read (the pace stays in the tooltip; a failed read is the header's to report).
+  resets, only once read (the pace stays in the tooltip; a failed read shows nothing, as in the header).
   Each row's actions are a `⋯` native menu (Reconnect…, Disconnect), and Disconnect is confirmed in
   the row itself, `ghost` Cancel beside `danger` Disconnect. An unreadable credential file replaces
   the rows with its error, Reveal and Retry, never an empty group (§9).
