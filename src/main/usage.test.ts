@@ -61,4 +61,17 @@ test("a subscription is read with its own token; an API key has no windows; a re
   assert.equal((await providerUsage("anthropic", auth, t + 2 * MIN_GAP_MS)).windows, undefined, "an API key is not a plan");
   assert.equal((await providerUsage("mistral", auth, t)).windows, undefined, "a provider with no usage route");
   assert.equal(calls.length, 2, "neither asked the usage route");
+
+  // Another file's login is another answer, even inside the gap.
+  const other = join(dir, "other.json");
+  await writeFile(other, JSON.stringify({ anthropic: { type: "api_key", key: "sk-ant-api03-other" } }));
+  status = 200;
+  const t2 = t + 10 * MIN_GAP_MS;
+  assert.ok((await providerUsage("anthropic", auth, t2)).windows === undefined);
+  await writeFile(
+    other,
+    JSON.stringify({ anthropic: { type: "oauth", access: "sk-ant-oat01-other", refresh: "r", expires: Date.now() + 3_600_000 } }),
+  );
+  assert.deepEqual((await providerUsage("anthropic", other, t2 + 1)).windows, [{ label: "5h", percent: 4, windowSeconds: 5 * HOUR }]);
+  assert.equal(calls.at(-1)?.authorization, "Bearer sk-ant-oat01-other");
 });

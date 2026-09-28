@@ -69,7 +69,11 @@ if (!process.versions.electron) {
     await writeFile(join(data, "agents.json"), JSON.stringify([{ id: "live", name: "Live", dir }]));
     // The app's own data directory, named explicitly: this process is "Electron", not "duang".
     const real = join(app.getPath("appData"), "duang", "auth.json");
-    assert.ok(existsSync(real), `connect Codex and Anthropic in duang first; ${real} does not exist`);
+    assert.ok(
+      existsSync(real),
+      `${real} does not exist. Connect Codex and Anthropic in duang (Settings → Model providers), or ` +
+        `sign in with the CLI pointed at it: FASTAGENT_AUTH_PATH="${real}" fastagent login`,
+    );
     symlinkSync(real, join(data, "auth.json"));
 
     const loaded = new Promise((resolve) => {

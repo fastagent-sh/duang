@@ -130,16 +130,18 @@ async function read(provider: string, authPath: string): Promise<ProviderUsage> 
 }
 
 /**
- * One answer per provider per gap, shared by concurrent callers. A failure is kept for the gap too:
- * retrying a 429 sooner is how it stays a 429.
+ * One answer per login per gap, shared by concurrent callers: keyed by the file and the provider,
+ * since the file is what holds the login. A failure is kept for the gap too: retrying a 429 sooner
+ * is how it stays a 429.
  */
 const recent = new Map<string, { at: number; answer: Promise<ProviderUsage> }>();
 
 /** `authPath` is the credential file whose login pays for the conversation: duang's own. */
 export function providerUsage(provider: string, authPath: string, now = Date.now()): Promise<ProviderUsage> {
-  const hit = recent.get(provider);
+  const key = `${authPath}\0${provider}`;
+  const hit = recent.get(key);
   if (hit && now - hit.at < MIN_GAP_MS) return hit.answer;
   const answer = read(provider, authPath);
-  recent.set(provider, { at: now, answer });
+  recent.set(key, { at: now, answer });
   return answer;
 }
