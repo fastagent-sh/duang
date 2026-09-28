@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, dayLabel, duration, firstArg, foldHead, fromEntries, lines, previewOf, resumeRunning, toolText, type Item } from "./transcript.ts";
+import {
+  apply,
+  claim,
+  dayLabel,
+  duration,
+  firstArg,
+  foldHead,
+  fromEntries,
+  lines,
+  previewOf,
+  queueView,
+  resumeRunning,
+  toolText,
+  type Item,
+  type UserItem,
+} from "./transcript.ts";
 
 const event = (type: string, data: Record<string, unknown>) => ({ type, timestamp: 0, data }) as never;
 
@@ -88,6 +103,25 @@ test("only the active run's unanswered calls resume as running", () => {
   assert.equal(status("new"), "running");
 });
 
+test("the runtime's queue shows this window's own messages by what was typed, and others by their text", () => {
+  const typed: UserItem = { kind: "user", text: "/skill:demo", at: 1 };
+  const plain: UserItem = { kind: "user", text: "and also", at: 2 };
+  const unsent: UserItem = { kind: "user", text: "not listed yet", at: 3 };
+  // The runtime lists a slash command expanded, and one message came from elsewhere.
+  const view = queueView([typed, plain, unsent], ["Say demo.", "and also", "from elsewhere"]);
+  assert.deepEqual(
+    view.map(({ item, listed }) => [item.text, listed]),
+    [
+      ["/skill:demo", true],
+      ["and also", true],
+      ["from elsewhere", true],
+      ["not listed yet", false],
+    ],
+  );
+  assert.equal(claim([plain, typed], "and also"), plain, "the same text wins over the command fallback");
+  assert.equal(claim([plain], "somebody else's"), undefined);
+});
+
 test("a duration reads as pi writes it", () => {
   assert.equal(duration(3_240), "3.2s");
   assert.equal(duration(59_990), "60.0s");
@@ -159,7 +193,7 @@ test("history keeps the guaranteed kinds and skips the rest", () => {
     { id: "3", timestamp: 0, kind: "model_change", data: {} },
   ]);
   assert.deepEqual(items, [
-    { kind: "user", text: "hi", at: 0 },
+    { kind: "user", text: "hi", at: 0, entryId: "1" },
     { kind: "assistant", text: "yo", open: false, at: 0 },
   ]);
 });
@@ -202,7 +236,7 @@ test("history follows the active leaf instead of flattening sibling branches", (
     { id: "b", parentId: "root", timestamp: 2, kind: "assistant", data: { text: "active answer" } },
   ];
   assert.deepEqual(fromEntries(entries, "b"), [
-    { kind: "user", text: "question", at: 0 },
+    { kind: "user", text: "question", at: 0, entryId: "root" },
     { kind: "assistant", text: "active answer", open: false, at: 2 },
   ]);
   assert.throws(() => fromEntries(entries, "missing"), /Invalid session entry chain/);
