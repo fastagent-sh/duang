@@ -163,6 +163,17 @@ pre,
   animation: pop 160ms var(--ease-ui) both;
 }
 
+/* Said only once it lasts long enough to notice: a flow that answers within a frame would otherwise
+   flash a word nobody can read. A fade with no movement, so reduced motion keeps it too. */
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+.after-a-moment {
+  animation: appear 180ms var(--ease-ui) 500ms both;
+}
+
 /* The highlight has to be painted, not inherited: `currentColor` inside the gradient would resolve
    to the transparent text colour this needs, and the sweep would be invisible. */
 .shimmer {

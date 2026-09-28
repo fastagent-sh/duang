@@ -113,11 +113,13 @@ nothing connected it says so and offers **Connect a provider**; otherwise it end
 providers…**. Both open Settings. Returning from a successful connection reopens the picker without
 choosing a model for the person.
 
-**Choosing.** Connecting is a dialog, so Escape cancels it like the model picker. It lists providers
-first, by pi's names and filterable, then how to connect (subscription or API key) when the provider
-offers both, each by FastAgent's own label (`Anthropic (Claude Pro/Max)`, `Anthropic API key`); one
-way goes straight into its flow. A provider already connected says how,
-and connecting it the other way says first that it will replace that credential.
+**Choosing.** Connecting happens in place, in the provider's own row of Settings; there is no
+dialog. Providers not yet connected are listed by pi's names, common ones first, the rest behind
+*More providers*, all searchable (Escape in a non-empty search clears it before it leaves
+Settings). Opening a row shows how to connect it (subscription or API key) side by side, even when
+there is only one way, so nothing starts on a click that only meant to look. A connected provider
+opens the same way from its row's menu (*Reconnect…*), saying first that connecting replaces the
+credential it holds. Arriving from the model picker scrolls to the providers to add.
 
 **Connecting.** The flow is driven by FastAgent's `login`
 ([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) and rendered by the kind
@@ -125,10 +127,13 @@ of step it asks for, never by per-provider screens: a browser sign-in opens the 
 offers *Open again* and *Copy link*, with a folded field for pasting a code or redirect URL when
 the browser is on another device (the field disappears if the browser callback wins); a device code
 is shown large with *Copy* and a link to the verification page, counting down if it expires; a key
-is a masked field that is cleared once submitted and never stored in drafts; a choice is a list.
+is shown as typed, stays in its field while it is checked (selected for fixing if refused) and is
+never stored in drafts; a choice is a list.
 A key is verified once: a rejected key (HTTP 401) is asked for again with the provider's reason; a
-key that could not be verified is saved with that warning. Cancel, Escape or closing the window
-ends the flow and writes nothing, with no error shown. Any other failure (port in use, token
+key that could not be verified is saved with that warning. There is no separate Cancel: collapsing
+the row by its header, opening another provider (one row is open at a time, and none is ever
+locked), leaving Settings (Escape) or closing the window ends the flow and writes nothing, with no
+error shown. Any other failure (port in use, token
 exchange, network) shows the original message with *Try again* and *Back*.
 
 **An unreadable file.** A missing `auth.json` is nothing connected yet. One that cannot be read or
@@ -136,7 +141,13 @@ parsed is shown with its original error and path: in the providers list with Rev
 the model picker with Retry. It is never shown as "nothing connected", and connecting or
 disconnecting refuses to write over it (FastAgent's store will not overwrite a corrupt file).
 
-**Disconnecting** removes the provider's credential from duang's file after a confirmation. It
+**Connected.** Success closes the row, and the provider appears in the connected list with a brief
+`connected` mark (or `saved · key not checked` when the key could not be verified). A subscription
+row there shows its plan windows once they are read and nothing when they are not. If Settings was
+opened from the picker, the picker comes back.
+
+**Disconnecting** removes the provider's credential from duang's file after a confirmation, asked
+in the row itself. It
 never reaches the CLI's or pi's stores. If an environment variable also supplies the provider, the
 confirmation names it and says requests continue with it; otherwise it says conversations using the
 provider fail on their next request with the provider's own error.

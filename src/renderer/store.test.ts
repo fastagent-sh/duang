@@ -1117,6 +1117,34 @@ test("cancelling a sign-in closes it with nothing to say; any other end keeps it
   store.dispose();
 });
 
+test("starting another sign-in ends the running one first, since main runs one at a time", async () => {
+  const { api, store, step } = harness();
+  const openai: ProviderRow = { id: "openai", name: "OpenAI", ways: [{ method: "api_key", label: "OpenAI API key", subscription: false }] };
+  const xai: ProviderRow = { id: "xai", name: "xAI", ways: [{ method: "api_key", label: "xAI API key", subscription: false }] };
+  const first = deferred<LoginOutcome>();
+  const started: string[] = [];
+  let busy = false;
+  api.login = async (provider) => {
+    // Main's rule: a login that starts before the last one has ended is refused.
+    if (busy) return { ok: false, error: "Another sign-in is in progress." };
+    busy = true;
+    started.push(provider);
+    if (provider === "openai") return first.promise.finally(() => (busy = false));
+    return new Promise(() => {});
+  };
+  // Cancelling takes a moment to end in main, as closing a callback server does.
+  api.cancelLogin = async () => void setTimeout(() => first.resolve({ ok: false, cancelled: true }), 10);
+  const running = store.connect(openai, openai.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Key" } });
+  void store.connect(xai, xai.ways[0]!);
+  await running;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(started, ["openai", "xai"]);
+  assert.equal(store.getSnapshot().signIn?.provider, xai, "the new sign-in is the one on screen");
+  assert.equal(store.getSnapshot().signIn?.outcome, undefined, "and it is running, not refused");
+  store.dispose();
+});
+
 test("a blank answer is sent when the flow asks for one, and a blank key is not", async () => {
   const { api, store, step } = harness();
   const copilot: ProviderRow = {

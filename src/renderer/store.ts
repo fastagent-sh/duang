@@ -28,6 +28,12 @@ export interface SignIn {
   device?: Shown<"device_code">;
   info?: Shown<"info">;
   progress?: string;
+  /**
+   * Answers sent to a key prompt so far. A key prompt that comes back after one means the provider
+   * refused the key; no prompt after one means it is being checked. The flow says both only in words
+   * meant for a terminal, so the dialog tells them apart by this instead.
+   */
+  keyAnswers: number;
   outcome?: Exclude<LoginOutcome, { cancelled: true }>;
 }
 
@@ -572,6 +578,8 @@ export function createStore(api: DuangApi) {
     else if (step.type === "progress") next.progress = step.message;
     publish({ signIn: next });
   });
+  /** The sign-in main is running for this window, until main says it has ended. */
+  let login: Promise<LoginOutcome> | undefined;
   async function loadProviders() {
     try {
       publish({ providers: await api.listProviders(), providersError: undefined });
@@ -697,17 +705,25 @@ export function createStore(api: DuangApi) {
     checkConnection,
     loadProviders,
     /**
-     * Runs one sign-in to its end. Cancelling closes the dialog with nothing written; success re-reads
-     * the providers, whose models the picker then lists; any other end stays on screen with its reason.
+     * Runs one sign-in to its end. Cancelling closes it with nothing written; success re-reads the
+     * providers, whose models the picker then lists; any other end stays on screen with its reason.
+     * Starting another replaces the one running: main runs one at a time and ends a cancelled flow
+     * only once its callback server has closed, so this waits for that before starting.
      */
     async connect(provider: ProviderRow, way: ProviderRow["ways"][number]) {
-      if (view.signIn && !view.signIn.outcome) throw new Error("A sign-in is already on screen");
-      publish({ signIn: { provider, way } });
+      while (login) {
+        void api.cancelLogin();
+        await Promise.allSettled([login]);
+      }
+      publish({ signIn: { provider, way, keyAnswers: 0 } });
+      const mine = (login = api.login(provider.id, way.method));
       let outcome: LoginOutcome;
       try {
-        outcome = await api.login(provider.id, way.method);
+        outcome = await mine;
       } catch (error) {
         outcome = { ok: false, error: message(error) };
+      } finally {
+        if (login === mine) login = undefined;
       }
       if (view.signIn?.provider !== provider || view.signIn.way !== way) return;
       if (!outcome.ok && outcome.cancelled) return publish({ signIn: undefined });
@@ -723,7 +739,8 @@ export function createStore(api: DuangApi) {
     async answerSignIn(value: string) {
       const prompt = view.signIn?.prompt;
       if (!prompt || (prompt.prompt.type === "secret" && !value)) return;
-      publish({ signIn: { ...view.signIn!, prompt: undefined } });
+      const s = view.signIn!;
+      publish({ signIn: { ...s, prompt: undefined, keyAnswers: s.keyAnswers + (prompt.prompt.type === "secret" ? 1 : 0) } });
       await api.answerLogin(prompt.id, value);
     },
     /** Ends a running sign-in (it resolves as cancelled and the dialog closes), or closes a finished one. */

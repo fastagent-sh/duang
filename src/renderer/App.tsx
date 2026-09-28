@@ -162,6 +162,7 @@ export default function App() {
               store.requestPicker();
               setSettings(false);
             }}
+            onMenu={duang.menu}
             onClose={() => setSettings(false)}
           />
         ) : (

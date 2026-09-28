@@ -885,13 +885,15 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("!document.querySelector('#network-heading') && document.querySelector('textarea')", "Escape leaves Settings");
 
-      // Model providers: what duang's file holds, then a key connected through the dialog — rejected
-      // once, asked again, accepted — and disconnected. Everything lands in duang's file only.
+      // Model providers: what duang's file holds, then a key connected in its row (rejected once,
+      // fixed in place, accepted) and disconnected. Everything lands in duang's file only.
       const escape = () => {
         win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
         win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       };
-      const providersListed = "document.querySelector('#providers-heading') && document.body.innerText.includes('Connect a provider…')";
+      const providersListed = "document.querySelector('#providers-heading') && document.querySelector('#providers-add-heading')";
+      const connectedRow = (id) => `document.querySelector('#providers-heading ~ div [data-provider="${id}"]')`;
+      const addRow = (id) => `document.querySelector('#providers-add-heading ~ div [data-provider="${id}"]')`;
       const openSettings = async () => {
         await click("Settings");
         await until(providersListed, "Settings lists the providers");
@@ -902,26 +904,48 @@ if (!process.versions.electron) {
         await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Manage providers…').click()`);
         await until(providersListed, "Manage providers… opens Settings");
       };
-      /** From Settings, the connect dialog's provider list — not a flow left over — then DeepSeek's key step. */
-      const pickDeepSeek = async () => {
-        await click("Connect a provider…");
-        await until("document.querySelector('dialog input[aria-label=\"Filter providers\"]')", "the connect dialog lists providers");
+      /** A closed row in the Add card, found by search, opened, and its API key way chosen. */
+      const pickKey = async (id, query) => {
         await evaluate(`(() => {
-          const input = document.querySelector('dialog input[aria-label="Filter providers"]');
-          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'deep');
+          const input = document.querySelector('input[aria-label="Filter providers"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(query)});
           input.dispatchEvent(new Event('input', { bubbles: true }));
         })()`);
-        await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.startsWith('DeepSeek')).click()`);
-        await until("document.querySelector('dialog input[type=password]')", "the key field");
+        await until(`${addRow(id)}?.querySelector('button[aria-expanded="false"]')`, `${id} is offered, closed: no flow left over`);
+        await evaluate(`${addRow(id)}.querySelector('button[aria-expanded]').click()`);
+        await until(`[...${addRow(id)}.querySelectorAll('button')].some((b) => b.textContent.startsWith('API key'))`, `${id}'s ways`);
+        await evaluate(`[...${addRow(id)}.querySelectorAll('button')].find((b) => b.textContent.startsWith('API key')).click()`);
+        await until(`${addRow(id)}?.querySelector('#provider-key:not(:disabled)')`, `${id}'s key field`);
       };
       const answer = async (value) => {
-        await until("document.querySelector('dialog input[type=password]')", "the key field");
+        await until("document.querySelector('#provider-key:not(:disabled)')", "the key field");
         await evaluate(`(() => {
-          const input = document.querySelector('dialog input[type=password]');
+          const input = document.querySelector('#provider-key');
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.form.requestSubmit();
         })()`);
+      };
+      const landed = async (what) => {
+        await until(`${connectedRow("deepseek")}?.innerText.includes('connected')`, what);
+        assert.equal(await evaluate("!!document.querySelector('#provider-key')"), false, "the row it came from closed");
+      };
+      /** The next native menu chooses `label`, through main's own handler: what a click on it would do. */
+      const chooseFromMenu = (label) => {
+        const build = Menu.buildFromTemplate;
+        Menu.buildFromTemplate = (template) => {
+          Menu.buildFromTemplate = build;
+          const item = template.find((entry) => entry.label === label);
+          assert.ok(item, `the menu offers ${label}`);
+          return { popup: () => item.click() };
+        };
+      };
+      const disconnectDeepSeek = async (what) => {
+        chooseFromMenu("Disconnect");
+        await evaluate(`${connectedRow("deepseek")}.querySelector('button[aria-label="Actions for DeepSeek"]').click()`);
+        await until(`document.querySelector('[role=alertdialog][aria-label="Disconnect DeepSeek"]')`, "Disconnect asks in the row");
+        await evaluate(`[...document.querySelectorAll('[role=alertdialog] button')].find((b) => b.textContent.trim() === 'Disconnect').click()`);
+        await until(`!${connectedRow("deepseek")}`, what);
       };
 
       await openSettings();
@@ -930,77 +954,66 @@ if (!process.versions.electron) {
 
       // A reload leaves nobody to answer the sign-in main is running: it must end with the page, or
       // every later connect in this window is refused as "Another sign-in is in progress".
-      await pickDeepSeek();
+      await pickKey("deepseek", "deep");
       const reloadedForSignIn = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       win.webContents.reload();
       await reloadedForSignIn;
       await until("!!document.querySelector('textarea')", "the reloaded window");
       await openSettings();
-      await pickDeepSeek();
-      // ⌘N reaches the window through the dialog and leaves Settings: the sign-in must end with it,
-      // so the next dialog lists providers instead of showing a flow nobody could see.
+      await pickKey("deepseek", "deep");
+      // ⌘N leaves Settings: the sign-in must end with it, so the next visit offers the row closed
+      // instead of a flow nobody could see.
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
       await until("!document.querySelector('#providers-heading')", "⌘N leaves Settings");
       await openSettings();
-      await pickDeepSeek();
+      await pickKey("deepseek", "deep");
+      // Straight to another row while one runs: it switches, ending the first, and never locks the
+      // page. (The race with main's one-at-a-time rule is the store's test: a cancelled key prompt
+      // ends here long before the next way can be chosen.)
+      await pickKey("xai", "xai");
+      assert.equal(
+        await evaluate(`[...document.querySelectorAll('#provider-key')].map((input) => input.closest('[data-provider]').dataset.provider).join()`),
+        "xai",
+        "one sign-in on screen: the first row closed",
+      );
+      await pickKey("deepseek", "deep");
 
       await answer("sk-bad");
       await until(
-        "document.querySelector('dialog input[type=password]') && document.querySelector('dialog').innerText.includes('Authentication Fails')",
+        `${addRow("deepseek")}?.innerText.includes("didn't accept this key") && ${addRow("deepseek")}.textContent.includes('Authentication Fails') && document.querySelector('#provider-key:not(:disabled)')`,
         "a rejected key is asked for again, with the provider's reason",
       );
+      assert.equal(await evaluate("document.querySelector('#provider-key').value"), "sk-bad", "kept, to be fixed in place");
       await answer("sk-good");
-      await until("document.querySelector('dialog')?.innerText.includes('Connected DeepSeek API key')", "the checked key is connected");
+      await landed("the checked key is connected, and listed on Settings: this visit did not start at the picker");
       assert.deepEqual(deepseekKeys, ["Bearer sk-bad", "Bearer sk-good"], "each key was checked once, with the provider itself");
       let saved = JSON.parse(await readFile(selectedAuth, "utf8"));
       assert.deepEqual(saved.deepseek, { type: "api_key", key: "sk-good" }, "written to duang's own file");
       assert.equal(JSON.parse(await readFile(GLOBAL_AUTH_PATH, "utf8")).deepseek, undefined, "never to the CLI's");
-      await click("Done");
-      await until(
-        "!document.querySelector('dialog') && [...document.querySelectorAll('#providers-heading ~ div div')].some((row) => row.innerText.startsWith('DeepSeek'))",
-        "the connected provider is listed, on Settings: this visit did not start at the picker",
-      );
-      await evaluate("(window.confirm = () => true, true)");
-      await evaluate(`[...document.querySelectorAll('#providers-heading ~ div > div')].find((row) => row.innerText.startsWith('DeepSeek')).querySelector('button:last-child').click()`);
-      await until(
-        "![...document.querySelectorAll('#providers-heading ~ div > div')].some((row) => row.innerText.startsWith('DeepSeek'))",
-        "a disconnected provider leaves the list",
-      );
+      await disconnectDeepSeek("a disconnected provider leaves the list");
       saved = JSON.parse(await readFile(selectedAuth, "utf8"));
       assert.equal(saved.deepseek, undefined);
       assert.ok(saved.anthropic && saved.openai, "disconnecting one provider keeps the others");
       escape();
       await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
 
-      // Reached from the picker and left another way (Escape): opening Settings afterwards is plain —
-      // no dialog of its own accord, and no trip back to the picker after connecting.
+      // Reached from the picker and left another way (Escape): opening Settings afterwards is plain,
+      // with no trip back to the picker after connecting.
       await fromPicker();
       escape();
       await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
       await openSettings();
-      assert.equal(await evaluate("!!document.querySelector('dialog')"), false, "no dialog of its own accord");
-      await pickDeepSeek();
+      await pickKey("deepseek", "deep");
       await answer("sk-good");
-      await until("document.querySelector('dialog')?.innerText.includes('Connected DeepSeek API key')", "connected again");
-      await click("Done");
-      await until(
-        "!document.querySelector('dialog') && [...document.querySelectorAll('#providers-heading ~ div div')].some((row) => row.innerText.startsWith('DeepSeek'))",
-        "a visit that did not start at the picker stays on Settings",
-      );
-      await evaluate(`[...document.querySelectorAll('#providers-heading ~ div > div')].find((row) => row.innerText.startsWith('DeepSeek')).querySelector('button:last-child').click()`);
-      await until(
-        "![...document.querySelectorAll('#providers-heading ~ div > div')].some((row) => row.innerText.startsWith('DeepSeek'))",
-        "disconnected again",
-      );
+      await landed("a visit that did not start at the picker stays on Settings");
+      await disconnectDeepSeek("disconnected again");
       escape();
       await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
 
       // Connected from the picker: back to the picker, with the new provider's models in it.
       await fromPicker();
-      await pickDeepSeek();
+      await pickKey("deepseek", "deep");
       await answer("sk-good");
-      await until("document.querySelector('dialog')?.innerText.includes('Connected DeepSeek API key')", "connected from the picker");
-      await click("Done");
       await until(
         "!document.querySelector('#providers-heading') && document.querySelector('dialog[aria-label=\"Choose a model\"]')?.innerText.includes('deepseek/')",
         "a connection started at the picker returns to it, listing the new models",

@@ -9,10 +9,10 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
-import type { Network, Route } from "../preload/index.ts";
+import type { DuangApi, Network, Route } from "../preload/index.ts";
 import type { Connection, Store, View } from "./store.ts";
 import { Button } from "./ui.tsx";
-import { ProvidersGroup } from "./providers.tsx";
+import { ProvidersSection } from "./providers.tsx";
 import { KINDS, manualFields, manualUrl, type Scheme } from "./network.ts";
 
 const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
@@ -26,12 +26,14 @@ export function Settings({
   store,
   connectOnOpen,
   onConnected,
+  onMenu,
   onClose,
 }: {
   view: View;
   store: Store;
   connectOnOpen?: boolean;
   onConnected: () => void;
+  onMenu: DuangApi["menu"];
   onClose: () => void;
 }) {
   const saved = view.settings;
@@ -92,7 +94,7 @@ export function Settings({
         </div>
 
         <div className="space-y-6">
-          <ProvidersGroup view={view} store={store} connectOnOpen={connectOnOpen} onConnected={onConnected} />
+          <ProvidersSection view={view} store={store} onMenu={onMenu} focusAdd={connectOnOpen} onConnected={onConnected} />
           {view.settingsError ? (
             <div role="alert" className="space-y-3">
               <p className="text-danger whitespace-pre-wrap break-words">{view.settingsError}</p>

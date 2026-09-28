@@ -601,17 +601,40 @@ hashing the name across seven low-saturation hues. Identity is the avatar; prese
 around it (§9), never a change to the avatar itself, so an agent looks like the same agent whether
 it is busy or idle.
 
-## 12b. Settings (network shipped) and connecting a provider (planned)
+## 12b. Settings: model providers and network (shipped)
 
 Behaviour is in interaction.md: [Settings and Network](interaction.md#shipped-local-workbench)
 (shipped) and [providers](interaction.md#connecting-model-providers-stage-1-first-version-shipped) (first version shipped);
 this is how it should read. References: Zed's AI settings, which name subscriptions and API access
-as different things; OpenCode's connect-provider dialog, one dialog walking method, prompt, waiting
-and result; Codex's "Sign in with ChatGPT / API key" pair. Refused: Cherry Studio's dense
-per-provider forms, where a `Check` beside the key field read as a key check but tested a model.
+as different things; Codex's "Sign in with ChatGPT / API key" pair; macOS System Settings' rows that
+open in place. Refused: a connect dialog, which covered the list it was adding to; Cherry Studio's
+dense per-provider forms, where a `Check` beside the key field read as a key check but tested a model.
 
 ```
 Settings                                                        ×
+
+MODEL PROVIDERS
+╭─────────────────────────────────────────────────────────────────╮
+│ [A\] Anthropic        5h ▬ 18% ~ 03:22  7d ▬ 62% ~ Thu 00:22  ⋯ │
+│      Claude Pro/Max                                             │
+│   ───────────────────────────────────────────────────────────── │
+│ [G]  Google                                                   ⋯ │
+│      from GEMINI_API_KEY                                        │
+╰─────────────────────────────────────────────────────────────────╯
+
+ADD A PROVIDER
+╭─────────────────────────────────────────────────────────────────╮
+│ ⌕    Search providers                                           │
+│   ───────────────────────────────────────────────────────────── │
+│ [◎]  GitHub Copilot                                           ⌄ │
+│      Subscription · API key                                     │
+│      ╭──────────────────────────╮ ╭──────────────────────────╮  │
+│      │ ◍ Subscription           │ │ ⚿ API key                │  │
+│      │   Sign in with your plan │ │   Pay as you go          │  │
+│      ╰──────────────────────────╯ ╰──────────────────────────╯  │
+│   ───────────────────────────────────────────────────────────── │
+│ ⌄    More providers                                          33 │
+╰─────────────────────────────────────────────────────────────────╯
 
 NETWORK
 ╭─────────────────────────────────────────────────────────────────╮
@@ -647,15 +670,31 @@ MANUAL PROXY                               (only while Manual is chosen)
   header acts on the agent list, Settings is app-level and rarely used, and it is a place rather
   than an action, so it takes the selection mark while open. It is its own tab stop after the
   roster. Escape or the close control returns to the conversation.
-- Provider rows follow the Network group's inset rows: the provider's name over a muted line of its
-  sources (`Subscription`, `API key`, an environment variable's name), with `ghost` Reconnect (or
-  Connect, when only a variable serves it) and `danger` Disconnect. An unreadable credential file
-  replaces the rows with its error, Reveal and Retry, never an empty group (§9).
-- *Connect a provider* opens the connect dialog: the modal dialog surface (§6b), about 420 wide, one
-  `primary` action per step. It lists providers by pi's own names, common ones first and
-  filterable; a provider with more than one way to connect then lists those ways by FastAgent's
-  labels. Custom endpoints come after the first version. A device code is monospace at 22px with a Copy control; a browser step shows waiting
-  status with `Open again` and `Copy link`, and folds the paste-a-code field under it.
+- Providers are two inset cards in the Network group's style, each row led by the provider's logo
+  on a neutral 32px tile (LobeHub's SVGs, vendored with their license; initials on the same tile
+  when there is none), because names alone blur together (OpenAI, OpenAI Codex, OpenRouter).
+  *Model providers* lists what serves each one now, in the person's words (`Claude Pro/Max`,
+  `API key`, `from GEMINI_API_KEY`); a subscription adds its plan windows, used and when each
+  resets, only once read (the pace stays in the tooltip; a failed read is the header's to report).
+  Each row's actions are a `⋯` native menu (Reconnect…, Disconnect), and Disconnect is confirmed in
+  the row itself, `ghost` Cancel beside `danger` Disconnect. An unreadable credential file replaces
+  the rows with its error, Reveal and Retry, never an empty group (§9).
+- *Add a provider* starts with its search field and ends with *More providers* and the count: the
+  eight most people connect come first, the rest alphabetically behind it, all by pi's own names.
+  One row is open at a time, on `bg-hover`, and opening one closes the other. An open row shows
+  its ways as two equal cards, a Globe or Key tile with the plan or `API key` and one line of what
+  it means, never the provider's name again; a connected row opens the same way from its menu,
+  saying first that connecting replaces what is saved.
+- The sign-in draws inside the row, indented to the text, and the row's second line says what is
+  happening (`Signing in with Claude Pro/Max`, `Adding an API key`). States are one line with a
+  16px mark column so the detail aligns with the words: a pulsing accent dot for waiting, a danger
+  dot for a refusal or failure. The key field shows the key as typed, 28px high, placeholders in
+  sans and values in mono. A device code is monospace at 20px with a Copy control; a browser step
+  shows waiting status with `Open again` and `Copy link`, and folds the paste-a-code field under
+  it. *Connecting to {provider}…* between steps appears only after half a second, so a step that
+  follows within a frame does not flash it. There is no Cancel: the row's header closes it.
+- Success closes the row and marks the provider in the list above with a `success` badge
+  (`connected`, 4 s) or a `warning` one (`saved · key not checked`, 8 s), scrolled into view.
 - Reasoning effort is a `ghost` chip beside the model chip, with the same popover list.
 
 ## 13. Shipped Week 1 visual pass
