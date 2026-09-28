@@ -1116,3 +1116,24 @@ test("cancelling a sign-in closes it with nothing to say; any other end keeps it
   assert.equal(store.getSnapshot().providers, undefined, "never shown as nothing connected");
   store.dispose();
 });
+
+test("a blank answer is sent when the flow asks for one, and a blank key is not", async () => {
+  const { api, store, step } = harness();
+  const copilot: ProviderRow = {
+    id: "github-copilot",
+    name: "GitHub Copilot",
+    ways: [{ method: "oauth", label: "GitHub Copilot", subscription: true }],
+  };
+  const answers: [string, string][] = [];
+  api.answerLogin = async (id, value) => void answers.push([id, value]);
+  api.login = () => new Promise(() => {});
+  void store.connect(copilot, copilot.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "text", message: "GitHub Enterprise URL/domain (blank for github.com)" } });
+  await store.answerSignIn("");
+  assert.deepEqual(answers, [["1", ""]], "blank means github.com");
+  step({ type: "prompt", id: "2", prompt: { type: "secret", message: "Key" } });
+  await store.answerSignIn("");
+  assert.deepEqual(answers, [["1", ""]], "an empty key is not an answer");
+  assert.equal(store.getSnapshot().signIn?.prompt?.id, "2", "the key field stays");
+  store.dispose();
+});

@@ -899,7 +899,29 @@ if (!process.versions.electron) {
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'deep');
         input.dispatchEvent(new Event('input', { bubbles: true }));
       })()`);
+      const pickDeepSeek = async () => {
+        await click("Connect a provider…");
+        await until("document.querySelector('dialog[aria-label=\"Connect a provider\"]')", "the connect dialog opens");
+        await evaluate(`(() => {
+          const input = document.querySelector('dialog input[aria-label="Filter providers"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'deep');
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        })()`);
+        await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.startsWith('DeepSeek')).click()`);
+        await until("document.querySelector('dialog input[type=password]')", "the key field");
+      };
       await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.startsWith('DeepSeek')).click()`);
+      await until("document.querySelector('dialog input[type=password]')", "the key field");
+      // A reload leaves nobody to answer the sign-in main is running: it must end with the page, or
+      // every later connect in this window is refused as "Another sign-in is in progress".
+      const reloadedForSignIn = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      win.webContents.reload();
+      await reloadedForSignIn;
+      await until("!!document.querySelector('textarea')", "the reloaded window");
+      await click("Settings");
+      await until("document.querySelector('#providers-heading') && document.body.innerText.includes('Connect a provider')", "Settings after the reload");
+      await pickDeepSeek();
+      assert.ok(!(await evaluate("document.querySelector('dialog').innerText.includes('Another sign-in')")), "the reload ended the old sign-in");
       const answer = async (value) => {
         await until("document.querySelector('dialog input[type=password]')", "the key field");
         await evaluate(`(() => {

@@ -1,6 +1,6 @@
 /**
  * Settings → Model providers: what serves each provider now, and a dialog that connects one into
- * duang's own credential file (docs/interaction.md, "Planned: connecting model providers").
+ * duang's own credential file (docs/interaction.md, "Connecting model providers").
  *
  * The dialog is drawn by what the sign-in asks for — a browser, a device code, a key, a choice — never
  * by per-provider screens, and every name in it is pi's or FastAgent's own.
@@ -387,8 +387,8 @@ function Question({
   store: Store;
 }) {
   const [value, setValue] = useState("");
+  // The store refuses a blank key; a blank answer to anything else is sent as the flow asked.
   const submit = () => {
-    if (!value.trim()) return;
     void store.answerSignIn(value.trim());
     setValue("");
   };

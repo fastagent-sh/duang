@@ -19,7 +19,7 @@ import {
 } from "./agents.ts";
 import { authPath, modelsFor } from "./credentials.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
-import { providerUsage } from "./usage.ts";
+import { forgetUsage, providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
@@ -108,12 +108,14 @@ function createWindow(): BrowserWindow {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => event.preventDefault());
   const senderId = win.webContents.id;
-  win.webContents.on("destroyed", () => {
+  // Closing or reloading the window (⌘R, a renderer crash) leaves nobody to answer its sign-in, so it
+  // ends, which also closes the provider's callback server; the webContents id survives a reload.
+  const release = () => {
     stopWindowStreams(senderId);
-    // Closing the window ends its sign-in, which also closes the provider's callback server.
     if (signIn?.senderId === senderId) signIn.flow.cancel();
-  });
-  win.webContents.on("did-start-loading", () => stopWindowStreams(senderId));
+  };
+  win.webContents.on("destroyed", release);
+  win.webContents.on("did-start-loading", release);
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
   return win;
@@ -240,9 +242,10 @@ function register(): void {
   ipcMain.handle("providers:reveal", () =>
     existsSync(authPath) ? shell.showItemInFolder(authPath) : shell.openPath(dirname(authPath)),
   );
-  ipcMain.handle("providers:disconnect", (_e, provider: string) => {
+  ipcMain.handle("providers:disconnect", async (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
-    return disconnect(authPath, provider);
+    await disconnect(authPath, provider);
+    forgetUsage(provider, authPath);
   });
   ipcMain.handle("providers:login", async (e, provider: string, method: LoginMethod): Promise<LoginOutcome> => {
     if (typeof provider !== "string" || (method !== "oauth" && method !== "api_key"))
@@ -260,7 +263,9 @@ function register(): void {
     });
     signIn = { senderId: e.sender.id, flow };
     try {
-      return await flow.result;
+      const outcome = await flow.result;
+      if (outcome.ok) forgetUsage(provider, authPath);
+      return outcome;
     } finally {
       signIn = undefined;
     }

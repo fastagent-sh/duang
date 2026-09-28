@@ -667,7 +667,7 @@ export function createStore(api: DuangApi) {
     open,
     /**
      * Read on every opening of the picker, for the open agent: its own `models.json` is part of the
-     * list, and a `fastagent login` while duang runs needs no restart.
+     * list, and a provider connected or disconnected in Settings shows on the next opening.
      */
     async loadModels() {
       const id = view.agentId;
@@ -715,10 +715,14 @@ export function createStore(api: DuangApi) {
       publish({ signIn: { ...shown, outcome } });
       if (outcome.ok) await loadProviders();
     },
-    /** The answer leaves the renderer here, once; the prompt, and a typed secret with it, is cleared. */
+    /**
+     * The answer leaves the renderer here, once; the prompt, and a typed secret with it, is cleared.
+     * A blank answer is an answer: GitHub Copilot's "blank for github.com", Bedrock's "press Enter to
+     * continue". Only a key cannot be blank.
+     */
     async answerSignIn(value: string) {
       const prompt = view.signIn?.prompt;
-      if (!prompt) return;
+      if (!prompt || (prompt.prompt.type === "secret" && !value)) return;
       publish({ signIn: { ...view.signIn!, prompt: undefined } });
       await api.answerLogin(prompt.id, value);
     },

@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 const dir = await mkdtemp(join(tmpdir(), "duang-usage-"));
 const auth = join(dir, "auth.json");
-const { MIN_GAP_MS, parseAnthropic, parseCodex, providerUsage } = await import("./usage.ts");
+const { MIN_GAP_MS, forgetUsage, parseAnthropic, parseCodex, providerUsage } = await import("./usage.ts");
 
 const HOUR = 3600;
 
@@ -74,4 +74,14 @@ test("a subscription is read with its own token; an API key has no windows; a re
   );
   assert.deepEqual((await providerUsage("anthropic", other, t2 + 1)).windows, [{ label: "5h", percent: 4, windowSeconds: 5 * HOUR }]);
   assert.equal(calls.at(-1)?.authorization, "Bearer sk-ant-oat01-other");
+
+  // Reconnected inside the gap (an API key replaced by a subscription): the new login is read.
+  await writeFile(
+    auth,
+    JSON.stringify({ anthropic: { type: "oauth", access: "sk-ant-oat01-new", refresh: "r", expires: Date.now() + 3_600_000 } }),
+  );
+  assert.equal((await providerUsage("anthropic", auth, t2 + 2)).windows, undefined, "still the key's answer until told");
+  forgetUsage("anthropic", auth);
+  assert.equal((await providerUsage("anthropic", auth, t2 + 3)).windows?.length, 1);
+  assert.equal(calls.at(-1)?.authorization, "Bearer sk-ant-oat01-new");
 });

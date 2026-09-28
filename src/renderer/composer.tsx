@@ -197,7 +197,7 @@ export function Composer({
   useEffect(() => {
     if (store.takePickerRequest()) setPicking(true);
   }, [store]);
-  // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
+  // Every opening rereads the credential file, so a provider connected in Settings shows up.
   // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
     if (picking) void store.loadModels();
