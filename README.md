@@ -148,10 +148,12 @@ user data (`~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` o
 `fastagent` CLI's (`~/.fastagent/.secrets/auth.json`), not a project's `.secrets/auth.json`, not
 pi's, and `FASTAGENT_AUTH_PATH` does not redirect it. Copying a login between files would put one
 OAuth grant in two places, and whichever refreshes first invalidates the other. SDK-supported
-environment credentials still apply when a provider is absent from the file. Until providers can be
-connected in duang ([#84](https://github.com/fastagent-sh/duang/issues/84)), sign in once with the
-CLI pointed at this file: `FASTAGENT_AUTH_PATH="$HOME/Library/Application Support/duang/auth.json"
-fastagent login`.
+environment credentials still apply when a provider is absent from the file.
+
+Providers are connected in duang: Settings → Model providers, or **Connect a provider** in an empty
+model picker. Choose the provider, then a subscription sign-in (in the system browser) or an API key
+(checked once with the provider before it is saved). Disconnecting removes the provider from
+duang's file only.
 
 The picker lists what the open agent can run, including endpoints from its own
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`: every provider with a

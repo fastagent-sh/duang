@@ -59,13 +59,17 @@ to the developer's real duang file, never a copy, so a real refresh writes back 
 it runs with duang closed, because each process locks the path it was given. See the
 [credential policy](../README.md#run-it).
 
-**Planned: sign-in runs in main.** Main calls FastAgent's public login entry point
+**Sign-in runs in main** (`src/main/providers.ts`). Main calls FastAgent's public `login`
 ([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with that same `authPath`
 and relays each prompt and event to the renderer over typed IPC, one flow at a time; cancel and
 window destruction abort it, which also closes the provider's local callback server. A secret
 travels from renderer to main once, as an answer; no message from main to the renderer carries
 credential contents. Browser and verification URLs open with `shell.openExternal` after an
-`https:` (or loopback `http:`) check, never in an app window. Custom endpoints come after the first
+`https:` (or loopback `http:`) check, never in an app window, and the renderer can reopen only a URL
+the running flow reported. The provider list reads duang's file (`fastagentCredentialStore.list`),
+names and ways from FastAgent (`loginOptions`, pi's provider names), and each provider's ambient
+source (an environment variable) over an empty store, so a stored credential cannot hide the
+variable that keeps answering after a disconnect. Custom endpoints come after the first
 version; where their definitions are written is open (see [design](design.md)). Whatever the file,
 duang never writes an entry for a built-in provider id: a `baseUrl` override there would outlive the
 credential it was entered with and send a later subscription token or official key to the relay.

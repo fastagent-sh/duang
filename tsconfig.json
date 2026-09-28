@@ -9,7 +9,7 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "types": ["node", "electron"],
+    "types": ["node", "electron", "vite/client"],
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "electron.vite.config.ts"]

@@ -1,7 +1,7 @@
 /** The bar over a conversation: who it is with, where it runs, and what it costs. */
 import { ListBullets } from "@phosphor-icons/react";
 import type { ProviderUsage, UsageWindow } from "../preload/index.ts";
-import { contextLabel, errorLine, pace, paceLabel, resetLabel } from "./usage.ts";
+import { contextLabel, pace, paceLabel, resetLabel } from "./usage.ts";
 import { ago } from "./sessions.ts";
 import { Avatar, Badge, Button } from "./ui.tsx";
 import { location } from "./paths.ts";
@@ -9,15 +9,19 @@ import { location } from "./paths.ts";
 /**
  * What is left of the plan paying for this conversation: each window's share used, when it resets,
  * and for the week whether it is burning faster than the clock (▲) or slower (▼). Nothing for an API
- * key; a failed read says so instead of leaving old numbers up.
+ * key, and nothing for a failed read either: the numbers are a glance, not a status to act on, and a
+ * failure never leaves old ones up (the store replaces them).
  */
-export function PlanUsage({ plan, now = Date.now() }: { plan?: { data?: ProviderUsage; error?: string }; now?: number }) {
-  if (plan?.error)
-    return (
-      <span className="pointer-events-auto shrink-0 text-[11px] text-muted" title={errorLine(plan.error)}>
-        usage unavailable
-      </span>
-    );
+export function PlanUsage({
+  plan,
+  now = Date.now(),
+  brief,
+}: {
+  plan?: { data?: ProviderUsage; error?: string };
+  now?: number;
+  /** Used and when it resets, beside a name that must stay readable; the pace stays in the tooltip. */
+  brief?: boolean;
+}) {
   const windows = plan?.data?.windows;
   if (!windows?.length) return null;
   const detail = [
@@ -30,13 +34,13 @@ export function PlanUsage({ plan, now = Date.now() }: { plan?: { data?: Provider
   return (
     <span className="pointer-events-auto flex shrink-0 items-center gap-3 text-[11px] text-muted tabular-nums" title={detail}>
       {windows.map((w) => (
-        <PlanWindow key={w.label} window={w} now={now} />
+        <PlanWindow key={w.label} window={w} now={now} brief={brief} />
       ))}
     </span>
   );
 }
 
-function PlanWindow({ window: w, now }: { window: UsageWindow; now: number }) {
+function PlanWindow({ window: w, now, brief }: { window: UsageWindow; now: number; brief?: boolean }) {
   const reset = resetLabel(w);
   const diff = pace(w, now);
   return (
@@ -45,11 +49,12 @@ function PlanWindow({ window: w, now }: { window: UsageWindow; now: number }) {
       <span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-stroke">
         <span className="block h-full rounded-full bg-muted" style={{ width: `${Math.min(100, w.percent)}%` }} />
       </span>
-      {w.percent.toFixed(0)}%
+      {/* Settings stacks plans in rows: a fixed width lines them up whatever the digits. */}
+      <span className={brief ? "min-w-[4ch] text-right" : undefined}>{w.percent.toFixed(0)}%</span>
       {/* A narrow header keeps the percentages; when and how fast move to the tooltip. Measured on
           the header, not the window, because the sidebar's width is the person's to drag. */}
       {reset && <span className="@max-[44rem]:hidden">~ {reset}</span>}
-      {diff !== undefined && (
+      {!brief && diff !== undefined && (
         <span className={`@max-[44rem]:hidden ${diff > 0 ? "text-danger" : "text-success"}`}>{paceLabel(diff)}</span>
       )}
     </span>

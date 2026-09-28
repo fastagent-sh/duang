@@ -136,6 +136,14 @@ async function read(provider: string, authPath: string): Promise<ProviderUsage> 
  */
 const recent = new Map<string, { at: number; answer: Promise<ProviderUsage> }>();
 
+/**
+ * A provider's login in that file changed (connected, replaced, disconnected): the next ask reads the
+ * new one instead of the old login's answer for the rest of the gap.
+ */
+export function forgetUsage(provider: string, authPath: string): void {
+  recent.delete(`${authPath}\0${provider}`);
+}
+
 /** `authPath` is the credential file whose login pays for the conversation: duang's own. */
 export function providerUsage(provider: string, authPath: string, now = Date.now()): Promise<ProviderUsage> {
   const key = `${authPath}\0${provider}`;

@@ -20,8 +20,11 @@ export default function App() {
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
-  // is not remembered across launches.
-  const [settings, setSettings] = useState(false);
+  // is not remembered across launches. Settings reached from the model picker carries that with it:
+  // its "Connect a provider" lands on the providers to add, and a connection made from there
+  // returns to the picker. It is part of the same state so that every way out of Settings drops it.
+  const [settings, setSettings] = useState<false | { fromPicker?: { connect: boolean } }>(false);
+  const openSettings = () => setSettings((open) => open || {});
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
   const [listOpen, setListOpen] = useState(false);
@@ -42,7 +45,7 @@ export default function App() {
     return store.dispose;
   }, [store]);
   // The App menu's Settings… (⌘,) opens the page; asking again while it is open keeps it there.
-  useEffect(() => duang.onOpenSettings(() => setSettings(true)), []);
+  useEffect(() => duang.onOpenSettings(openSettings), []);
   const newConversation = useCallback(() => {
     const opened = store.newConversation();
     const target = store.getSnapshot().conversation;
@@ -98,7 +101,13 @@ export default function App() {
   const remove = () => {
     if (confirm("Remove this agent from duang? The directory is not touched.")) void store.removeAgent();
   };
-  const composer = <Composer view={view} store={store} />;
+  const composer = (
+    <Composer
+      view={view}
+      store={store}
+      onProviders={(connect) => setSettings({ fromPicker: { connect } })}
+    />
+  );
   // States whose own panel already explains the setup problem and offers the fix. Repeating the
   // runtime's prose above them contradicts it: a plain project is told to run `fastagent init`
   // while duang is offering to scaffold it.
@@ -128,7 +137,7 @@ export default function App() {
         previews={view.previews}
         latest={(id) => rowsFor(id).find((row) => !row.fresh)}
         errors={view.sessionsError}
-        settingsOpen={settings}
+        settingsOpen={Boolean(settings)}
         onSelect={(id) => {
           // Any way into a conversation leaves Settings; the agent you were on comes back as it was.
           setSettings(false);
@@ -138,13 +147,24 @@ export default function App() {
           setSettings(false);
           void store.addAgent();
         }}
-        onSettings={() => setSettings(true)}
+        onSettings={openSettings}
         onRename={(id, name) => void store.renameAgent(id, name)}
         onMenu={duang.menu}
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
         {settings ? (
-          <Settings view={view} store={store} onClose={() => setSettings(false)} />
+          <Settings
+            view={view}
+            store={store}
+            connectOnOpen={settings.fromPicker?.connect}
+            onConnected={() => {
+              if (!settings.fromPicker) return;
+              store.requestPicker();
+              setSettings(false);
+            }}
+            onMenu={duang.menu}
+            onClose={() => setSettings(false)}
+          />
         ) : (
           <>
             {agent && (

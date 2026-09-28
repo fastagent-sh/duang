@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
-import type { DuangApi, OpenResult, SessionFrame } from "../preload/index.ts";
-import { createStore } from "./store.ts";
+import type { DuangApi, LoginOutcome, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
+import { createStore, keyStep } from "./store.ts";
 import { queueView } from "./transcript.ts";
 
 function deferred<T>() {
@@ -23,6 +23,7 @@ const empty = () => ({
 });
 function harness() {
   let listener!: (frame: SessionFrame) => void;
+  let stepListener!: (step: LoginStep) => void;
   const closed: string[] = [];
   const opens: string[] = [];
   const api: DuangApi = {
@@ -64,6 +65,17 @@ function harness() {
       listener = fn;
       return () => {};
     },
+    listProviders: async () => [],
+    revealProviders: async () => {},
+    disconnect: async () => {},
+    login: async () => ({ ok: true, verified: "n/a" }),
+    answerLogin: async () => {},
+    cancelLogin: async () => {},
+    openLoginUrl: async () => {},
+    onLoginStep: (fn) => {
+      stepListener = fn;
+      return () => {};
+    },
   };
   const store = createStore(api);
   const emit = (c: NonNullable<ReturnType<typeof store.getSnapshot>["conversation"]>, type: string, data = {}) => {
@@ -81,7 +93,8 @@ function harness() {
   ) => {
     listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, expected } });
   };
-  return { api, store, emit, end, closed, opens };
+  const step = (s: LoginStep) => stepListener(s);
+  return { api, store, emit, end, step, closed, opens };
 }
 
 test("first model selection unlocks a new conversation; configured models come from the runtime", async () => {
@@ -982,6 +995,11 @@ test("plan usage is kept per provider, and a failed read replaces the numbers wi
     { error: "api.anthropic.com answered 429: rate limited" },
     "a stale percentage must not stay on screen as current",
   );
+
+  api.providerUsage = async () => data;
+  await store.loadUsage("anthropic");
+  await store.disconnect("anthropic");
+  assert.equal(store.getSnapshot().usage.anthropic, undefined, "a disconnected plan's numbers go with it");
   store.dispose();
 });
 
@@ -1039,5 +1057,172 @@ test("a slow history read cannot replace a newer one", async () => {
   slow.resolve(reply("older"));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(store.getSnapshot().previews["b"]?.text, "newer");
+  store.dispose();
+});
+
+test("a sign-in shows what its flow asks, sends the answer once, and ends by its outcome", async () => {
+  const { api, store, step } = harness();
+  const anthropic: ProviderRow = {
+    id: "anthropic",
+    name: "Anthropic",
+    ways: [
+      { method: "oauth", label: "Anthropic (Claude Pro/Max)", subscription: true },
+      { method: "api_key", label: "Anthropic API key", subscription: false },
+    ],
+  };
+  const lists = [[anthropic], [{ ...anthropic, stored: "api_key" as const }]];
+  api.listProviders = async () => lists.shift()!;
+  await store.loadProviders();
+  const answers: [string, string][] = [];
+  api.answerLogin = async (id, value) => void answers.push([id, value]);
+  const done = deferred<LoginOutcome>();
+  api.login = () => done.promise;
+
+  const connecting = store.connect(anthropic, anthropic.ways[1]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Anthropic API key" } });
+  step({ type: "info", message: "Keys start with sk-ant-" });
+  assert.equal(store.getSnapshot().signIn?.prompt?.prompt.type, "secret");
+  await store.answerSignIn("sk-ant-typed");
+  assert.deepEqual(answers, [["1", "sk-ant-typed"]]);
+  assert.equal(store.getSnapshot().signIn?.prompt, undefined, "the field, and what was typed, is gone");
+  assert.equal(store.getSnapshot().signIn?.info?.message, "Keys start with sk-ant-");
+  done.resolve({ ok: true, verified: "ok" });
+  await connecting;
+  assert.deepEqual(store.getSnapshot().signIn?.outcome, { ok: true, verified: "ok" });
+  assert.equal(store.getSnapshot().providers?.[0]?.stored, "api_key", "the list is re-read after it lands");
+  step({ type: "info", message: "late" });
+  assert.equal(store.getSnapshot().signIn?.info?.message, "Keys start with sk-ant-", "a finished flow takes no more steps");
+  await store.closeSignIn();
+  assert.equal(store.getSnapshot().signIn, undefined);
+  store.dispose();
+});
+
+test("cancelling a sign-in closes it with nothing to say; any other end keeps its reason", async () => {
+  const { api, store, step } = harness();
+  const openai: ProviderRow = { id: "openai", name: "OpenAI", ways: [{ method: "api_key", label: "OpenAI API key", subscription: false }] };
+  const running = deferred<LoginOutcome>();
+  api.login = () => running.promise;
+  api.cancelLogin = async () => running.resolve({ ok: false, cancelled: true });
+  const first = store.connect(openai, openai.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Key" } });
+  await store.closeSignIn();
+  await first;
+  assert.equal(store.getSnapshot().signIn, undefined, "a decision, not a failure");
+
+  api.login = async () => ({ ok: false, error: "EADDRINUSE: port 1455" });
+  await store.connect(openai, openai.ways[0]!);
+  assert.deepEqual(store.getSnapshot().signIn?.outcome, { ok: false, error: "EADDRINUSE: port 1455" });
+
+  api.listProviders = async () => {
+    throw new Error("auth.json: corrupt auth file");
+  };
+  await store.loadProviders();
+  assert.equal(store.getSnapshot().providersError, "auth.json: corrupt auth file");
+  assert.equal(store.getSnapshot().providers, undefined, "never shown as nothing connected");
+  store.dispose();
+});
+
+test("starting another sign-in ends the running one first, since main runs one at a time", async () => {
+  const { api, store, step } = harness();
+  const openai: ProviderRow = { id: "openai", name: "OpenAI", ways: [{ method: "api_key", label: "OpenAI API key", subscription: false }] };
+  const xai: ProviderRow = { id: "xai", name: "xAI", ways: [{ method: "api_key", label: "xAI API key", subscription: false }] };
+  const first = deferred<LoginOutcome>();
+  const started: string[] = [];
+  let busy = false;
+  api.login = async (provider) => {
+    // Main's rule: a login that starts before the last one has ended is refused.
+    if (busy) return { ok: false, error: "Another sign-in is in progress." };
+    busy = true;
+    started.push(provider);
+    if (provider === "openai") return first.promise.finally(() => (busy = false));
+    return new Promise(() => {});
+  };
+  // Cancelling takes a moment to end in main, as closing a callback server does.
+  api.cancelLogin = async () => void setTimeout(() => first.resolve({ ok: false, cancelled: true }), 10);
+  const running = store.connect(openai, openai.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Key" } });
+  void store.connect(xai, xai.ways[0]!);
+  await running;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(started, ["openai", "xai"]);
+  assert.equal(store.getSnapshot().signIn?.provider, xai, "the new sign-in is the one on screen");
+  assert.equal(store.getSnapshot().signIn?.outcome, undefined, "and it is running, not refused");
+  store.dispose();
+});
+
+test("only a key question is a key step: what a flow asks after the key is its own question", async () => {
+  const { api, store, step } = harness();
+  const answers: [string, string][] = [];
+  api.answerLogin = async (id, value) => void answers.push([id, value]);
+  // Runs until cancelled, as main's does.
+  let end: (outcome: LoginOutcome) => void = () => {};
+  api.login = () => new Promise((resolve) => (end = resolve));
+  api.cancelLogin = async () => end({ ok: false, cancelled: true });
+  const shown = () => keyStep(store.getSnapshot().signIn!);
+  // Cloudflare: the key, then the account ID, which is not a refused key.
+  const cloudflare: ProviderRow = { id: "cloudflare-workers-ai", name: "Cloudflare Workers AI", ways: [{ method: "api_key", label: "Cloudflare API key", subscription: false }] };
+  void store.connect(cloudflare, cloudflare.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Cloudflare API key" } });
+  assert.equal(shown(), "ask");
+  await store.answerSignIn("cf-key");
+  assert.equal(shown(), "checking");
+  step({ type: "prompt", id: "2", prompt: { type: "text", message: "Enter Cloudflare account ID" } });
+  assert.equal(shown(), undefined, "a question of its own, not the key asked again");
+  await store.answerSignIn("account-1");
+  assert.deepEqual(answers, [["1", "cf-key"], ["2", "account-1"]], "the account ID is what was typed for it");
+  assert.equal(shown(), undefined, "waiting after the account ID is not checking a key");
+  await store.closeSignIn();
+
+  // Vertex: a refused key starts the flow over at its choice, which is a choice, not the key again.
+  const vertex: ProviderRow = { id: "google-vertex", name: "Google Vertex AI", ways: [{ method: "api_key", label: "Vertex AI", subscription: false }] };
+  const choice = { type: "select", message: "Auth method", options: [{ id: "api_key", label: "API key" }] } as const;
+  void store.connect(vertex, vertex.ways[0]!);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  step({ type: "prompt", id: "3", prompt: choice });
+  assert.equal(shown(), undefined);
+  await store.answerSignIn("api_key");
+  step({ type: "prompt", id: "4", prompt: { type: "secret", message: "Vertex API key" } });
+  assert.equal(shown(), "ask");
+  await store.answerSignIn("bad-key");
+  step({ type: "prompt", id: "5", prompt: choice });
+  assert.equal(shown(), undefined, "the choice again, not a key field that would send the key as its answer");
+  await store.answerSignIn("api_key");
+  step({ type: "prompt", id: "6", prompt: { type: "secret", message: "Vertex API key" } });
+  assert.equal(shown(), "refused", "the key asked again after one was sent");
+  store.dispose();
+});
+
+test("a blank answer is sent when the flow asks for one, and a blank key is not", async () => {
+  const { api, store, step } = harness();
+  const copilot: ProviderRow = {
+    id: "github-copilot",
+    name: "GitHub Copilot",
+    ways: [{ method: "oauth", label: "GitHub Copilot", subscription: true }],
+  };
+  const answers: [string, string][] = [];
+  api.answerLogin = async (id, value) => void answers.push([id, value]);
+  api.login = () => new Promise(() => {});
+  void store.connect(copilot, copilot.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "text", message: "GitHub Enterprise URL/domain (blank for github.com)" } });
+  await store.answerSignIn("");
+  assert.deepEqual(answers, [["1", ""]], "blank means github.com");
+  step({ type: "prompt", id: "2", prompt: { type: "secret", message: "Key" } });
+  await store.answerSignIn("");
+  assert.deepEqual(answers, [["1", ""]], "an empty key is not an answer");
+  assert.equal(store.getSnapshot().signIn?.prompt?.id, "2", "the key field stays");
+  store.dispose();
+});
+
+test("a link the browser will not open is said in the running sign-in", async () => {
+  const { api, store, step } = harness();
+  const anthropic: ProviderRow = { id: "anthropic", name: "Anthropic", ways: [{ method: "oauth", label: "Anthropic (Claude Pro/Max)", subscription: true }] };
+  api.login = () => new Promise(() => {});
+  api.openLoginUrl = async () => {
+    throw new Error("no application to open https");
+  };
+  void store.connect(anthropic, anthropic.ways[0]!);
+  step({ type: "auth_url", url: "https://claude.ai/oauth/authorize" });
+  await store.openLoginUrl("https://claude.ai/oauth/authorize");
+  assert.equal(store.getSnapshot().signIn?.info?.message, "The browser did not open: no application to open https");
   store.dispose();
 });

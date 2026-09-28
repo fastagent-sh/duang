@@ -9,9 +9,10 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
-import type { Network, Route } from "../preload/index.ts";
+import type { DuangApi, Network, Route } from "../preload/index.ts";
 import type { Connection, Store, View } from "./store.ts";
 import { Button } from "./ui.tsx";
+import { ProvidersSection } from "./providers.tsx";
 import { KINDS, manualFields, manualUrl, type Scheme } from "./network.ts";
 
 const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
@@ -20,7 +21,21 @@ const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("M
  * The store reads, saves and checks; this page holds only the form being filled in and what is wrong
  * with it.
  */
-export function Settings({ view, store, onClose }: { view: View; store: Store; onClose: () => void }) {
+export function Settings({
+  view,
+  store,
+  connectOnOpen,
+  onConnected,
+  onMenu,
+  onClose,
+}: {
+  view: View;
+  store: Store;
+  connectOnOpen?: boolean;
+  onConnected: () => void;
+  onMenu: DuangApi["menu"];
+  onClose: () => void;
+}) {
   const saved = view.settings;
   const [mode, setMode] = useState<Network["mode"]>("automatic");
   const [scheme, setScheme] = useState<Scheme>("http");
@@ -78,92 +93,95 @@ export function Settings({ view, store, onClose }: { view: View; store: Store; o
           <Button kind="ghost" size={28} onClick={onClose} aria-label="Close settings" title="Close (Esc)" icon={<X size={14} />} />
         </div>
 
-        {view.settingsError ? (
-          <div role="alert" className="space-y-3">
-            <p className="text-danger whitespace-pre-wrap break-words">{view.settingsError}</p>
-            <p className="text-muted text-[12px]">
-              Fix or remove the file, then retry. Until then the network follows the system proxy.
-            </p>
-            <div className="flex gap-2">
-              <Button onClick={() => void store.revealSettings()}>Reveal in Finder</Button>
-              <Button kind="ghost" onClick={() => void load()}>
-                Retry
-              </Button>
+        <div className="space-y-6">
+          <ProvidersSection view={view} store={store} onMenu={onMenu} focusAdd={connectOnOpen} onConnected={onConnected} />
+          {view.settingsError ? (
+            <div role="alert" className="space-y-3">
+              <p className="text-danger whitespace-pre-wrap break-words">{view.settingsError}</p>
+              <p className="text-muted text-[12px]">
+                Fix or remove the file, then retry. Until then the network follows the system proxy.
+              </p>
+              <div className="flex gap-2">
+                <Button onClick={() => void store.revealSettings()}>Reveal in Finder</Button>
+                <Button kind="ghost" onClick={() => void load()}>
+                  Retry
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : !saved ? (
-          <p role="status" className="text-muted">
-            Loading…
-          </p>
-        ) : (
-          <div className="space-y-6">
-            <Group
-              id="network-heading"
-              title="Network"
-            >
-              <RadioGroup label="Proxy">
-                <Option label="Automatic" checked={mode === "automatic"} onSelect={() => choose("automatic")}>
-                  {state("automatic") ?? `Follow ${MAC ? "macOS" : "system"} proxy settings, including a VPN switched on later`}
-                </Option>
-                <Option label="Manual" checked={mode === "manual"} onSelect={() => choose("manual")}>
-                  {state("manual") ?? savedManual ?? "Not set"}
-                </Option>
-                <Option label="Off" checked={mode === "off"} onSelect={() => choose("off")}>
-                  {state("off") ?? "Connect directly"}
-                </Option>
-              </RadioGroup>
-            </Group>
-
-            {mode === "manual" && (
-              <form
-                className="space-y-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveManual();
-                }}
+          ) : !saved ? (
+            <p role="status" className="text-muted">
+              Loading…
+            </p>
+          ) : (
+            <div className="space-y-6">
+              <Group
+                id="network-heading"
+                title="Network"
               >
-                <Group title="Manual proxy">
-                  <RadioGroup label="Proxy type">
-                    {KINDS.map((kind) => (
-                      <Option key={kind.scheme} label={kind.label} checked={scheme === kind.scheme} onSelect={() => setScheme(kind.scheme)} />
-                    ))}
-                  </RadioGroup>
-                </Group>
-                <Group>
-                  <Field label="Server" value={server} onChange={setServer} placeholder="127.0.0.1" />
-                  <Field label="Port" value={port} onChange={setPort} placeholder="7890" inputMode="numeric" />
-                </Group>
-                <div className="flex items-start gap-3 px-4">
-                  <p role="alert" className="flex-1 text-[12px] text-danger">
-                    {problem}
-                  </p>
-                  {/* A hidden submit keeps Enter working in either field; Button forces type="button". */}
-                  <button type="submit" hidden />
-                  <Button kind="primary" onClick={saveManual}>
-                    Use this proxy
-                  </Button>
-                </div>
-              </form>
-            )}
-            {saved.route.commandError && (
-              <p role="alert" className="px-4 text-danger text-[12px]">
-                {saved.route.commandError}
-              </p>
-            )}
-            {mode !== "manual" && problem && (
-              <p role="alert" className="px-4 text-danger text-[12px]">
-                {problem}
-              </p>
-            )}
-          </div>
-        )}
+                <RadioGroup label="Proxy">
+                  <Option label="Automatic" checked={mode === "automatic"} onSelect={() => choose("automatic")}>
+                    {state("automatic") ?? `Follow ${MAC ? "macOS" : "system"} proxy settings, including a VPN switched on later`}
+                  </Option>
+                  <Option label="Manual" checked={mode === "manual"} onSelect={() => choose("manual")}>
+                    {state("manual") ?? savedManual ?? "Not set"}
+                  </Option>
+                  <Option label="Off" checked={mode === "off"} onSelect={() => choose("off")}>
+                    {state("off") ?? "Connect directly"}
+                  </Option>
+                </RadioGroup>
+              </Group>
+
+              {mode === "manual" && (
+                <form
+                  className="space-y-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveManual();
+                  }}
+                >
+                  <Group title="Manual proxy">
+                    <RadioGroup label="Proxy type">
+                      {KINDS.map((kind) => (
+                        <Option key={kind.scheme} label={kind.label} checked={scheme === kind.scheme} onSelect={() => setScheme(kind.scheme)} />
+                      ))}
+                    </RadioGroup>
+                  </Group>
+                  <Group>
+                    <Field label="Server" value={server} onChange={setServer} placeholder="127.0.0.1" />
+                    <Field label="Port" value={port} onChange={setPort} placeholder="7890" inputMode="numeric" />
+                  </Group>
+                  <div className="flex items-start gap-3 px-4">
+                    <p role="alert" className="flex-1 text-[12px] text-danger">
+                      {problem}
+                    </p>
+                    {/* A hidden submit keeps Enter working in either field; Button forces type="button". */}
+                    <button type="submit" hidden />
+                    <Button kind="primary" onClick={saveManual}>
+                      Use this proxy
+                    </Button>
+                  </div>
+                </form>
+              )}
+              {saved.route.commandError && (
+                <p role="alert" className="px-4 text-danger text-[12px]">
+                  {saved.route.commandError}
+                </p>
+              )}
+              {mode !== "manual" && problem && (
+                <p role="alert" className="px-4 text-danger text-[12px]">
+                  {problem}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 /** A small-caps heading over an inset card. */
-function Group({ id, title, children }: { id?: string; title?: string; children: ReactNode }) {
+export function Group({ id, title, children }: { id?: string; title?: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="space-y-1.5">
       {title && (
@@ -177,7 +195,7 @@ function Group({ id, title, children }: { id?: string; title?: string; children:
 }
 
 /** Rows are divided by a hairline that starts where the text does, as in Telegram's lists. */
-const row =
+export const row =
   "relative before:absolute before:left-4 before:right-0 before:top-0 before:h-px before:bg-stroke first:before:hidden";
 
 /**

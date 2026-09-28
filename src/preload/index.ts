@@ -17,6 +17,8 @@ export type { ProviderUsage, UsageWindow } from "../main/usage.ts";
 export type { Network } from "../main/settings.ts";
 import type { Network } from "../main/settings.ts";
 export type { Route } from "../main/proxy.ts";
+export type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
+import type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
 import type { Route } from "../main/proxy.ts";
 import type { ProviderUsage } from "../main/usage.ts";
 
@@ -67,6 +69,27 @@ const api = {
   revealSettings: (): Promise<void> => ipcRenderer.invoke("settings:reveal"),
   /** One request over the model route: any HTTP status means it works; a rejection names the route. */
   testNetwork: (): Promise<{ status: number; ms: number; route: Route }> => ipcRenderer.invoke("network:test"),
+  /** What can be connected, and what serves each provider now. Rejects when duang's file is unreadable. */
+  listProviders: (): Promise<ProviderRow[]> => ipcRenderer.invoke("providers:list"),
+  /** Shows duang's credential file, or its folder before anything is connected. */
+  revealProviders: (): Promise<void> => ipcRenderer.invoke("providers:reveal"),
+  /** Removes the provider from duang's file only; an environment variable keeps serving it. */
+  disconnect: (provider: string): Promise<void> => ipcRenderer.invoke("providers:disconnect", provider),
+  /**
+   * Runs one sign-in to the end. Its questions and progress arrive through `onLoginStep`, and are
+   * answered with `answerLogin`. Cancelling resolves `{ ok: false, cancelled: true }`.
+   */
+  login: (provider: string, method: LoginMethod): Promise<LoginOutcome> =>
+    ipcRenderer.invoke("providers:login", provider, method),
+  answerLogin: (id: string, value: string): Promise<void> => ipcRenderer.invoke("providers:answer", id, value),
+  cancelLogin: (): Promise<void> => ipcRenderer.invoke("providers:cancel"),
+  /** Opens again, in the system browser, a URL the sign-in in progress reported. */
+  openLoginUrl: (url: string): Promise<void> => ipcRenderer.invoke("providers:open", url),
+  onLoginStep: (listener: (step: LoginStep) => void): (() => void) => {
+    const handler = (_e: unknown, step: LoginStep): void => listener(step);
+    ipcRenderer.on("providers:step", handler);
+    return () => void ipcRenderer.off("providers:step", handler);
+  },
   /** A subscription's plan windows for this provider; no `windows` when its login is not a subscription. */
   providerUsage: (provider: string): Promise<ProviderUsage> => ipcRenderer.invoke("usage:get", provider),
   /**
