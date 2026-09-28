@@ -608,12 +608,17 @@ export function createStore(api: DuangApi) {
       }
     },
     open,
-    /** Read on every opening of the picker: a `fastagent login` while duang runs needs no restart. */
+    /**
+     * Read on every opening of the picker, for the open agent: its own `models.json` is part of the
+     * list, and a `fastagent login` while duang runs needs no restart.
+     */
     async loadModels() {
+      const id = view.agentId;
       const request = ++modelsRequest;
       publish({ models: undefined, modelsError: undefined });
+      if (!id) return;
       try {
-        const models = await api.listModels();
+        const models = await api.listModels(id);
         if (request === modelsRequest) publish({ models });
       } catch (error) {
         if (request === modelsRequest) publish({ modelsError: message(error) });

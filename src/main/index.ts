@@ -16,7 +16,7 @@ import {
   workingAgents,
   type AgentRow,
 } from "./agents.ts";
-import { credentials } from "./credentials.ts";
+import { modelsFor } from "./credentials.ts";
 import { providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
@@ -176,9 +176,9 @@ function register(): void {
     if (typeof model !== "string") throw new Error("Model must be a string");
     if (session !== undefined) requireSession(session);
     const row = await requireAgent(id);
-    // The picker only offers configured models, so a miss here means the file changed underneath it.
-    if (!(await credentials()).specs.includes(model))
-      return refuse("model_unavailable", `${model} is not in the configured credential file — pick another.`);
+    // The picker offers this agent's runnable models, so a miss here means something changed underneath it.
+    if (!(await modelsFor(row.dir)).specs.includes(model))
+      return refuse("model_unavailable", `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
     if (result.ok) stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
     return result;
@@ -222,7 +222,7 @@ function register(): void {
     return pending;
   });
   ipcMain.handle("network:test", () => testConnection());
-  ipcMain.handle("models:list", credentials);
+  ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
     return providerUsage(provider);
@@ -313,8 +313,8 @@ function register(): void {
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
     // The agent's commands spawn during this run; they get the route as it is now.
     await syncCommandProxy();
-    // One credential file serves every runtime, so no conversation can name a model this agent
-    // cannot authenticate: the picker only ever offered what that file has.
+    // One credential file serves every runtime, and the picker only offered what this agent can
+    // authenticate through it.
     return withAgentRun(await requireAgent(id), ({ agent, control }) =>
       send(agent, control.sessions.get(session), text),
     );

@@ -150,7 +150,9 @@ store; point `FASTAGENT_AUTH_PATH` at either to use it. SDK-supported environmen
 apply when a provider is absent from the selected file. `FASTAGENT_SECRETS_DIR` does not redirect
 this file.
 
-The picker checks credential configuration without refreshing OAuth or testing the provider.
+The picker lists what the open agent can run through that file, including endpoints from its own
+`fastagent/models.json` and the machine's `~/.fastagent/models.json`. It checks credential
+configuration without refreshing OAuth or testing the provider.
 Reopening it or pressing Retry rereads the file, so external login changes need no app restart.
 Execution resolves the actual conversation's provider, including history that differs from the
 agent default; OAuth refresh and provider errors remain visible. OAuth refresh writes back to the

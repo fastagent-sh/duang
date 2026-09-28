@@ -176,9 +176,10 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   // An agent with no model cannot start: open the list rather than leave the person guessing.
   useEffect(() => setPicking(needsModel), [agentId, needsModel]);
   // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
+  // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
     if (picking) void store.loadModels();
-  }, [picking, store]);
+  }, [picking, agentId, store]);
 
   const query = completionQuery(value);
   const suggestions = query === undefined || dismissed ? [] : matches(view.commands, query);

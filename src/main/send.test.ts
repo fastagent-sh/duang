@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Agent } from "@fastagent-sh/fastagent/core";
+import { SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import type { Session, SessionResult } from "@fastagent-sh/fastagent/session";
 import { send } from "./send.ts";
 
@@ -25,7 +25,7 @@ test("send routes idle, live and both admission races without silently dropping 
     const agent = {
       async *invoke(_scope: unknown, { text }: { text: string }) {
         calls.push(`invoke:${text}`);
-        if (scenario === "busy") yield { type: "failed", code: "session_busy", details: "busy", retryable: true };
+        if (scenario === "busy") yield { type: "failed", code: SESSION_BUSY_CODE, details: "busy", retryable: true };
         else if (scenario === "failed") yield { type: "failed", details: "original error", retryable: false };
         else yield { type: "completed" };
       },
