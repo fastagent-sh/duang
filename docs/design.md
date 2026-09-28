@@ -102,8 +102,8 @@ source too, and cannot be removed from duang.
 `userData`: `~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
 `~/.config/duang/` on Linux). duang does not read the `fastagent` CLI's or pi's stores, and
 `FASTAGENT_AUTH_PATH` no longer points it elsewhere. Sharing a file, or copying a login between
-files, puts one OAuth grant in two places: a provider rotates the refresh token on every refresh, so
-one copy's refresh silently invalidates the other. So a login made in a terminal is made again in
+files, puts one OAuth grant in two places: some providers (Anthropic, OpenAI Codex) rotate the
+refresh token on every refresh, so one copy's refresh silently invalidates the other. So a login made in a terminal is made again in
 duang, as its own grant, and nothing duang connects, replaces or disconnects reaches the CLI. The
 file holds one credential per provider: an API key replaces a subscription login for the same
 provider, and the reverse, and duang says so before it happens.

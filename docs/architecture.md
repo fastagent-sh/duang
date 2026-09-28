@@ -55,7 +55,12 @@ no longer redirect it. Only one file is read: no fallback to the CLI's or pi's s
 OAuth grant in two files is invalidated by whichever refreshes first. Provider environment
 variables still apply when the file has no credential for a provider. The file is plain JSON
 (`0600`); OS-backed storage needs a pluggable credential store in FastAgent
-([fastagent#652](https://github.com/fastagent-sh/fastagent/issues/652)).
+([fastagent#652](https://github.com/fastagent-sh/fastagent/issues/652)). Tests follow the same
+rule, without an override: the smoke writes synthetic credentials into its isolated userData's
+`auth.json`, and decoys into the CLI's and pi's stores and a `FASTAGENT_AUTH_PATH` file, which must
+stay unread. The opt-in live check keeps its isolated userData but makes that `auth.json` a symlink
+to the developer's real duang file, never a copy, so a real refresh writes back to the one grant;
+it runs with duang closed, because each process locks the path it was given.
 
 **Planned: sign-in runs in main.** Main calls FastAgent's public login entry point
 ([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with that same `authPath`
@@ -184,7 +189,7 @@ work may already have happened. These are data-integrity constraints, not an ent
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
 | Model and channel credentials | each runtime's credential store or host secrets; planned for local agents: duang's own `userData/auth.json` | Never copy an OAuth login between stores or into a remote deployment. |
-| Machine model endpoints (planned) | machine-level FastAgent models file | Local to this machine; not part of a preset or deployment. |
+| Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a preset or deployment. |
 | App preferences (planned) | `userData/settings.json` | Network mode only; never credentials. |
 | Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |
 | Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |

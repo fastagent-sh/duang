@@ -131,6 +131,11 @@ key that could not be verified is saved with that warning. Cancel, Escape or clo
 ends the flow and writes nothing, with no error shown. Any other failure (port in use, token
 exchange, network) shows the original message with *Try again* and *Back*.
 
+**An unreadable file.** A missing `auth.json` is nothing connected yet. One that cannot be read or
+parsed is shown with its original error and path: in the providers list with Reveal and Retry, in
+the model picker with Retry. It is never shown as "nothing connected", and connecting or
+disconnecting refuses to write over it (FastAgent's store will not overwrite a corrupt file).
+
 **Disconnecting** removes the provider's credential from duang's file after a confirmation. It
 never reaches the CLI's or pi's stores. If an environment variable also supplies the provider, the
 confirmation names it and says requests continue with it; otherwise it says conversations using the

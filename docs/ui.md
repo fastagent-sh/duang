@@ -643,9 +643,10 @@ MANUAL PROXY                               (only while Manual is chosen)
   roster. Escape or the close control returns to the conversation.
 - Planned: provider rows use the conversation-row rhythm; the authentication kind is a neutral
   badge, and a failure is a `danger` badge with its reason, never colour alone (§9).
-- *Add a provider* is a searchable list grouped Subscription / API key / Custom endpoint. Choosing
-  a row opens the connect dialog: the modal dialog surface (§6b), 440 wide, one `primary` action
-  per step. A device code is monospace at 22px with a Copy control; a browser step shows waiting
+- *Connect a provider* opens the connect dialog: the modal dialog surface (§6b), about 420 wide, one
+  `primary` action per step. It lists providers by pi's own names, common ones first and
+  filterable; a provider with more than one way to connect then lists those ways by FastAgent's
+  labels. Custom endpoints come after the first version. A device code is monospace at 22px with a Copy control; a browser step shows waiting
   status with `Open again` and `Copy link`, and folds the paste-a-code field under it.
 - Reasoning effort is a `ghost` chip beside the model chip, with the same popover list.
 
