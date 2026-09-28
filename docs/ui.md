@@ -392,7 +392,11 @@ Everything else follows from those two:
 - **System events are one centred muted line**: model changed, run stopped, a send refused. They are
   facts about the session, not things anyone said.
 - **A message is placed where the runtime says it entered.** Sent, it waits below the live output,
-  dimmed and labelled `sending`, or `queued` while the runtime lists it in `pending.steering`. It
+  dimmed and labelled `sending`, or `queued` while the runtime lists it in `pending.steering`; one
+  that opens a run (nothing running, or the running one has no message yet, judged when it is sent)
+  waits above the run's `working…` mark instead of below it, since the work is what it asked for.
+  One sent during a compaction waits below: the compaction is not its work, while a `/compact` sent
+  from idle opens it. It
   takes its place in the transcript when FastAgent reports it entering the conversation
   (`user_message`): a steer is read at the run's next turn boundary, so placing it at send time put it
   above output written without it. The queue shown is the runtime's, so a steer queued before a reload

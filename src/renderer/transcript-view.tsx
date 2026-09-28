@@ -86,8 +86,10 @@ export function Transcript({
   /**
    * Messages that have not entered the conversation yet, below the output until the runtime places
    * them. `listed`: the runtime reports it as queued; otherwise it is still on its way there.
+   * `opens`: it opens the run on screen, so it reads above that run's working mark; a steer waits
+   * below the output it did not shape.
    */
-  waiting: { item: Item; listed: boolean }[];
+  waiting: { item: Item; listed: boolean; opens: boolean }[];
   busy: boolean;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
@@ -115,6 +117,14 @@ export function Transcript({
   // A running tool already says the run is alive, with its own clock, wherever it sits: a parallel
   // call can still run above one that finished.
   const silent = !streaming && !items.some((item) => item.kind === "tool" && item.status === "running");
+  const queue = (opening: boolean) =>
+    waiting.map(({ item, listed, opens }, index) =>
+      opens === opening ? (
+        <div key={index} className="enter pt-6">
+          <Message item={item} waiting={listed ? "queued" : "sending"} />
+        </div>
+      ) : null,
+    );
 
   const shown = lines(items);
   /**
@@ -189,16 +199,13 @@ export function Transcript({
             </div>
           ),
         )}
+        {queue(true)}
         {busy && silent && (
           <div className="pt-6">
             <Working />
           </div>
         )}
-        {waiting.map(({ item, listed }, index) => (
-          <div key={index} className="enter pt-6">
-            <Message item={item} waiting={listed ? "queued" : "sending"} />
-          </div>
-        ))}
+        {queue(false)}
       </div>
     </div>
     </div>

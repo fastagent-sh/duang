@@ -11,7 +11,7 @@ import type {
   Route,
   SessionFrame,
 } from "../preload/index.ts";
-import { apply, claim, fromEntries, known, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
+import { apply, claim, fromEntries, known, opensRun, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
@@ -994,7 +994,7 @@ export function createStore(api: DuangApi) {
       c.draft = "";
       // Where it goes is the runtime's report, not this guess: it waits below the output until
       // `user_message` places it, whether it opens a run or joins one.
-      const echo: UserItem = { kind: "user", text, at: Date.now() };
+      const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
       c.waiting = [...c.waiting, echo];
       const waiting = () => c.waiting.includes(echo);
       /** Nothing entered from it, so the text is still the person's to send again. */

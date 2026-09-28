@@ -10,6 +10,7 @@ import {
   fromEntries,
   lines,
   previewOf,
+  opensRun,
   queueView,
   resumeRunning,
   toolText,
@@ -120,6 +121,21 @@ test("the runtime's queue shows this window's own messages by what was typed, an
   );
   assert.equal(claim([plain, typed], "and also"), plain, "the same text wins over the command fallback");
   assert.equal(claim([plain], "somebody else's"), undefined);
+});
+
+test("a message opens a run when there is none to join, and never a compaction it did not ask for", () => {
+  assert.equal(opensRun(undefined, false), true, "a conversation not read yet");
+  assert.equal(opensRun("idle", true), true, "after a run, even though it had a message");
+  assert.equal(opensRun("running", false), true, "started, its message not placed yet");
+  assert.equal(opensRun("running", true), false, "a steer");
+  assert.equal(opensRun("compacting", false), false, "sent during a compaction");
+  const opening: UserItem = { kind: "user", text: "/compact", at: 1, opens: true };
+  const steer: UserItem = { kind: "user", text: "and also", at: 2, opens: false };
+  assert.deepEqual(
+    queueView([opening, steer], []).map(({ item, opens }) => [item.text, opens]),
+    [["/compact", true], ["and also", false]],
+  );
+  assert.equal(queueView([opening], ["/compact"])[0]?.opens, false, "listed as queued, it is a steer");
 });
 
 test("a duration reads as pi writes it", () => {

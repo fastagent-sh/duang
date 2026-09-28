@@ -1,5 +1,5 @@
 /** Fold session entries and live events into what the transcript shows. Pure, so it is testable. */
-import type { KnownSessionEvent, ServingErrorEvent, SessionEntry, SessionEvent } from "@fastagent-sh/fastagent/session";
+import type { KnownSessionEvent, ServingErrorEvent, SessionEntry, SessionEvent, SessionState } from "@fastagent-sh/fastagent/session";
 
 /**
  * When it happened. Required on every item, because both the day separators and the time under a
@@ -12,9 +12,10 @@ type At = { at: number };
 export type Item = At &
   /**
    * `steered`: it joined a run that already had a user message. `entryId`: the runtime's record of it,
-   * from history or from `user_message`, so a backfill and a live event are one bubble.
+   * from history or from `user_message`, so a backfill and a live event are one bubble. `opens`: while
+   * it waits, it was sent with no run to join (see {@link opensRun}).
    */
-  ({ kind: "user"; text: string; steered?: boolean; entryId?: string }
+  ({ kind: "user"; text: string; steered?: boolean; entryId?: string; opens?: boolean }
   | { kind: "assistant"; text: string; open: boolean }
   /**
    * `started` is kept because `at` is restamped when the block settles, and "thought for 8s" is
@@ -72,18 +73,31 @@ export function claim(waiting: UserItem[], text: string): UserItem | undefined {
 }
 
 /**
+ * Whether a message sent now opens a run rather than joins one, decided when it is sent: nothing is
+ * running, or the run on screen has not placed its user message yet. A message sent during a
+ * compaction does not open the compaction, which it did not ask for; it opens the run after it,
+ * while a `/compact` sent from idle opens the compaction itself.
+ */
+export function opensRun(status: SessionState["status"] | undefined, runHasUser: boolean): boolean {
+  if (status === "compacting") return false;
+  return status !== "running" || !runHasUser;
+}
+
+/**
  * The bubbles below the live output: the runtime's queue first, in its order, each shown as this
  * window's own message when it is one; then messages sent from here that the runtime has not listed
- * yet. `listed` is what the runtime reports as queued; the rest are still on their way.
+ * yet. `listed` is what the runtime reports as queued; the rest are still on their way. `opens`: it
+ * reads above the run's working mark rather than below it, since that work is what it asked for.
  */
-export function queueView(waiting: UserItem[], pending: string[]): { item: UserItem; listed: boolean }[] {
+export function queueView(waiting: UserItem[], pending: string[]): { item: UserItem; listed: boolean; opens: boolean }[] {
   let left = waiting;
   const listed = pending.map((text) => {
     const own = claim(left, text);
     if (own) left = left.filter((item) => item !== own);
-    return { item: own ?? { kind: "user" as const, text, at: 0 }, listed: true };
+    // Listed as queued, it is a steer for the run on screen, whatever it was sent as.
+    return { item: own ?? { kind: "user" as const, text, at: 0 }, listed: true, opens: false };
   });
-  return [...listed, ...left.map((item) => ({ item, listed: false }))];
+  return [...listed, ...left.map((item) => ({ item, listed: false, opens: item.opens === true }))];
 }
 
 /** A day boundary in the reading flow: without it, yesterday's run reads as if it just happened. */
