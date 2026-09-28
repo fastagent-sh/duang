@@ -244,7 +244,7 @@ if (!process.versions.electron) {
       // The keyboard and focus checks need the page to have focus: without it Chromium moves
       // `activeElement` but fires no focus event, and the roster's "last reached" row never updates.
       // Stealing OS focus is not reliable on macOS 14 and later while another app is in use, so the
-      // page is told to behave as focused instead, as Puppeteer does for headed tests.
+      // page is told to behave as focused instead, as Playwright does for every Chromium page.
       win.webContents.debugger.attach();
       await win.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
