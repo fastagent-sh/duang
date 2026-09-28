@@ -535,7 +535,7 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('A skill the completion list should offer')", "list reopens");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
-      await until("document.querySelector('textarea').value === '/demo '", "Enter accepts the name, it does not send");
+      await until("document.querySelector('textarea').value === '/skill:demo '", "Enter accepts the skill in the spelling pi runs, it does not send");
       await type("");
 
       // An agent with no skills must say so; silence here reads as a broken composer.

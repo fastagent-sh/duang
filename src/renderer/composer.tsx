@@ -204,7 +204,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             <button
               key={command.name}
               onMouseEnter={() => setCursor(index)}
-              onClick={() => store.setDraft(complete(command.name))}
+              onClick={() => store.setDraft(complete(command))}
               className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
                 command === chosen ? "bg-accent-weak text-accent" : ""
               }`}
@@ -248,7 +248,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             // Enter and Tab accept the name rather than send: a bare `/name` is never a message.
             if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && chosen) {
               e.preventDefault();
-              return store.setDraft(complete(chosen.name));
+              return store.setDraft(complete(chosen));
             }
           }
           // While an IME is composing, Enter picks a candidate — sending there would cut a word in half.

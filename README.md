@@ -188,23 +188,20 @@ The fragmented Week 1 status display was subsequently redesigned
 
 Accepted limitations, each recorded in its issue:
 
-- **`/name` does not invoke anything.** Completion spells the name; the agent reads the line as
-  text and usually acts on it, which is the model's judgement rather than a promise. Making it
-  deterministic is a FastAgent contract question
-  ([fastagent#572](https://github.com/fastagent-sh/fastagent/issues/572)); duang will not expand
-  commands itself, because that breaks for remote agents whose files are not on this machine.
+- **A mistyped command goes through as text.** Completion inserts the spelling the engine runs
+  (`/skill:<name>` for a skill, `/<name>` for an extension command or prompt template), and pi
+  expands it ([fastagent#572](https://github.com/fastagent-sh/fastagent/issues/572)). A name the
+  engine does not know, typed by hand, reaches the model as plain text without a warning. duang does
+  not expand commands itself, because that breaks for remote agents whose files are not on this
+  machine.
 - **History replay is partial.** Durable entries expose tool names and results but not tool
   arguments, thinking or settled run outcomes, and partial output emitted before a reload is not
   replayed. Nothing presents partial history as a complete trace.
-- **Token usage, cost and context are not shown.** The runtime records them per turn, but the live
-  session state duang reads does not carry them
-  ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)); nothing is invented in
-  their place. A Claude or ChatGPT subscription's plan windows are shown, read from endpoints those
-  providers do not document, so they can stop working without notice.
-- **Skills load only from the agent's own `fastagent/skills/`**, so global skills are invisible
-  ([fastagent#570](https://github.com/fastagent-sh/fastagent/issues/570)), and an unreadable agent
-  directory is reported upstream as "no agent here"
-  ([fastagent#571](https://github.com/fastagent-sh/fastagent/issues/571)).
+- **Token counts and cost are not shown.** The header shows how full the context is, from the
+  session's `state().usage` ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)),
+  which also carries the latest answer's tokens and cost; duang does not display those. A Claude or
+  ChatGPT subscription's plan windows are shown, read from endpoints those providers do not
+  document, so they can stop working without notice.
 - **One unexplained incident**: a run whose output was produced and stored never rendered live,
   once, and has not reproduced. Recorded with its evidence in
   [#10](https://github.com/fastagent-sh/duang/issues/10) rather than patched blind.
