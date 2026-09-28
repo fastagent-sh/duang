@@ -887,21 +887,25 @@ if (!process.versions.electron) {
 
       // Model providers: what duang's file holds, then a key connected through the dialog — rejected
       // once, asked again, accepted — and disconnected. Everything lands in duang's file only.
-      await click("Settings");
-      await until(
-        "document.querySelector('#providers-heading') && document.body.innerText.includes('OpenAI Codex')",
-        "the providers in duang's file are listed by pi's names",
-      );
-      await click("Connect a provider…");
-      await until("document.querySelector('dialog[aria-label=\"Connect a provider\"]')", "the connect dialog opens");
-      await evaluate(`(() => {
-        const input = document.querySelector('dialog input[aria-label="Filter providers"]');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'deep');
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      })()`);
+      const escape = () => {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      };
+      const providersListed = "document.querySelector('#providers-heading') && document.body.innerText.includes('Connect a provider…')";
+      const openSettings = async () => {
+        await click("Settings");
+        await until(providersListed, "Settings lists the providers");
+      };
+      const fromPicker = async () => {
+        await evaluate(`document.querySelector('button[title="Model for this agent"]').click()`);
+        await until("[...document.querySelectorAll('dialog button')].some((b) => b.textContent.trim() === 'Manage providers…')", "the picker offers Manage providers…");
+        await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Manage providers…').click()`);
+        await until(providersListed, "Manage providers… opens Settings");
+      };
+      /** From Settings, the connect dialog's provider list — not a flow left over — then DeepSeek's key step. */
       const pickDeepSeek = async () => {
         await click("Connect a provider…");
-        await until("document.querySelector('dialog[aria-label=\"Connect a provider\"]')", "the connect dialog opens");
+        await until("document.querySelector('dialog input[aria-label=\"Filter providers\"]')", "the connect dialog lists providers");
         await evaluate(`(() => {
           const input = document.querySelector('dialog input[aria-label="Filter providers"]');
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'deep');
@@ -910,18 +914,6 @@ if (!process.versions.electron) {
         await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.startsWith('DeepSeek')).click()`);
         await until("document.querySelector('dialog input[type=password]')", "the key field");
       };
-      await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.startsWith('DeepSeek')).click()`);
-      await until("document.querySelector('dialog input[type=password]')", "the key field");
-      // A reload leaves nobody to answer the sign-in main is running: it must end with the page, or
-      // every later connect in this window is refused as "Another sign-in is in progress".
-      const reloadedForSignIn = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
-      win.webContents.reload();
-      await reloadedForSignIn;
-      await until("!!document.querySelector('textarea')", "the reloaded window");
-      await click("Settings");
-      await until("document.querySelector('#providers-heading') && document.body.innerText.includes('Connect a provider')", "Settings after the reload");
-      await pickDeepSeek();
-      assert.ok(!(await evaluate("document.querySelector('dialog').innerText.includes('Another sign-in')")), "the reload ended the old sign-in");
       const answer = async (value) => {
         await until("document.querySelector('dialog input[type=password]')", "the key field");
         await evaluate(`(() => {
@@ -931,6 +923,27 @@ if (!process.versions.electron) {
           input.form.requestSubmit();
         })()`);
       };
+
+      await openSettings();
+      assert.ok(await evaluate("document.body.innerText.includes('OpenAI Codex')"), "listed by pi's names");
+      assert.equal(await evaluate("!!document.querySelector('dialog')"), false, "Settings reached from the sidebar opens no dialog");
+
+      // A reload leaves nobody to answer the sign-in main is running: it must end with the page, or
+      // every later connect in this window is refused as "Another sign-in is in progress".
+      await pickDeepSeek();
+      const reloadedForSignIn = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      win.webContents.reload();
+      await reloadedForSignIn;
+      await until("!!document.querySelector('textarea')", "the reloaded window");
+      await openSettings();
+      await pickDeepSeek();
+      // ⌘N reaches the window through the dialog and leaves Settings: the sign-in must end with it,
+      // so the next dialog lists providers instead of showing a flow nobody could see.
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
+      await until("!document.querySelector('#providers-heading')", "⌘N leaves Settings");
+      await openSettings();
+      await pickDeepSeek();
+
       await answer("sk-bad");
       await until(
         "document.querySelector('dialog input[type=password]') && document.querySelector('dialog').innerText.includes('Authentication Fails')",
@@ -945,7 +958,7 @@ if (!process.versions.electron) {
       await click("Done");
       await until(
         "!document.querySelector('dialog') && [...document.querySelectorAll('#providers-heading ~ div div')].some((row) => row.innerText.startsWith('DeepSeek'))",
-        "the connected provider is listed",
+        "the connected provider is listed, on Settings: this visit did not start at the picker",
       );
       await evaluate("(window.confirm = () => true, true)");
       await evaluate(`[...document.querySelectorAll('#providers-heading ~ div > div')].find((row) => row.innerText.startsWith('DeepSeek')).querySelector('button:last-child').click()`);
@@ -956,9 +969,44 @@ if (!process.versions.electron) {
       saved = JSON.parse(await readFile(selectedAuth, "utf8"));
       assert.equal(saved.deepseek, undefined);
       assert.ok(saved.anthropic && saved.openai, "disconnecting one provider keeps the others");
-      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
-      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      escape();
       await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
+
+      // Reached from the picker and left another way (Escape): opening Settings afterwards is plain —
+      // no dialog of its own accord, and no trip back to the picker after connecting.
+      await fromPicker();
+      escape();
+      await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
+      await openSettings();
+      assert.equal(await evaluate("!!document.querySelector('dialog')"), false, "no dialog of its own accord");
+      await pickDeepSeek();
+      await answer("sk-good");
+      await until("document.querySelector('dialog')?.innerText.includes('Connected DeepSeek API key')", "connected again");
+      await click("Done");
+      await until(
+        "!document.querySelector('dialog') && [...document.querySelectorAll('#providers-heading ~ div div')].some((row) => row.innerText.startsWith('DeepSeek'))",
+        "a visit that did not start at the picker stays on Settings",
+      );
+      await evaluate(`[...document.querySelectorAll('#providers-heading ~ div > div')].find((row) => row.innerText.startsWith('DeepSeek')).querySelector('button:last-child').click()`);
+      await until(
+        "![...document.querySelectorAll('#providers-heading ~ div > div')].some((row) => row.innerText.startsWith('DeepSeek'))",
+        "disconnected again",
+      );
+      escape();
+      await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
+
+      // Connected from the picker: back to the picker, with the new provider's models in it.
+      await fromPicker();
+      await pickDeepSeek();
+      await answer("sk-good");
+      await until("document.querySelector('dialog')?.innerText.includes('Connected DeepSeek API key')", "connected from the picker");
+      await click("Done");
+      await until(
+        "!document.querySelector('#providers-heading') && document.querySelector('dialog[aria-label=\"Choose a model\"]')?.innerText.includes('deepseek/')",
+        "a connection started at the picker returns to it, listing the new models",
+      );
+      escape();
+      await until("!document.querySelector('dialog')", "Escape closes the picker");
 
       // A route duang cannot take (SOCKS4, from a PAC file) is shown, not fatal: a send still goes
       // out, agent commands just get no proxy, and the page says both. Choosing again recovers.

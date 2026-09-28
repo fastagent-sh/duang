@@ -146,8 +146,13 @@ function ConnectDialog({
     const el = dialog.current!;
     el.showModal();
     el.querySelector<HTMLElement>("input, button[data-first]")?.focus();
-    return () => el.close();
-  }, []);
+    return () => {
+      el.close();
+      // Settings can go away under the dialog (⌘N reaches the window): a sign-in nobody can see must
+      // not keep running, or finish writing a credential, behind it.
+      if (store.getSnapshot().signIn) void store.closeSignIn();
+    };
+  }, [store]);
 
   const connect = (provider: ProviderRow, way: Way) => void store.connect(provider, way);
   const choose = (provider: ProviderRow) => {

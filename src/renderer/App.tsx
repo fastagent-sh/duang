@@ -20,11 +20,11 @@ export default function App() {
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
-  // is not remembered across launches.
-  const [settings, setSettings] = useState(false);
-  // How Settings was reached from the model picker: its "Connect a provider" opens the connect dialog
-  // at once, and a connection made from there returns to the picker.
-  const [fromPicker, setFromPicker] = useState<{ connect: boolean }>();
+  // is not remembered across launches. Settings reached from the model picker carries that with it:
+  // its "Connect a provider" opens the connect dialog at once, and a connection made from there
+  // returns to the picker. It is part of the same state so that every way out of Settings drops it.
+  const [settings, setSettings] = useState<false | { fromPicker?: { connect: boolean } }>(false);
+  const openSettings = () => setSettings((open) => open || {});
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
   const [listOpen, setListOpen] = useState(false);
@@ -45,7 +45,7 @@ export default function App() {
     return store.dispose;
   }, [store]);
   // The App menu's Settings… (⌘,) opens the page; asking again while it is open keeps it there.
-  useEffect(() => duang.onOpenSettings(() => setSettings(true)), []);
+  useEffect(() => duang.onOpenSettings(openSettings), []);
   const newConversation = useCallback(() => {
     const opened = store.newConversation();
     const target = store.getSnapshot().conversation;
@@ -105,16 +105,9 @@ export default function App() {
     <Composer
       view={view}
       store={store}
-      onProviders={(connect) => {
-        setFromPicker({ connect });
-        setSettings(true);
-      }}
+      onProviders={(connect) => setSettings({ fromPicker: { connect } })}
     />
   );
-  const closeSettings = () => {
-    setSettings(false);
-    setFromPicker(undefined);
-  };
   // States whose own panel already explains the setup problem and offers the fix. Repeating the
   // runtime's prose above them contradicts it: a plain project is told to run `fastagent init`
   // while duang is offering to scaffold it.
@@ -144,7 +137,7 @@ export default function App() {
         previews={view.previews}
         latest={(id) => rowsFor(id).find((row) => !row.fresh)}
         errors={view.sessionsError}
-        settingsOpen={settings}
+        settingsOpen={Boolean(settings)}
         onSelect={(id) => {
           // Any way into a conversation leaves Settings; the agent you were on comes back as it was.
           setSettings(false);
@@ -154,7 +147,7 @@ export default function App() {
           setSettings(false);
           void store.addAgent();
         }}
-        onSettings={() => setSettings(true)}
+        onSettings={openSettings}
         onRename={(id, name) => void store.renameAgent(id, name)}
         onMenu={duang.menu}
       />
@@ -163,13 +156,13 @@ export default function App() {
           <Settings
             view={view}
             store={store}
-            connectOnOpen={fromPicker?.connect}
+            connectOnOpen={settings.fromPicker?.connect}
             onConnected={() => {
-              if (!fromPicker) return;
+              if (!settings.fromPicker) return;
               store.requestPicker();
-              closeSettings();
+              setSettings(false);
             }}
-            onClose={closeSettings}
+            onClose={() => setSettings(false)}
           />
         ) : (
           <>
