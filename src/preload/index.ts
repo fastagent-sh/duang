@@ -55,7 +55,11 @@ const api = {
   revealAgent: (agentId: string): Promise<void> => ipcRenderer.invoke("agent:reveal", agentId),
   /** Where duang keeps its agent list — the one thing to open when that file cannot be read. */
   revealRegistry: (): Promise<void> => ipcRenderer.invoke("registry:reveal"),
-  listModels: (): Promise<Models> => ipcRenderer.invoke("models:list"),
+  /**
+   * What this agent can run: built-ins and the `models.json` endpoints, kept to providers with a
+   * configured credential (the credential file, an environment variable or a key in `models.json`).
+   */
+  listModels: (agentId: string): Promise<Models> => ipcRenderer.invoke("models:list", agentId),
   /** duang's own preferences and the route requests take now. Rejects when the settings file is unreadable. */
   getSettings: (): Promise<{ network: Network; route: Route }> => ipcRenderer.invoke("settings:get"),
   /** Saves and applies at once; new requests use it, a running turn keeps its connection. */

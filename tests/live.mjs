@@ -73,7 +73,7 @@ if (!process.versions.electron) {
     await import("../out/main/index.js");
     await loaded;
 
-    const models = await call("listModels");
+    const models = await call("listModels", "live");
     const before = await readFile(models.authPath, "utf8");
     // Not simply the first Codex spec: the picker also lists models a ChatGPT account may not run
     // (see the note in issue #5), and this check is about credentials, not entitlements.

@@ -1,7 +1,7 @@
 /** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, CaretDown, Check, Stop, X } from "@phosphor-icons/react";
-import { complete, completionQuery, matches } from "./commands.ts";
+import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
 import { home, location } from "./paths.ts";
@@ -176,9 +176,10 @@ export function Composer({ view, store }: { view: View; store: Store }) {
   // An agent with no model cannot start: open the list rather than leave the person guessing.
   useEffect(() => setPicking(needsModel), [agentId, needsModel]);
   // Every opening rereads the credential file, so a `fastagent login` while duang runs shows up.
+  // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
     if (picking) void store.loadModels();
-  }, [picking, store]);
+  }, [picking, agentId, store]);
 
   const query = completionQuery(value);
   const suggestions = query === undefined || dismissed ? [] : matches(view.commands, query);
@@ -203,12 +204,13 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             <button
               key={command.name}
               onMouseEnter={() => setCursor(index)}
-              onClick={() => store.setDraft(complete(command.name))}
+              onClick={() => store.setDraft(complete(command))}
               className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
                 command === chosen ? "bg-accent-weak text-accent" : ""
               }`}
             >
-              <span className="font-mono text-[12px]">/{command.name}</span>
+              {/* What accepting it inserts: a bare `/weather` typed by hand would reach the model as text. */}
+              <span className="font-mono text-[12px]">/{spelling(command)}</span>
               <span className="truncate text-[11px] text-muted flex-1">{command.description}</span>
               <span className="ml-auto text-[11px] text-muted">{command.source}</span>
             </button>
@@ -247,7 +249,7 @@ export function Composer({ view, store }: { view: View; store: Store }) {
             // Enter and Tab accept the name rather than send: a bare `/name` is never a message.
             if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && chosen) {
               e.preventDefault();
-              return store.setDraft(complete(chosen.name));
+              return store.setDraft(complete(chosen));
             }
           }
           // While an IME is composing, Enter picks a candidate — sending there would cut a word in half.

@@ -572,7 +572,7 @@ The whole list, so it lives in one place instead of being read out of the handle
 | `⇧Enter` | composer | Newline |
 | `/` | composer | Command completion |
 | `↓` `↑` | composer, list open | Move through the completions |
-| `Enter` `Tab` | composer, list open | Accept the name rather than send — a bare `/name` is never a message |
+| `Enter` `Tab` | composer, list open | Accept the name rather than send; a skill is inserted as `/skill:<name>`, the spelling pi runs |
 | `Esc` | composer, list open | Dismiss the completions |
 | `Esc` | model picker | Close it and return focus to the chip that opened it |
 | arrows, `PageUp` `PageDown` | transcript, focused | Scroll, from Chromium |

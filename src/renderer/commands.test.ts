@@ -26,6 +26,14 @@ test("a line that does not start with a slash is not a command", () => {
   assert.equal(completionQuery(""), undefined);
 });
 
-test("accepting a name leaves the cursor where arguments go", () => {
-  assert.equal(complete("model"), "/model ");
+test("accepting a name leaves the cursor where arguments go, in the spelling the engine runs", () => {
+  assert.equal(complete({ name: "commit", source: "prompt" }), "/commit ");
+  // pi runs a skill as `/skill:<name>`; a bare `/weather` would reach the model as plain text.
+  assert.equal(complete({ name: "weather", source: "skill" }), "/skill:weather ");
+});
+
+test("a skill is found by its name and by the spelling that runs it", () => {
+  const skills = [{ name: "weather", source: "skill" }];
+  assert.deepEqual(matches(skills, "wea").map((c) => c.name), ["weather"]);
+  assert.deepEqual(matches(skills, "skill:w").map((c) => c.name), ["weather"]);
 });

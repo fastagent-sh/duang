@@ -1,10 +1,10 @@
 /**
- * Slash-command completion: names only, and a name is all it is.
+ * Slash-command completion: the composer spells a listed command, and the line goes as typed.
  *
- * FastAgent's `commands()` is a LISTING, not an invocation surface (session-control design §5.1.1):
- * the data plane takes prompts as text and nothing expands `/name`. So typing one sends that line as
- * written — useful because the agent's own skills are named there — and the composer's only job is to
- * spell the name correctly. Arguments are typed after it like any other text.
+ * The engine, not duang, runs it (fastagent#572): pi expands `/skill:<name>` into the skill's text and
+ * dispatches an extension's or prompt template's `/<name>`. So completion inserts the spelling the
+ * engine answers to and interprets nothing itself, which is what keeps a remote agent, whose files are
+ * not on this machine, working the same way. Arguments are typed after it like any other text.
  */
 import type { AgentCommand } from "@fastagent-sh/fastagent/session";
 
@@ -17,12 +17,18 @@ export function completionQuery(value: string): string | undefined {
   return match?.[1];
 }
 
+/** How pi is asked to run it: a skill by `skill:<name>`, anything else by its name. */
+export const spelling = (command: AgentCommand) => (command.source === "skill" ? `skill:${command.name}` : command.name);
+
+/** A skill is found by its name or by the spelling that runs it. */
 export function matches(commands: AgentCommand[], query: string, limit = 8): AgentCommand[] {
   const needle = query.toLowerCase();
-  return commands.filter((c) => c.name.toLowerCase().startsWith(needle)).slice(0, limit);
+  return commands
+    .filter((c) => c.name.toLowerCase().startsWith(needle) || spelling(c).toLowerCase().startsWith(needle))
+    .slice(0, limit);
 }
 
-/** The line after accepting a completion: the name, plus the space its arguments start after. */
-export function complete(name: string): string {
-  return `/${name} `;
+/** The line after accepting a completion: its spelling, plus the space its arguments start after. */
+export function complete(command: AgentCommand): string {
+  return `/${spelling(command)} `;
 }
