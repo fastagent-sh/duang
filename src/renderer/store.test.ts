@@ -1080,18 +1080,18 @@ test("a sign-in shows what its flow asks, sends the answer once, and ends by its
 
   const connecting = store.connect(anthropic, anthropic.ways[1]!);
   step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Anthropic API key" } });
-  step({ type: "progress", message: "Checking the key…" });
+  step({ type: "info", message: "Keys start with sk-ant-" });
   assert.equal(store.getSnapshot().signIn?.prompt?.prompt.type, "secret");
   await store.answerSignIn("sk-ant-typed");
   assert.deepEqual(answers, [["1", "sk-ant-typed"]]);
   assert.equal(store.getSnapshot().signIn?.prompt, undefined, "the field, and what was typed, is gone");
-  assert.equal(store.getSnapshot().signIn?.progress, "Checking the key…");
+  assert.equal(store.getSnapshot().signIn?.info?.message, "Keys start with sk-ant-");
   done.resolve({ ok: true, verified: "ok" });
   await connecting;
   assert.deepEqual(store.getSnapshot().signIn?.outcome, { ok: true, verified: "ok" });
   assert.equal(store.getSnapshot().providers?.[0]?.stored, "api_key", "the list is re-read after it lands");
-  step({ type: "progress", message: "late" });
-  assert.equal(store.getSnapshot().signIn?.progress, "Checking the key…", "a finished flow takes no more steps");
+  step({ type: "info", message: "late" });
+  assert.equal(store.getSnapshot().signIn?.info?.message, "Keys start with sk-ant-", "a finished flow takes no more steps");
   await store.closeSignIn();
   assert.equal(store.getSnapshot().signIn, undefined);
   store.dispose();

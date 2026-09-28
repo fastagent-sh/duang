@@ -489,9 +489,10 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 /**
  * A running or failed sign-in. Success leaves the row (see above).
  *
- * The flow's own words (`progress`, `info`) are written for a terminal — "verifying the key with
- * deepseek/deepseek-v4-pro…" — so the states the row can tell apart are said in its own words, and
- * the flow's text is kept only where it is the reason for something (docs/ui.md §9).
+ * The flow's own words (`progress`, `info`, a sign-in page's `instructions`) are written for a
+ * terminal: "verifying the key with deepseek/deepseek-v4-pro…". So the states the row can tell
+ * apart are said in its own words, and the flow's text is kept only where it is the reason for
+ * something or points somewhere (docs/ui.md §9).
  */
 function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
   const { url, device, info, prompt, outcome, provider } = signIn;

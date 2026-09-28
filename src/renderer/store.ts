@@ -24,10 +24,10 @@ export interface SignIn {
   provider: ProviderRow;
   way: ProviderRow["ways"][number];
   prompt?: Shown<"prompt">;
-  url?: Shown<"auth_url">;
+  /** The sign-in page. Its `instructions` and the flow's `progress` are words for a terminal, not kept. */
+  url?: { url: string };
   device?: Shown<"device_code">;
   info?: Shown<"info">;
-  progress?: string;
   /** Answers sent to a key prompt so far: a key prompt asked again after one means it was refused. */
   keyAnswers: number;
   /** What the last answer was to, so a key being checked is told from any other wait. */
@@ -581,12 +581,13 @@ export function createStore(api: DuangApi) {
     if (step.type === "prompt") next.prompt = { id: step.id, prompt: step.prompt };
     else if (step.type === "dismiss") {
       if (s.prompt?.id === step.id) delete next.prompt;
-    } else if (step.type === "auth_url") next.url = { url: step.url, ...(step.instructions ? { instructions: step.instructions } : {}) };
+    } else if (step.type === "auth_url") next.url = { url: step.url };
     else if (step.type === "device_code") {
       const { type: _type, ...device } = step;
       next.device = device;
     } else if (step.type === "info") next.info = { message: step.message, ...(step.links ? { links: step.links } : {}) };
-    else if (step.type === "progress") next.progress = step.message;
+    // `progress` narrates for a terminal what the row already says in its own words.
+    else if (step.type === "progress") return;
     publish({ signIn: next });
   });
   /** The sign-in main is running for this window, until main says it has ended. */
