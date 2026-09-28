@@ -17,7 +17,7 @@ export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
 type Shown<T extends LoginStep["type"]> = Omit<Extract<LoginStep, { type: T }>, "type">;
 /**
- * One sign-in as the dialog shows it: the provider and way chosen, what the flow asks now, the latest
+ * One sign-in as its provider's row shows it: the provider and way chosen, what the flow asks now, the latest
  * of each kind of thing it reported, and its outcome once it ends. A cancelled flow is simply gone.
  */
 export interface SignIn {
@@ -28,13 +28,24 @@ export interface SignIn {
   device?: Shown<"device_code">;
   info?: Shown<"info">;
   progress?: string;
-  /**
-   * Answers sent to a key prompt so far. A key prompt that comes back after one means the provider
-   * refused the key; no prompt after one means it is being checked. The flow says both only in words
-   * meant for a terminal, so the dialog tells them apart by this instead.
-   */
+  /** Answers sent to a key prompt so far: a key prompt asked again after one means it was refused. */
   keyAnswers: number;
+  /** What the last answer was to, so a key being checked is told from any other wait. */
+  answered?: NonNullable<SignIn["prompt"]>["prompt"]["type"];
   outcome?: Exclude<LoginOutcome, { cancelled: true }>;
+}
+
+/**
+ * Where a key sign-in is, which the flow says only in words meant for a terminal: asking for the
+ * key, asking again because it was refused, or checking the one just sent. Decided by the question
+ * on screen and the last one answered, never by the count alone: a flow may ask other things after
+ * the key (Cloudflare's account ID) or start over at a choice (Vertex, Bedrock), and those are
+ * questions of their own, not a refused key.
+ */
+export function keyStep(signIn: SignIn): "ask" | "refused" | "checking" | undefined {
+  if (signIn.way.method !== "api_key" || signIn.outcome) return undefined;
+  if (signIn.prompt) return signIn.prompt.prompt.type !== "secret" ? undefined : signIn.keyAnswers > 0 ? "refused" : "ask";
+  return signIn.answered === "secret" ? "checking" : undefined;
 }
 
 /**
@@ -155,7 +166,7 @@ export interface View {
   providers?: ProviderRow[];
   /** Why they could not be read, or why a disconnect failed. The page says so, never "none". */
   providersError?: string;
-  /** The sign-in in progress or just finished, shown by the connect dialog. */
+  /** The sign-in in progress or just finished, shown in its provider's row in Settings. */
   signIn?: SignIn;
   conversation?: Conversation;
   /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
@@ -562,7 +573,7 @@ export function createStore(api: DuangApi) {
     const at = Date.now();
     c.items = [...c.items, ...ran.map((item): Item => ({ kind: "note", tone: "info", text: `ran ${item.text}`, at }))];
   }
-  /** A step belongs to the sign-in the dialog shows; one arriving after it closed is dropped. */
+  /** A step belongs to the sign-in on screen; one arriving after it closed is dropped. */
   const stopSteps = api.onLoginStep((step) => {
     const s = view.signIn;
     if (!s || s.outcome) return;
@@ -740,24 +751,25 @@ export function createStore(api: DuangApi) {
       const prompt = view.signIn?.prompt;
       if (!prompt || (prompt.prompt.type === "secret" && !value)) return;
       const s = view.signIn!;
-      publish({ signIn: { ...s, prompt: undefined, keyAnswers: s.keyAnswers + (prompt.prompt.type === "secret" ? 1 : 0) } });
+      const secret = prompt.prompt.type === "secret";
+      publish({ signIn: { ...s, prompt: undefined, answered: prompt.prompt.type, keyAnswers: s.keyAnswers + (secret ? 1 : 0) } });
       await api.answerLogin(prompt.id, value);
     },
-    /** Ends a running sign-in (it resolves as cancelled and the dialog closes), or closes a finished one. */
+    /** Ends a running sign-in (it resolves as cancelled and leaves the row), or closes a finished one. */
     async closeSignIn() {
       if (!view.signIn) return;
       if (view.signIn.outcome) return publish({ signIn: undefined });
       await api.cancelLogin();
     },
     /**
-     * Opens a URL the sign-in reported. A browser that will not open is said in the dialog — the one
-     * place the person is looking — and Copy link is the way on.
+     * Opens a URL the sign-in reported. A browser that will not open is said in the sign-in's row, the
+     * one place the person is looking, where Copy link is the way on for a sign-in page.
      */
     async openLoginUrl(url: string) {
       try {
         await api.openLoginUrl(url);
       } catch (error) {
-        // Only the running dialog offers these links; anywhere else a failure stays an error.
+        // Only a running sign-in's row offers these links; anywhere else a failure stays an error.
         if (!view.signIn || view.signIn.outcome) throw error;
         publish({ signIn: { ...view.signIn, info: { message: `The browser did not open: ${message(error)}` } } });
       }

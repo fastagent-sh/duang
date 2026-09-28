@@ -123,7 +123,7 @@ test("a browser that does not open is said, and reopening it rejects", async () 
   await new Promise((resolve) => setImmediate(resolve));
   assert.ok(
     sent.some((step) => step.type === "info" && step.message.includes("no application to open https")),
-    "the dialog says why nothing opened",
+    "the row says why nothing opened",
   );
   await assert.rejects(flow.reopen("https://claude.ai/oauth/authorize"), /no application to open https/);
   flow.cancel();

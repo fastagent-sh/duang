@@ -18,7 +18,7 @@ function ModelPopover({
   store: Store;
   current?: string;
   onClose: () => void;
-  /** Opens Settings → Model providers; `connect` brings the connect dialog up straight away. */
+  /** Opens Settings → Model providers; `connect` scrolls it to the providers to add. */
   onProviders: (connect: boolean) => void;
 }) {
   const { models, modelsError: error } = view;

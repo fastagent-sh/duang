@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretDown, CaretRight, Check, Copy, DotsThree, Globe, Key, MagnifyingGlass, X } from "@phosphor-icons/react";
 import type { DuangApi, ProviderRow } from "../preload/index.ts";
-import type { SignIn, Store, View } from "./store.ts";
+import { keyStep, type SignIn, type Store, type View } from "./store.ts";
 import { PlanUsage } from "./header.tsx";
 import { Group, row } from "./settings.tsx";
 import { Badge, Button } from "./ui.tsx";
@@ -453,6 +453,20 @@ function ConfirmDisconnect({ provider, onCancel, onConfirm }: { provider: Provid
 }
 
 /** Shown for a moment after a copy: the control confirms, nothing else moves. */
+/** What the flow says beside a step, with the pages it points to (Vertex's ADC guide, AWS's chain). */
+function FlowInfo({ info, store, className = "" }: { info: NonNullable<SignIn["info"]>; store: Store; className?: string }) {
+  return (
+    <div className={`space-y-1 text-[12px] text-muted ${className}`}>
+      <p className="whitespace-pre-wrap break-words">{info.message}</p>
+      {info.links?.map((link) => (
+        <button key={link.url} type="button" className="block text-accent underline" onClick={() => void store.openLoginUrl(link.url)}>
+          {link.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -476,7 +490,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
  * A running or failed sign-in. Success leaves the row (see above).
  *
  * The flow's own words (`progress`, `info`) are written for a terminal — "verifying the key with
- * deepseek/deepseek-v4-pro…" — so the states the dialog can tell apart are said in its own words, and
+ * deepseek/deepseek-v4-pro…" — so the states the row can tell apart are said in its own words, and
  * the flow's text is kept only where it is the reason for something (docs/ui.md §9).
  */
 function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
@@ -506,7 +520,7 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
           </Button>
           <CopyButton text={url.url} label="Copy link" />
         </div>
-        {info && <p className="pl-6 text-[12px] text-muted">{info.message}</p>}
+        {info && <FlowInfo info={info} store={store} className="pl-6" />}
         {prompt?.prompt.type === "manual_code" && (
           <details className="group pl-6 text-[12px]">
             <summary className="flex cursor-pointer select-none items-center gap-1 text-muted marker:content-none hover:text-text">
@@ -525,8 +539,9 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
 
   if (device) return <DeviceCode device={device} store={store} />;
 
-  if (signIn.way.method === "api_key" && (prompt?.prompt.type === "secret" || signIn.keyAnswers > 0)) {
-    const refused = !!prompt && signIn.keyAnswers > 0;
+  const key = keyStep(signIn);
+  if (key) {
+    const refused = key === "refused";
     return (
       <div className="space-y-2">
         {refused && (
@@ -553,7 +568,7 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
     return (
       <div className="space-y-2">
         <Answer key={prompt.id} prompt={prompt.prompt} store={store} action="Continue" />
-        {info && <p className="text-[12px] text-muted">{info.message}</p>}
+        {info && <FlowInfo info={info} store={store} />}
       </div>
     );
 

@@ -155,7 +155,7 @@ export function startLogin(options: {
       },
       notify(event) {
         // The browser opens by itself for a sign-in; everything else is opened on request. A browser
-        // that does not open is said in the dialog, where Copy link is the way on.
+        // that does not open is said in the sign-in's row, where Copy link is the way on.
         if (event.type === "auth_url" && report(event.url))
           open(event.url).catch((error: unknown) =>
             send({ type: "info", message: `The browser did not open (${(error as Error).message}). Copy the link instead.` }),

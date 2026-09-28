@@ -21,7 +21,7 @@ export default function App() {
   const busy = view.busy;
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
   // is not remembered across launches. Settings reached from the model picker carries that with it:
-  // its "Connect a provider" opens the connect dialog at once, and a connection made from there
+  // its "Connect a provider" lands on the providers to add, and a connection made from there
   // returns to the picker. It is part of the same state so that every way out of Settings drops it.
   const [settings, setSettings] = useState<false | { fromPicker?: { connect: boolean } }>(false);
   const openSettings = () => setSettings((open) => open || {});

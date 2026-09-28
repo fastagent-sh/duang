@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
 import type { DuangApi, LoginOutcome, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
-import { createStore } from "./store.ts";
+import { createStore, keyStep } from "./store.ts";
 import { queueView } from "./transcript.ts";
 
 function deferred<T>() {
@@ -1145,6 +1145,48 @@ test("starting another sign-in ends the running one first, since main runs one a
   store.dispose();
 });
 
+test("only a key question is a key step: what a flow asks after the key is its own question", async () => {
+  const { api, store, step } = harness();
+  const answers: [string, string][] = [];
+  api.answerLogin = async (id, value) => void answers.push([id, value]);
+  // Runs until cancelled, as main's does.
+  let end: (outcome: LoginOutcome) => void = () => {};
+  api.login = () => new Promise((resolve) => (end = resolve));
+  api.cancelLogin = async () => end({ ok: false, cancelled: true });
+  const shown = () => keyStep(store.getSnapshot().signIn!);
+  // Cloudflare: the key, then the account ID, which is not a refused key.
+  const cloudflare: ProviderRow = { id: "cloudflare-workers-ai", name: "Cloudflare Workers AI", ways: [{ method: "api_key", label: "Cloudflare API key", subscription: false }] };
+  void store.connect(cloudflare, cloudflare.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Cloudflare API key" } });
+  assert.equal(shown(), "ask");
+  await store.answerSignIn("cf-key");
+  assert.equal(shown(), "checking");
+  step({ type: "prompt", id: "2", prompt: { type: "text", message: "Enter Cloudflare account ID" } });
+  assert.equal(shown(), undefined, "a question of its own, not the key asked again");
+  await store.answerSignIn("account-1");
+  assert.deepEqual(answers, [["1", "cf-key"], ["2", "account-1"]], "the account ID is what was typed for it");
+  assert.equal(shown(), undefined, "waiting after the account ID is not checking a key");
+  await store.closeSignIn();
+
+  // Vertex: a refused key starts the flow over at its choice, which is a choice, not the key again.
+  const vertex: ProviderRow = { id: "google-vertex", name: "Google Vertex AI", ways: [{ method: "api_key", label: "Vertex AI", subscription: false }] };
+  const choice = { type: "select", message: "Auth method", options: [{ id: "api_key", label: "API key" }] } as const;
+  void store.connect(vertex, vertex.ways[0]!);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  step({ type: "prompt", id: "3", prompt: choice });
+  assert.equal(shown(), undefined);
+  await store.answerSignIn("api_key");
+  step({ type: "prompt", id: "4", prompt: { type: "secret", message: "Vertex API key" } });
+  assert.equal(shown(), "ask");
+  await store.answerSignIn("bad-key");
+  step({ type: "prompt", id: "5", prompt: choice });
+  assert.equal(shown(), undefined, "the choice again, not a key field that would send the key as its answer");
+  await store.answerSignIn("api_key");
+  step({ type: "prompt", id: "6", prompt: { type: "secret", message: "Vertex API key" } });
+  assert.equal(shown(), "refused", "the key asked again after one was sent");
+  store.dispose();
+});
+
 test("a blank answer is sent when the flow asks for one, and a blank key is not", async () => {
   const { api, store, step } = harness();
   const copilot: ProviderRow = {
@@ -1166,7 +1208,7 @@ test("a blank answer is sent when the flow asks for one, and a blank key is not"
   store.dispose();
 });
 
-test("a link the browser will not open is said in the running dialog", async () => {
+test("a link the browser will not open is said in the running sign-in", async () => {
   const { api, store, step } = harness();
   const anthropic: ProviderRow = { id: "anthropic", name: "Anthropic", ways: [{ method: "oauth", label: "Anthropic (Claude Pro/Max)", subscription: true }] };
   api.login = () => new Promise(() => {});
