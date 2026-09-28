@@ -47,8 +47,8 @@ export function ProvidersGroup({
     const reach = provider.ambient
       ? `Requests will continue with ${provider.ambient}.`
       : `Conversations using ${provider.name} fail on their next request.`;
-    // The file is duang's alone, so this never reaches the fastagent CLI's or pi's logins.
-    if (confirm(`Disconnect ${provider.name}? This removes its ${methodName(provider.stored!)} from duang only. ${reach}`))
+    // The file is duang's alone, so this never reaches a login made anywhere else.
+    if (confirm(`Disconnect ${provider.name}? This removes its ${methodName(provider.stored!)} from duang. ${reach}`))
       void store.disconnect(provider.id);
   };
 
@@ -102,7 +102,8 @@ export function ProvidersGroup({
         )}
       </Group>
       <p className="-mt-4 px-4 text-[12px] text-muted">
-        Kept in duang's own credential file, not shared with the fastagent CLI.{" "}
+        {/* What it means for the person, not how it is kept: nothing here is sent anywhere else. */}
+        Saved on this computer.{" "}
         <button type="button" className="underline" onClick={() => void store.revealProviders()}>
           Show file
         </button>
@@ -220,7 +221,7 @@ function ConnectDialog({
             >
               <span className="block">{way.label}</span>
               <span className="block text-[12px] text-muted">
-                {way.method === "oauth" ? "Sign in in your browser" : "Paste a key; it is checked once"}
+                {way.method === "oauth" ? "Sign in in your browser" : "Paste an API key"}
                 {/* One credential per provider in the file: say so before it happens. */}
                 {chosen.stored && ` · replaces the ${methodName(chosen.stored)} saved for ${chosen.name}`}
               </span>

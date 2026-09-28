@@ -464,6 +464,12 @@ text nobody sent is unfinished work, and no other word in the list says that. `d
 vocabulary for the word's own sake — it is what a finished tool is called when something has to name
 it, such as a tooltip — while the third tier keeps it off the screen.
 
+Copy says what something means for the person, never how duang is built. FastAgent, pi, the
+`fastagent` CLI, credential stores and file layering are not the person's vocabulary: "Saved on this
+computer", not "kept in duang's own credential file, not shared with the fastagent CLI". The
+exception is an agent's own files, which its author writes and names (`fastagent/skills`), and
+original error text, which is kept verbatim (§9).
+
 **An outcome you were not there for is a decision, not reassurance.** Runs are long and fact 4 says
 you come back to them, so a run that settles while you are reading something else leaves a mark: the
 conversation row says `done` or `failed` as a filled pill with its label in semibold, the agent row
