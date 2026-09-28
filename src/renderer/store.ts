@@ -500,12 +500,12 @@ export function createStore(api: DuangApi) {
   }
   /**
    * What the runtime still lists as queued when its run ends never entered the conversation and is
-   * dropped with the run. It returns to the draft rather than stay on screen as if delivered.
+   * dropped with the run. It returns to the draft rather than stay on screen as if delivered, and so
+   * does a message this window did not send: after a reload the runtime's queue is the only place a
+   * steer typed before it still exists, and nothing else would keep those words.
    */
   function dropQueued(c: Conversation, pending: string[]) {
-    const dropped = queueView(c.waiting, pending).flatMap(({ item, listed }) =>
-      listed && c.waiting.includes(item) ? [item] : [],
-    );
+    const dropped = queueView(c.waiting, pending).flatMap(({ item, listed }) => (listed ? [item] : []));
     if (!dropped.length) return;
     c.waiting = c.waiting.filter((item) => !dropped.includes(item));
     for (const item of dropped) c.returned.delete(item);
@@ -843,8 +843,9 @@ export function createStore(api: DuangApi) {
           restoreRejected();
         } else if (waiting()) {
           c.returned.add(echo);
-          // A run that already ended while the call returned has nothing left to place it with.
-          if (c.state?.status !== "running") ranNothing(c);
+          // A run that already ended while the call returned has nothing left to place it with. A
+          // stream that ended cannot say whether it entered: Retry re-reads the history instead.
+          if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c);
         }
       } catch (error) {
         note(error, c);

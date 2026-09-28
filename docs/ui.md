@@ -397,7 +397,8 @@ Everything else follows from those two:
   (`user_message`): a steer is read at the run's next turn boundary, so placing it at send time put it
   above output written without it. The queue shown is the runtime's, so a steer queued before a reload
   or from another client still shows. One still queued when the run ends was dropped: it returns to
-  the draft instead of staying on screen as delivered. An extension command that does its work
+  the draft instead of staying on screen as delivered, including a steer typed before a reload, whose
+  words exist nowhere else. An extension command that does its work
   without sending anything into the conversation leaves one line, `ran /go X`. A message is matched to
   the one sent from here by its text, a slash command by being the oldest one waiting, since the
   runtime reports it expanded; a message from elsewhere queued ahead of one of ours can take its

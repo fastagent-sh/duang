@@ -798,6 +798,40 @@ test("the runtime's queue shows messages from elsewhere; a backfilled entry is n
   store.dispose();
 });
 
+test("a steer queued before a reload returns to the draft when the run drops it", async () => {
+  const { api, store, emit } = harness();
+  api.openSession = async () => ({
+    state: { status: "running" as const, activeRunId: "run", pending: { steering: ["typed before reload"], followUp: [] } },
+    entries: { entries: [] },
+  });
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  // Stop: pi's abort does not clear the queue, so the settling run still lists it.
+  emit(c, "run_settled", { status: "aborted" });
+  assert.equal(c.draft, "typed before reload", "the runtime's queue was the only place these words existed");
+  store.dispose();
+});
+
+test("a send that returns after the stream ended does not claim its message ran without entering", async () => {
+  const { api, store, emit, end } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const sent = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  api.send = () => sent.promise;
+  store.setDraft("hello");
+  const sending = store.send();
+  emit(c, "run_started");
+  end(c, "stream disconnected", false);
+  sent.resolve({ ok: true });
+  await sending;
+  assert.equal(
+    c.items.some((item) => item.kind === "note" && item.text.startsWith("ran ")),
+    false,
+    "whether it entered is unknown here; Retry reads the history",
+  );
+  store.dispose();
+});
+
 test("the open agent's list keeps the newest answer, and a failed re-read lands on its row", async () => {
   const { api, store, emit } = harness();
   api.openAgent = async () => listed("s1");
