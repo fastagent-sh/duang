@@ -732,7 +732,19 @@ export function createStore(api: DuangApi) {
       if (view.signIn.outcome) return publish({ signIn: undefined });
       await api.cancelLogin();
     },
-    openLoginUrl: (url: string) => api.openLoginUrl(url),
+    /**
+     * Opens a URL the sign-in reported. A browser that will not open is said in the dialog — the one
+     * place the person is looking — and Copy link is the way on.
+     */
+    async openLoginUrl(url: string) {
+      try {
+        await api.openLoginUrl(url);
+      } catch (error) {
+        // Only the running dialog offers these links; anywhere else a failure stays an error.
+        if (!view.signIn || view.signIn.outcome) throw error;
+        publish({ signIn: { ...view.signIn, info: { message: `The browser did not open: ${message(error)}` } } });
+      }
+    },
     /** A reveal that fails is said where the providers' problems are. */
     async revealProviders() {
       try {

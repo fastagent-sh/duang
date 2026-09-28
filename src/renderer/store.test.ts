@@ -1137,3 +1137,17 @@ test("a blank answer is sent when the flow asks for one, and a blank key is not"
   assert.equal(store.getSnapshot().signIn?.prompt?.id, "2", "the key field stays");
   store.dispose();
 });
+
+test("a link the browser will not open is said in the running dialog", async () => {
+  const { api, store, step } = harness();
+  const anthropic: ProviderRow = { id: "anthropic", name: "Anthropic", ways: [{ method: "oauth", label: "Anthropic (Claude Pro/Max)", subscription: true }] };
+  api.login = () => new Promise(() => {});
+  api.openLoginUrl = async () => {
+    throw new Error("no application to open https");
+  };
+  void store.connect(anthropic, anthropic.ways[0]!);
+  step({ type: "auth_url", url: "https://claude.ai/oauth/authorize" });
+  await store.openLoginUrl("https://claude.ai/oauth/authorize");
+  assert.equal(store.getSnapshot().signIn?.info?.message, "The browser did not open: no application to open https");
+  store.dispose();
+});

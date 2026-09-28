@@ -6,6 +6,7 @@
  * No Electron import, so it runs under `node --test`: the caller supplies the file and a way to open a
  * URL in the system browser.
  */
+import { existsSync } from "node:fs";
 import {
   createPiModels,
   fastagentCredentialStore,
@@ -43,6 +44,8 @@ const loud = (message: string) => {
  * only read.
  */
 export async function listProviders(authPath: string, empty: string): Promise<ProviderRow[]> {
+  // A file there would be read as the ambient sources, and name ones that do not exist.
+  if (existsSync(empty)) throw new Error(`${empty} must not exist: duang reads it as "no stored credentials". Remove it.`);
   const held = new Map(
     (await fastagentCredentialStore(authPath, { warn: loud }).list()).map((info) => [info.providerId, info.type]),
   );
@@ -108,7 +111,8 @@ export function startLogin(options: {
   method: LoginMethod;
   authPath: string;
   send: (step: LoginStep) => void;
-  open: (url: string) => void;
+  /** Opens the system browser; rejects when it cannot (no default browser, `xdg-open` failing). */
+  open: (url: string) => Promise<void>;
   run?: typeof login;
 }) {
   const { provider, method, authPath, send, open, run = login } = options;
@@ -150,8 +154,12 @@ export function startLogin(options: {
         });
       },
       notify(event) {
-        // The browser opens by itself for a sign-in; everything else is opened on request.
-        if (event.type === "auth_url" && report(event.url)) open(event.url);
+        // The browser opens by itself for a sign-in; everything else is opened on request. A browser
+        // that does not open is said in the dialog, where Copy link is the way on.
+        if (event.type === "auth_url" && report(event.url))
+          open(event.url).catch((error: unknown) =>
+            send({ type: "info", message: `The browser did not open (${(error as Error).message}). Copy the link instead.` }),
+          );
         if (event.type === "device_code") report(event.verificationUri);
         if (event.type === "info") for (const link of event.links ?? []) report(link.url);
         send(event);
@@ -173,10 +181,10 @@ export function startLogin(options: {
     cancel() {
       abort.abort();
     },
-    /** Opens a URL this flow reported, again. */
-    reopen(url: string) {
+    /** Opens a URL this flow reported, again. Rejects when the browser cannot be opened. */
+    async reopen(url: string) {
       if (!reported.has(url)) throw new Error("Not a URL this sign-in reported");
-      open(url);
+      await open(url);
     },
   };
 }

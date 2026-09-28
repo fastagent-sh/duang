@@ -235,8 +235,9 @@ function register(): void {
   ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
   // Model providers, in duang's own credential file. `empty` is never written: it is where a provider's
-  // environment variable is read with no stored credential in front of it.
-  const empty = join(app.getPath("temp"), "duang-no-credentials.json");
+  // environment variable is read with no stored credential in front of it. In this user's own data,
+  // not a shared temporary directory where anyone could put a file at that path.
+  const empty = join(app.getPath("userData"), "no-credentials.json");
   ipcMain.handle("providers:list", () => listProviders(authPath, empty));
   // Before anything is connected the file does not exist yet; its folder is the place to show.
   ipcMain.handle("providers:reveal", () =>
@@ -259,7 +260,7 @@ function register(): void {
       send: (step) => {
         if (!e.sender.isDestroyed()) e.sender.send("providers:step", step);
       },
-      open: (url) => void shell.openExternal(url),
+      open: (url) => shell.openExternal(url),
     });
     signIn = { senderId: e.sender.id, flow };
     try {
@@ -277,9 +278,9 @@ function register(): void {
   ipcMain.handle("providers:cancel", (e) => {
     if (signIn?.senderId === e.sender.id) signIn.flow.cancel();
   });
-  ipcMain.handle("providers:open", (e, url: string) => {
+  ipcMain.handle("providers:open", async (e, url: string) => {
     if (signIn?.senderId !== e.sender.id) throw new Error("No sign-in is in progress");
-    signIn.flow.reopen(url);
+    await signIn.flow.reopen(url);
   });
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");

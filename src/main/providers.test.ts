@@ -30,6 +30,13 @@ test("providers list pi's own names and ways, what duang's file holds, and a var
   }
 });
 
+test("a file where the empty store must be is refused, not read as ambient credentials", async () => {
+  const auth = join(dir, "planted-auth.json");
+  const planted = join(dir, "planted.json");
+  await writeFile(planted, JSON.stringify({ anthropic: { type: "api_key", key: "someone-else" } }));
+  await assert.rejects(listProviders(auth, planted), /must not exist/);
+});
+
 test("disconnect removes only that provider from duang's file, and a corrupt file is an error", async () => {
   const auth = join(dir, "disconnect.json");
   await writeFile(
@@ -62,7 +69,7 @@ test("a sign-in relays prompts and events, withdraws a prompt its flow no longer
     method: "oauth",
     authPath: join(dir, "flow.json"),
     send: (step) => sent.push(step),
-    open: (url) => opened.push(url),
+    open: async (url) => void opened.push(url),
     run: async ({ interaction }) => {
       interaction.notify({ type: "auth_url", url: "https://claude.ai/oauth/authorize" });
       interaction.notify({ type: "auth_url", url: "http://evil.example/" });
@@ -94,8 +101,32 @@ test("a sign-in relays prompts and events, withdraws a prompt its flow no longer
   await new Promise((resolve) => setImmediate(resolve));
   finish();
   assert.deepEqual(await flow.result, { ok: true, verified: "n/a" });
-  flow.reopen("https://claude.ai/oauth/authorize");
-  assert.throws(() => flow.reopen("https://elsewhere.example/"), /Not a URL this sign-in reported/);
+  await flow.reopen("https://claude.ai/oauth/authorize");
+  await assert.rejects(flow.reopen("https://elsewhere.example/"), /Not a URL this sign-in reported/);
+});
+
+test("a browser that does not open is said, and reopening it rejects", async () => {
+  const sent: LoginStep[] = [];
+  const flow = startLogin({
+    provider: "anthropic",
+    method: "oauth",
+    authPath: join(dir, "nobrowser.json"),
+    send: (step) => sent.push(step),
+    open: async () => {
+      throw new Error("no application to open https");
+    },
+    run: async ({ interaction }) => {
+      interaction.notify({ type: "auth_url", url: "https://claude.ai/oauth/authorize" });
+      return new Promise(() => {});
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(
+    sent.some((step) => step.type === "info" && step.message.includes("no application to open https")),
+    "the dialog says why nothing opened",
+  );
+  await assert.rejects(flow.reopen("https://claude.ai/oauth/authorize"), /no application to open https/);
+  flow.cancel();
 });
 
 test("cancelling ends the flow as a decision, not a failure", async () => {
@@ -104,7 +135,7 @@ test("cancelling ends the flow as a decision, not a failure", async () => {
     method: "api_key",
     authPath: join(dir, "cancel.json"),
     send: () => {},
-    open: () => {},
+    open: async () => {},
     run: async ({ interaction }) => {
       await interaction.prompt({ type: "secret", message: "Key" }).catch(() => {
         throw new LoginCancelled("cancelled");
@@ -121,7 +152,7 @@ test("cancelling ends the flow as a decision, not a failure", async () => {
     method: "api_key",
     authPath: join(dir, "fail.json"),
     send: () => {},
-    open: () => {},
+    open: async () => {},
     run: async () => {
       throw new Error("EADDRINUSE: port 1455");
     },
