@@ -88,8 +88,8 @@ if (!process.versions.electron) {
     for (const name of Object.keys(process.env)) {
       if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^AWS_|^GOOGLE_|^AZURE_|^PI_|PROXY$/i.test(name)) delete process.env[name];
     }
-    const { GLOBAL_AUTH_PATH } = await import("@fastagent-sh/fastagent/pi");
-    await writeFile(GLOBAL_AUTH_PATH, JSON.stringify({ openai: { type: "api_key", key: "shot-key" } }));
+    // duang reads only its own credential file, in its user data.
+    await writeFile(join(data, "auth.json"), JSON.stringify({ openai: { type: "api_key", key: "shot-key" } }));
     await writeFile(join(workspace, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(join(second, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');

@@ -142,13 +142,16 @@ lock yet, so two instances writing at once can drop each other's rows. Invalid o
 reported rather than replaced with an empty list. Adding the same resolved directory reuses its
 existing row, and removing an agent never deletes the directory or conversation history.
 
-The picker and every conversation use the same credential file: FastAgent's own global store
-(`~/.fastagent/.secrets/auth.json`, what `fastagent login -g` writes) by default, or the path in
-`FASTAGENT_AUTH_PATH` (a leading `~` is expanded). The picker displays its resolved path. duang
-neither copies credentials nor silently falls back to a project's `.secrets/auth.json` or to pi's
-store; point `FASTAGENT_AUTH_PATH` at either to use it. SDK-supported environment credentials still
-apply when a provider is absent from the selected file. `FASTAGENT_SECRETS_DIR` does not redirect
-this file.
+The picker, every conversation and plan usage use duang's own credential file, `auth.json` in its
+user data (`~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
+`~/.config/duang/` on Linux). The picker displays its path. duang reads no other store: not the
+`fastagent` CLI's (`~/.fastagent/.secrets/auth.json`), not a project's `.secrets/auth.json`, not
+pi's, and `FASTAGENT_AUTH_PATH` does not redirect it. Copying a login between files would put one
+OAuth grant in two places, and whichever refreshes first invalidates the other. SDK-supported
+environment credentials still apply when a provider is absent from the file. Until providers can be
+connected in duang ([#84](https://github.com/fastagent-sh/duang/issues/84)), sign in once with the
+CLI pointed at this file: `FASTAGENT_AUTH_PATH="$HOME/Library/Application Support/duang/auth.json"
+fastagent login`.
 
 The picker lists what the open agent can run, including endpoints from its own
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`: every provider with a
@@ -157,7 +160,7 @@ configured credential, whether in that file, an environment variable or a key wr
 Reopening it or pressing Retry rereads the file, so external login changes need no app restart.
 Execution resolves the actual conversation's provider, including history that differs from the
 agent default; OAuth refresh and provider errors remain visible. OAuth refresh writes back to the
-selected file through the SDK. Behind a proxy, every request follows the system's proxy settings as
+same file through the SDK. Behind a proxy, every request follows the system's proxy settings as
 they are at that moment (a VPN switched on later included), because Node's `fetch` would otherwise
 ignore them; Settings → Network can fix a proxy or turn it off, and tests the route.
 
@@ -179,9 +182,10 @@ the original diagnostic and a way to reach the file, never replaced with an empt
 agent never deletes its directory or conversations. Changing an agent's model or removing it is
 refused while any of its conversations is running.
 
-The picker and every conversation resolve credentials from one file. `test:live` passes against
+The picker and every conversation resolve credentials from one file. `test:live` passed against
 real Codex and Anthropic accounts, including a conversation whose provider differs from the agent
-default and a real OAuth refresh that rotated both tokens back into the same file. The smoke check
+default and a real OAuth refresh that rotated both tokens back into the same file. It now reads
+duang's own file (through a symlink, never a copy) and has not been re-run since that change. The smoke check
 covers the same paths deterministically with isolated credentials and replaced provider HTTP.
 
 The fragmented Week 1 status display was subsequently redesigned

@@ -97,7 +97,7 @@ A *Connected* list shows each provider with every source that authenticates it, 
 Disconnect. A provider-supplied environment variable (such as `ANTHROPIC_API_KEY`) is shown as a
 source too, and cannot be removed from duang.
 
-**duang's own credential file.** Connections are written to one file that only duang reads:
+**duang's own credential file (shipped).** Connections are written to one file that only duang reads:
 `auth.json` in the app's data directory, beside `agents.json` and `settings.json` (Electron's
 `userData`: `~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
 `~/.config/duang/` on Linux). duang does not read the `fastagent` CLI's or pi's stores, and
@@ -141,7 +141,7 @@ and accounts are not settings until a shipped feature needs them.
 ## Paths through the product
 
 **Daily local use (current foundation).** Connect a model provider (planned in-app, into duang's
-own credential file; today `fastagent login`), add an agent directory, choose a model, start work,
+own credential file; today `fastagent login` with `FASTAGENT_AUTH_PATH` pointed at that file), add an agent directory, choose a model, start work,
 switch away, return to the real outcome, continue. Stage 1 strengthens the return-to-work flow,
 loaded-definition visibility and relevant local change review, using real tasks before adding
 compact, fork or a complete file tree. The current client already covers the basic chat, history,

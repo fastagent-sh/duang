@@ -1,13 +1,17 @@
 /**
- * Real provider check for issue #5: no faked HTTP, the machine's own FastAgent credential file.
+ * Real provider check for issue #5: no faked HTTP, this machine's own duang credential file.
  * Opt-in (`DUANG_LIVE=1`), spends a few model tokens, and prints no credential values.
  *
  * Isolated: a temporary userData/registry and a throwaway agent directory. NOT isolated on purpose:
- * the credential file, because the point is that duang reuses the existing one and that real OAuth
- * refresh writes back through the SDK exactly as it does in `npm run dev`.
+ * the credential file. The temporary userData's `auth.json` is a symlink to the real one, never a copy:
+ * a copied OAuth login is invalidated the first time either copy refreshes. Real refresh writes back
+ * through the link, as it does in the app.
+ *
+ * Quit duang first. FastAgent locks the path it was given, so this run and a running app would hold
+ * different locks over the same file and could refresh one login at once.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -63,6 +67,14 @@ if (!process.versions.electron) {
     await mkdir(data, { recursive: true });
     await writeFile(join(dir, "fastagent", "fastagent.config.ts"), "export default {};\n");
     await writeFile(join(data, "agents.json"), JSON.stringify([{ id: "live", name: "Live", dir }]));
+    // The app's own data directory, named explicitly: this process is "Electron", not "duang".
+    const real = join(app.getPath("appData"), "duang", "auth.json");
+    assert.ok(
+      existsSync(real),
+      `${real} does not exist. Connect Codex and Anthropic in duang (Settings → Model providers), or ` +
+        `sign in with the CLI pointed at it: FASTAGENT_AUTH_PATH="${real}" fastagent login`,
+    );
+    symlinkSync(real, join(data, "auth.json"));
 
     const loaded = new Promise((resolve) => {
       app.once("browser-window-created", (_event, window) => {

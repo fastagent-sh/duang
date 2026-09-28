@@ -10,19 +10,16 @@ import electron from "electron";
 
 // The parent removes the fixture only after Chromium has stopped writing its disk caches.
 if (!process.versions.electron) {
-  for (const override of [false, true]) {
-    const root = mkdtempSync(join(tmpdir(), "duang-smoke-"));
-    try {
-      const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
-        stdio: "inherit",
-        env: { ...process.env, DUANG_SMOKE_ROOT: root, DUANG_SMOKE_AUTH_OVERRIDE: String(override), HOME: root },
-        timeout: 90000,
-      });
-      process.exitCode = child.status ?? 1;
-      if (process.exitCode) break;
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+  const root = mkdtempSync(join(tmpdir(), "duang-smoke-"));
+  try {
+    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
+      stdio: "inherit",
+      env: { ...process.env, DUANG_SMOKE_ROOT: root, HOME: root },
+      timeout: 90000,
+    });
+    process.exitCode = child.status ?? 1;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 } else {
   const { app, BrowserWindow, Menu } = electron;
@@ -51,16 +48,19 @@ if (!process.versions.electron) {
       anthropic: { type: "oauth", access: "sk-ant-oat01-synthetic", refresh: "synthetic-refresh", expires: Date.now() + 3600000 },
       "openai-codex": codex,
     };
-    // The expectation is FastAgent's own global path, not a copy of it: a duang default that drifts
-    // from `fastagent login` must fail here rather than agree with a literal this file made up.
-    const { GLOBAL_AUTH_PATH: defaultAuth } = await import("@fastagent-sh/fastagent/pi");
-    const selectedAuth = process.env.DUANG_SMOKE_AUTH_OVERRIDE === "true" ? join(root, "custom-auth.json") : defaultAuth;
-    if (selectedAuth !== defaultAuth) process.env.FASTAGENT_AUTH_PATH = selectedAuth;
-    // Stores duang must never read on its own. Holding only `openai-codex` makes a wrong pick visible:
-    // the `anthropic/...` assertions below cannot pass from these files.
-    await writeFile(join(root, ".fastagent", "auth.json"), JSON.stringify({ "openai-codex": codex }));
+    // duang's own file, in its user data. Everything below reads and writes only this one.
+    const selectedAuth = join(data, "auth.json");
+    // Stores duang must never read: the CLI's global store, pi's, a stray one, and the file
+    // `FASTAGENT_AUTH_PATH` names, which the CLI honours and duang no longer does. Holding only
+    // `openai-codex` (or a wrong key) makes a wrong pick visible: the `anthropic/...` assertions below
+    // cannot pass from these files.
+    const { GLOBAL_AUTH_PATH } = await import("@fastagent-sh/fastagent/pi");
+    const decoy = JSON.stringify({ "openai-codex": codex });
+    process.env.FASTAGENT_AUTH_PATH = join(root, "custom-auth.json");
+    await writeFile(process.env.FASTAGENT_AUTH_PATH, decoy);
+    await writeFile(GLOBAL_AUTH_PATH, decoy);
+    await writeFile(join(root, ".fastagent", "auth.json"), decoy);
     await writeFile(join(root, ".pi", "agent", "auth.json"), JSON.stringify({ openai: { type: "api_key", key: "wrong-store" } }));
-    if (selectedAuth !== defaultAuth) await writeFile(defaultAuth, JSON.stringify({ "openai-codex": codex }));
     await writeFile(selectedAuth, JSON.stringify(stored));
     await writeFile(join(configured, "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
     // A definition-local endpoint (#59): listed for this agent only, and accepted as its model.
@@ -964,7 +964,7 @@ if (!process.versions.electron) {
       }
       assert.ok(onSettings, "the new window lands on Settings");
       console.log(
-        `Electron smoke passed (${selectedAuth === defaultAuth ? "default auth" : "explicit auth"}): local workflow, cross-provider history, missing/corrupt credentials and recovery`,
+        "Electron smoke passed: local workflow, duang's own credential file, cross-provider history, missing/corrupt credentials and recovery",
       );
     } catch (error) {
       console.error(error);

@@ -1,14 +1,13 @@
-/** One credential file for the picker and every runtime, independent of the agent's default model. */
-import { homedir } from "node:os";
-import { resolve } from "node:path";
-import { availableModelsFromDir, GLOBAL_AUTH_PATH } from "@fastagent-sh/fastagent/pi";
+/**
+ * duang's own credential file: the one file the picker, every runtime, plan usage and sign-in read and
+ * write. It is not the `fastagent` CLI's or pi's store, and nothing falls back to them: one OAuth grant
+ * in two files is invalidated by whichever refreshes first, since providers rotate the refresh token.
+ */
+import { join } from "node:path";
+import { app } from "electron";
+import { availableModelsFromDir } from "@fastagent-sh/fastagent/pi";
 
-/** FastAgent expands a leading `~` for the same variable; a GUI's environment rarely has a shell to do it. */
-function expandHome(path: string): string {
-  return path === "~" ? homedir() : path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : path;
-}
-
-export const authPath = resolve(expandHome(process.env.FASTAGENT_AUTH_PATH || GLOBAL_AUTH_PATH));
+export const authPath = join(app.getPath("userData"), "auth.json");
 
 /** What the picker shows: the specs this agent can run, and the credential file its runtimes use. */
 export interface Models {

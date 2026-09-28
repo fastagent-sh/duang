@@ -6,7 +6,6 @@ import { test } from "node:test";
 
 const dir = await mkdtemp(join(tmpdir(), "duang-usage-"));
 const auth = join(dir, "auth.json");
-process.env.FASTAGENT_AUTH_PATH = auth;
 const { MIN_GAP_MS, parseAnthropic, parseCodex, providerUsage } = await import("./usage.ts");
 
 const HOUR = 3600;
@@ -48,18 +47,31 @@ test("a subscription is read with its own token; an API key has no windows; a re
     }),
   );
   const t = Date.now();
-  const first = await providerUsage("anthropic", t);
+  const first = await providerUsage("anthropic", auth, t);
   assert.deepEqual(first.windows, [{ label: "5h", percent: 4, windowSeconds: 5 * HOUR }]);
   assert.deepEqual(calls, [{ url: "https://api.anthropic.com/api/oauth/usage", authorization: "Bearer sk-ant-oat01-test" }]);
 
   // Within the gap the same answer is reused: a turn ending every minute must not poll a 429-prone route.
-  assert.equal(await providerUsage("anthropic", t + MIN_GAP_MS - 1), first);
+  assert.equal(await providerUsage("anthropic", auth, t + MIN_GAP_MS - 1), first);
   assert.equal(calls.length, 1);
 
   status = 429;
-  await assert.rejects(providerUsage("anthropic", t + MIN_GAP_MS), /api\.anthropic\.com answered 429: rate limited/);
+  await assert.rejects(providerUsage("anthropic", auth, t + MIN_GAP_MS), /api\.anthropic\.com answered 429: rate limited/);
   await writeFile(auth, JSON.stringify({ anthropic: { type: "api_key", key: "sk-ant-api03-test" } }));
-  assert.equal((await providerUsage("anthropic", t + 2 * MIN_GAP_MS)).windows, undefined, "an API key is not a plan");
-  assert.equal((await providerUsage("mistral", t)).windows, undefined, "a provider with no usage route");
+  assert.equal((await providerUsage("anthropic", auth, t + 2 * MIN_GAP_MS)).windows, undefined, "an API key is not a plan");
+  assert.equal((await providerUsage("mistral", auth, t)).windows, undefined, "a provider with no usage route");
   assert.equal(calls.length, 2, "neither asked the usage route");
+
+  // Another file's login is another answer, even inside the gap.
+  const other = join(dir, "other.json");
+  await writeFile(other, JSON.stringify({ anthropic: { type: "api_key", key: "sk-ant-api03-other" } }));
+  status = 200;
+  const t2 = t + 10 * MIN_GAP_MS;
+  assert.ok((await providerUsage("anthropic", auth, t2)).windows === undefined);
+  await writeFile(
+    other,
+    JSON.stringify({ anthropic: { type: "oauth", access: "sk-ant-oat01-other", refresh: "r", expires: Date.now() + 3_600_000 } }),
+  );
+  assert.deepEqual((await providerUsage("anthropic", other, t2 + 1)).windows, [{ label: "5h", percent: 4, windowSeconds: 5 * HOUR }]);
+  assert.equal(calls.at(-1)?.authorization, "Bearer sk-ant-oat01-other");
 });

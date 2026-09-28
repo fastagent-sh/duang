@@ -91,8 +91,9 @@ function ModelPopover({
       ) : models?.specs.length === 0 ? (
         <div className="text-muted text-[12px] p-2 leading-relaxed space-y-2">
           <p>
-            No provider is configured. Use <span className="font-mono">fastagent login</span> with
-            <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to the file above, then retry.
+            No provider is connected. duang reads only the file above. Until providers can be connected
+            here (#84), sign in with <span className="font-mono">fastagent login</span> run with
+            <span className="font-mono"> FASTAGENT_AUTH_PATH</span> set to that file, then retry.
           </p>
           <Button kind="ghost" size={28} onClick={onRetry}>
             Retry
