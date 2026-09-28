@@ -800,6 +800,10 @@ export function createStore(api: DuangApi) {
       } catch (error) {
         return publish({ providersError: message(error) });
       }
+      // The plan it paid for is gone: its numbers must not stay in the conversation header, which
+      // asks again only when its provider, run or conversation changes.
+      const { [provider]: _gone, ...usage } = view.usage;
+      publish({ usage });
       await loadProviders();
     },
     /**

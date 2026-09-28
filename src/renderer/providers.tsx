@@ -452,7 +452,6 @@ function ConfirmDisconnect({ provider, onCancel, onConfirm }: { provider: Provid
   );
 }
 
-/** Shown for a moment after a copy: the control confirms, nothing else moves. */
 /** What the flow says beside a step, with the pages it points to (Vertex's ADC guide, AWS's chain). */
 function FlowInfo({ info, store, className = "" }: { info: NonNullable<SignIn["info"]>; store: Store; className?: string }) {
   return (
@@ -467,6 +466,7 @@ function FlowInfo({ info, store, className = "" }: { info: NonNullable<SignIn["i
   );
 }
 
+/** Shown for a moment after a copy: the control confirms, nothing else moves. */
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -513,7 +513,7 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
   if (url)
     return (
       <div className="space-y-3">
-        <Status tone="waiting" title="Waiting for you to finish in your browser…" detail={`${new URL(url.url).host} opened in your browser.`} />
+        <Status tone="waiting" title="Waiting for you to finish in your browser…" detail={`Sign in at ${new URL(url.url).host}.`} />
         <div className="flex flex-wrap items-center gap-2 pl-6">
           <Button size={28} onClick={() => void store.openLoginUrl(url.url)}>
             Open again

@@ -995,6 +995,11 @@ test("plan usage is kept per provider, and a failed read replaces the numbers wi
     { error: "api.anthropic.com answered 429: rate limited" },
     "a stale percentage must not stay on screen as current",
   );
+
+  api.providerUsage = async () => data;
+  await store.loadUsage("anthropic");
+  await store.disconnect("anthropic");
+  assert.equal(store.getSnapshot().usage.anthropic, undefined, "a disconnected plan's numbers go with it");
   store.dispose();
 });
 
