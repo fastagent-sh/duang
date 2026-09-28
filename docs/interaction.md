@@ -30,8 +30,9 @@ broken agent shows its original failure with a way to retry, reveal or remove it
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
 The picker lists the models the open agent can run: pi's built-ins, the agent's own
-`fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to the providers the
-credential file configures. Switching agents with the picker open reads the new agent's list. It
+`fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to providers with a
+configured credential: in the credential file, in an environment variable, or as a key written in
+that `models.json`. Switching agents with the picker open reads the new agent's list. It
 leads with the selected model and a short credential-file label; expanding the label reveals the
 complete FastAgent path. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.

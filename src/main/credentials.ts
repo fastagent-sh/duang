@@ -10,7 +10,7 @@ function expandHome(path: string): string {
 
 export const authPath = resolve(expandHome(process.env.FASTAGENT_AUTH_PATH || GLOBAL_AUTH_PATH));
 
-/** What the picker shows: the specs this agent can run, and the credential file they were read from. */
+/** What the picker shows: the specs this agent can run, and the credential file its runtimes use. */
 export interface Models {
   specs: string[];
   authPath: string;

@@ -18,7 +18,7 @@ export function completionQuery(value: string): string | undefined {
 }
 
 /** How pi is asked to run it: a skill by `skill:<name>`, anything else by its name. */
-const spelling = (command: AgentCommand) => (command.source === "skill" ? `skill:${command.name}` : command.name);
+export const spelling = (command: AgentCommand) => (command.source === "skill" ? `skill:${command.name}` : command.name);
 
 /** A skill is found by its name or by the spelling that runs it. */
 export function matches(commands: AgentCommand[], query: string, limit = 8): AgentCommand[] {

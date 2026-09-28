@@ -525,6 +525,10 @@ if (!process.versions.electron) {
       await evaluate("document.querySelector('textarea').focus()");
       await type("/");
       await until("document.body.innerText.includes('A skill the completion list should offer')", "command list");
+      assert.ok(
+        (await evaluate("document.body.innerText")).includes("/skill:demo"),
+        "the list shows the spelling accepting it inserts, not a bare /demo",
+      );
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until(
