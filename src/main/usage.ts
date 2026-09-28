@@ -8,7 +8,6 @@
  * stays in main; the renderer gets numbers.
  */
 import { createPiModels } from "@fastagent-sh/fastagent/pi";
-import { authPath } from "./credentials.ts";
 
 export interface UsageWindow {
   /** "5h", "7d": the window's length, as a person names it. */
@@ -118,7 +117,7 @@ const endpoints: Record<string, (token: string) => Promise<UsageWindow[]>> = {
     ),
 };
 
-async function read(provider: string): Promise<ProviderUsage> {
+async function read(provider: string, authPath: string): Promise<ProviderUsage> {
   const fetchedAt = Date.now();
   const endpoint = endpoints[provider];
   if (!endpoint) return { provider, fetchedAt };
@@ -136,10 +135,11 @@ async function read(provider: string): Promise<ProviderUsage> {
  */
 const recent = new Map<string, { at: number; answer: Promise<ProviderUsage> }>();
 
-export function providerUsage(provider: string, now = Date.now()): Promise<ProviderUsage> {
+/** `authPath` is the credential file whose login pays for the conversation: duang's own. */
+export function providerUsage(provider: string, authPath: string, now = Date.now()): Promise<ProviderUsage> {
   const hit = recent.get(provider);
   if (hit && now - hit.at < MIN_GAP_MS) return hit.answer;
-  const answer = read(provider);
+  const answer = read(provider, authPath);
   recent.set(provider, { at: now, answer });
   return answer;
 }

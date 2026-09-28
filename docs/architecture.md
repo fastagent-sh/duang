@@ -43,24 +43,21 @@ expired login under the credential file's lock, as a run would) and calls the pr
 route. Neither route is documented; an unexpected shape is an error, not zero. The renderer
 receives window percentages and reset times only.
 
-**Credential-file selection is application-scoped.** The picker and all assemblies receive the
-same explicit `authPath`; it is never chosen from an agent default or a cached provider probe.
-FastAgent resolves credentials for the actual session model and owns OAuth refresh/writeback.
-The renderer receives model specs and the selected path, never credential contents. See the
-[credential policy](../README.md#run-it) for defaults and explicit overrides.
-
-**Planned: duang's own credential file.** The picker, every assembly, plan usage and sign-in
-will use `userData/auth.json` instead of FastAgent's global store, and `FASTAGENT_AUTH_PATH` will
-no longer redirect it. Only one file is read: no fallback to the CLI's or pi's store, because one
-OAuth grant in two files is invalidated by whichever refreshes first. Provider environment
-variables still apply when the file has no credential for a provider. The file is plain JSON
+**duang's own credential file.** The picker, every assembly and plan usage receive the same
+explicit `authPath`, `userData/auth.json`; it is never chosen from an agent default, a cached
+provider probe or `FASTAGENT_AUTH_PATH`. Only that file is read: no fallback to the CLI's or pi's
+store, because one OAuth grant in two files is invalidated by whichever refreshes first. Provider
+environment variables still apply when the file has no credential for a provider. FastAgent
+resolves credentials for the actual session model and owns OAuth refresh/writeback. The renderer
+receives model specs and the file's path, never credential contents. The file is plain JSON
 (`0600`); OS-backed storage needs a pluggable credential store in FastAgent
 ([fastagent#652](https://github.com/fastagent-sh/fastagent/issues/652)). Tests follow the same
 rule, without an override: the smoke writes synthetic credentials into its isolated userData's
 `auth.json`, and decoys into the CLI's and pi's stores and a `FASTAGENT_AUTH_PATH` file, which must
 stay unread. The opt-in live check keeps its isolated userData but makes that `auth.json` a symlink
 to the developer's real duang file, never a copy, so a real refresh writes back to the one grant;
-it runs with duang closed, because each process locks the path it was given.
+it runs with duang closed, because each process locks the path it was given. See the
+[credential policy](../README.md#run-it).
 
 **Planned: sign-in runs in main.** Main calls FastAgent's public login entry point
 ([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with that same `authPath`
@@ -125,7 +122,7 @@ persists drafts and selection in localStorage (a drafts value it cannot read is 
 `duang.drafts.unreadable` and reported, never overwritten); live output and attention marks are presentation
 state, not a second durable transcript. Remote contacts and credentials are future work: never
 store access tokens alongside contact metadata; use OS-backed secure storage for secrets. Model
-credentials are not duang's: they stay in FastAgent's credential file. Planned app preferences
+credentials live in duang's own `userData/auth.json`, written through FastAgent's credential store. Planned app preferences
 (the network mode) live in `userData/settings.json`, validated on read; an unreadable file is an
 error, not a first run.
 
@@ -188,7 +185,7 @@ work may already have happened. These are data-integrity constraints, not an ent
 | Local conversations | FastAgent local state root | Already implemented; not uploaded on publish. |
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
-| Model and channel credentials | each runtime's credential store or host secrets; planned for local agents: duang's own `userData/auth.json` | Never copy an OAuth login between stores or into a remote deployment. |
+| Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a remote deployment. |
 | Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a preset or deployment. |
 | App preferences (planned) | `userData/settings.json` | Network mode only; never credentials. |
 | Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |

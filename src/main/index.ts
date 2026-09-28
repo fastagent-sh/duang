@@ -16,7 +16,7 @@ import {
   workingAgents,
   type AgentRow,
 } from "./agents.ts";
-import { modelsFor } from "./credentials.ts";
+import { authPath, modelsFor } from "./credentials.ts";
 import { providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
@@ -225,7 +225,7 @@ function register(): void {
   ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
-    return providerUsage(provider);
+    return providerUsage(provider, authPath);
   });
   // The dock is where "something happened while you were away" belongs: the sidebar can only say it
   // while duang is the window you are looking at.
