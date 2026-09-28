@@ -117,6 +117,9 @@ export default function App() {
   const usage = c?.state?.usage;
   const pending = c?.state?.pending;
   const waiting = c ? queueView(c.waiting, pending?.steering ?? []) : [];
+  // With no run going, or one that has not placed its user message yet, what waits opens the run
+  // rather than joins it: it reads before the run's working mark, not after.
+  const opens = !c || c.state?.status !== "running" || !c.runHasUser;
   // The plan that pays for this conversation: its own model's provider, which may differ from the
   // agent default.
   const provider = (c?.state?.model ?? view.model)?.split("/")[0];
@@ -246,7 +249,7 @@ export default function App() {
               // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
               // run streams, so this gap *is* where the newest line lands. At 16 the line you are
               // reading sat on the composer's edge, half under the fade.
-              <Transcript key={c.subscription} items={c.items} waiting={waiting} busy={busy} bottomGap={composerHeight + 64} />
+              <Transcript key={c.subscription} items={c.items} waiting={waiting} opens={opens} busy={busy} bottomGap={composerHeight + 64} />
             )}
             {agentId && agentState === "ready" && c && (c.items.length > 0 || waiting.length > 0) && (
               // Floating, not stacked: the transcript runs the full height of the pane and passes
