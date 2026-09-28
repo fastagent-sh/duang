@@ -78,13 +78,16 @@ function gap(previous: Line | undefined, line: Line): string {
 
 export function Transcript({
   items,
-  queued,
+  waiting,
   busy,
   bottomGap,
 }: {
   items: Item[];
-  /** Sent into the run but not read by the model yet: they sit below the output until it does. */
-  queued: Item[];
+  /**
+   * Messages that have not entered the conversation yet, below the output until the runtime places
+   * them. `listed`: the runtime reports it as queued; otherwise it is still on its way there.
+   */
+  waiting: { item: Item; listed: boolean }[];
   busy: boolean;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
@@ -126,7 +129,7 @@ export function Transcript({
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
     check();
-  }, [items, queued, busy, streaming]);
+  }, [items, waiting, busy, streaming]);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -191,9 +194,9 @@ export function Transcript({
             <Working />
           </div>
         )}
-        {queued.map((item, index) => (
+        {waiting.map(({ item, listed }, index) => (
           <div key={index} className="enter pt-6">
-            <Message item={item} queued />
+            <Message item={item} waiting={listed ? "queued" : "sending"} />
           </div>
         ))}
       </div>
@@ -211,7 +214,7 @@ const markdownComponents = { code: MarkdownCode };
 /** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 
-export function Message({ item, queued }: { item: Item; queued?: boolean }) {
+export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "sending" }) {
   switch (item.kind) {
     case "user":
       // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
@@ -221,15 +224,15 @@ export function Message({ item, queued }: { item: Item; queued?: boolean }) {
           <div
             className={`bubble max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 whitespace-pre-wrap ${
               item.steered ? "border-r-2 border-accent" : ""
-            } ${queued ? "opacity-60" : ""}`}
+            } ${waiting ? "opacity-60" : ""}`}
           >
             {item.text}
           </div>
           {/* After the fact nothing else distinguishes a message that joined a run from one that
               started it (§8). */}
           <div className="flex items-center gap-2 text-[11px] text-muted">
-            {queued ? (
-              <span>queued</span>
+            {waiting ? (
+              <span>{waiting}</span>
             ) : (
               <>
                 {item.steered && <span className="text-accent">joined the run</span>}

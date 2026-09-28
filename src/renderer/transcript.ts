@@ -10,7 +10,11 @@ import type { KnownSessionEvent, ServingErrorEvent, SessionEntry, SessionEvent }
 type At = { at: number };
 
 export type Item = At &
-  ({ kind: "user"; text: string; steered?: boolean }
+  /**
+   * `steered`: it joined a run that already had a user message. `entryId`: the runtime's record of it,
+   * from history or from `user_message`, so a backfill and a live event are one bubble.
+   */
+  ({ kind: "user"; text: string; steered?: boolean; entryId?: string }
   | { kind: "assistant"; text: string; open: boolean }
   /**
    * `started` is kept because `at` is restamped when the block settles, and "thought for 8s" is
@@ -52,6 +56,34 @@ export function dayLabel(at: number, now: number = Date.now()): string {
   if (days === 1) return "Yesterday";
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
+}
+
+export type UserItem = Extract<Item, { kind: "user" }>;
+
+/**
+ * Which of this window's own waiting messages a text from the runtime is: the oldest with that text,
+ * else the oldest slash command, because the runtime reports a command expanded (or, for an extension
+ * command, the message it sent). Anything else is a message from another client or from before a reload.
+ * ponytail: text is the only key. A message from elsewhere queued ahead of one of our commands takes
+ * the command's place; a client-supplied prompt id upstream is the fix if several clients steer at once.
+ */
+export function claim(waiting: UserItem[], text: string): UserItem | undefined {
+  return waiting.find((item) => item.text === text) ?? waiting.find((item) => item.text.startsWith("/"));
+}
+
+/**
+ * The bubbles below the live output: the runtime's queue first, in its order, each shown as this
+ * window's own message when it is one; then messages sent from here that the runtime has not listed
+ * yet. `listed` is what the runtime reports as queued; the rest are still on their way.
+ */
+export function queueView(waiting: UserItem[], pending: string[]): { item: UserItem; listed: boolean }[] {
+  let left = waiting;
+  const listed = pending.map((text) => {
+    const own = claim(left, text);
+    if (own) left = left.filter((item) => item !== own);
+    return { item: own ?? { kind: "user" as const, text, at: 0 }, listed: true };
+  });
+  return [...listed, ...left.map((item) => ({ item, listed: false }))];
 }
 
 /** A day boundary in the reading flow: without it, yesterday's run reads as if it just happened. */
@@ -107,7 +139,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
     };
     const at = entry.timestamp;
     if (entry.kind === "user") {
-      items.push({ kind: "user", text: data.text ?? "", at });
+      items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
     } else if (entry.kind === "assistant") {
       if (data.text) items.push({ kind: "assistant", text: data.text, open: false, at });
       for (const call of data.toolCalls ?? []) {

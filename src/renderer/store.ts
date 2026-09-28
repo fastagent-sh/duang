@@ -1,6 +1,6 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, Network, ProviderUsage, Route, SessionFrame } from "../preload/index.ts";
-import { apply, fromEntries, known, previewOf, resumeRunning, type Item } from "./transcript.ts";
+import { apply, claim, fromEntries, known, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
@@ -72,26 +72,18 @@ interface Conversation {
   /** Main ended this subscription on purpose. Nothing broke; this view just stopped listening. */
   ended?: string;
   sends: number;
-  runStarts: number;
   events: SessionEvent[];
   /**
-   * The runtime's steering queue (`pending.steering`), oldest first, as bubbles. A steer waits for the
-   * run's next turn boundary, so showing it in `items` at send time puts it above output the model
-   * produced without it. It moves into `items` when it leaves the runtime's list, which FastAgent
-   * defines as entering the conversation.
+   * Messages sent from this window that have not entered the conversation yet, oldest first. They
+   * show below the live output until the runtime's `user_message` places them: a steer is read at the
+   * run's next turn boundary, so placing it at send time put it above output written without it.
    */
-  queued: UserItem[];
-  /** Sent as steers from this window, not listed by the runtime yet. */
-  unlisted: UserItem[];
-  /**
-   * A message that starts a turn has been sent and its run has not started yet. A message sent now
-   * joins that run. It is cleared at `run_started`: once the run is going, `status` says it, and
-   * after it settles a new message starts a turn even while the first send is still returning.
-   */
-  starting: boolean;
+  waiting: UserItem[];
+  /** Of `waiting`, those whose send already returned: accepted, yet nothing has entered from them. */
+  returned: Set<UserItem>;
+  /** The current run already has a user message, so the next one joined it rather than opened it. */
+  runHasUser: boolean;
 }
-type UserItem = Extract<Item, { kind: "user" }>;
-const steer = (text: string, at: number): UserItem => ({ kind: "user", text, at, steered: true });
 /**
  * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
  * this window holds that conversation, read once from its history otherwise. Presentation only: it
@@ -384,11 +376,10 @@ export function createStore(api: DuangApi) {
       draft: drafts.get(key(agentId, session)) ?? "",
       loading: true,
       sends: 0,
-      runStarts: 0,
       events: [],
-      queued: [],
-      unlisted: [],
-      starting: false,
+      waiting: [],
+      returned: new Set(),
+      runHasUser: false,
     };
     conversations.set(key(agentId, session), c);
     publish({ conversation: c, error: undefined });
@@ -398,7 +389,8 @@ export function createStore(api: DuangApi) {
       c.items = fromEntries(result.entries.entries, result.entries.leafEntryId);
       if (result.state.status === "running") c.items = resumeRunning(c.items);
       c.state = result.state;
-      c.queued = result.state.pending.steering.map((text) => steer(text, Date.now()));
+      // Opened mid-run, the run's opening message is already in the history just read.
+      c.runHasUser = result.state.status === "running";
       c.loading = false;
       // New sends are disabled until backfill finishes. An already-running local turn retains its
       // subscription and view across navigation, so its deltas are never reconstructed from history.
@@ -471,72 +463,65 @@ export function createStore(api: DuangApi) {
     const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
     const e = known(event);
     if (e.type === "run_started") {
-      c.runStarts++;
-      // No message of ours was waiting for a run, so this one belongs to the oldest unlisted
-      // message: main found the runtime idle (the turn it meant to join never started) and started
-      // a turn with it. It opens this run, so it goes above the run's output.
-      const [opening] = c.unlisted;
-      if (!c.starting && opening) {
-        opening.steered = false;
-        opening.at = event.timestamp;
-        c.unlisted = c.unlisted.slice(1);
-        c.items = [...c.items, opening];
-      }
-      c.starting = false;
+      c.runHasUser = false;
       c.state = { ...state, status: "running", activeRunId: e.runId };
     } else if (e.type === "run_settled") {
+      dropQueued(c, state.pending.steering);
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
       // A run that ends while you are reading something else is the thing you came back for. A run
       // you stopped yourself is not news.
       if (c !== view.conversation && e.data.status !== "aborted")
         unseen.set(key(c.agentId, c.session), e.data.status === "completed" ? "done" : "failed");
       void listSessions(c.agentId);
+    } else if (e.type === "user_message") {
+      enter(c, e.data.entryId, e.data.text, e.timestamp);
     } else if (e.type === "queue_changed") {
-      requeue(c, e.data.steering, e.timestamp);
       c.state = { ...state, pending: e.data };
     } else if (e.type === "state_changed") {
       c.state = { ...state, ...e.data };
     }
     c.items = apply(c.items, event);
-    if (event.type === "run_settled") settleQueue(c);
+    if (event.type === "run_settled") ranNothing(c);
   }
   /**
-   * Follow the runtime's steering list. The queue only loses entries at its head (they entered the
-   * conversation, so they move into `items` now) and gains them at its tail. A new entry is this
-   * window's own message when one was sent with that text; a slash command is listed expanded, so an
-   * unmatched entry takes the oldest command sent. Anything else was queued elsewhere, or before a
-   * reload, and still shows.
+   * The runtime placed a user message: it goes into the transcript here, at the moment it entered.
+   * An entry the history already holds (a backfill that overlapped the live stream) is not added
+   * twice. This window's own message keeps the words that were typed.
    */
-  function requeue(c: Conversation, next: string[], at: number) {
-    let read = 0;
-    while (!c.queued.slice(read).every((item, i) => next[i] === item.text)) read++;
-    const entered = c.queued.slice(0, read);
-    for (const item of entered) item.at = at;
-    c.items = [...c.items, ...entered];
-    const kept = c.queued.slice(read);
-    const added = next.slice(kept.length).map((text) => {
-      const own = c.unlisted.find((item) => item.text === text) ?? c.unlisted.find((item) => item.text.startsWith("/"));
-      if (!own) return steer(text, at);
-      c.unlisted = c.unlisted.filter((item) => item !== own);
-      return own;
-    });
-    c.queued = [...kept, ...added];
+  function enter(c: Conversation, entryId: string, text: string, at: number) {
+    const known = c.items.some((item) => item.kind === "user" && item.entryId === entryId);
+    const own = known ? undefined : claim(c.waiting, text);
+    if (own) {
+      c.waiting = c.waiting.filter((item) => item !== own);
+      c.returned.delete(own);
+    }
+    if (!known) c.items = [...c.items, { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
+    c.runHasUser = true;
   }
   /**
-   * The run is gone. What its queue still listed never entered the conversation and was dropped:
-   * it returns to the draft rather than stay on screen as if delivered. Messages the runtime never
-   * listed did not reach this run; main is starting a new turn with them, so they are ordinary
-   * messages now, after the run's closing note.
+   * What the runtime still lists as queued when its run ends never entered the conversation and is
+   * dropped with the run. It returns to the draft rather than stay on screen as if delivered, and so
+   * does a message this window did not send: after a reload the runtime's queue is the only place a
+   * steer typed before it still exists, and nothing else would keep those words.
    */
-  function settleQueue(c: Conversation) {
-    const dropped = c.queued;
-    const unsent = c.unlisted;
-    c.queued = [];
-    c.unlisted = [];
-    if (dropped.length) c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
-    // Changed in place: a send that fails later finds and removes its message by identity.
-    for (const item of unsent) item.steered = false;
-    c.items = [...c.items, ...unsent];
+  function dropQueued(c: Conversation, pending: string[]) {
+    const dropped = queueView(c.waiting, pending).flatMap(({ item, listed }) => (listed ? [item] : []));
+    if (!dropped.length) return;
+    c.waiting = c.waiting.filter((item) => !dropped.includes(item));
+    for (const item of dropped) c.returned.delete(item);
+    c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
+  }
+  /**
+   * An accepted message with no run left to enter: an extension command that did its work without
+   * sending anything into the conversation. It ran, so it neither returns to the draft nor vanishes.
+   */
+  function ranNothing(c: Conversation) {
+    const ran = c.waiting.filter((item) => c.returned.has(item));
+    if (!ran.length) return;
+    c.waiting = c.waiting.filter((item) => !c.returned.has(item));
+    c.returned.clear();
+    const at = Date.now();
+    c.items = [...c.items, ...ran.map((item): Item => ({ kind: "note", tone: "info", text: `ran ${item.text}`, at }))];
   }
   const unsubscribe = api.onSessionEvent((frame: SessionFrame) => {
     const c = conversations.get(key(frame.agentId, frame.session));
@@ -833,22 +818,14 @@ export function createStore(api: DuangApi) {
       // choice the person can revisit. Dropping the message in silence is how that stays hidden.
       if (view.blocked) throw new Error(`Cannot send while ${view.blocked}`);
       c.draft = "";
-      // Steering: this message joined a run that was already going. Afterwards nothing else
-      // distinguishes it from one that started a turn (§8), so the fact is recorded now.
-      // A run in flight, not `busy(c)`: that predicate also covers compaction, and a message sent
-      // while the context is being compacted starts a turn rather than joining one.
-      const joining = c.state?.status === "running" || c.starting;
-      const echo: UserItem = { kind: "user", text, at: Date.now(), steered: joining };
-      if (joining) c.unlisted = [...c.unlisted, echo];
-      else {
-        c.items = [...c.items, echo];
-        c.starting = true;
-      }
-      const runStarts = c.runStarts;
+      // Where it goes is the runtime's report, not this guess: it waits below the output until
+      // `user_message` places it, whether it opens a run or joins one.
+      const echo: UserItem = { kind: "user", text, at: Date.now() };
+      c.waiting = [...c.waiting, echo];
+      const waiting = () => c.waiting.includes(echo);
+      /** Nothing entered from it, so the text is still the person's to send again. */
       const restoreRejected = () => {
-        if (c.runStarts !== runStarts) return;
-        c.items = c.items.filter((item) => item !== echo);
-        c.unlisted = c.unlisted.filter((item) => item !== echo);
+        c.waiting = c.waiting.filter((item) => item !== echo);
         c.draft = c.draft ? `${text}\n${c.draft}` : text;
       };
       c.sends++;
@@ -856,20 +833,24 @@ export function createStore(api: DuangApi) {
       try {
         const result = await api.send(c.agentId, c.session, text);
         if (!result.ok) {
-          // A run outcome already belongs to the transcript; only a rejected message returns to the draft.
+          // Once it entered, the failure is the run's, and the run's note already says it.
+          if (!waiting()) return;
           if (
             result.error.code !== "aborted" &&
             !c.items.some((item) => item.kind === "note" && item.text.includes(result.error.message))
           )
             refusal(result.error.message, c);
           restoreRejected();
+        } else if (waiting()) {
+          c.returned.add(echo);
+          // A run that already ended while the call returned has nothing left to place it with. A
+          // stream that ended cannot say whether it entered: Retry re-reads the history instead.
+          if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c);
         }
       } catch (error) {
         note(error, c);
-        restoreRejected();
+        if (waiting()) restoreRejected();
       } finally {
-        // A turn that never started (refused, or failed before its run) leaves nothing to join.
-        if (!joining && c.runStarts === runStarts) c.starting = false;
         c.sends--;
         publish();
       }

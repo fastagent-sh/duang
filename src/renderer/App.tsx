@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
+import { queueView } from "./transcript.ts";
 import { BrokenAgent, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
 import { ConversationList, Sidebar } from "./rows.tsx";
 import { ConversationHeader } from "./header.tsx";
@@ -106,6 +107,7 @@ export default function App() {
 
   const usage = c?.state?.usage;
   const pending = c?.state?.pending;
+  const waiting = c ? queueView(c.waiting, pending?.steering ?? []) : [];
   // The plan that pays for this conversation: its own model's provider, which may differ from the
   // agent default.
   const provider = (c?.state?.model ?? view.model)?.split("/")[0];
@@ -218,15 +220,15 @@ export default function App() {
               />
             ) : agentState === "no_agent" ? (
               <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
-            ) : !c || c.items.length === 0 ? (
+            ) : !c || (c.items.length === 0 && waiting.length === 0) ? (
               <NewConversation>{composer}</NewConversation>
             ) : (
               // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
               // run streams, so this gap *is* where the newest line lands. At 16 the line you are
               // reading sat on the composer's edge, half under the fade.
-              <Transcript key={c.subscription} items={c.items} queued={[...c.queued, ...c.unlisted]} busy={busy} bottomGap={composerHeight + 64} />
+              <Transcript key={c.subscription} items={c.items} waiting={waiting} busy={busy} bottomGap={composerHeight + 64} />
             )}
-            {agentId && agentState === "ready" && c && c.items.length > 0 && (
+            {agentId && agentState === "ready" && c && (c.items.length > 0 || waiting.length > 0) && (
               // Floating, not stacked: the transcript runs the full height of the pane and passes
               // beneath this, which is what keeps the bottom of the window from reading as a seam.
               <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
