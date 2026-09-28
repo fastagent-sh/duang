@@ -49,17 +49,23 @@ FastAgent resolves credentials for the actual session model and owns OAuth refre
 The renderer receives model specs and the selected path, never credential contents. See the
 [credential policy](../README.md#run-it) for defaults and explicit overrides.
 
+**Planned: duang's own credential file.** The picker, every assembly, plan usage and sign-in
+will use `userData/auth.json` instead of FastAgent's global store, and `FASTAGENT_AUTH_PATH` will
+no longer redirect it. Only one file is read: no fallback to the CLI's or pi's store, because one
+OAuth grant in two files is invalidated by whichever refreshes first. Provider environment
+variables still apply when the file has no credential for a provider. The file is plain JSON
+(`0600`); OS-backed storage needs a pluggable credential store in FastAgent
+([fastagent#652](https://github.com/fastagent-sh/fastagent/issues/652)).
+
 **Planned: sign-in runs in main.** Main calls FastAgent's public login entry point
-([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with the same `authPath`
+([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with that same `authPath`
 and relays each prompt and event to the renderer over typed IPC, one flow at a time; cancel and
 window destruction abort it, which also closes the provider's local callback server. A secret
 travels from renderer to main once, as an answer; no message from main to the renderer carries
 credential contents. Browser and verification URLs open with `shell.openExternal` after an
-`https:` (or loopback `http:`) check, never in an app window. A custom endpoint's key is stored
-through the public `fastagentCredentialStore`; its definition goes to the machine-level models
-file ([fastagent#603](https://github.com/fastagent-sh/fastagent/issues/603)), which duang edits
-only by its own provider ids, with an atomic write, refusing to touch a file it cannot parse. duang
-never writes an entry for a built-in provider id: a `baseUrl` override there would outlive the
+`https:` (or loopback `http:`) check, never in an app window. Custom endpoints come after the first
+version; where their definitions are written is open (see [design](design.md)). Whatever the file,
+duang never writes an entry for a built-in provider id: a `baseUrl` override there would outlive the
 credential it was entered with and send a later subscription token or official key to the relay.
 
 **One network route, owned by Chromium.** Node's `fetch` ignores the system proxy, and a
@@ -177,7 +183,7 @@ work may already have happened. These are data-integrity constraints, not an ent
 | Local conversations | FastAgent local state root | Already implemented; not uploaded on publish. |
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
-| Model and channel credentials | each runtime's credential store or host secrets | Never copy a local OAuth login into a remote deployment. |
+| Model and channel credentials | each runtime's credential store or host secrets; planned for local agents: duang's own `userData/auth.json` | Never copy an OAuth login between stores or into a remote deployment. |
 | Machine model endpoints (planned) | machine-level FastAgent models file | Local to this machine; not part of a preset or deployment. |
 | App preferences (planned) | `userData/settings.json` | Network mode only; never credentials. |
 | Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |
