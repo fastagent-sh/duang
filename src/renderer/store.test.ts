@@ -77,7 +77,9 @@ function harness() {
     openLoginUrl: async () => {},
     onLoginStep: (fn) => {
       stepListener = fn;
-      return () => {};
+      return () => {
+        if (stepListener === fn) stepListener = () => {};
+      };
     },
   };
   const store = createStore(api);
@@ -116,10 +118,11 @@ test("first model selection unlocks a new conversation; configured models come f
   store.dispose();
 });
 
-test("a store that React disposes and loads again still hears its conversations", async () => {
+test("a store that React disposes and loads again still hears its conversations and sign-ins", async () => {
   // Fast Refresh runs the App effect's cleanup and setup again on the same store, on every edit in
-  // development. The second setup must register for live events again, or every run looks stuck.
-  const { store, emit } = harness();
+  // development. The second setup must register for what main pushes again, or every run looks
+  // stuck and a sign-in never shows what its flow asks.
+  const { api, store, emit, step } = harness();
   await store.load();
   store.dispose();
   await store.load();
@@ -127,6 +130,14 @@ test("a store that React disposes and loads again still hears its conversations"
   assert.equal(c.loading, false);
   emit(c, "run_started");
   assert.equal(store.getSnapshot().busy, true, "the run the runtime reported is shown as running");
+  const provider: ProviderRow = { id: "p", name: "P", ways: [{ method: "api_key", label: "P key", subscription: false }] };
+  const done = deferred<LoginOutcome>();
+  api.login = () => done.promise;
+  const connecting = store.connect(provider, provider.ways[0]!);
+  step({ type: "prompt", id: "1", prompt: { type: "secret", message: "Key" } });
+  assert.equal(store.getSnapshot().signIn?.prompt?.id, "1", "the flow's question reaches the sign-in");
+  done.resolve({ ok: false, cancelled: true });
+  await connecting;
   store.dispose();
 });
 
@@ -1081,6 +1092,7 @@ test("a slow history read cannot replace a newer one", async () => {
 
 test("a sign-in shows what its flow asks, sends the answer once, and ends by its outcome", async () => {
   const { api, store, step } = harness();
+  await store.load();
   const anthropic: ProviderRow = {
     id: "anthropic",
     name: "Anthropic",
@@ -1118,6 +1130,7 @@ test("a sign-in shows what its flow asks, sends the answer once, and ends by its
 
 test("cancelling a sign-in closes it with nothing to say; any other end keeps its reason", async () => {
   const { api, store, step } = harness();
+  await store.load();
   const openai: ProviderRow = { id: "openai", name: "OpenAI", ways: [{ method: "api_key", label: "OpenAI API key", subscription: false }] };
   const running = deferred<LoginOutcome>();
   api.login = () => running.promise;
@@ -1143,6 +1156,7 @@ test("cancelling a sign-in closes it with nothing to say; any other end keeps it
 
 test("starting another sign-in ends the running one first, since main runs one at a time", async () => {
   const { api, store, step } = harness();
+  await store.load();
   const openai: ProviderRow = { id: "openai", name: "OpenAI", ways: [{ method: "api_key", label: "OpenAI API key", subscription: false }] };
   const xai: ProviderRow = { id: "xai", name: "xAI", ways: [{ method: "api_key", label: "xAI API key", subscription: false }] };
   const first = deferred<LoginOutcome>();
@@ -1171,6 +1185,7 @@ test("starting another sign-in ends the running one first, since main runs one a
 
 test("only a key question is a key step: what a flow asks after the key is its own question", async () => {
   const { api, store, step } = harness();
+  await store.load();
   const answers: [string, string][] = [];
   api.answerLogin = async (id, value) => void answers.push([id, value]);
   // Runs until cancelled, as main's does.
@@ -1213,6 +1228,7 @@ test("only a key question is a key step: what a flow asks after the key is its o
 
 test("a blank answer is sent when the flow asks for one, and a blank key is not", async () => {
   const { api, store, step } = harness();
+  await store.load();
   const copilot: ProviderRow = {
     id: "github-copilot",
     name: "GitHub Copilot",
@@ -1234,6 +1250,7 @@ test("a blank answer is sent when the flow asks for one, and a blank key is not"
 
 test("a link the browser will not open is said in the running sign-in", async () => {
   const { api, store, step } = harness();
+  await store.load();
   const anthropic: ProviderRow = { id: "anthropic", name: "Anthropic", ways: [{ method: "oauth", label: "Anthropic (Claude Pro/Max)", subscription: true }] };
   api.login = () => new Promise(() => {});
   api.openLoginUrl = async () => {

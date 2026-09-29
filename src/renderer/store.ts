@@ -623,10 +623,10 @@ export function createStore(api: DuangApi) {
     publish();
   };
   /**
-   * What main pushes to this window. Registered when the store is made, and again by `load` after a
-   * `dispose`: React runs an effect's cleanup and then its setup again on the same store (Fast Refresh
-   * does, on every edit in development), and a store left unregistered after that still reads history
-   * and lists but never hears a live event, so every run looks stuck at its start.
+   * What main pushes to this window, registered by `load` and dropped by `dispose`: App's effect
+   * setup and cleanup. React runs that cleanup and then the setup again on the same store (Fast
+   * Refresh does, on every edit in development), so registering anywhere else left a store that
+   * still read history and lists but never heard a live event, and every run looked stuck.
    */
   let stopFrames: (() => void) | undefined;
   let stopSteps: (() => void) | undefined;
@@ -634,7 +634,6 @@ export function createStore(api: DuangApi) {
     stopFrames ??= api.onSessionEvent(onFrame);
     stopSteps ??= api.onLoginStep(onStep);
   };
-  listen();
 
   /**
    * One request over the model route. Asked after every read or change of the network, and from the
