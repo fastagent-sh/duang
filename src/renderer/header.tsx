@@ -128,9 +128,9 @@ export function UsageMeter({ plan, context, now }: Usage) {
 
 /**
  * What you are looking at, floating over it: the conversation, the workspace it runs in, and what is
- * left of the plan and the context. It hovers rather than sits in a bar because the transcript is the
- * page, and a full-width bar would cut it in two. Translucent, so text passing underneath reads as
- * scrolled away rather than deleted.
+ * left of the plan and the context, beside the one action on it. It hovers rather than sits in a bar
+ * because the transcript is the page, and a full-width bar would cut it in two. Translucent, so text
+ * passing underneath reads as scrolled away rather than deleted.
  */
 export function ConversationHeader({
   agent,
@@ -157,46 +157,55 @@ export function ConversationHeader({
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
     // only what you can actually grab, click or hover for a tooltip takes the pointer back.
-    <header className="conversation-header pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
-      {/* The same avatar as in the roster: whose work this is should not need reading. */}
-      <Avatar name={agent} size={30} working={working} />
-      <div className="min-w-0 flex-1">
-        {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
-        <div className="pointer-events-auto flex min-w-0 items-baseline gap-1.5 drag">
-          <span className={`${title === agent ? "max-w-full" : "max-w-[35%]"} shrink-0 truncate font-prose font-semibold`} title={agent}>{agent}</span>
-          {title !== agent && <span className="min-w-0 truncate font-prose text-muted" title={title}>· {title}</span>}
+    <header className="pointer-events-none absolute inset-x-4 top-2 z-10">
+      {/* Two parts, as Telegram splits a chat's info from what you can do to it: what you are looking
+          at, and the one thing to do about it. It runs the pane's width, as chrome does; the composer
+          below is the one that takes the reading column, to sit under the text. */}
+      <div className="flex items-stretch gap-2">
+        <div className="conversation-header flex min-w-0 flex-1 items-center gap-2.5 rounded-composer bg-surface/75 py-1.5 pr-4 pl-2 ring-1 ring-stroke backdrop-blur-xl">
+          {/* The same avatar as in the roster: whose work this is should not need reading. */}
+          <Avatar name={agent} size={30} working={working} />
+          <div className="min-w-0 flex-1">
+            {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
+            <div className="pointer-events-auto flex min-w-0 items-baseline gap-1.5 drag">
+              <span className={`${title === agent ? "max-w-full" : "max-w-[35%]"} shrink-0 truncate font-prose font-semibold`} title={agent}>{agent}</span>
+              {title !== agent && <span className="min-w-0 truncate font-prose text-muted" title={title}>· {title}</span>}
+            </div>
+            {dir && (
+              <button
+                onClick={onReveal}
+                title={dir}
+                className="pointer-events-auto block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
+              >
+                {location(dir)}
+              </button>
+            )}
+          </div>
+          {working && <Badge tone="accent" pulse>working</Badge>}
+          <UsageMeter plan={plan} context={context} />
+          {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
         </div>
-        {dir && (
-          <button
-            onClick={onReveal}
-            title={dir}
-            className="pointer-events-auto block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
-          >
-            {location(dir)}
-          </button>
+        {list && (
+          <div className="conversation-header grid aspect-square shrink-0 place-items-center rounded-full bg-surface/75 ring-1 ring-stroke backdrop-blur-xl">
+            {/* Opens the `ConversationList` popover by id and anchors it (index.css). A dot says one of
+                them finished while you were elsewhere, which is the reason to open it. */}
+            <Button
+              kind="ghost"
+              size={40}
+              popoverTarget="conversations"
+              aria-label={list.unseen ? `Conversations, ${list.unseen} unseen` : "Conversations"}
+              title="Conversations"
+              icon={
+                <span className="relative">
+                  <ListBullets size={18} />
+                  {list.unseen > 0 && <span className="absolute -top-0.5 -right-1 size-2 rounded-full bg-accent" />}
+                </span>
+              }
+              className={`conversations-anchor pointer-events-auto ${list.open ? "bg-hover" : ""}`}
+            />
+          </div>
         )}
       </div>
-      {working && <Badge tone="accent" pulse>working</Badge>}
-      <UsageMeter plan={plan} context={context} />
-      {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
-      {list && (
-        // Opens the `ConversationList` popover by id and anchors it (index.css). A dot says one of
-        // them finished while you were elsewhere, which is the reason to open it.
-        <Button
-          kind="ghost"
-          size={28}
-          popoverTarget="conversations"
-          aria-label={list.unseen ? `Conversations, ${list.unseen} unseen` : "Conversations"}
-          title="Conversations"
-          icon={
-            <span className="relative">
-              <ListBullets size={16} />
-              {list.unseen > 0 && <span className="absolute -top-0.5 -right-1 size-2 rounded-full bg-accent" />}
-            </span>
-          }
-          className={`conversations-anchor pointer-events-auto -mr-1.5 ${list.open ? "bg-hover" : ""}`}
-        />
-      )}
     </header>
   );
 }

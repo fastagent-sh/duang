@@ -42,6 +42,8 @@
   --radius-badge: 6px;
   --radius-card: 10px;
   --radius-float: 14px;
+  /* The composer's field: a pill when it holds one line, a rounded rectangle when it grows. */
+  --radius-composer: 20px;
 
   /* The system face, paired with the system's own CJK face: this is a native window with a hidden
      title bar, and a web font beside it reads as a page rather than an app. */
@@ -179,11 +181,12 @@ body,
   height: 100%;
 }
 
-/* One column for reading and writing: prose, code, tables and the composer share its edges. 768 at
-   15px keeps a line near 51 Chinese characters; at 920 it ran to 65 and the eye lost the next line. */
+/* One column for reading and writing: prose, code, tables and the composer share its edges, so the eye
+   goes straight down from the text to the field. 840 at 15px keeps a line near 56 Chinese characters;
+   920 runs to 61 and the eye loses the next line, and 768 (51) read as narrow. */
 .column {
   width: 100%;
-  max-width: 768px;
+  max-width: 840px;
   margin-inline: auto;
 }
 
@@ -660,7 +663,7 @@ summary:focus-visible,
     background: oklch(1 0 0);
     box-shadow: 0 14px 36px -24px oklch(0.3 0.02 285 / 26%);
   }
-  .composer-card button[aria-label="Send"][aria-disabled="true"] {
+  .composer button[aria-label="Send"][aria-disabled="true"] {
     background: var(--color-surface-2);
     color: var(--color-muted);
   }
