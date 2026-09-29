@@ -51,17 +51,18 @@ export default function Gallery() {
           </Button>
         </Section>
 
-        <Section title="Buttons — heights" note="28 inside rows and dense bars, 32 standing on its own">
+        <Section title="Buttons — heights" note="28 inside rows and dense bars, 32 standing on its own, 40 round in the composer and header">
           <Button size={32}>32 — on its own</Button>
           <Button size={28}>28 — in a row</Button>
           <Button size={32} icon={<Plus size={16} />} aria-label="Add" />
           <Button size={28} icon={<FolderOpen size={14} />} aria-label="Reveal" />
           <Button size={28} kind="danger" icon={<Trash size={13} />} aria-label="Delete" />
           <Button size={28} kind="primary" icon={<ArrowUp size={15} />} aria-label="Send" />
+          <Button size={40} kind="primary" icon={<ArrowUp size={18} />} aria-label="Send message" />
         </Section>
 
         <Section title="Buttons — disabled" note="the prop takes the reason, so nothing greys out silently">
-          <Button kind="primary" size={28} icon={<ArrowUp size={15} />} disabled="Type a message first" />
+          <Button kind="primary" size={28} icon={<ArrowUp size={15} />} disabled="Select an agent first" />
           <Button kind="ghost" size={28} disabled="Stop the turn to change the model" className="font-mono">
             anthropic/claude-sonnet-5
           </Button>

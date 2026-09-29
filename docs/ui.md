@@ -145,8 +145,8 @@ where the text does, as in Telegram and WeChat. The hairlines on both sides of a
 open agent, or the one under the pointer — give way, as Telegram's do: a line running into a rounded
 fill reads as a cut.
 
-**The open agent's conversations hang from the header.** A list button at the header's trailing
-edge shows and hides them in a floating panel under it, the way ChatGPT's header panels do: a
+**The open agent's conversations hang from the header.** A list button, the header's disc,
+shows and hides them in a floating panel under it, the way ChatGPT's header panels do: a
 native popover, so the top layer, a click outside and Escape closing it are the platform's, and an
 Escape that closes it does not also stop a run. The button carries a dot while one of the agent's
 conversations has an outcome you have not seen. The panel is titled `Conversations` with a `＋` for
@@ -178,6 +178,7 @@ What does not carry over is putting the transcript itself on a decorative canvas
 over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
 the chrome floats. The transcript starts below the header, then slides underneath it when scrolled;
 a soft lower shadow keeps the two readable without stopping the page.
+
 Its right edge says how much is left, in muted 11px text, and only for the limit closest to running
 out: `7d ▬ 88%` with a 40px bar, where the plan's windows and the context compete on percentage.
 Hovering or focusing it opens a small table of every limit: each window's share and reset, the pace
@@ -185,8 +186,29 @@ of a day-or-longer window as a green `▼` or red `▲` percentage, the context 
 which plan and when it was read. Every one of those in a row made the header's right edge the
 densest text on screen for numbers read once in a while. No threshold colours: the percentage is the
 signal.
-The composer floats the same way at the bottom, and the transcript passes beneath both. The strips
-past them, above the header and below the composer, are veiled rather than painted over: the canvas
+
+**The header is two parts.** What you are looking at (avatar, agent and conversation, directory,
+`working`, the plan and context meter, `queued`) is one pill, and the one action on it, the
+conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
+and menu. The header runs the pane's width: it is chrome, and held to the reading column it read as a
+card in the middle of a page. The composer does not: it sits in the reading column, its attach and
+voice/send discs on the text's edges, because the eye goes from the last line down to the field and
+a field wider than the text made that a jump. The disc is alone because nothing else on a
+conversation is an action yet: new conversation lives in the sidebar, and a menu with nothing in it
+would be furniture.
+
+The composer floats the same way at the bottom, and the transcript passes beneath both. It is one row
+in Telegram's shape: an attach button, the field, and one round button that is whatever the next
+action is (voice while the field is empty, Send once it holds text, Stop while a run is live). What
+belongs to the next message rather than to the app, the model chip, sits inside the field at its
+right end, where Telegram keeps its emoji. The field is a 40px pill that grows into a rounded
+rectangle as it takes lines (up to eight), and the buttons stay level with its last line. Attach and
+voice are shown but disabled with their reason: attachments have no path through duang yet, and a
+sent image would not come back in the transcript, because FastAgent's `user_message` leaves images out.
+They are placeholders by decision, kept for the layout's sake, and each goes when the feature lands or
+the layout stops wanting it.
+
+The strips past the header and the composer, above one and below the other, are veiled rather than painted over: the canvas
 at 65% over a 3px blur, strongest at the window's edge and clear by the bar's inner edge. A line
 passing there stays faintly visible, the way the header shows it, and reads as moving on; left bare,
 the gap above the header showed sharp cut lines, and painted solid, the text stopped at an edge. Tried and reverted: a header in its own row with a
@@ -233,7 +255,7 @@ composer remains white. Violet stays in selections and actions rather than tinti
 | Token | Dark | Light | Use |
 |---|---|---|---|
 | `bg` | `oklch(0.225 0.004 285)` | `oklch(0.992 0.004 80)` | the transcript and its canvas |
-| `surface` | `oklch(0.27 0.005 285)` | `oklch(0.986 0.004 85)` | cards and popovers; the composer is white in light mode |
+| `surface` | `oklch(0.27 0.005 285)` | `oklch(0.986 0.004 85)` | cards and popovers; the composer's field and discs are white in light mode |
 | `sidebar` | `oklch(0.285 0.005 285)` | `oklch(0.958 0.009 80)` | the sidebar panel (light mode adds a gentle gradient) |
 | `surface-2` | `oklch(0.315 0.006 285)` | `oklch(0.946 0.006 80)` | pressed and nested surfaces |
 | `stroke` | `oklch(0.36 0.006 285)` | `oklch(0.886 0.007 80)` | hairlines and borders |
@@ -366,15 +388,16 @@ row, a header or the composer. `danger` deletes or removes, and stays quiet unti
 it, because these sit on screen all day. `loud` fills a kind instead of tinting it, for the one
 control that must be found instantly: Stop.
 
-Two heights: 28 inside rows and dense bars, 32 standing on its own. Icon-only is square at the same
-height, and only where the symbol is universal (§6). Height also decides text size (11px and 12px):
+Three sizes: 28 inside rows and dense bars, 32 standing on its own, and 40, a circle that exists only
+for the composer's icon buttons. Icon-only is square at the same height (round at 40), and only where
+the symbol is universal (§6). Height also decides text size (11px at 28, otherwise 12px):
 Tailwind utilities all have the same specificity, so a size a call site passes would be decided by
 the generated sheet's order rather than by intent. Nothing a call site can pass may contradict the
 component; what varies is a prop.
 
 **A disabled control says why.** The `disabled` prop takes the reason rather than a boolean, so a
-control cannot be greyed out silently: it dims to 40% and carries the reason. In light mode the
-composer's inactive Send button also takes a neutral fill. "Type a message first", "Stop the turn to change the model". It is disabled with `aria-disabled`
+control cannot be greyed out silently: it dims to 40% and carries the reason. In light mode a
+disabled Send takes a neutral fill. "Stop the turn to change the model", "Voice input is not available yet". It is disabled with `aria-disabled`
 rather than the native attribute and stays focusable, because a natively disabled button cannot be
 reached by keyboard and a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is
 dropped by the component.
@@ -414,10 +437,12 @@ sparse, and their job is to be findable when you scroll back: *what did I ask fo
 change it?* A bubble is a good anchor precisely because it is small and visually distinct.
 
 **What the agent produces is a document.** Left aligned, no bubble, full markdown in a column up to
-768px wide, which paragraphs, lists, code, tables and the composer share, so every edge lines up.
-At 920 a line ran to 65 Chinese characters and the eye lost its way back to the next line. The
-transcript reserves its scrollbar track on both sides so its column centres where the composer's
-does. Spacing groups rather than separates, on the §7 scale: two paragraphs sit 12 apart, but a
+840px wide, which paragraphs, lists, code, tables and the composer share, so every edge lines up
+and the eye goes straight down from the text to the field. That is a line of about 56 Chinese
+characters at 15px. At 920 a line runs to 61 and the eye loses its way back to the next line; 768
+(51) was the width until it read as narrow. The composer was 768 before the transcript was, and the
+header is the one piece that does not take the column. The transcript reserves its scrollbar track
+on both sides so its column centres where the composer's does. Spacing groups rather than separates, on the §7 scale: two paragraphs sit 12 apart, but a
 paragraph and the list it introduces only 4; a heading stands 24 below what came before and 8 above
 what it introduces; code blocks, tables and quotes take 16, a rule 24. One gap for every pair, which
 Streamdown's own `space-y-4` gives, left every block equally separate, so nothing read as belonging

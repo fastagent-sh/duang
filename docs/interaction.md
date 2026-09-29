@@ -21,7 +21,7 @@ or by double-clicking it; this renames duang's registry entry, never the directo
 
 Clicking an agent row restores its last open conversation if still available, otherwise an active
 run, then the most recent conversation (or a new one). The open agent's conversations are in a list
-the header's list button shows and hides; it floats under the button, closes on a click outside or
+the header's list button, a round disc beside its info pill, shows and hides; it floats under the button, closes on a click outside or
 Escape (without stopping a run), and closes when a conversation is chosen or started. Running and
 drafted work stays attached to its originating agent and conversation when navigating.
 
@@ -82,7 +82,10 @@ across navigation and application restart. A send rejected before admission rema
 failed run may already have performed tool work. Stop does not roll back completed work or promise
 to cancel a non-cancellable tool.
 
-The composer sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
+The composer is one row: an attach button, the field with the model chip inside its right end, and
+one round button that is the next action: voice while the draft is empty (whitespace is empty),
+Send once it has text, Stop while a run is live. Attach and voice are disabled and say why; neither is implemented.
+It sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
 the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it; the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow

@@ -10,14 +10,15 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 /**
- * Four kinds, two heights, and no third option.
+ * Four kinds, three sizes, and no fourth option: 28 and 32 are rectangles; 40 is the round icon
+ * button of the composer and the header, and only an icon fits it.
  *
  * `primary` at most once per screen — the one thing to do here. `secondary` outlines an alternative,
  * `ghost` is an action inside a row or a header, `danger` deletes or removes and is quiet until the
  * pointer is on it, because these sit on screen all day. `loud` fills a kind instead of tinting it,
  * and exists for the one control that must be found instantly: Stop.
  *
- * Size decides the text size too (28 → 11px, 32 → 12px): a call site that passes its own would be
+ * Size decides the text size too (28 → 11px, otherwise 12px): a call site that passes its own would be
  * overridden by this one anyway.
  *
  * A disabled control is a question nobody answered, so `disabled` takes the answer: pass the reason
@@ -41,7 +42,7 @@ export function Button({
   /** Forwarded so a roving tabindex can focus the control it has moved to (§11). */
   ref?: Ref<HTMLButtonElement>;
   kind?: "primary" | "secondary" | "ghost" | "danger";
-  size?: 28 | 32;
+  size?: 28 | 32 | 40;
   loud?: boolean;
   icon?: ReactNode;
   disabled?: string | false;
@@ -57,7 +58,10 @@ export function Button({
   };
   const filled = { primary: "bg-accent-fill text-fill-fg", danger: "bg-danger-fill text-fill-fg" };
   const [rest_, hover] = loud && kind in filled ? [filled[kind as "primary" | "danger"], ""] : kinds[kind];
-  const box = children ? `${size === 28 ? "h-7 px-2.5" : "h-8 px-3"} gap-1.5` : size === 28 ? "size-7" : "size-8";
+  const box =
+    size === 40
+      ? "size-10 rounded-full"
+      : `rounded-card ${children ? `${size === 28 ? "h-7 px-2.5" : "h-8 px-3"} gap-1.5` : size === 28 ? "size-7" : "size-8"}`;
   return (
     <button
       {...rest}
@@ -66,7 +70,7 @@ export function Button({
       aria-disabled={disabled ? true : undefined}
       onClick={disabled ? undefined : onClick}
       title={disabled || title}
-      className={`inline-flex shrink-0 items-center justify-center rounded-card transition-colors ${
+      className={`inline-flex shrink-0 items-center justify-center transition-colors ${
         size === 28 ? "text-[11px]" : "text-[12px]"
       } ${box} ${rest_} ${disabled ? "opacity-40 cursor-default" : hover} ${className}`}
     >

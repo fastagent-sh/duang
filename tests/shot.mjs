@@ -182,8 +182,9 @@ if (!process.versions.electron) {
       const input = document.querySelector('textarea');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, '读一下这个文件, 跑一次 i18n 检查, 然后解释 ListingResult 的核心部分');
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      document.querySelector('button[aria-label="Send"]').click();
     })()`);
+    await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "Send appears for a draft");
+    await evaluate(`document.querySelector('button[aria-label="Send"]').click()`);
     await until("document.body.innerText.includes('sectionsGenerated')", "the answer");
     await until("document.querySelector('pre code span') !== null", "highlighting");
 
@@ -218,7 +219,7 @@ if (!process.versions.electron) {
         const box = document.querySelector('[aria-label="Transcript"]');
         box.scrollTop = box.scrollHeight;
         const last = box.querySelector('.column').lastElementChild;
-        const composer = document.querySelector('textarea').closest('.column');
+        const composer = document.querySelector('.composer');
         return Math.round(composer.getBoundingClientRect().top - last.getBoundingClientRect().bottom);
       })()`),
     );
@@ -229,7 +230,7 @@ if (!process.versions.electron) {
     // composer actually show.
     win.setSize(1500, 1040);
     await new Promise((resolve) => setTimeout(resolve, 200));
-    console.log("wide column edges vs composer:", await evaluate(`(() => { const a = document.querySelector('[aria-label="Transcript"] .column').getBoundingClientRect(); const b = document.querySelector('textarea').closest('.column').getBoundingClientRect(); return [a.left - b.left, a.right - b.right, a.width].join(","); })()`));
+    console.log("wide column edges vs composer:", await evaluate(`(() => { const a = document.querySelector('[aria-label="Transcript"] .column').getBoundingClientRect(); const b = document.querySelector('.composer').getBoundingClientRect(); return [a.left - b.left, a.right - b.right, a.width].join(","); })()`));
     await capture("app-wide");
     win.setSize(820, 660);
     await capture("app-narrow");
