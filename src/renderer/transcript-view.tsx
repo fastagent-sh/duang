@@ -61,7 +61,7 @@ export function RunStatus({
   const detail = shown ? undefined : on;
   const elapsed = useElapsed(started, undefined);
   return (
-    <div className="enter flex h-6 items-center gap-2 text-[12px]">
+    <div className="enter flex h-7 items-center gap-2 text-[12px]">
       <span className="bounce size-[7px] shrink-0 rounded-full bg-accent" aria-hidden />
       <span className="shimmer shrink-0">{word}</span>
       {detail && <span className={`min-w-0 truncate text-muted ${word === "thinking" ? "" : "font-mono"}`}>{detail}</span>}
@@ -87,16 +87,21 @@ function useElapsed(started: number | undefined, ended: number | undefined): str
  *
  * A single gap for everything is what made a run of tool calls read as a sparse list: `bash`,
  * `thinking`, `bash` are single lines of one activity, and 24 between them is the space a paragraph
- * gets. They close up to 8; the register changing — to or from what someone wrote or the agent
- * answered — is what earns the full step.
+ * gets. They close up to 8. The agent's own words and its work are one flow, so a step between them
+ * is 12 — at 24 each tool line floated in a blank band of its own. Only a change of speaker earns
+ * the full step: 32 above what someone sent, 24 below it.
  */
-const ASIDE = new Set(["tool", "thinking", "note", "work"]);
+const ASIDE = new Set(["tool", "thinking", "note", "work", "status"]);
 
-function gap(previous: Line | Work | undefined, line: Line | Work): string {
+function gap(previous: string | undefined, kind: string): string {
   if (!previous) return "";
-  if (line.kind === "user") return "pt-8";
-  return ASIDE.has(line.kind) && ASIDE.has(previous.kind) ? "pt-2" : "pt-6";
+  if (kind === "user") return "pt-8";
+  if (previous === "user") return "pt-6";
+  return ASIDE.has(kind) && ASIDE.has(previous) ? "pt-2" : "pt-3";
 }
+
+/** An answer ends its turn unless the run goes on to work after it; only then does it get a footer. */
+const ends = (next: Line | Work | undefined, busy: boolean) => (next ? next.kind !== "work" : !busy);
 
 export function Transcript({
   items,
@@ -141,7 +146,7 @@ export function Transcript({
   const queue = (opening: boolean) =>
     waiting.map(({ item, listed, opens }, index) =>
       opens === opening ? (
-        <div key={index} className="enter pt-6">
+        <div key={index} className="enter pt-8">
           <Message item={item} waiting={listed ? "queued" : "sending"} />
         </div>
       ) : null,
@@ -198,8 +203,9 @@ export function Transcript({
       role="region"
       aria-label="Transcript"
       onScroll={check}
-      // pt clears the floating header; the first message starts below it, not behind it.
-      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16"
+      // pt clears the floating header; the first message starts below it, not behind it. The
+      // scrollbar's track is reserved on both sides, so the column centres where the composer does.
+      className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 [scrollbar-gutter:stable_both-edges]"
       style={{ paddingBottom: bottomGap }}
     >
       <div className="column">
@@ -215,14 +221,14 @@ export function Transcript({
           ) : (
             // `enter` runs once, when the element is created — a streaming answer re-renders into
             // the same node, so the rise does not restart on every token.
-            <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1], line)}`}>
-              {line.kind === "work" ? <WorkBlock work={line} /> : <Message item={line} />}
+            <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
+              {line.kind === "work" ? <WorkBlock work={line} /> : <Message item={line} ends={ends(all[index + 1], busy)} />}
             </div>
           ),
         )}
         {queue(true)}
         {busy && (
-          <div className="pt-6">
+          <div className={gap(waiting.some(({ opens }) => opens) ? "user" : shown.at(-1)?.kind, "status")}>
             <RunStatus items={items} status={status} started={started} shown={isLone(shown.at(-1))} />
           </div>
         )}
@@ -242,7 +248,21 @@ const markdownComponents = { code: MarkdownCode };
 /** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 
-export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "sending" }) {
+/**
+ * Streamdown caps a table at 300px and scrolls the rest inside it: a scroll region in a scrolling
+ * transcript steals the wheel and hides how much is there (the same reason tool output folds). */
+const TABLE_FULL_HEIGHT = 0;
+
+export function Message({
+  item,
+  waiting,
+  ends = true,
+}: {
+  item: Item;
+  waiting?: "queued" | "sending";
+  /** False for words the run goes on to work after: a time and a copy button between steps are noise. */
+  ends?: boolean;
+}) {
   switch (item.kind) {
     case "user":
       // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
@@ -277,11 +297,11 @@ export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "s
             {/* The cursor is appended to the text rather than to the container: Streamdown emits
                 block elements, so a sibling span would start its own line instead of trailing the
                 last word. Token arrival is the animation (§8, §10). */}
-            <Streamdown components={markdownComponents} controls={markdownControls}>
+            <Streamdown components={markdownComponents} controls={markdownControls} tableMaxHeight={TABLE_FULL_HEIGHT}>
               {item.open ? `${item.text}▍` : item.text}
             </Streamdown>
           </div>
-          {!item.open && <Footer text={item.text} at={item.at} />}
+          {!item.open && ends && <Footer text={item.text} at={item.at} />}
         </div>
       );
     case "thinking": {
@@ -291,7 +311,7 @@ export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "s
       const trail = thinkingLine(item.text);
       return (
         <details className="group text-muted text-[12px]">
-          <summary className="cursor-default select-none flex items-center gap-1.5">
+          <summary className="cursor-default select-none flex h-7 items-center gap-2">
             <CaretRight size={11} className="shrink-0 transition-transform group-open:rotate-90" />
             {/* Still streaming means the seconds are not final yet, so the label sweeps instead of
                 counting: the movement is the answer to "is it stuck". */}
@@ -300,7 +320,7 @@ export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "s
             </span>
             <span className="truncate opacity-60 group-open:hidden">{trail}</span>
           </summary>
-          <div className="mt-1.5 ml-[5px] whitespace-pre-wrap border-l border-stroke pl-3 leading-relaxed">
+          <div className="mb-1 ml-[5px] whitespace-pre-wrap border-l border-stroke pl-3 leading-relaxed">
             {item.text}
           </div>
         </details>
@@ -339,7 +359,8 @@ function Footer({ text, at }: { text: string; at: number }) {
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
-    <div className="mt-2 flex items-center gap-1 text-[11px] text-muted">
+    // h-5, not the button's 28: the row is a line of metadata, and the hover target may overhang it.
+    <div className="mt-1.5 flex h-5 items-center gap-1 text-[11px] text-muted">
       <span className="tabular-nums">{clock(at)}</span>
       {failed && <span className="text-danger">could not copy: {failed}</span>}
       <Button
@@ -457,7 +478,7 @@ export function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
     // The negative margin lets the hover highlight breathe past the text without moving the text:
     // the command stays on the document's left edge, aligned with the paragraphs above it.
     <details className="group -mx-2.5 rounded-card open:bg-surface open:ring-1 open:ring-stroke">
-      <summary className="cursor-default select-none flex items-center gap-2 rounded-card px-2.5 h-8 text-[12px] hover:bg-hover group-open:rounded-b-none">
+      <summary className="cursor-default select-none flex items-center gap-2 rounded-card px-2.5 h-7 text-[12px] hover:bg-hover group-open:rounded-b-none">
         <CaretRight size={11} className="shrink-0 text-muted transition-transform group-open:rotate-90" />
         <Icon size={14} className={`shrink-0 ${mark}`} />
         {/* The tool's own name in front of its argument: `bash` and `read` are different work, and

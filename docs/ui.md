@@ -178,12 +178,18 @@ What does not carry over is putting the transcript itself on a decorative canvas
 over wallpaper, ours is a document that has to stay readable — so the transcript is opaque and only
 the chrome floats. The transcript starts below the header, then slides underneath it when scrolled;
 a soft lower shadow keeps the two readable without stopping the page.
-Its right edge says how much is left, in muted 11px text: the plan's windows as `5h ▬ 4% ~ 14:29`
-with a 40px bar, the week's pace as a green `▼` or red `▲` percentage, then context as
-`45.1%/1.0M`. No threshold colours: the percentage is the signal. When the header is narrower than
-44rem, reset times and pace move to the tooltip and the percentages stay.
-The composer floats the same way at the bottom: the transcript passes beneath it, and a short fade
-behind it keeps text from sliding past its sides. Tried and reverted: a header in its own row with a
+Its right edge says how much is left, in muted 11px text, and only for the limit closest to running
+out: `7d ▬ 88%` with a 40px bar, where the plan's windows and the context compete on percentage.
+Hovering or focusing it opens a small table of every limit: each window's share and reset, the pace
+of a day-or-longer window as a green `▼` or red `▲` percentage, the context as `45% of 1.0M`, and
+which plan and when it was read. Every one of those in a row made the header's right edge the
+densest text on screen for numbers read once in a while. No threshold colours: the percentage is the
+signal.
+The composer floats the same way at the bottom, and the transcript passes beneath both. The strips
+past them, above the header and below the composer, are veiled rather than painted over: the canvas
+at 65% over a 3px blur, strongest at the window's edge and clear by the bar's inner edge. A line
+passing there stays faintly visible, the way the header shows it, and reads as moving on; left bare,
+the gap above the header showed sharp cut lines, and painted solid, the text stopped at an edge. Tried and reverted: a header in its own row with a
 masked top edge (#58), and a solid backdrop behind the composer with a 40px fade above it (#62).
 Both stopped text at a line, which made the conversation read as a framed box rather than a
 continuous page.
@@ -260,11 +266,25 @@ looking alike.
 ```css
 --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
 --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
+--font-prose: "Prose", "PingFang SC", sans-serif;
 ```
 
-The system face, paired with the system's own CJK face. This is a native window with a hidden title
-bar, and a web font beside it reads as a page rather than an app. Do not force CJK into the monospace
-family; let it fall back to PingFang SC inside code contexts rather than deforming it.
+Controls, navigation and the trace use the system face, paired with the system's own CJK face. This is
+a native window with a hidden title bar, and a web font in its chrome reads as a page rather than an
+app. The conversation is the exception (below). Do not force CJK into the monospace
+family; let it fall back to PingFang SC inside code contexts rather than deforming it. Maple Mono is
+the one mono everywhere, trace and answers alike, so a command in the answer looks like the command
+that ran. In a sentence it is set a step down, at regular weight, on the paper's deeper tint
+without a border: a marked word, not a chip, and not a dark bar inside a bold lead.
+
+**The conversation has its own voice, `Prose`**, two bundled rounded faces under one name: Nunito for
+Latin and Resource Han Rounded for Chinese. A system sans there made the answer indistinguishable
+from every other chat app. Resource Han Rounded is the design Maple Mono CN draws its CJK from, so the
+answer and the code it quotes share their Chinese letterforms; it is used on its own because Maple's
+CJK sits in 1.2em cells to align in a terminal, which spreads a paragraph apart. Maple Mono itself
+was tried for Latin prose and read poorly: a monospace line is a third wider and has no word shapes.
+The CJK face is cut to GB2312 (1.1 MB a weight); a rarer character falls back to PingFang. Both
+fonts are OFL; their licences sit beside them in `src/renderer/fonts/`.
 
 **Chinese is a first-class case, and CSS cannot see it.** CJK glyphs fill their em box and want more
 leading than Latin at the same size. A `:lang(zh)` rule is the obvious way to say so, and it does not
@@ -275,18 +295,31 @@ right for Chinese, slightly airy for English, and this is a document column rath
 It lives in one place, `.md, .bubble`, which the composer wears too so that a long message does not
 reflow the moment it is sent.
 
-The scale stays compact in navigation and the tool trace. Prose and headings have more space so
-results can be scanned without turning the trace into a second document:
+Chinese and Latin mixed in one line get a sixth of a space between them from `text-autospace`, set on
+`body`: model output is inconsistent about typing that space, and the browser adds it only where it
+is missing. Code, paths and tool output opt out, since the gap would push a line with Chinese in it
+off Maple's 2:1 grid and out of column. Fullwidth punctuation keeps Chromium's default trimming (`text-spacing-trim: normal`);
+trimming every mark to half width is a Japanese convention, not a Chinese one. Prose wraps with
+`text-wrap: pretty`, so a paragraph does not end on a lone character such as `单。`.
+
+**What you write, what you sent and what the agent answered are one voice**: 14px at 1.7, one step
+above the navigation and two above the trace. The transcript is a report read later (fact 5), not a
+log glanced at, so it takes a reading size, while the work that produced it stays at 12 and reads
+as an aside. Bold is 600, not 700, since answers that lead every item with a bold sentence
+became a page of dark bars; the Chinese beside it takes Bold, because a CJK stroke needs more weight
+than a Latin one to read as emphasis.
 
 | Role | Size / line-height / weight |
 |---|---|
 | New conversation heading | 22 / normal / 500 |
-| Answer headings | 15–17.5 / prose leading / 600 |
-| Conversation prose | 14 / 1.7 / 400 |
+| Answer headings | 21 / 18 / 16 (h1–h3), 14 below / 1.4 / 600 |
+| Conversation prose, sent messages, composer | 14 / 1.7 / 400 |
+| Answer tables | 13 / 1.6 / 400, header 600 muted on a tinted band |
 | Agent name | 13.5 / 1.4 / 600 |
-| Composer, sidebar rows | 13 / 1.7 / 400 |
+| Sidebar rows | 13 / 1.7 / 400 |
 | Tool rows, thinking, model list, card bodies | 12 / 1.5 / 400 |
 | Code, paths, tool output | 12.5 / 1.625 / 400, mono |
+| Inline code | 0.875em of its line (11 at least) / 400, mono |
 | Badges, timestamps, labels | 11 / 1 / 400–500 |
 
 Mono sits half a step above the sans beside it on purpose: its x-height is smaller, so the same
@@ -361,9 +394,16 @@ sparse, and their job is to be findable when you scroll back: *what did I ask fo
 change it?* A bubble is a good anchor precisely because it is small and visually distinct.
 
 **What the agent produces is a document.** Left aligned, no bubble, full markdown in a column up to
-920px wide, with paragraphs and lists capped at 720px; code and tables retain the full width. The
-composer keeps its own narrower measure (768px), because a text field as wide as the transcript
-reads as a form rather than a place to type. It writes commands, output, plans, diffs and reports;
+768px wide, which paragraphs, lists, code, tables and the composer share, so every edge lines up.
+At 920 a line ran to 65 Chinese characters and the eye lost its way back to the next line. The
+transcript reserves its scrollbar track on both sides so its column centres where the composer's
+does. Spacing groups rather than separates, on the §7 scale: two paragraphs sit 12 apart, but a
+paragraph and the list it introduces only 4; a heading stands 24 below what came before and 8 above
+what it introduces; code blocks, tables and quotes take 16, a rule 24. One gap for every pair, which
+Streamdown's own `space-y-4` gives, left every block equally separate, so nothing read as belonging
+together. A table is part of the document: full height rather than its own scroll region, no frame,
+a header band in the code block's family of tints, and hairlines between rows. The agent
+writes commands, output, plans, diffs and reports;
 wrapping that in speech balloons
 fragments a record that needs to be scanned, and gives up the width its content needs. Products that
 bubble both sides keep the heavy work somewhere else — a separate workspace panel — so what remains
@@ -456,14 +496,18 @@ Everything else follows from those two:
 - **Streaming** trails a block cursor `▍`, which says "still writing" without a spinner and vanishes
   on settle.
 - **A settled answer ends with when it landed and a way to copy it**, and nothing else. Runs are
-  long and read later, so the time is part of the record; the copy control appears on hover. A
+  long and read later, so the time is part of the record; the copy control appears on hover. Only
+  the words that end a turn carry it: a message the run goes on to work after is narration between
+  steps, and a time under each one wedged a line of metadata between every step. A
   rating has nowhere to go here. Branching and editing are not shipped Week 1 controls; if a
   later task needs branching, its affordance belongs beside the relevant entry rather than on
   every answer.
-- **Spacing is decided by the pair, not by one constant.** 32 above what someone sent, 24 wherever
-  the register changes, and **8** between two asides — a tool call, a thinking line, a system note.
-  Those are single lines of one activity, and giving `bash` / `thinking` / `bash` the space a
-  paragraph gets is what turns a work log into a sparse list. Below the last line there is 48 before
+- **Spacing is decided by the pair, not by one constant.** 32 above what someone sent, 24 below it,
+  12 between the agent's words and its work, and **8** between two asides — a tool call, a thinking
+  line, a system note, the live status. Those are single lines of one activity, and giving `bash` /
+  `thinking` / `bash` the space a paragraph gets is what turns a work log into a sparse list; at 24
+  between words and work, each tool line floated in a blank band of its own. Every one-line row in
+  the trace (work summary, tool call, thinking, live status) is 28 tall, so they share one rhythm. Below the last line there is 48 before
   the composer: the transcript is pinned to its bottom while a run streams, so that gap is where the
   newest line lands, and at 16 it sat on the composer's edge under the fade.
 - **A date separator** — one centred muted line — appears where a conversation crosses a day. Reading

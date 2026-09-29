@@ -28,10 +28,13 @@ export function pace(window: UsageWindow, now: number): number | undefined {
 export const paceLabel = (diff: number) => `${diff > 0 ? "▲" : "▼"}${Math.abs(diff).toFixed(1)}%`;
 
 /** "1.0M", "200K": a context window's size, the way model pages print it. */
-function tokens(n: number): string {
+export function tokens(n: number): string {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
 }
 
-/** "45.1%/1.0M": how full, out of how much. */
-export const contextLabel = (used: number, window: number) =>
-  `${((used / window) * 100).toFixed(1)}%/${tokens(window)}`;
+/** A share of some limit: one of the plan's windows, or the model's context. */
+export type Meter = { label: string; percent: number };
+
+/** The limit closest to running out, the one the header keeps showing; a tie keeps the first. */
+export const tightest = (meters: Meter[]): Meter | undefined =>
+  meters.reduce<Meter | undefined>((a, b) => (a && a.percent >= b.percent ? a : b), undefined);

@@ -117,6 +117,8 @@ export default function App() {
   const usage = c?.state?.usage;
   const pending = c?.state?.pending;
   const waiting = c ? queueView(c.waiting, pending?.steering ?? []) : [];
+  // A transcript fills the pane, and the header and composer float over it.
+  const reading = !!agentId && agentState === "ready" && !!c && (c.items.length > 0 || waiting.length > 0);
   // The plan that pays for this conversation: its own model's provider, which may differ from the
   // agent default.
   const provider = (c?.state?.model ?? view.model)?.split("/")[0];
@@ -248,17 +250,22 @@ export default function App() {
               // reading sat on the composer's edge, half under the fade.
               <Transcript key={c.subscription} items={c.items} waiting={waiting} busy={busy} status={c.state?.status} started={c.started} bottomGap={composerHeight + 64} />
             )}
-            {agentId && agentState === "ready" && c && (c.items.length > 0 || waiting.length > 0) && (
-              // Floating, not stacked: the transcript runs the full height of the pane and passes
-              // beneath this, which is what keeps the bottom of the window from reading as a seam.
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
-                {/* The composer is narrower than the reading column, so text would slide past on both
-                    sides of it. The canvas fades in underneath instead. */}
-                <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg via-bg to-transparent" />
-                <div ref={composerBox} className="composer-column pointer-events-auto">
-                  {composer}
+            {reading && (
+              <>
+                {/* The edges past the floating bars are veiled, not painted over: text passing there
+                    stays faintly visible, dimmed and softened the way the header itself shows it, so
+                    it reads as moving on rather than cut off. The veil clears toward the page by the
+                    bar's inner edge; a solid edge stopped the text at a line (#58, #62). */}
+                <div className="veil pointer-events-none absolute inset-x-0 top-0 z-[5] h-12 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+                {/* Floating, not stacked: the transcript runs the full height of the pane and passes
+                    beneath this, which is what keeps the bottom of the window from reading as a seam. */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
+                  <div className="veil absolute inset-x-0 bottom-0 h-28 [mask-image:linear-gradient(to_top,black_50%,transparent)]" />
+                  <div ref={composerBox} className="column pointer-events-auto">
+                    {composer}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </>
         )}
