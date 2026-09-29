@@ -373,8 +373,8 @@ if (!process.versions.electron) {
       await until("document.querySelector('dialog') === null", "Escape dismisses the picker");
       assert.equal(
         await evaluate("document.activeElement?.title"),
-        "Model for this agent",
-        "picker restores focus to its trigger",
+        "Model for this agent: openai/gpt-4o-mini",
+        "picker restores focus to its trigger, whose tooltip names the whole model",
       );
       const firstSession = await evaluate("window.duang.openAgent('smoke').then(r => r.sessions[0].session)");
       assert.ok(firstSession);
@@ -927,7 +927,7 @@ if (!process.versions.electron) {
         await until(providersListed, "Settings lists the providers");
       };
       const fromPicker = async () => {
-        await evaluate(`document.querySelector('button[title="Model for this agent"]').click()`);
+        await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
         await until("[...document.querySelectorAll('dialog button')].some((b) => b.textContent.trim() === 'Manage providers…')", "the picker offers Manage providers…");
         await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Manage providers…').click()`);
         await until(providersListed, "Manage providers… opens Settings");

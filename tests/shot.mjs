@@ -239,7 +239,7 @@ if (!process.versions.electron) {
     await until(`document.querySelector('#conversations:popover-open')`, "conversation list");
     await capture("app-conversations");
     await evaluate(`document.querySelector('#conversations').hidePopover()`);
-    await evaluate(`document.querySelector('button[title="Model for this agent"]').click()`);
+    await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
     await until(`document.querySelector('dialog[open]')`, "model picker");
     await capture("models");
     await evaluate(`document.querySelector('dialog summary').click()`);

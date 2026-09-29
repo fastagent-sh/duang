@@ -319,8 +319,9 @@ export function Composer({
               kind="ghost"
               size={28}
               onClick={() => setPicking(!picking)}
-              disabled={modelReason}
-              title="Model for this agent"
+              // The chip truncates a long id, so the tooltip carries the whole name in both states.
+              disabled={modelReason && model ? `${modelReason} (${model})` : modelReason}
+              title={model ? `Model for this agent: ${model}` : "Model for this agent"}
               className={`max-w-full font-mono ${!model && needsModel ? "text-warning" : ""}`}
             >
               <span className="truncate">{model ?? (needsModel ? "pick a model" : "reading model…")}</span>
