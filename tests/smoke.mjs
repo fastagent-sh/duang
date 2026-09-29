@@ -289,6 +289,24 @@ if (!process.versions.electron) {
         "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')",
         "stream settles",
       );
+      // The answer's Latin is in the bundled face, not the fallback: Chromium silently skipped it once
+      // when the Latin and Chinese faces declared different weights (index.css).
+      await until(
+        "[...document.fonts].some((f) => f.family === 'Prose' && f.unicodeRange.startsWith('U+0-FF') && f.style === 'normal' && f.status === 'loaded')",
+        "the answer's Latin face loads",
+      );
+      await until("[...document.fonts].some((f) => f.family === 'Avatar' && f.status === 'loaded')", "the avatar face loads");
+      // Bold italic must be a face of its own: with only a 400 italic declared, `***x***` matched it and
+      // lost its weight (index.css).
+      assert.deepEqual(
+        await evaluate(`(async () => {
+          const pick = async (text) =>
+            (await document.fonts.load('italic 600 15px Prose', text)).map((f) => f.weight + ' ' + f.style);
+          return [await pick('a'), await pick('中')];
+        })()`),
+        [["600 italic"], ["600 italic"]],
+        "bold italic has its own Latin and Chinese faces",
+      );
       // A tool that worked says nothing (§9, third tier): the card is finished when its result is
       // in and the running badge is gone.
       await until(

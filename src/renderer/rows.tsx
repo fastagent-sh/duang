@@ -186,7 +186,7 @@ export function Sidebar({
                   <RenameField
                     label="Agent name"
                     value={agent.name}
-                    className="min-w-0 flex-1 text-[13.5px]"
+                    className="min-w-0 flex-1 font-prose text-[13.5px]"
                     onCancel={() => endRename(agent.id)}
                     onCommit={(name) => {
                       endRename(agent.id);
@@ -221,7 +221,7 @@ export function Sidebar({
                   <Avatar name={agent.name} size={48} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{agent.name}</span>
+                      <span className="min-w-0 flex-1 truncate font-prose text-[13.5px] font-semibold">{agent.name}</span>
                       {/* Busy is said in words where the time goes: the preview below is the work
                           itself, streaming, and must not be replaced by a word about it. */}
                       {busy > 0 ? (
@@ -244,7 +244,7 @@ export function Sidebar({
                           {error}
                         </span>
                       ) : (
-                        <span className="min-w-0 flex-1 line-clamp-2 break-words text-muted">
+                        <span className="min-w-0 flex-1 line-clamp-2 break-words font-prose text-muted">
                           {preview?.text ?? (preview ? "New conversation" : last?.label ?? "No conversations yet")}
                         </span>
                       )}
@@ -401,7 +401,7 @@ export function ConversationList({
               key={row.session}
               label="Conversation name"
               value={renaming.label}
-              className="my-0.5 block w-full text-[12.5px]"
+              className="my-0.5 block w-full font-prose text-[12.5px]"
               onCancel={() => endRename(row)}
               onCommit={(name) => {
                 endRename(row);
@@ -429,7 +429,7 @@ export function ConversationList({
                 }`}
               >
                 <span
-                  className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
+                  className={`min-w-0 flex-1 truncate font-prose text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
                     row.unseen ? "font-semibold" : ""
                   }`}
                 >

@@ -94,7 +94,7 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
   return (
     <span
       aria-hidden
-      className={`grid shrink-0 place-items-center font-semibold uppercase text-white ${
+      className={`grid shrink-0 place-items-center font-avatar font-semibold uppercase text-white ${
         working ? "ring-2 ring-accent ring-offset-2 ring-offset-surface animate-pulse" : ""
       }`}
       style={{
