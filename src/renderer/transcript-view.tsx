@@ -367,16 +367,39 @@ function Footer({ text, at }: { text: string; at: number }) {
  * A stretch of tool calls and thinking as one line that says what kind of work it was, opening into
  * the calls themselves, where a call that failed still says so. It stays closed while it grows: the
  * live status below says what the run is on.
+ *
+ * A lone call is a one-item block drawn as the call alone (open, summary hidden), so that when the
+ * next call folds it into a block it is still the same element. A card opened while it stood alone
+ * keeps the block open once it folds, rather than vanishing from under the person reading it.
  */
 export function WorkBlock({ work }: { work: Work }) {
-  const text = summarize(work.items);
+  const lone = work.items.length === 1;
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const el = box.current!;
+    // `toggle` does not bubble, so an inner card opening is heard in the capture phase.
+    const heard = (event: Event) => {
+      if (event.target !== el && (event.target as HTMLDetailsElement).open) setOpen(true);
+    };
+    el.addEventListener("toggle", heard, true);
+    return () => el.removeEventListener("toggle", heard, true);
+  }, []);
   return (
-    <details className="group/work">
-      <summary className="cursor-default select-none flex h-7 items-center gap-2 text-[12px] text-muted transition-colors hover:text-text">
+    <details
+      ref={box}
+      open={lone || open}
+      onToggle={(event) => !lone && setOpen(event.currentTarget.open)}
+      className="group/work"
+    >
+      <summary
+        hidden={lone}
+        className="cursor-default select-none flex h-7 items-center gap-2 text-[12px] text-muted transition-colors hover:text-text"
+      >
         <CaretRight size={11} className="shrink-0 transition-transform group-open/work:rotate-90" />
-        <span className="truncate">{text}</span>
+        <span className="truncate">{summarize(work.items)}</span>
       </summary>
-      <div className="mt-1 ml-[5px] space-y-0.5 border-l border-stroke pl-3.5">
+      <div className={lone ? "" : "mt-1 ml-[5px] space-y-0.5 border-l border-stroke pl-3.5"}>
         {work.items.map((item, index) => (
           <Message key={index} item={item} />
         ))}

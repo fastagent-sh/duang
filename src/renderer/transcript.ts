@@ -129,15 +129,19 @@ type Thinking = Extract<Item, { kind: "thinking" }>;
  */
 export type Work = { kind: "work"; items: (Tool | Thinking)[] };
 
-/** Consecutive asides folded into one {@link Work} block. A lone call keeps its own line, which says more. */
+/**
+ * Consecutive asides as one {@link Work} block each, a lone one included: a call that stands alone
+ * now is the first of a block once the next call arrives, and it must stay the same element on
+ * screen when that happens, or the card someone is reading closes under them. The view draws a
+ * one-item block as the item alone.
+ */
 export function group(lines: Line[]): (Line | Work)[] {
   const out: (Line | Work)[] = [];
   for (const line of lines) {
     const previous = out.at(-1);
     if (line.kind !== "tool" && line.kind !== "thinking") out.push(line);
     else if (previous?.kind === "work") previous.items.push(line);
-    else if (previous?.kind === "tool" || previous?.kind === "thinking") out[out.length - 1] = { kind: "work", items: [previous, line] };
-    else out.push(line);
+    else out.push({ kind: "work", items: [line] });
   }
   return out;
 }
@@ -167,7 +171,7 @@ export function summarize(items: Work["items"]): string {
   const parts = thought >= 1000 ? [`thought ${Math.round(thought / 1000)}s`] : [];
   for (const kind of WORK) {
     const mine = tools.filter((tool) => kind.tools.includes(tool.name));
-    const n = kind.distinct ? new Set(mine.map((tool) => firstArg(tool.args) || tool.id)).size : mine.length;
+    const n = kind.distinct ? new Set(mine.map((tool) => (tool.args as { path?: unknown } | undefined)?.path ?? tool.id)).size : mine.length;
     if (n) parts.push(kind.did(n));
   }
   const others = new Map<string, number>();

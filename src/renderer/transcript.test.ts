@@ -308,12 +308,13 @@ const tool = (name: string, args: unknown, extra: Partial<Extract<Item, { kind: 
   ...extra,
 });
 
-test("consecutive tool calls and thinking fold into one work block; a lone call and prose do not", () => {
+test("consecutive tool calls and thinking fold into one work block, which prose ends", () => {
   const answer: Item = { kind: "assistant", text: "ok", open: false, at: 0 };
   const shown = group([tool("read", { path: "a" }), answer, tool("read", { path: "a" }), tool("bash", { command: "ls" }), answer]);
+  // A lone call is a block of one, so the next call extends it rather than replacing it on screen.
   assert.deepEqual(
-    shown.map((line) => line.kind),
-    ["tool", "assistant", "work", "assistant"],
+    shown.map((line) => (line.kind === "work" ? line.items.length : line.kind)),
+    [1, "assistant", 2, "assistant"],
   );
 });
 
@@ -330,6 +331,10 @@ test("a work block counts files once and names the kind of work", () => {
     tool("mcp_search", {}),
   ] as never);
   assert.equal(text, "thought 4s, read 2 files, searched once, ran 1 command, used mcp_search \u00d72");
+  // Counted by the real path: two index.ts files in different packages are two files.
+  assert.equal(summarize([tool("read", { path: "/r/packages/a/src/index.ts" }), tool("read", { path: "/r/packages/b/src/index.ts" })] as never), "read 2 files");
+  // The path, not whichever string argument comes first.
+  assert.equal(summarize([tool("edit", { oldText: "x", path: "/a.ts" }), tool("edit", { oldText: "x", path: "/b.ts" })] as never), "changed 2 files");
   // History carries no arguments, so every reopened call counts on its own.
   assert.equal(summarize([tool("read", undefined), tool("read", undefined)] as never), "read 2 files");
 });

@@ -293,7 +293,7 @@ if (!process.versions.electron) {
       // in and the running badge is gone.
       await until(
         `(() => {
-          const card = document.querySelector('details');
+          const card = document.querySelector('details details');
           return card && card.textContent.includes('Hello from the workspace') && !card.textContent.includes('running');
         })()`,
         "tool trace finishes",
@@ -316,7 +316,7 @@ if (!process.versions.electron) {
       );
       assert.ok(
         await evaluate(`(() => {
-          const summary = document.querySelector('details summary').textContent;
+          const summary = document.querySelector('details details summary').textContent;
           return summary.includes('project/hello.txt') && !summary.includes('duang-smoke-');
         })()`),
         "a tool row names the file, not a machine-specific path",
@@ -336,7 +336,7 @@ if (!process.versions.electron) {
       );
 
       // The card now separates arguments from result, so read the whole card rather than its first block.
-      const transcript = await evaluate("document.querySelector('details').textContent");
+      const transcript = await evaluate("document.querySelector('details details').textContent");
       assert.match(transcript, /Hello from the workspace/);
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog button[aria-current=\"true\"]') !== null", "model picker reopens with the current model");
