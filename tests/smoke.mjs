@@ -286,7 +286,7 @@ if (!process.versions.electron) {
       assert.equal(await readFile(join(workspace, "fastagent", "fastagent.config.ts"), "utf8"), "export default {};\n");
       await message("Read hello.txt and answer.");
       await until(
-        "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main').innerText.includes('working…')",
+        "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')",
         "stream settles",
       );
       // A tool that worked says nothing (§9, third tier): the card is finished when its result is
@@ -462,7 +462,7 @@ if (!process.versions.electron) {
         "directory-configured model",
       );
       await message("Use the configured model with the selected credentials.");
-      await until("document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main').innerText.includes('working…')", "configured model uses the same credential file");
+      await until("document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')", "configured model uses the same credential file");
 
       const models = await evaluate("window.duang.listModels('configured')");
       assert.equal(models.authPath, selectedAuth);
@@ -477,7 +477,7 @@ if (!process.versions.electron) {
       await chooseModel("anthropic/claude-sonnet-4-5");
       await until("!document.querySelector('textarea').disabled && document.body.innerText.includes('anthropic/claude-sonnet-4-5')", "selected conversation changes provider");
       await message("Use the Anthropic conversation model.");
-      await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main').innerText.includes('working…')", "synthetic Anthropic OAuth request");
+      await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main .bounce')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
       await until("/5h[\\s\\S]*4%[\\s\\S]*7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's plan windows");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
@@ -509,7 +509,7 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
       assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), codexModel);
       await message("Continue the historical Anthropic conversation.");
-      await until("document.querySelector('main').innerText.split('Anthropic smoke answer').length === 3 && !document.querySelector('main').innerText.includes('working…')", "mixed-provider history resolves its own credential");
+      await until("document.querySelector('main').innerText.split('Anthropic smoke answer').length === 3 && !document.querySelector('main .bounce')", "mixed-provider history resolves its own credential");
       assert.equal(anthropicRequests, 2);
 
       // A missing historical provider fails without silently switching models; fixing the file needs no restart.
@@ -1031,7 +1031,7 @@ if (!process.versions.electron) {
       const answers = () => evaluate("document.querySelector('main').innerText.split('Smoke answer').length");
       const before = await answers();
       await message("Send through a SOCKS4 PAC answer.");
-      await until(`document.querySelector('main').innerText.split('Smoke answer').length > ${before} && !document.querySelector('main').innerText.includes('working…')`, "a send is not stopped by the commands' route");
+      await until(`document.querySelector('main').innerText.split('Smoke answer').length > ${before} && !document.querySelector('main .bounce')`, "a send is not stopped by the commands' route");
       settingsItem.click();
       await until(
         "document.body.innerText.includes('unsupported proxy route') && document.body.innerText.includes('Agent commands get no proxy: Unsupported proxy route \"SOCKS 127.0.0.1:1080\"')",

@@ -11,7 +11,7 @@ import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react
 import { Badge, Button } from "./ui.tsx";
 import { CodeBlock } from "./code.tsx";
 import { PlanUsage } from "./header.tsx";
-import { Message, Tool } from "./transcript-view.tsx";
+import { Message, RunStatus, Tool, WorkBlock } from "./transcript-view.tsx";
 
 /** One instant for every fixed item, so the page renders the same in each shot. */
 const FIXED = new Date(2026, 0, 5, 9, 41).getTime();
@@ -94,7 +94,7 @@ export default function Gallery() {
 
         <Section title="Badges — the one status vocabulary" note="a mark and a word, never colour alone; pulse means still happening">
           <Badge tone="accent" pulse>
-            working…
+            working
           </Badge>
           <Badge tone="accent" pulse>
             2 working
@@ -161,6 +161,40 @@ export default function Gallery() {
             />
             <Message item={{ kind: "note", tone: "info", text: "model changed to anthropic/claude-sonnet-5", at: FIXED }} />
             <CodeBlock language="typescript" code={'const t = useTranslations("AmazonListing");\nreturn t("heading");'} />
+          </div>
+        </Section>
+
+        <Section
+          title="Work and the live status"
+          note="a stretch of tool calls reads as one line of what kind of work it was; the live end of a run says what it is on now"
+        >
+          <div className="w-full space-y-3">
+            <WorkBlock
+              work={{
+                kind: "work",
+                items: [
+                  { kind: "thinking", text: "", open: false, started: FIXED, at: FIXED + 6_000 },
+                  ...["a.ts", "b.ts", "c.ts", "d.ts"].map((file, index) => ({
+                    kind: "tool" as const,
+                    id: file,
+                    name: "read",
+                    args: { path: `/src/${file}` },
+                    status: "done" as const,
+                    at: FIXED + index,
+                  })),
+                  { kind: "tool", id: "g", name: "grep", args: { pattern: "sectionsGenerated" }, status: "done", at: FIXED },
+                  { kind: "tool", id: "t", name: "bash", args: { command: "npm test" }, isError: true, status: "done", at: FIXED },
+                ],
+              }}
+            />
+            <RunStatus
+              items={[{ kind: "tool", id: "r", name: "bash", args: { command: "npm run build" }, status: "running", at: FIXED }]}
+              status="running"
+            />
+            <RunStatus
+              items={[{ kind: "thinking", text: "The check fails fast, so the answer should not depend on it.", open: true, started: FIXED, at: FIXED }]}
+              status="running"
+            />
           </div>
         </Section>
 
