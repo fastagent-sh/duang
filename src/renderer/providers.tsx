@@ -248,7 +248,7 @@ export function ProvidersSection({
                 header={{
                   trailing: (
                     <>
-                      {provider.stored === "oauth" && <PlanUsage plan={view.usage[provider.id]} brief />}
+                      {provider.stored === "oauth" && <PlanUsage plan={view.usage[provider.id]} />}
                       {landed?.id === provider.id && (
                         <Badge tone={landed.unchecked ? "warning" : "success"} className="enter">
                           {landed.unchecked ? "saved · key not checked" : "connected"}

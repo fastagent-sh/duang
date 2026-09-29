@@ -49,6 +49,8 @@
   /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
      what terminal output actually contains. The rest are fallbacks for machines without it. */
   --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
+  /* The conversation's own voice, defined below. */
+  --font-prose: "Prose", "PingFang SC", sans-serif;
 
   --ease-ui: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -83,22 +85,52 @@
   }
 }
 
+/*
+ * "Prose" is two bundled faces under one name, both rounded: Nunito for Latin, and Resource Han
+ * Rounded for Chinese, the design Maple Mono CN takes its CJK from, so the answer and the code it
+ * talks about share their Chinese letterforms. The system sans made the answer indistinguishable
+ * from every other chat app.
+ *
+ * Resource Han Rounded is cut to GB2312 (6,763 characters, 1.2 MB a weight) with
+ * `pyftsubset --text-file=gb2312.txt --unicodes=U+3000-303F,U+FF00-FFEF,U+2014,U+2015,U+2026,U+00B7
+ * --flavor=woff2 --layout-features='*'`; a rarer character falls back to PingFang.
+ */
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/nunito-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 200 1000;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/nunito-latin-wght-italic.woff2") format("woff2-variations");
+  font-weight: 200 1000;
+  font-style: italic;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/resource-han-rounded-cn-400-gb2312.woff2") format("woff2");
+  font-weight: 400;
+  unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
+}
+/* Bold, not Medium, under Nunito's 600: a Chinese stroke needs more weight to read as emphasis. */
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/resource-han-rounded-cn-700-gb2312.woff2") format("woff2");
+  font-weight: 600;
+  unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
+}
+
 html,
 body,
 #root {
   height: 100%;
 }
 
-/* Keep room for wide code and tables; prose gets its own shorter line length below. */
+/* One column for reading and writing: prose, code, tables and the composer share its edges. 768 at
+   14px keeps a line near 54 Chinese characters; at 920 it ran to 65 and the eye lost the next line. */
 .column {
-  width: 100%;
-  max-width: 920px;
-  margin-inline: auto;
-}
-
-/* The composer is an input, not a reading surface. A text field as wide as the transcript looks like
-   a form; it keeps its own, narrower measure. */
-.composer-column {
   width: 100%;
   max-width: 768px;
   margin-inline: auto;
@@ -110,6 +142,9 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 13px;
+  /* A sixth of a space between Chinese and Latin or digits, where the writer left none; an existing
+     space is not doubled. Model output is inconsistent about it, and this makes it even. */
+  text-autospace: normal;
 }
 
 /* Code and command output keep the ligatures the mono family ships with, and tabular figures so
@@ -249,20 +284,16 @@ details[open]::details-content {
   background: transparent !important;
 }
 
-/* Chinese and Latin share one leading; code and tables can use the full reading column while
-   paragraphs and lists stay short enough to scan. The composer still matches sent bubbles. */
+/* What you write, what you sent and what the agent answered are one voice: Prose at 14px, with a
+   leading that suits Chinese. The trace around them stays at 12, so the answer is the loudest text on the
+   page and the work that produced it the quietest. `pretty` keeps a paragraph from ending on a lone
+   character such as `单。`, which Chinese breaks into easily. */
 .md,
 .bubble {
-  line-height: 1.7;
-}
-.md {
+  font-family: var(--font-prose);
   font-size: 14px;
-}
-.md p,
-.md ul,
-.md ol,
-.md blockquote {
-  max-width: 720px;
+  line-height: 1.7;
+  text-wrap: pretty;
 }
 
 /* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
@@ -299,6 +330,13 @@ summary:focus-visible,
     0 12px 32px oklch(0 0 0 / 28%);
   outline: 1px solid var(--color-stroke);
   padding: 6px;
+}
+
+/* What covers the transcript past the floating header and composer: the canvas at partial strength
+   over a slight blur, so a line passing there is still seen going by. */
+.veil {
+  background: color-mix(in oklch, var(--color-bg) 65%, transparent);
+  backdrop-filter: blur(3px);
 }
 
 /* The header still floats over the transcript; its lower edge, not a hard strip across the page,
@@ -373,37 +411,89 @@ summary:focus-visible,
 }
 
 /*
- * The agent's output. Streamdown ships shadcn-flavoured class names (`bg-muted`, `border-border`)
- * that our palette deliberately does not define, so its own look lands half-applied. It does mark
- * every element with `data-streamdown`, which is the seam we style through — our tokens win, and our
- * vocabulary stays ours.
+ * The agent's output reads as a report someone comes back to, so spacing groups rather than
+ * separates, on the spacing scale (§7): a paragraph binds to the list it introduces (4) while two
+ * paragraphs sit 12 apart, a heading stands 24 below what came before and 8 above what it
+ * introduces, and code, tables and quotes take 16. One gap for every pair, which is what
+ * Streamdown's own `space-y-4` gives, left every block equally separate, and nothing read as
+ * belonging together.
  *
- * The register is Codex's: a quiet container, almost no chrome, controls only where an action
- * exists.
+ * Streamdown ships shadcn-flavoured class names (`bg-muted`, `border-border`) that our palette does
+ * not define, but marks every element with `data-streamdown`: that is the seam styled through. Its
+ * blocks are children of an unmarked root, `.md > div`.
  */
-[data-streamdown="table-wrapper"] {
-  border: 0;
-  border-radius: var(--radius-float);
-  background: var(--color-surface);
-  padding: 6px;
-  gap: 0;
-  margin: 14px 0;
+.md > div > * {
+  margin-block: 0;
 }
-[data-streamdown="table-wrapper"] > div {
-  border: 0;
-  background: transparent;
+.md > div > * + * {
+  margin-top: 4px;
 }
-[data-streamdown="table-header"] {
-  background: var(--color-surface-2);
+.md > div > p + p,
+.md > div > :is(ul, ol) + * {
+  margin-top: 12px;
 }
-[data-streamdown="table-header-cell"],
-[data-streamdown="table-cell"] {
-  padding: 6px 10px;
-  font-size: 12.5px;
-  border-bottom: 1px solid var(--color-stroke);
+.md > div > [data-streamdown^="heading-"]:not(:first-child) {
+  margin-top: 24px;
+}
+.md > div > [data-streamdown^="heading-"] + * {
+  margin-top: 8px;
+}
+.md > div > :is(.code-block, [data-streamdown="table-wrapper"], [data-streamdown="blockquote"]) {
+  margin-block: 16px;
+}
+.md > div > [data-streamdown="horizontal-rule"] {
+  margin-block: 24px;
+}
+
+/* 600, not the browser's 700: SF at 700 is heavier than PingFang's Semibold beside it, and answers
+   that lead every item with a bold sentence turned into a page of dark bars. */
+.md strong {
+  font-weight: 600;
+}
+[data-streamdown^="heading-"] {
+  font-weight: 600;
+  line-height: 1.4;
+}
+[data-streamdown="heading-1"] {
+  font-size: 21px;
+}
+[data-streamdown="heading-2"] {
+  font-size: 18px;
+}
+[data-streamdown="heading-3"] {
+  font-size: 16px;
+}
+[data-streamdown="heading-4"],
+[data-streamdown="heading-5"],
+[data-streamdown="heading-6"] {
+  font-size: 14px;
+}
+[data-streamdown="horizontal-rule"] {
+  border-color: var(--color-stroke);
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
 }
 [data-streamdown="list-item"] {
-  padding: 1px 0;
+  padding: 0 0 0 2px;
+}
+.md li + li {
+  margin-top: 4px;
+}
+.md li::marker {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.md li p {
+  display: inline;
 }
 [data-streamdown="blockquote"] {
   border-left: 2px solid var(--color-stroke);
@@ -415,45 +505,73 @@ summary:focus-visible,
   color: var(--color-accent);
   text-decoration: underline;
 }
-[data-streamdown^="heading-"] {
-  font-size: 1.1em;
+
+/* A table is part of the document: no frame, a header band in the code block's family of tints, and
+   hairlines between rows. The band starts on the column's edge, as a code block's fill does. */
+[data-streamdown="table-wrapper"] {
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0;
+  gap: 0;
+}
+[data-streamdown="table-wrapper"] > div {
+  border: 0;
+  background: transparent;
+}
+/* Copy and fullscreen float over the header's far end on hover: as their own row they left an
+   empty band above every table. */
+[data-streamdown="table-wrapper"] > div:not(:has(table)) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  border-radius: var(--radius-badge);
+  background: var(--color-surface-2);
+  opacity: 0;
+  transition: opacity 150ms var(--ease-ui);
+}
+[data-streamdown="table-wrapper"]:is(:hover, :focus-within) > div:not(:has(table)) {
+  opacity: 1;
+}
+[data-streamdown="table"] > *,
+[data-streamdown="table-header"] {
+  border: 0;
+  background: none;
+}
+[data-streamdown="table-header-cell"],
+[data-streamdown="table-cell"] {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: start;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-stroke);
+}
+[data-streamdown="table-header-cell"] {
+  border-bottom: 0;
+  background: var(--color-surface-2);
+  color: var(--color-muted);
   font-weight: 600;
-  margin: 1.35em 0 0.45em;
 }
-[data-streamdown="heading-1"],
-[data-streamdown="heading-2"] {
-  font-size: 1.25em;
+[data-streamdown="table-header-cell"]:first-child {
+  border-radius: var(--radius-badge) 0 0 var(--radius-badge);
 }
-[data-streamdown="horizontal-rule"] {
-  border-color: var(--color-stroke);
+[data-streamdown="table-header-cell"]:last-child {
+  border-radius: 0 var(--radius-badge) var(--radius-badge) 0;
+}
+[data-streamdown="table-row"]:last-child > [data-streamdown="table-cell"] {
+  border-bottom: 0;
 }
 
-/*
- * Markdown from the model: rhythm and lists only.
- *
- * Everything else is said once, above, through `data-streamdown`. A second set of element rules for
- * the same DOM does not just repeat itself — it wins. `.md td` outranks `[data-streamdown="table-cell"]`
- * on specificity, so the quiet bottom-hairline table above was being drawn as a full grid by a rule
- * written to agree with it.
- */
-.md > * + * {
-  margin-top: 0.6em;
-}
-.md ul,
-.md ol {
-  padding-left: 1.2em;
-}
-.md ul {
-  list-style: disc;
-}
-.md ol {
-  list-style: decimal;
-}
-.md li + li {
-  margin-top: 0.15em;
-}
-.md li p {
-  display: inline;
+/* Inline code is the trace's own mono, set a step down and on the paper's deeper tint: a marked
+   word in the sentence, not a chip stuck on it. Regular weight, so a bold sentence does not turn
+   it into a dark bar. */
+.inline-code {
+  font-size: max(0.875em, 11px);
+  font-weight: 400;
+  background: color-mix(in oklch, var(--color-surface-2) 80%, transparent);
 }
 
 /* Light mode gives navigation, writing and code different jobs without changing the floating
@@ -496,15 +614,9 @@ summary:focus-visible,
   .code-block {
     background: oklch(0.966 0.007 270);
   }
-  .inline-code {
-    background: var(--color-surface-2);
-  }
   .popover {
     box-shadow:
       0 2px 6px oklch(0.25 0.02 285 / 6%),
       0 18px 40px -8px oklch(0.25 0.02 285 / 18%);
-  }
-  [data-streamdown="table-wrapper"] {
-    border: 1px solid var(--color-stroke);
   }
 }

@@ -1,27 +1,27 @@
 /** The bar over a conversation: who it is with, where it runs, and what it costs. */
+import { Fragment } from "react";
 import { ListBullets } from "@phosphor-icons/react";
-import type { ProviderUsage, UsageWindow } from "../preload/index.ts";
-import { contextLabel, pace, paceLabel, resetLabel } from "./usage.ts";
+import type { ProviderUsage } from "../preload/index.ts";
+import { pace, paceLabel, resetLabel, tightest, tokens } from "./usage.ts";
 import { ago } from "./sessions.ts";
 import { Avatar, Badge, Button } from "./ui.tsx";
 import { location } from "./paths.ts";
 
+/** How full a limit is, as a 40px bar beside its percentage. */
+function Bar({ percent }: { percent: number }) {
+  return (
+    <span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-stroke">
+      <span className="block h-full rounded-full bg-muted" style={{ width: `${Math.min(100, percent)}%` }} />
+    </span>
+  );
+}
+
 /**
- * What is left of the plan paying for this conversation: each window's share used, when it resets,
- * and for the week whether it is burning faster than the clock (▲) or slower (▼). Nothing for an API
- * key, and nothing for a failed read either: the numbers are a glance, not a status to act on, and a
- * failure never leaves old ones up (the store replaces them).
+ * A plan login's windows beside its name in Settings: each one's share used and when it resets, the
+ * rest in the tooltip. Nothing for an API key, and nothing for a failed read either: the numbers are
+ * a glance, not a status to act on, and a failure never leaves old ones up (the store replaces them).
  */
-export function PlanUsage({
-  plan,
-  now = Date.now(),
-  brief,
-}: {
-  plan?: { data?: ProviderUsage; error?: string };
-  now?: number;
-  /** Used and when it resets, beside a name that must stay readable; the pace stays in the tooltip. */
-  brief?: boolean;
-}) {
+export function PlanUsage({ plan }: { plan?: { data?: ProviderUsage; error?: string } }) {
   const windows = plan?.data?.windows;
   if (!windows?.length) return null;
   const detail = [
@@ -32,32 +32,97 @@ export function PlanUsage({
     `${plan!.data!.provider} · updated ${ago(plan!.data!.fetchedAt)}`,
   ].join("\n");
   return (
-    <span className="pointer-events-auto flex shrink-0 items-center gap-3 text-[11px] text-muted tabular-nums" title={detail}>
-      {windows.map((w) => (
-        <PlanWindow key={w.label} window={w} now={now} brief={brief} />
-      ))}
+    <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted tabular-nums" title={detail}>
+      {windows.map((w) => {
+        const reset = resetLabel(w);
+        return (
+          <span key={w.label} className="flex items-center gap-1.5">
+            {w.label}
+            <Bar percent={w.percent} />
+            {/* Settings stacks plans in rows: a fixed width lines them up whatever the digits. */}
+            <span className="min-w-[4ch] text-right">{w.percent.toFixed(0)}%</span>
+            {reset && <span>~ {reset}</span>}
+          </span>
+        );
+      })}
     </span>
   );
 }
 
-function PlanWindow({ window: w, now, brief }: { window: UsageWindow; now: number; brief?: boolean }) {
-  const reset = resetLabel(w);
-  const diff = pace(w, now);
+type Usage = {
+  plan?: { data?: ProviderUsage; error?: string };
+  context?: { used: number; window: number };
+  now?: number;
+};
+
+/**
+ * Every limit on this conversation in one table: each plan window's share, its reset and, for a day
+ * or more, its pace against the clock (`▼` under, `▲` over), then the context and the plan's source.
+ */
+export function UsageDetail({ plan, context, now = Date.now() }: Usage) {
+  const data = plan?.data;
+  const windows = data?.windows ?? [];
   return (
-    <span className="flex items-center gap-1.5">
-      {w.label}
-      <span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-stroke">
-        <span className="block h-full rounded-full bg-muted" style={{ width: `${Math.min(100, w.percent)}%` }} />
-      </span>
-      {/* Settings stacks plans in rows: a fixed width lines them up whatever the digits. */}
-      <span className={brief ? "min-w-[4ch] text-right" : undefined}>{w.percent.toFixed(0)}%</span>
-      {/* A narrow header keeps the percentages; when and how fast move to the tooltip. Measured on
-          the header, not the window, because the sidebar's width is the person's to drag. */}
-      {reset && <span className="@max-[44rem]:hidden">~ {reset}</span>}
-      {!brief && diff !== undefined && (
-        <span className={`@max-[44rem]:hidden ${diff > 0 ? "text-danger" : "text-success"}`}>{paceLabel(diff)}</span>
+    <div className="grid grid-cols-[auto_auto_auto_auto] items-center gap-x-2 gap-y-1.5 px-2 py-1.5 text-[11px] whitespace-nowrap text-muted tabular-nums">
+      {windows.map((w) => {
+        const reset = resetLabel(w);
+        const diff = pace(w, now);
+        return (
+          <Fragment key={w.label}>
+            <span>{w.label}</span>
+            <Bar percent={w.percent} />
+            <span className="text-right text-text">{w.percent.toFixed(0)}%</span>
+            <span>
+              {reset && `resets ${reset}`}
+              {diff !== undefined && (
+                <span className={`ml-2 ${diff > 0 ? "text-danger" : "text-success"}`}>{paceLabel(diff)}</span>
+              )}
+            </span>
+          </Fragment>
+        );
+      })}
+      {context && (
+        <>
+          <span>context</span>
+          <Bar percent={(context.used / context.window) * 100} />
+          <span className="text-right text-text">{((context.used / context.window) * 100).toFixed(0)}%</span>
+          <span>of {tokens(context.window)}</span>
+        </>
       )}
-    </span>
+      {data && windows.length > 0 && (
+        <span className="col-span-4 mt-0.5 border-t border-stroke pt-1.5">
+          {data.provider} · updated {ago(data.fetchedAt)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The header's right edge: only the limit closest to running out, with the rest a hover or a focus
+ * away. Every window with its reset and pace, then the context, made that edge the densest text on
+ * screen for numbers read once in a while. A plan read that failed or an API key adds no windows,
+ * never a stale percentage.
+ */
+export function UsageMeter({ plan, context, now }: Usage) {
+  const windows = plan?.data?.windows ?? [];
+  const shown = tightest([
+    ...windows,
+    ...(context ? [{ label: "context", percent: (context.used / context.window) * 100 }] : []),
+  ]);
+  if (!shown) return null;
+  return (
+    // Focusable so the table is reachable without a pointer; it is information, not a control.
+    <div tabIndex={0} aria-label="Usage" className="group pointer-events-auto relative shrink-0 text-[11px] text-muted tabular-nums">
+      <span className="flex items-center gap-1.5">
+        {shown.label}
+        <Bar percent={shown.percent} />
+        {shown.percent.toFixed(0)}%
+      </span>
+      <div className="popover absolute top-full right-0 mt-3 hidden group-hover:block group-focus-visible:block">
+        <UsageDetail plan={plan} context={context} now={now} />
+      </div>
+    </div>
   );
 }
 
@@ -92,7 +157,7 @@ export function ConversationHeader({
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
     // only what you can actually grab, click or hover for a tooltip takes the pointer back.
-    <header className="conversation-header @container pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
+    <header className="conversation-header pointer-events-none absolute inset-x-4 top-2 z-10 flex items-center gap-2.5 rounded-float bg-surface/75 py-1.5 pr-3 pl-2 ring-1 ring-stroke backdrop-blur-xl">
       {/* The same avatar as in the roster: whose work this is should not need reading. */}
       <Avatar name={agent} size={30} working={working} />
       <div className="min-w-0 flex-1">
@@ -112,12 +177,7 @@ export function ConversationHeader({
         )}
       </div>
       {working && <Badge tone="accent" pulse>working</Badge>}
-      <PlanUsage plan={plan} />
-      {context && (
-        <span className="pointer-events-auto shrink-0 text-[11px] text-muted tabular-nums" title="Context used, out of the model's window">
-          {contextLabel(context.used, context.window)}
-        </span>
-      )}
+      <UsageMeter plan={plan} context={context} />
       {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
       {list && (
         // Opens the `ConversationList` popover by id and anchors it (index.css). A dot says one of

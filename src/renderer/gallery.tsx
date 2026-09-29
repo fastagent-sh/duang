@@ -10,12 +10,11 @@
 import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { CodeBlock } from "./code.tsx";
-import { PlanUsage } from "./header.tsx";
+import { UsageDetail, UsageMeter } from "./header.tsx";
 import { Message, RunStatus, Tool, WorkBlock } from "./transcript-view.tsx";
 
 /** One instant for every fixed item, so the page renders the same in each shot. */
 const FIXED = new Date(2026, 0, 5, 9, 41).getTime();
-import { contextLabel } from "./usage.ts";
 
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
@@ -69,7 +68,7 @@ export default function Gallery() {
           <Button disabled="This agent is not ready">Reveal in Finder</Button>
         </Section>
 
-        <Section title="Plan usage" note="the header's right edge: used, reset, and the week's pace against the clock">
+        <Section title="Plan usage" note="the header's right edge keeps the fullest limit; hover opens every window, its reset and pace">
           {(() => {
             const now = Date.UTC(2026, 8, 23, 12);
             const plan = (week: number) => ({
@@ -82,11 +81,16 @@ export default function Gallery() {
                 ],
               },
             });
+            const context = { used: 451_000, window: 1_000_000 };
             return (
-              <div className="space-y-2">
-                <PlanUsage plan={plan(18)} now={now} />
-                <PlanUsage plan={plan(88)} now={now} />
-                <span className="block text-[11px] text-muted tabular-nums">{contextLabel(451_000, 1_000_000)}</span>
+              <div className="flex items-start gap-8">
+                <div className="space-y-2">
+                  <UsageMeter plan={plan(18)} context={context} now={now} />
+                  <UsageMeter plan={plan(88)} context={context} now={now} />
+                </div>
+                <div className="popover">
+                  <UsageDetail plan={plan(88)} context={context} now={now} />
+                </div>
               </div>
             );
           })()}

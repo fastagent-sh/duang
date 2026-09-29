@@ -45,6 +45,10 @@ Three things follow from it:
 - regeneration is per section, not per listing
 - \`showRegenerateAll\` is a presentation flag, nothing more
 
+## 中文排版
+
+**1. 回退逻辑有漏洞** \`mapLsStatus\` 的 \`default → 'active'\`：遇到未知状态会默认给用户开通使用权。应该改成抛错（让 LS 重试）或者映射成 \`past_due\`，Stripe webhook 同理，这样 30 次调用之后仍然会被拒绝。
+
 The i18n check failed. Open the tool call above for the exact diagnostic before committing.`;
 
 const THOUGHTS = [
@@ -98,7 +102,8 @@ if (!process.versions.electron) {
       { id: "shot-2", name: "compass", dir: second },
     ]));
 
-    // Turn 1 reads a file, turn 2 fails a tool, turn 3 answers with the markdown above.
+    // Turn 1 reads a file, turn 2 says what it found and fails a tool, turn 3 answers with the
+    // markdown above. The words between two calls are the text-to-work spacing §8 is about.
     let requests = 0;
     globalThis.fetch = async (input, init) => {
       // Settings checks a different host; do not consume a model turn or touch the real network.
@@ -116,12 +121,23 @@ if (!process.versions.electron) {
       // reasoning item has to open its own output slot before its deltas mean anything.
       const thought = THOUGHTS[requests - 1];
       const reasoning = { id: `rs_${requests}`, type: "reasoning", summary: [{ type: "summary_text", text: thought }] };
-      const index = 1;
+      const say =
+        requests === 2
+          ? { id: "msg_2", type: "message", role: "assistant", content: [{ type: "output_text", text: "The file is one line, so the component lives elsewhere. Running the i18n check next.", annotations: [] }] }
+          : undefined;
+      const index = say ? 2 : 1;
       const events = [
         { type: "response.created", response: { id: `resp_${requests}` } },
         { type: "response.output_item.added", output_index: 0, item: { ...reasoning, summary: [] } },
         ...chunk(thought, 30).map((delta) => ({ type: "response.reasoning_summary_text.delta", output_index: 0, delta })),
         { type: "response.output_item.done", output_index: 0, item: reasoning },
+        ...(say
+          ? [
+              { type: "response.output_item.added", output_index: 1, item: { ...say, content: [] } },
+              { type: "response.output_text.delta", output_index: 1, delta: say.content[0].text },
+              { type: "response.output_item.done", output_index: 1, item: say },
+            ]
+          : []),
         { type: "response.output_item.added", output_index: index, item: { ...item, ...(tool ? { arguments: "" } : { content: [] }) } },
         // Chunked on purpose: a fence is unclosed for most of the stream, which is where the
         // renderer's block detection actually gets tested.
@@ -132,7 +148,7 @@ if (!process.versions.electron) {
           response: {
             id: `resp_${requests}`,
             status: "completed",
-            output: [reasoning, item],
+            output: [reasoning, ...(say ? [say] : []), item],
             usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
           },
         },
@@ -202,13 +218,19 @@ if (!process.versions.electron) {
         const box = document.querySelector('[aria-label="Transcript"]');
         box.scrollTop = box.scrollHeight;
         const last = box.querySelector('.column').lastElementChild;
-        const composer = document.querySelector('textarea').closest('.composer-column');
+        const composer = document.querySelector('textarea').closest('.column');
         return Math.round(composer.getBoundingClientRect().top - last.getBoundingClientRect().bottom);
       })()`),
     );
     await capture("app");
     await evaluate(`document.querySelector('details').open = false`);
     await capture("app-start", "top");
+    // Wide enough that the column stops growing: where its centring and its edges against the
+    // composer actually show.
+    win.setSize(1500, 1040);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    console.log("wide column edges vs composer:", await evaluate(`(() => { const a = document.querySelector('[aria-label="Transcript"] .column').getBoundingClientRect(); const b = document.querySelector('textarea').closest('.column').getBoundingClientRect(); return [a.left - b.left, a.right - b.right, a.width].join(","); })()`));
+    await capture("app-wide");
     win.setSize(820, 660);
     await capture("app-narrow");
     win.setSize(1180, 860);

@@ -60,7 +60,7 @@ const ALIASES: Record<string, string> = {
 
 export function CodeBlock({ code, language }: { code: string; language: string }) {
   return (
-    <div className="code-block relative my-3.5 rounded-float bg-surface px-4 pt-3 pb-3.5">
+    <div className="code-block relative rounded-float bg-surface px-4 pt-3 pb-3.5">
       <div className="flex items-center h-5 text-[12px] text-muted">{language}</div>
       <CopyButton code={code} />
       {/* The same text in the same place until the grammar lands: no skeleton, no reflow. */}
@@ -134,7 +134,7 @@ export function MarkdownCode({
 }) {
   const text = typeof children === "string" ? children : String(children ?? "");
   if (!("data-block" in props)) {
-    return <code className="inline-code rounded-[5px] bg-surface px-1.5 py-[0.15em] font-mono text-[0.92em]">{text}</code>;
+    return <code className="inline-code rounded-[4px] px-[0.3em] py-px font-mono">{text}</code>;
   }
   return <CodeBlock code={text.replace(/\n$/, "")} language={/language-(\S+)/.exec(className ?? "")?.[1] ?? "text"} />;
 }

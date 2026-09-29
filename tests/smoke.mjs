@@ -479,7 +479,9 @@ if (!process.versions.electron) {
       await message("Use the Anthropic conversation model.");
       await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main .bounce')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
-      await until("/5h[\\s\\S]*4%[\\s\\S]*7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's plan windows");
+      await until("/7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's fullest plan window");
+      assert.ok(!(await evaluate("document.querySelector('header').innerText")).includes("5h"), "the other windows wait for a hover");
+      assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%/, "the hover table lists every window");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
 
       // Change only the agent default, then reopen Anthropic history through a fresh renderer.
