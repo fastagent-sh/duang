@@ -28,6 +28,7 @@ import {
   phase,
   stringify,
   summarize,
+  thinkingLine,
   toolText,
   type Item,
   type Line,
@@ -42,18 +43,22 @@ import { Badge, Button, type Tone } from "./ui.tsx";
  * the whole run rather than filling silences, so the bottom of a working transcript always answers
  * "is it alive, and what is it on". The dot bounces (duang is the sound of one) and the word sweeps;
  * the clock is the run's, counted from when this window saw it start, so a run reopened halfway shows
- * none rather than a wrong one.
+ * none rather than a wrong one. `shown`: the step already stands on its own line right above (a lone
+ * call or thinking), so what it is on is not said twice.
  */
 export function RunStatus({
   items,
   status,
   started,
+  shown,
 }: {
   items: Item[];
   status: SessionState["status"] | undefined;
   started?: number;
+  shown?: boolean;
 }) {
-  const { word, detail } = phase(items, status);
+  const { word, detail: on } = phase(items, status);
+  const detail = shown ? undefined : on;
   const elapsed = useElapsed(started, undefined);
   return (
     <div className="enter flex h-6 items-center gap-2 text-[12px]">
@@ -218,7 +223,7 @@ export function Transcript({
         {queue(true)}
         {busy && (
           <div className="pt-6">
-            <RunStatus items={items} status={status} started={started} />
+            <RunStatus items={items} status={status} started={started} shown={isLone(shown.at(-1))} />
           </div>
         )}
         {queue(false)}
@@ -283,7 +288,7 @@ export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "s
       // Collapsed, a bare "thinking" says nothing about what happened. How long it took and the
       // line it is on are the two facts worth reading without expanding (docs/ui.md §8).
       const seconds = Math.round((item.at - item.started) / 1000);
-      const trail = item.text.trim().split("\n").at(-1) ?? "";
+      const trail = thinkingLine(item.text);
       return (
         <details className="group text-muted text-[12px]">
           <summary className="cursor-default select-none flex items-center gap-1.5">
@@ -372,8 +377,10 @@ function Footer({ text, at }: { text: string; at: number }) {
  * next call folds it into a block it is still the same element. A card opened while it stood alone
  * keeps the block open once it folds, rather than vanishing from under the person reading it.
  */
+const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.items.length === 1;
+
 export function WorkBlock({ work }: { work: Work }) {
-  const lone = work.items.length === 1;
+  const lone = isLone(work);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDetailsElement>(null);
   useEffect(() => {

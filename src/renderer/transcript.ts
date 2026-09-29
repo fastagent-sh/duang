@@ -180,6 +180,9 @@ export function summarize(items: Work["items"]): string {
   return parts.join(", ") || "thought";
 }
 
+/** The line a thinking block is on: its last one, which is what it is thinking now. */
+export const thinkingLine = (text: string): string => text.trim().split("\n").at(-1) ?? "";
+
 /**
  * What a live run is doing right now, in words, from what the transcript already holds: the tool that
  * is running and its argument, the line the model is thinking, or the answer being written. Before the
@@ -198,7 +201,7 @@ export function phase(items: Item[], status: SessionState["status"] | undefined)
   }
   const last = items.at(-1);
   if (last?.kind === "assistant" && last.open) return { word: "answering" };
-  const thought = last?.kind === "thinking" && last.open ? last.text.trim().split("\n").at(-1) : undefined;
+  const thought = last?.kind === "thinking" && last.open ? thinkingLine(last.text) : undefined;
   return { word: "thinking", detail: thought };
 }
 
@@ -370,7 +373,7 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
           : item.kind === "tool"
             ? `${item.name} ${firstArg(item.args)}`
             : item.kind === "thinking" && item.open
-              ? `thinking: ${item.text.trim().split("\n").at(-1)}`
+              ? `thinking: ${thinkingLine(item.text)}`
               : "";
     const plain = text
       .replace(/^(#{1,6}|>)\s*/gm, "")

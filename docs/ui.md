@@ -380,8 +380,11 @@ Everything else follows from those two:
   whoever opens it to find out why. Files are counted once however often they were read; a call
   reopened from history carries no arguments, so there each call counts. The block opens into the
   calls themselves, indented on a hairline. It stays closed while it grows, because the run's live
-  status (below) already says what the current step is. A lone call keeps its own line, which says
-  more than a count of one would.
+  status (below) already says what the current step is, with one exception: a call someone opened
+  while it stood alone keeps the block open when the next call folds it in, rather than closing
+  under the person reading it. A lone call keeps its own line, which says more than a count of one
+  would; when it is the current step, the live status below it gives the step's word without
+  repeating what it is on.
 - **The live end of a run says what it is doing.** For the whole run, not only its silences, the
   transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
   (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
