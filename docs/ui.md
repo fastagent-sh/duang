@@ -290,7 +290,7 @@ fonts are OFL; their licences sit beside them in `src/renderer/fonts/`. Nunito i
 size its words read a step smaller than the Chinese beside them. Each Latin face and its Chinese
 partner declare identical weight and style: Chromium picks one descriptor bucket before it reads
 `unicode-range`, and when Nunito was declared `200 1000` beside `400` and `600` it was never loaded,
-so Latin silently fell back to PingFang. The smoke test checks that the Latin face loads.
+so Latin silently fell back to PingFang. The smoke test checks that the Latin face loads. Italic and bold italic are faces of their own (Latin 400 and 600, Chinese 400 and 700), so emphasis keeps its weight; Chinese has no italic and the browser does not slant a face declared italic, so it stays upright inside emphasis.
 
 The rule is ownership, not place: **words a person wrote wear `Prose` wherever they are quoted**,
 so a message does not change typeface between the bubble and the header. That is the roster row's

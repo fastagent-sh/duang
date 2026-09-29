@@ -140,11 +140,28 @@
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-/* No italic Chinese exists; slanting the upright one keeps it in the family. */
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/nunito-latin-wght-italic.woff2") format("woff2-variations");
+  size-adjust: 110%;
+  font-weight: 600;
+  font-style: italic;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Chinese has no italic and the browser does not slant a face declared italic, so these render upright.
+   They exist to put the Chinese faces in the italic bucket beside Nunito's, at both weights: Chromium
+   picks the bucket before it reads unicode-range, and without them Chinese in emphasis leaves the family. */
 @font-face {
   font-family: "Prose";
   src: url("./fonts/resource-han-rounded-cn-400-gb2312.woff2") format("woff2");
   font-weight: 400;
+  font-style: italic;
+  unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
+}
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/resource-han-rounded-cn-700-gb2312.woff2") format("woff2");
+  font-weight: 600;
   font-style: italic;
   unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
 }
