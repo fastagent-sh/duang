@@ -91,9 +91,10 @@
  * talks about share their Chinese letterforms. The system sans made the answer indistinguishable
  * from every other chat app.
  *
- * Resource Han Rounded is cut to GB2312 (6,763 characters, 1.2 MB a weight) with
- * `pyftsubset --text-file=gb2312.txt --unicodes=U+3000-303F,U+FF00-FFEF,U+2014,U+2015,U+2026,U+00B7
- * --flavor=woff2 --layout-features='*'`; a rarer character falls back to PingFang.
+ * Resource Han Rounded is cut to its `unicode-range` below, of that only GB2312's 6,763 hanzi
+ * (1.1 MB a weight): `pyftsubset --text-file=<GB2312 hanzi> --unicodes=U+3000-303F,U+FF00-FFEF
+ * --flavor=woff2 --layout-features='*'`. A rarer hanzi falls back to PingFang; dashes, ellipses
+ * and curly quotes are Nunito's, in Chinese text too.
  */
 @font-face {
   font-family: "Prose";
@@ -148,11 +149,13 @@ body {
 }
 
 /* Code and command output keep the ligatures the mono family ships with, and tabular figures so
-   columns of numbers in tool output line up. */
+   columns of numbers in tool output line up. No autospace: Maple's CJK sits on a 2:1 grid with its
+   Latin, and a gap at every Chinese-Latin boundary pushes a line with Chinese in it out of column. */
 code,
 pre,
 .font-mono {
   font-variant-numeric: tabular-nums;
+  text-autospace: no-autospace;
 }
 
 /*

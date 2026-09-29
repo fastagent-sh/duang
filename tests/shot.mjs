@@ -47,7 +47,7 @@ Three things follow from it:
 
 ## 中文排版
 
-**1. 回退逻辑有漏洞** \`mapLsStatus\` 的 \`default → 'active'\`：遇到未知状态会默认给用户开通使用权。应该改成抛错（让 LS 重试）或者映射成 \`past_due\`，Stripe webhook 同理，这样 30 次调用之后仍然会被拒绝。
+**1. 缺少翻译键** \`ListingResult\` 用到的 \`heading\` 在 \`zh.json\` 里不存在：检查脚本按 \`AmazonListing\` 命名空间查找，找不到就报错。补上这个键（或者改用 \`title\`）之后再跑一次 i18n 检查，3 个 section 都会通过。
 
 The i18n check failed. Open the tool call above for the exact diagnostic before committing.`;
 

@@ -283,7 +283,7 @@ from every other chat app. Resource Han Rounded is the design Maple Mono CN draw
 answer and the code it quotes share their Chinese letterforms; it is used on its own because Maple's
 CJK sits in 1.2em cells to align in a terminal, which spreads a paragraph apart. Maple Mono itself
 was tried for Latin prose and read poorly: a monospace line is a third wider and has no word shapes.
-The CJK face is cut to GB2312 (1.2 MB a weight); a rarer character falls back to PingFang. Both
+The CJK face is cut to GB2312 (1.1 MB a weight); a rarer character falls back to PingFang. Both
 fonts are OFL; their licences sit beside them in `src/renderer/fonts/`.
 
 **Chinese is a first-class case, and CSS cannot see it.** CJK glyphs fill their em box and want more
@@ -297,7 +297,8 @@ reflow the moment it is sent.
 
 Chinese and Latin mixed in one line get a sixth of a space between them from `text-autospace`, set on
 `body`: model output is inconsistent about typing that space, and the browser adds it only where it
-is missing. Fullwidth punctuation keeps Chromium's default trimming (`text-spacing-trim: normal`);
+is missing. Code, paths and tool output opt out, since the gap would push a line with Chinese in it
+off Maple's 2:1 grid and out of column. Fullwidth punctuation keeps Chromium's default trimming (`text-spacing-trim: normal`);
 trimming every mark to half width is a Japanese convention, not a Chinese one. Prose wraps with
 `text-wrap: pretty`, so a paragraph does not end on a lone character such as `单。`.
 

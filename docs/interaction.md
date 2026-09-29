@@ -68,11 +68,11 @@ network follows the system proxy until it is fixed.
 The conversation header shows what is left of the plan paying for it: for a Claude or ChatGPT
 subscription login of the conversation's own provider, the fullest of its windows and the context,
 and on hover or focus each window's share used, its reset time, and for windows of a day or more the
-pace against the clock (`▼` under, `▲` over). An API key shows
-nothing, because it has no plan windows. Opening a conversation, changing its provider and a run
-starting or ending ask again; main answers from a three-minute cache, since Anthropic's route answers 429 when
-polled. A failed read shows nothing, never a stale percentage: the numbers are a glance, and a
-failure there is not something to act on. Context joins them as `45% of 1.0M` once FastAgent reports it
+pace against the clock (`▼` under, `▲` over). An API key has no plan windows, so only the context
+shows. Opening a conversation, changing its provider and a run starting or ending ask again; main
+answers from a three-minute cache, since Anthropic's route answers 429 when polled. A failed read
+shows no plan windows, never a stale percentage: the numbers are a glance, and a failure there is
+not something to act on. Context joins them as `45% of 1.0M` once FastAgent reports it
 ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)).
 
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
