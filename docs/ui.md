@@ -377,7 +377,10 @@ Everything else follows from those two:
   need is the kind of work. A call that failed is not called out on the block: the agent reads its
   own failures and carries on, so a failed call asks nothing of the person, and whether the work as
   a whole failed is the run's outcome to say. Inside the block the call still reads `failed`, for
-  whoever opens it to find out why. Files are counted once however often they were read; a call
+  whoever opens it to find out why. A call that never finished is different and is said:
+  `ran 2 commands, 1 stopped`. The agent never read its result and the run did not go on, and in a
+  reopened conversation, whose history carries no `run stopped` line, the summary is the only place
+  that says the work was cut short. Files are counted once however often they were read; a call
   reopened from history carries no arguments, so there each call counts. The block opens into the
   calls themselves, indented on a hairline. It stays closed while it grows, because the run's live
   status (below) already says what the current step is, with one exception: a call someone opened

@@ -368,6 +368,8 @@ function Footer({ text, at }: { text: string; at: number }) {
   );
 }
 
+const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.items.length === 1;
+
 /**
  * A stretch of tool calls and thinking as one line that says what kind of work it was, opening into
  * the calls themselves, where a call that failed still says so. It stays closed while it grows: the
@@ -377,8 +379,6 @@ function Footer({ text, at }: { text: string; at: number }) {
  * next call folds it into a block it is still the same element. A card opened while it stood alone
  * keeps the block open once it folds, rather than vanishing from under the person reading it.
  */
-const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.items.length === 1;
-
 export function WorkBlock({ work }: { work: Work }) {
   const lone = isLone(work);
   const [open, setOpen] = useState(false);

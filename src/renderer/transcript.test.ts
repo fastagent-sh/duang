@@ -335,6 +335,11 @@ test("a work block counts files once and names the kind of work", () => {
   assert.equal(summarize([tool("read", { path: "/r/packages/a/src/index.ts" }), tool("read", { path: "/r/packages/b/src/index.ts" })] as never), "read 2 files");
   // The path, not whichever string argument comes first.
   assert.equal(summarize([tool("edit", { oldText: "x", path: "/a.ts" }), tool("edit", { oldText: "x", path: "/b.ts" })] as never), "changed 2 files");
+  // A call that never finished is said, unlike one that failed: nothing else says the run was cut short.
+  assert.equal(
+    summarize([tool("bash", {}, { isError: true }), tool("bash", {}, { status: "interrupted" })] as never),
+    "ran 2 commands, 1 stopped",
+  );
   // History carries no arguments, so every reopened call counts on its own.
   assert.equal(summarize([tool("read", undefined), tool("read", undefined)] as never), "read 2 files");
 });

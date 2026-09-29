@@ -162,8 +162,10 @@ const WORK = [
 /**
  * A work block in one line: `read 9 files, ran 6 commands`. A call that failed is not counted apart:
  * the agent reads its own failures and carries on, so it asks nothing of the person, and the run's
- * outcome is what says whether the work as a whole failed. Files are counted once however often they
- * were read; a call reopened from history has no arguments, so there each call counts.
+ * outcome is what says whether the work as a whole failed. A call that never finished is (`, 1
+ * stopped`): the agent never read a result and the run did not go on, and reopened from history
+ * nothing else says the run was cut short. Files are counted once however often they were read; a
+ * call reopened from history has no arguments, so there each call counts.
  */
 export function summarize(items: Work["items"]): string {
   const tools = items.filter((item): item is Tool => item.kind === "tool");
@@ -177,6 +179,8 @@ export function summarize(items: Work["items"]): string {
   const others = new Map<string, number>();
   for (const tool of tools) if (!WORK.some((kind) => kind.tools.includes(tool.name))) others.set(tool.name, (others.get(tool.name) ?? 0) + 1);
   for (const [name, n] of others) parts.push(`used ${name}${n > 1 ? ` ×${n}` : ""}`);
+  const stopped = tools.filter((tool) => tool.status === "interrupted").length;
+  if (stopped) parts.push(`${stopped} stopped`);
   return parts.join(", ") || "thought";
 }
 
