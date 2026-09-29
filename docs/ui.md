@@ -267,6 +267,7 @@ looking alike.
 --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
 --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
 --font-prose: "Prose", "PingFang SC", sans-serif;
+--font-avatar: "Avatar", "Prose", "PingFang SC", sans-serif;
 ```
 
 Controls, navigation and the trace use the system face, paired with the system's own CJK face. This is
@@ -291,12 +292,19 @@ partner declare identical weight and style: Chromium picks one descriptor bucket
 `unicode-range`, and when Nunito was declared `200 1000` beside `400` and `600` it was never loaded,
 so Latin silently fell back to PingFang. The smoke test checks that the Latin face loads.
 
-The rule is ownership, not place: **the conversation's words wear `Prose` wherever they are
-quoted**, so a message does not change typeface between the bubble and the header. That is the
-roster row's preview line, the conversation title in the header and the rows of the conversation
-list with the field that renames one, at their own sizes. Everything the app says itself stays in
-the system face: names, times,
-badges, errors, controls and the trace.
+The rule is ownership, not place: **words a person wrote wear `Prose` wherever they are quoted**,
+so a message does not change typeface between the bubble and the header. That is the roster row's
+preview line, the agent's name (in the row, its rename field and the header), the conversation title
+in the header and the rows of the conversation list with the field that renames one, at their own
+sizes. A name is one of those words: the user chose it, and an agent is a contact. Everything the app
+says itself stays in the system face: times, badges, errors, controls and the trace.
+
+**An avatar's initials wear `Avatar`**: Fredoka 600 cut to Latin (16 KB, OFL, licence in
+`src/renderer/fonts/`). It is the roundest and bounciest of the faces tried (Nunito, Baloo 2, Quicksand,
+Sniglet, Grandstander, Lilita One, Chewy, Bubblegum Sans, Varela Round, Comfortaa), and still reads at the
+30px header size, where Sniglet's blobs already blur `AM` and `WR`. Two letters do not need more, so
+there is no reason to give an avatar the answer's face. A Chinese name is not in Fredoka and falls
+through to Prose's Chinese face. The smoke test checks that the face loads.
 
 **Chinese is a first-class case, and CSS cannot see it.** CJK glyphs fill their em box and want more
 leading than Latin at the same size. A `:lang(zh)` rule is the obvious way to say so, and it does not

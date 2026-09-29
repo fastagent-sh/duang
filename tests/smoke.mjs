@@ -295,6 +295,7 @@ if (!process.versions.electron) {
         "[...document.fonts].some((f) => f.family === 'Prose' && f.unicodeRange.startsWith('U+0-FF') && f.style === 'normal' && f.status === 'loaded')",
         "the answer's Latin face loads",
       );
+      await until("[...document.fonts].some((f) => f.family === 'Avatar' && f.status === 'loaded')", "the avatar face loads");
       // A tool that worked says nothing (§9, third tier): the card is finished when its result is
       // in and the running badge is gone.
       await until(

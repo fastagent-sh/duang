@@ -186,7 +186,7 @@ export function Sidebar({
                   <RenameField
                     label="Agent name"
                     value={agent.name}
-                    className="min-w-0 flex-1 text-[13.5px]"
+                    className="min-w-0 flex-1 font-prose text-[13.5px]"
                     onCancel={() => endRename(agent.id)}
                     onCommit={(name) => {
                       endRename(agent.id);
@@ -221,7 +221,7 @@ export function Sidebar({
                   <Avatar name={agent.name} size={48} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{agent.name}</span>
+                      <span className="min-w-0 flex-1 truncate font-prose text-[13.5px] font-semibold">{agent.name}</span>
                       {/* Busy is said in words where the time goes: the preview below is the work
                           itself, streaming, and must not be replaced by a word about it. */}
                       {busy > 0 ? (

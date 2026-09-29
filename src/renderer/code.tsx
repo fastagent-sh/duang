@@ -61,7 +61,7 @@ const ALIASES: Record<string, string> = {
 export function CodeBlock({ code, language }: { code: string; language: string }) {
   return (
     <div className="code-block relative rounded-float bg-surface px-4 pt-3 pb-3.5">
-      <div className="flex items-center h-5 text-[12px] text-muted">{language}</div>
+      <div className="flex items-center h-5 font-mono text-[12px] text-muted">{language}</div>
       <CopyButton code={code} />
       {/* The same text in the same place until the grammar lands: no skeleton, no reflow. */}
       <Suspense fallback={<Plain code={code} />}>

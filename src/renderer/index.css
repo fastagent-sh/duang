@@ -51,6 +51,9 @@
   --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
   /* The conversation's own voice, defined below. */
   --font-prose: "Prose", "PingFang SC", sans-serif;
+  /* An agent's initials: rounder and bouncier than the answer's text, so the contact looks alive. A
+     Chinese name falls through to Prose's Chinese face. */
+  --font-avatar: "Avatar", "Prose", "PingFang SC", sans-serif;
 
   --ease-ui: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -144,6 +147,13 @@
   font-weight: 400;
   font-style: italic;
   unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
+}
+/* Fredoka, cut to Latin: an avatar carries two letters, and a name that is not Latin uses Prose. */
+@font-face {
+  font-family: "Avatar";
+  src: url("./fonts/fredoka-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  unicode-range: U+0000-00FF;
 }
 
 html,
