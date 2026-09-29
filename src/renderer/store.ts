@@ -574,7 +574,7 @@ export function createStore(api: DuangApi) {
     c.items = [...c.items, ...ran.map((item): Item => ({ kind: "note", tone: "info", text: `ran ${item.text}`, at }))];
   }
   /** A step belongs to the sign-in on screen; one arriving after it closed is dropped. */
-  const stopSteps = api.onLoginStep((step) => {
+  const onStep = (step: LoginStep) => {
     const s = view.signIn;
     if (!s || s.outcome) return;
     const next: SignIn = { ...s };
@@ -589,7 +589,7 @@ export function createStore(api: DuangApi) {
     // `progress` narrates for a terminal what the row already says in its own words.
     else if (step.type === "progress") return;
     publish({ signIn: next });
-  });
+  };
   /** The sign-in main is running for this window, until main says it has ended. */
   let login: Promise<LoginOutcome> | undefined;
   async function loadProviders() {
@@ -600,7 +600,7 @@ export function createStore(api: DuangApi) {
     }
   }
 
-  const unsubscribe = api.onSessionEvent((frame: SessionFrame) => {
+  const onFrame = (frame: SessionFrame) => {
     const c = conversations.get(key(frame.agentId, frame.session));
     if (!c || c.subscription !== frame.subscription) return;
     if (frame.ended) {
@@ -621,7 +621,20 @@ export function createStore(api: DuangApi) {
     if (c.loading) c.events.push(frame.event);
     else fold(c, frame.event);
     publish();
-  });
+  };
+  /**
+   * What main pushes to this window. Registered when the store is made, and again by `load` after a
+   * `dispose`: React runs an effect's cleanup and then its setup again on the same store (Fast Refresh
+   * does, on every edit in development), and a store left unregistered after that still reads history
+   * and lists but never hears a live event, so every run looks stuck at its start.
+   */
+  let stopFrames: (() => void) | undefined;
+  let stopSteps: (() => void) | undefined;
+  const listen = () => {
+    stopFrames ??= api.onSessionEvent(onFrame);
+    stopSteps ??= api.onLoginStep(onStep);
+  };
+  listen();
 
   /**
    * One request over the model route. Asked after every read or change of the network, and from the
@@ -639,6 +652,7 @@ export function createStore(api: DuangApi) {
   }
 
   async function load() {
+    listen();
     publish({ loading: true, error: undefined });
     try {
       const agents = await api.listAgents();
@@ -1048,10 +1062,10 @@ export function createStore(api: DuangApi) {
       else await load();
     },
     dispose() {
-      unsubscribe();
-      stopSteps();
+      stopFrames?.();
+      stopSteps?.();
+      stopFrames = stopSteps = undefined;
       for (const c of conversations.values()) close(c);
-      listeners.clear();
     },
   };
 }

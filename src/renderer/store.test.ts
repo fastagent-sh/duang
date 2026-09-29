@@ -63,7 +63,10 @@ function harness() {
     abort: async () => ({ ok: true }),
     onSessionEvent: (fn) => {
       listener = fn;
-      return () => {};
+      // Unregistering is real here, so a store that stops listening is seen to stop hearing.
+      return () => {
+        if (listener === fn) listener = () => {};
+      };
     },
     listProviders: async () => [],
     revealProviders: async () => {},
@@ -110,6 +113,20 @@ test("first model selection unlocks a new conversation; configured models come f
   assert.equal(store.getSnapshot().model, "provider/model");
   assert.equal(store.getSnapshot().conversation?.loading, false);
   assert.equal(store.getSnapshot().blocked, undefined, "the one rule that disables the composer");
+  store.dispose();
+});
+
+test("a store that React disposes and loads again still hears its conversations", async () => {
+  // Fast Refresh runs the App effect's cleanup and setup again on the same store, on every edit in
+  // development. The second setup must register for live events again, or every run looks stuck.
+  const { store, emit } = harness();
+  await store.load();
+  store.dispose();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  assert.equal(c.loading, false);
+  emit(c, "run_started");
+  assert.equal(store.getSnapshot().busy, true, "the run the runtime reported is shown as running");
   store.dispose();
 });
 
