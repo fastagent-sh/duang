@@ -54,7 +54,11 @@ location and conversation. A visitor sees only their own authorized conversation
 is neither their private chat nor the owner's private chat.
 
 The central surface starts with what the agent can do, then becomes a readable record of the task:
-what was asked, what is running, what finished, what failed and what to do next. Tool details stay
+what was asked, what is running, what finished, what failed and what to do next. "What failed" is
+the run's outcome and anything the agent says went wrong, not each tool call: an agent reads its own
+failed calls and carries on, so a failed step it recovered from asks nothing of the person and is not
+called out when its work is folded; it still reads `failed` when opened. A call that never finished
+(stopped, or cut off with its runtime) is not a recovered step, and folded work says it. Tool details stay
 expandable; a long trace must not obscure the result. On reconnect, read runtime-owned state and
 history rather than replaying an accepted send. A lost connection is **unknown execution status**
 until the runtime can answer, not an automatic failure or success.

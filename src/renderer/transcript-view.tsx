@@ -23,28 +23,50 @@ import {
   duration,
   firstArg,
   foldHead,
+  group,
   lines,
+  phase,
   stringify,
+  summarize,
+  thinkingLine,
   toolText,
   type Item,
   type Line,
+  type Work,
 } from "./transcript.ts";
+import type { SessionState } from "@fastagent-sh/fastagent/session";
 import { clock } from "./sessions.ts";
 import { Badge, Button, type Tone } from "./ui.tsx";
 
 /**
- * The gap this fills is real work with nothing to show: from pressing send until the first token,
- * the model is thinking and the transcript has nothing to say, and silence there reads as a hang.
- * It carries no clock: how long the whole turn has taken says little, and a running tool times
- * itself on its own row.
+ * The live end of a run: what it is doing now, in words, and how long the run has taken. It stays for
+ * the whole run rather than filling silences, so the bottom of a working transcript always answers
+ * "is it alive, and what is it on". The dot bounces (duang is the sound of one) and the word sweeps;
+ * the clock is the run's, counted from when this window saw it start, so a run reopened halfway shows
+ * none rather than a wrong one. `shown`: the step already stands on its own line right above (a lone
+ * call or thinking), so what it is on is not said twice.
  */
-function Working() {
+export function RunStatus({
+  items,
+  status,
+  started,
+  shown,
+}: {
+  items: Item[];
+  status: SessionState["status"] | undefined;
+  started?: number;
+  shown?: boolean;
+}) {
+  const { word, detail: on } = phase(items, status);
+  const detail = shown ? undefined : on;
+  const elapsed = useElapsed(started, undefined);
   return (
-    <Badge tone="accent" pulse className="enter">
-      {/* The sweep is on the words, not on their opacity: this sits on screen for minutes at a time,
-          and a blinking label is the first thing that makes an interface look cheap. */}
-      <span className="shimmer">working…</span>
-    </Badge>
+    <div className="enter flex h-6 items-center gap-2 text-[12px]">
+      <span className="bounce size-[7px] shrink-0 rounded-full bg-accent" aria-hidden />
+      <span className="shimmer shrink-0">{word}</span>
+      {detail && <span className={`min-w-0 truncate text-muted ${word === "thinking" ? "" : "font-mono"}`}>{detail}</span>}
+      {elapsed && <span className="shrink-0 text-muted tabular-nums">· {elapsed}</span>}
+    </div>
   );
 }
 
@@ -68,9 +90,9 @@ function useElapsed(started: number | undefined, ended: number | undefined): str
  * gets. They close up to 8; the register changing — to or from what someone wrote or the agent
  * answered — is what earns the full step.
  */
-const ASIDE = new Set(["tool", "thinking", "note"]);
+const ASIDE = new Set(["tool", "thinking", "note", "work"]);
 
-function gap(previous: Line | undefined, line: Line): string {
+function gap(previous: Line | Work | undefined, line: Line | Work): string {
   if (!previous) return "";
   if (line.kind === "user") return "pt-8";
   return ASIDE.has(line.kind) && ASIDE.has(previous.kind) ? "pt-2" : "pt-6";
@@ -80,6 +102,8 @@ export function Transcript({
   items,
   waiting,
   busy,
+  status,
+  started,
   bottomGap,
 }: {
   items: Item[];
@@ -91,6 +115,9 @@ export function Transcript({
    */
   waiting: { item: Item; listed: boolean; opens: boolean }[];
   busy: boolean;
+  /** What the runtime says the conversation is doing, and when this window saw its run start. */
+  status: SessionState["status"] | undefined;
+  started?: number;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
 }) {
@@ -111,12 +138,6 @@ export function Transcript({
     setAway(!follow.current);
   };
 
-  // Nothing is streaming when the last thing said is closed — that is when the indicator earns its place.
-  const last = items.at(-1);
-  const streaming = last?.kind === "assistant" || last?.kind === "thinking" ? last.open : false;
-  // A running tool already says the run is alive, with its own clock, wherever it sits: a parallel
-  // call can still run above one that finished.
-  const silent = !streaming && !items.some((item) => item.kind === "tool" && item.status === "running");
   const queue = (opening: boolean) =>
     waiting.map(({ item, listed, opens }, index) =>
       opens === opening ? (
@@ -126,7 +147,7 @@ export function Transcript({
       ) : null,
     );
 
-  const shown = lines(items);
+  const shown = group(lines(items));
   /**
    * `enter` is for what arrives, and history has not arrived — it was already there. This component
    * remounts for every conversation it shows (keyed by subscription), and it mounts with the history
@@ -139,7 +160,7 @@ export function Transcript({
     const el = box.current;
     if (el && follow.current) el.scrollTop = el.scrollHeight;
     check();
-  }, [items, waiting, busy, streaming]);
+  }, [items, waiting, busy]);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -195,14 +216,14 @@ export function Transcript({
             // `enter` runs once, when the element is created — a streaming answer re-renders into
             // the same node, so the rise does not restart on every token.
             <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1], line)}`}>
-              <Message item={line} />
+              {line.kind === "work" ? <WorkBlock work={line} /> : <Message item={line} />}
             </div>
           ),
         )}
         {queue(true)}
-        {busy && silent && (
+        {busy && (
           <div className="pt-6">
-            <Working />
+            <RunStatus items={items} status={status} started={started} shown={isLone(shown.at(-1))} />
           </div>
         )}
         {queue(false)}
@@ -267,7 +288,7 @@ export function Message({ item, waiting }: { item: Item; waiting?: "queued" | "s
       // Collapsed, a bare "thinking" says nothing about what happened. How long it took and the
       // line it is on are the two facts worth reading without expanding (docs/ui.md §8).
       const seconds = Math.round((item.at - item.started) / 1000);
-      const trail = item.text.trim().split("\n").at(-1) ?? "";
+      const trail = thinkingLine(item.text);
       return (
         <details className="group text-muted text-[12px]">
           <summary className="cursor-default select-none flex items-center gap-1.5">
@@ -344,6 +365,53 @@ function Footer({ text, at }: { text: string; at: number }) {
         }}
       />
     </div>
+  );
+}
+
+const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.items.length === 1;
+
+/**
+ * A stretch of tool calls and thinking as one line that says what kind of work it was, opening into
+ * the calls themselves, where a call that failed still says so. It stays closed while it grows: the
+ * live status below says what the run is on.
+ *
+ * A lone call is a one-item block drawn as the call alone (open, summary hidden), so that when the
+ * next call folds it into a block it is still the same element. A card opened while it stood alone
+ * keeps the block open once it folds, rather than vanishing from under the person reading it.
+ */
+export function WorkBlock({ work }: { work: Work }) {
+  const lone = isLone(work);
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const el = box.current!;
+    // `toggle` does not bubble, so an inner card opening is heard in the capture phase.
+    const heard = (event: Event) => {
+      if (event.target !== el && (event.target as HTMLDetailsElement).open) setOpen(true);
+    };
+    el.addEventListener("toggle", heard, true);
+    return () => el.removeEventListener("toggle", heard, true);
+  }, []);
+  return (
+    <details
+      ref={box}
+      open={lone || open}
+      onToggle={(event) => !lone && setOpen(event.currentTarget.open)}
+      className="group/work"
+    >
+      <summary
+        hidden={lone}
+        className="cursor-default select-none flex h-7 items-center gap-2 text-[12px] text-muted transition-colors hover:text-text"
+      >
+        <CaretRight size={11} className="shrink-0 transition-transform group-open/work:rotate-90" />
+        <span className="truncate">{summarize(work.items)}</span>
+      </summary>
+      <div className={lone ? "" : "mt-1 ml-[5px] space-y-0.5 border-l border-stroke pl-3.5"}>
+        {work.items.map((item, index) => (
+          <Message key={index} item={item} />
+        ))}
+      </div>
+    </details>
   );
 }
 

@@ -119,6 +119,96 @@ export function lines(items: Item[]): Line[] {
   return out;
 }
 
+type Tool = Extract<Item, { kind: "tool" }>;
+type Thinking = Extract<Item, { kind: "thinking" }>;
+
+/**
+ * A stretch of work between two things worth reading: every tool call and thinking block in a row.
+ * One line per call made a reading session of twenty files twenty lines tall, and none of them said
+ * anything the person needed; what they need is what kind of work it was.
+ */
+export type Work = { kind: "work"; items: (Tool | Thinking)[] };
+
+/**
+ * Consecutive asides as one {@link Work} block each, a lone one included: a call that stands alone
+ * now is the first of a block once the next call arrives, and it must stay the same element on
+ * screen when that happens, or the card someone is reading closes under them. The view draws a
+ * one-item block as the item alone.
+ */
+export function group(lines: Line[]): (Line | Work)[] {
+  const out: (Line | Work)[] = [];
+  for (const line of lines) {
+    const previous = out.at(-1);
+    if (line.kind !== "tool" && line.kind !== "thinking") out.push(line);
+    else if (previous?.kind === "work") previous.items.push(line);
+    else out.push({ kind: "work", items: [line] });
+  }
+  return out;
+}
+
+/**
+ * Tools by the kind of work they do: how a running one is described, and how a finished stretch counts
+ * them. Anything else is named by its own name.
+ */
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const WORK = [
+  { tools: ["read"], doing: "reading", did: (n: number) => `read ${plural(n, "file")}`, distinct: true },
+  { tools: ["grep", "find", "ls"], doing: "searching", did: (n: number) => `searched ${n === 1 ? "once" : `${n} times`}` },
+  { tools: ["edit", "write"], doing: "editing", did: (n: number) => `changed ${plural(n, "file")}`, distinct: true },
+  { tools: ["bash"], doing: "running", did: (n: number) => `ran ${plural(n, "command")}` },
+  { tools: ["fetch"], doing: "fetching", did: (n: number) => `fetched ${plural(n, "page")}` },
+];
+
+/**
+ * A work block in one line: `read 9 files, ran 6 commands`. A call that failed is not counted apart:
+ * the agent reads its own failures and carries on, so it asks nothing of the person, and the run's
+ * outcome is what says whether the work as a whole failed. A call that never finished is (`, 1
+ * stopped`): the agent never read a result and the run did not go on, and reopened from history
+ * nothing else says the run was cut short. Files are counted once however often they were read; a
+ * call reopened from history has no arguments, so there each call counts.
+ */
+export function summarize(items: Work["items"]): string {
+  const tools = items.filter((item): item is Tool => item.kind === "tool");
+  const thought = items.reduce((ms, item) => (item.kind === "thinking" && !item.open ? ms + item.at - item.started : ms), 0);
+  const parts = thought >= 1000 ? [`thought ${Math.round(thought / 1000)}s`] : [];
+  for (const kind of WORK) {
+    const mine = tools.filter((tool) => kind.tools.includes(tool.name));
+    const n = kind.distinct ? new Set(mine.map((tool) => (tool.args as { path?: unknown } | undefined)?.path ?? tool.id)).size : mine.length;
+    if (n) parts.push(kind.did(n));
+  }
+  const others = new Map<string, number>();
+  for (const tool of tools) if (!WORK.some((kind) => kind.tools.includes(tool.name))) others.set(tool.name, (others.get(tool.name) ?? 0) + 1);
+  for (const [name, n] of others) parts.push(`used ${name}${n > 1 ? ` ×${n}` : ""}`);
+  const stopped = tools.filter((tool) => tool.status === "interrupted").length;
+  if (stopped) parts.push(`${stopped} stopped`);
+  return parts.join(", ") || "thought";
+}
+
+/** The line a thinking block is on: its last one, which is what it is thinking now. */
+export const thinkingLine = (text: string): string => text.trim().split("\n").at(-1) ?? "";
+
+/**
+ * What a live run is doing right now, in words, from what the transcript already holds: the tool that
+ * is running and its argument, the line the model is thinking, or the answer being written. Before the
+ * runtime reports the run, it is still starting.
+ */
+export function phase(items: Item[], status: SessionState["status"] | undefined): { word: string; detail?: string } {
+  if (status === "compacting") return { word: "compacting" };
+  if (status !== "running") return { word: "starting" };
+  const running = items.filter((item): item is Tool => item.kind === "tool" && item.status === "running");
+  if (running.length > 1) return { word: `running ${running.length} tools` };
+  const tool = running[0];
+  if (tool) {
+    const kind = WORK.find((candidate) => candidate.tools.includes(tool.name));
+    const arg = firstArg(tool.args);
+    return kind ? { word: kind.doing, detail: arg } : { word: "running", detail: `${tool.name} ${arg}`.trim() };
+  }
+  const last = items.at(-1);
+  if (last?.kind === "assistant" && last.open) return { word: "answering" };
+  const thought = last?.kind === "thinking" && last.open ? thinkingLine(last.text) : undefined;
+  return { word: "thinking", detail: thought };
+}
+
 /**
  * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
  *
@@ -272,7 +362,8 @@ export function firstArg(args: unknown): string {
 
 /**
  * What a roster row quotes: the newest thing said or done in a conversation, as plain text. Thinking
- * is not output and an answer with no text yet has nothing to say, so both are passed over. Markdown
+ * still going is what the agent is doing now, so it quotes the line it is on; settled, thinking is not
+ * output and is passed over, like an answer with no text yet. Markdown
  * loses only the marks that would show up as noise in two lines of plain text.
  */
 export function previewOf(items: Item[]): { text: string; at: number } | undefined {
@@ -285,7 +376,9 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
           ? item.text
           : item.kind === "tool"
             ? `${item.name} ${firstArg(item.args)}`
-            : "";
+            : item.kind === "thinking" && item.open
+              ? `thinking: ${thinkingLine(item.text)}`
+              : "";
     const plain = text
       .replace(/^(#{1,6}|>)\s*/gm, "")
       .replace(/```\w*|`|\*\*/g, "")

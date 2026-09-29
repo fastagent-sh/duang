@@ -190,9 +190,10 @@ if (!process.versions.electron) {
         console.log(path);
       }
     };
-    // One tool card open: expanded arguments and output are a state the transcript draws, and a
-    // sheet of closed rows never shows it.
-    await evaluate(`document.querySelectorAll('details')[1].open = true`);
+    // The work block open, and the failed call inside it: expanded arguments and output are a state
+    // the transcript draws, and a sheet of closed rows never shows it.
+    const failedCall = `[...document.querySelectorAll('details')].find((d) => d.querySelector('summary').textContent.includes('i18n:check'))`;
+    await evaluate(`document.querySelector('details').open = true; ${failedCall}.open = true`);
     // The live tail is the view people actually sit in, so that is what the shot shows. The printed
     // number is the clearance between the last line and the composer (App.tsx `bottomGap`).
     console.log(
@@ -206,7 +207,7 @@ if (!process.versions.electron) {
       })()`),
     );
     await capture("app");
-    await evaluate(`document.querySelectorAll('details')[1].open = false`);
+    await evaluate(`document.querySelector('details').open = false`);
     await capture("app-start", "top");
     win.setSize(820, 660);
     await capture("app-narrow");

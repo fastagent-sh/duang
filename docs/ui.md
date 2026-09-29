@@ -112,8 +112,8 @@ header. When those names match, the agent name uses the full header line and ret
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
 thing in that conversation — the agent's answer, the tool it is running (`bash npm run build`),
-a failure note, or your own message as `You: …` — as plain text, with markdown marks dropped and
-thinking passed over. While this window holds the conversation (the one on screen, or one running
+a failure note, the line it is thinking while it thinks (`thinking: …`), or your own message as
+`You: …` — as plain text, with markdown marks dropped and finished thinking passed over. While this window holds the conversation (the one on screen, or one running
 in the background after you walked away from it), the quote follows it as it streams. Otherwise it
 is read once from the conversation's history, through FastAgent's public `entries()`, and read again
 only when the session list says the conversation moved on. Nothing of it is stored: it is
@@ -371,6 +371,32 @@ in the transcript really is chat. Ours is the work.
 
 Everything else follows from those two:
 
+- **A stretch of work is one line.** Consecutive tool calls and thinking fold into a work block that
+  says what kind of work it was: `thought 6s, read 4 files, searched once, ran 1 command`. A reading
+  session of twenty files was twenty lines, none of them something the person needed; what they
+  need is the kind of work. A call that failed is not called out on the block: the agent reads its
+  own failures and carries on, so a failed call asks nothing of the person, and whether the work as
+  a whole failed is the run's outcome to say. Inside the block the call still reads `failed`, for
+  whoever opens it to find out why. A call that never finished is different and is said:
+  `ran 2 commands, 1 stopped`. The agent never read its result and the run did not go on, and in a
+  reopened conversation, whose history carries no `run stopped` line, the summary is the only place
+  that says the work was cut short. Files are counted once however often they were read; a call
+  reopened from history carries no arguments, so there each call counts. The block opens into the
+  calls themselves, indented on a hairline. It stays closed while it grows, because the run's live
+  status (below) already says what the current step is, with one exception: a call someone opened
+  while it stood alone keeps the block open when the next call folds it in, rather than closing
+  under the person reading it. A lone call keeps its own line, which says more than a count of one
+  would; when it is the current step, the live status below it gives the step's word without
+  repeating what it is on.
+- **The live end of a run says what it is doing.** For the whole run, not only its silences, the
+  transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
+  (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
+  reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking), and
+  how long the run has taken. No capsule, border or icon: tried, they made one line of status the
+  loudest thing on screen. A bare `working…` answered neither "is it alive" nor "what is it on", and
+  it came and went between steps. The clock counts
+  from when this window saw the run start, so a run that was already going when the conversation
+  opened shows none rather than a wrong one.
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
   tool's name, the command, and the state immediately after the command rather than pushed to the
   far right where it loses its subject — on no fill and behind no border, the same weight as the
@@ -394,7 +420,7 @@ Everything else follows from those two:
 - **A message is placed where the runtime says it entered.** Sent, it waits below the live output,
   dimmed and labelled `sending`, or `queued` while the runtime lists it in `pending.steering`; one
   that opens a run (nothing running, or the running one has no message yet, judged when it is sent)
-  waits above the run's `working…` mark instead of below it, since the work is what it asked for.
+  waits above the run's live status instead of below it, since the work is what it asked for.
   One sent during a compaction waits below: the compaction is not its work, while a `/compact` sent
   from idle opens it. It
   takes its place in the transcript when FastAgent reports it entering the conversation
@@ -454,13 +480,13 @@ away, so "is it still working" must be answerable from the sidebar without openi
 | Tier | States | How it is shown |
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
-| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, each running tool's elapsed time in the transcript; the turn as a whole carries no clock. No sentence in the reading flow. |
+| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, and at the end of the transcript one live status line: the current step and the run's clock. |
 | **Nothing to do** | ready, done *(already seen)* | Show nothing. A tool that worked wears no badge; a trace where nine cards in ten say `done` is how the one that failed gets lost. |
 
 One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
 another:
 
-`working` · `thinking` · `running` · `done` · `failed` · `stopped` · `refused` · `unsent` ·
+`working` · `thinking` · `running` · `reading` · `searching` · `editing` · `fetching` · `answering` · `compacting` · `starting` · `done` · `failed` · `stopped` · `refused` · `unsent` ·
 `needs a model` · `no agent yet` · `broken`
 
 `unsent` earns its place in the list rather than being an exception to it: a conversation holding
@@ -511,15 +537,16 @@ the person's to edit.
 
 ## 10. Motion
 
-One easing, `cubic-bezier(0.2, 0, 0, 1)`, and three named shapes. The vocabulary is borrowed from
+One easing, `cubic-bezier(0.2, 0, 0, 1)`, and four named shapes. The vocabulary is borrowed from
 Beautiful UI, not its components: a small set of movements used consistently is what reads as
 polish, and a large set used occasionally is what reads as a demo.
 
 | Shape | What it is | Where |
 |---|---|---|
-| `enter` | opacity plus a 6px rise, 180ms | anything arriving in the transcript: a message, a tool call, the working indicator. Not history — opening a conversation shows its backlog still |
+| `enter` | opacity plus a 6px rise, 180ms | anything arriving in the transcript: a message, a tool call, the live status. Not history — opening a conversation shows its backlog still |
 | `pop` | opacity plus scale from 0.96, 160ms | something appearing in place rather than arriving: `back to the latest` |
-| `shimmer` | a highlight swept across the words, 2.4s, looping | work in progress with nothing to show yet: `working…`, `thinking` while it streams |
+| `shimmer` | a highlight swept across the words, 2.4s, looping | work in progress: the live status's step, `thinking` while it streams |
+| `bounce` | a dot rising and falling, squashing where it lands, 900ms, looping | the live status's mark: duang is the sound of one, and a ball in motion reads as alive where a pulse reads as waiting |
 
 `shimmer` replaces blinking a label's opacity, which is the cheapest-looking thing an interface can
 do and which sits on screen for minutes at a time here.

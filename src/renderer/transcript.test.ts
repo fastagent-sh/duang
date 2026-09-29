@@ -8,7 +8,10 @@ import {
   firstArg,
   foldHead,
   fromEntries,
+  group,
   lines,
+  phase,
+  summarize,
   previewOf,
   opensRun,
   queueView,
@@ -177,9 +180,11 @@ test("a preview quotes the newest output as plain text, and follows a streaming 
   assert.equal(previewOf([]), undefined);
   let items: Item[] = [{ kind: "user", text: "Deploy it", at: 1 }];
   assert.deepEqual(previewOf(items), { text: "You: Deploy it", at: 1 });
-  // An answer that has only thought so far has nothing to quote yet.
-  items = [...items, { kind: "thinking", text: "hmm", open: true, at: 2, started: 2 }];
-  assert.equal(previewOf(items)?.text, "You: Deploy it");
+  // Thinking still going is what the agent is doing now: the line it is on.
+  items = [...items, { kind: "thinking", text: "first\nnow the build", open: true, at: 2, started: 2 }];
+  assert.equal(previewOf(items)?.text, "thinking: now the build");
+  // Settled, it is not output, and is passed over.
+  assert.equal(previewOf([items[0]!, { ...(items[1] as never as object), open: false } as Item])?.text, "You: Deploy it");
   items = [...items, { kind: "tool", id: "t", name: "bash", args: { command: "npm run build" }, status: "running", at: 3 }];
   assert.equal(previewOf(items)?.text, "bash npm run build");
   items = apply(items, { type: "message_delta", timestamp: 4, data: { delta: "## Done\n\nThe **build**" } } as never);
@@ -291,4 +296,71 @@ test("a day label crosses the year, not a count of days", () => {
   // Eleven days back, but a different year: the year has to be said or it reads as this December.
   assert.match(dayLabel(Date.UTC(2025, 11, 25, 12, 0, 0), jan), /2025/);
   assert.doesNotMatch(dayLabel(Date.UTC(2026, 0, 1, 12, 0, 0), jan), /2026/);
+});
+
+const tool = (name: string, args: unknown, extra: Partial<Extract<Item, { kind: "tool" }>> = {}): Item => ({
+  kind: "tool",
+  id: Math.random().toString(),
+  name,
+  args,
+  status: "done",
+  at: 0,
+  ...extra,
+});
+
+test("consecutive tool calls and thinking fold into one work block, which prose ends", () => {
+  const answer: Item = { kind: "assistant", text: "ok", open: false, at: 0 };
+  const shown = group([tool("read", { path: "a" }), answer, tool("read", { path: "a" }), tool("bash", { command: "ls" }), answer]);
+  // A lone call is a block of one, so the next call extends it rather than replacing it on screen.
+  assert.deepEqual(
+    shown.map((line) => (line.kind === "work" ? line.items.length : line.kind)),
+    [1, "assistant", 2, "assistant"],
+  );
+});
+
+test("a work block counts files once and names the kind of work", () => {
+  const thinking: Item = { kind: "thinking", text: "", open: false, started: 0, at: 4000 };
+  const text = summarize([
+    thinking,
+    tool("read", { path: "/x/a.ts" }),
+    tool("read", { path: "/x/a.ts" }),
+    tool("read", { path: "/x/b.ts" }),
+    tool("bash", { command: "npm test" }, { isError: true }),
+    tool("grep", { pattern: "foo" }),
+    tool("mcp_search", {}),
+    tool("mcp_search", {}),
+  ] as never);
+  assert.equal(text, "thought 4s, read 2 files, searched once, ran 1 command, used mcp_search \u00d72");
+  // Counted by the real path: two index.ts files in different packages are two files.
+  assert.equal(summarize([tool("read", { path: "/r/packages/a/src/index.ts" }), tool("read", { path: "/r/packages/b/src/index.ts" })] as never), "read 2 files");
+  // The path, not whichever string argument comes first.
+  assert.equal(summarize([tool("edit", { oldText: "x", path: "/a.ts" }), tool("edit", { oldText: "x", path: "/b.ts" })] as never), "changed 2 files");
+  // A call that never finished is said, unlike one that failed: nothing else says the run was cut short.
+  assert.equal(
+    summarize([tool("bash", {}, { isError: true }), tool("bash", {}, { status: "interrupted" })] as never),
+    "ran 2 commands, 1 stopped",
+  );
+  // History carries no arguments, so every reopened call counts on its own.
+  assert.equal(summarize([tool("read", undefined), tool("read", undefined)] as never), "read 2 files");
+});
+
+test("the live status says what the run is doing now", () => {
+  const answering: Item = { kind: "assistant", text: "x", open: true, at: 0 };
+  const thinking: Item = { kind: "thinking", text: "first\nnow the tests", open: true, started: 0, at: 0 };
+  const build = tool("bash", { command: "npm test" }, { status: "running", id: "t1" });
+  assert.deepEqual(phase([], undefined), { word: "starting" });
+  assert.deepEqual(phase([], "compacting"), { word: "compacting" });
+  assert.deepEqual(phase([], "running"), { word: "thinking", detail: undefined });
+  // Thinking says the line it is on.
+  assert.deepEqual(phase([thinking], "running"), { word: "thinking", detail: "now the tests" });
+  assert.deepEqual(phase([answering], "running"), { word: "answering" });
+  assert.deepEqual(phase([build], "running"), { word: "running", detail: "npm test" });
+  assert.deepEqual(phase([tool("read", { path: "/a/b/c.ts" }, { status: "running", id: "r" })], "running"), {
+    word: "reading",
+    detail: "\u2026/b/c.ts",
+  });
+  assert.equal(
+    phase([tool("read", {}, { status: "running" }), tool("bash", {}, { status: "running" })], "running").word,
+    "running 2 tools",
+  );
 });

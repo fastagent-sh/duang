@@ -126,6 +126,8 @@ interface Conversation {
   returned: Set<UserItem>;
   /** The current run already has a user message, so the next one joined it rather than opened it. */
   runHasUser: boolean;
+  /** When this window saw the current run start; unknown for a run that was already going when it opened. */
+  started?: number;
 }
 /**
  * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
@@ -514,9 +516,11 @@ export function createStore(api: DuangApi) {
     const e = known(event);
     if (e.type === "run_started") {
       c.runHasUser = false;
+      c.started = e.timestamp;
       c.state = { ...state, status: "running", activeRunId: e.runId };
     } else if (e.type === "run_settled") {
       dropQueued(c, state.pending.steering);
+      c.started = undefined;
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
       // A run that ends while you are reading something else is the thing you came back for. A run
       // you stopped yourself is not news.
