@@ -96,17 +96,17 @@
  * --flavor=woff2 --layout-features='*'`. A rarer hanzi falls back to PingFang; dashes, ellipses
  * and curly quotes are Nunito's, in Chinese text too.
  */
+/* One face per script for each weight and style, with identical descriptors. Chromium picks a single
+   descriptor bucket before it looks at `unicode-range`: with the variable Nunito declared as
+   `200 1000` beside the CJK faces' `400` and `600`, it chose the CJK bucket and never loaded
+   Nunito, and Latin fell back to PingFang. The variable file serves both Latin weights.
+   Nunito is set 10% up: its x-height is 0.48em against Resource Han Rounded's 0.54, and at the
+   same nominal size its words read a step smaller than the Chinese beside them. */
 @font-face {
   font-family: "Prose";
   src: url("./fonts/nunito-latin-wght-normal.woff2") format("woff2-variations");
-  font-weight: 200 1000;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Prose";
-  src: url("./fonts/nunito-latin-wght-italic.woff2") format("woff2-variations");
-  font-weight: 200 1000;
-  font-style: italic;
+  size-adjust: 110%;
+  font-weight: 400;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
@@ -115,11 +115,34 @@
   font-weight: 400;
   unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
 }
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/nunito-latin-wght-normal.woff2") format("woff2-variations");
+  size-adjust: 110%;
+  font-weight: 600;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 /* Bold, not Medium, under Nunito's 600: a Chinese stroke needs more weight to read as emphasis. */
 @font-face {
   font-family: "Prose";
   src: url("./fonts/resource-han-rounded-cn-700-gb2312.woff2") format("woff2");
   font-weight: 600;
+  unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
+}
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/nunito-latin-wght-italic.woff2") format("woff2-variations");
+  size-adjust: 110%;
+  font-weight: 400;
+  font-style: italic;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* No italic Chinese exists; slanting the upright one keeps it in the family. */
+@font-face {
+  font-family: "Prose";
+  src: url("./fonts/resource-han-rounded-cn-400-gb2312.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
   unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
 }
 
@@ -130,7 +153,7 @@ body,
 }
 
 /* One column for reading and writing: prose, code, tables and the composer share its edges. 768 at
-   14px keeps a line near 54 Chinese characters; at 920 it ran to 65 and the eye lost the next line. */
+   15px keeps a line near 51 Chinese characters; at 920 it ran to 65 and the eye lost the next line. */
 .column {
   width: 100%;
   max-width: 768px;
@@ -287,14 +310,14 @@ details[open]::details-content {
   background: transparent !important;
 }
 
-/* What you write, what you sent and what the agent answered are one voice: Prose at 14px, with a
+/* What you write, what you sent and what the agent answered are one voice: Prose at 15px, with a
    leading that suits Chinese. The trace around them stays at 12, so the answer is the loudest text on the
    page and the work that produced it the quietest. `pretty` keeps a paragraph from ending on a lone
    character such as `单。`, which Chinese breaks into easily. */
 .md,
 .bubble {
   font-family: var(--font-prose);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.7;
   text-wrap: pretty;
 }
@@ -458,18 +481,18 @@ summary:focus-visible,
   line-height: 1.4;
 }
 [data-streamdown="heading-1"] {
-  font-size: 21px;
+  font-size: 22px;
 }
 [data-streamdown="heading-2"] {
-  font-size: 18px;
+  font-size: 19px;
 }
 [data-streamdown="heading-3"] {
-  font-size: 16px;
+  font-size: 17px;
 }
 [data-streamdown="heading-4"],
 [data-streamdown="heading-5"],
 [data-streamdown="heading-6"] {
-  font-size: 14px;
+  font-size: 15px;
 }
 [data-streamdown="horizontal-rule"] {
   border-color: var(--color-stroke);
@@ -546,7 +569,7 @@ summary:focus-visible,
 [data-streamdown="table-header-cell"],
 [data-streamdown="table-cell"] {
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   text-align: start;
   vertical-align: top;

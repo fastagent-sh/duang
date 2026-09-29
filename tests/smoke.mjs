@@ -289,6 +289,12 @@ if (!process.versions.electron) {
         "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')",
         "stream settles",
       );
+      // The answer's Latin is in the bundled face, not the fallback: Chromium silently skipped it once
+      // when the Latin and Chinese faces declared different weights (index.css).
+      await until(
+        "[...document.fonts].some((f) => f.family === 'Prose' && f.unicodeRange.startsWith('U+0-FF') && f.style === 'normal' && f.status === 'loaded')",
+        "the answer's Latin face loads",
+      );
       // A tool that worked says nothing (§9, third tier): the card is finished when its result is
       // in and the running badge is gone.
       await until(

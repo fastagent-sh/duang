@@ -284,12 +284,18 @@ answer and the code it quotes share their Chinese letterforms; it is used on its
 CJK sits in 1.2em cells to align in a terminal, which spreads a paragraph apart. Maple Mono itself
 was tried for Latin prose and read poorly: a monospace line is a third wider and has no word shapes.
 The CJK face is cut to GB2312 (1.1 MB a weight); a rarer character falls back to PingFang. Both
-fonts are OFL; their licences sit beside them in `src/renderer/fonts/`.
+fonts are OFL; their licences sit beside them in `src/renderer/fonts/`. Nunito is set 10% up
+(`size-adjust`): its x-height is 0.48em against Resource Han Rounded's 0.54, and at the same nominal
+size its words read a step smaller than the Chinese beside them. Each Latin face and its Chinese
+partner declare identical weight and style: Chromium picks one descriptor bucket before it reads
+`unicode-range`, and when Nunito was declared `200 1000` beside `400` and `600` it was never loaded,
+so Latin silently fell back to PingFang. The smoke test checks that the Latin face loads.
 
 The rule is ownership, not place: **the conversation's words wear `Prose` wherever they are
 quoted**, so a message does not change typeface between the bubble and the header. That is the
 roster row's preview line, the conversation title in the header and the rows of the conversation
-list with the field that renames one, at their own sizes. Everything the app says itself stays in the system face: names, times,
+list with the field that renames one, at their own sizes. Everything the app says itself stays in
+the system face: names, times,
 badges, errors, controls and the trace.
 
 **Chinese is a first-class case, and CSS cannot see it.** CJK glyphs fill their em box and want more
@@ -308,7 +314,7 @@ off Maple's 2:1 grid and out of column. Fullwidth punctuation keeps Chromium's d
 trimming every mark to half width is a Japanese convention, not a Chinese one. Prose wraps with
 `text-wrap: pretty`, so a paragraph does not end on a lone character such as `单。`.
 
-**What you write, what you sent and what the agent answered are one voice**: 14px at 1.7, one step
+**What you write, what you sent and what the agent answered are one voice**: 15px at 1.7, one step
 above the navigation and two above the trace. The transcript is a report read later (fact 5), not a
 log glanced at, so it takes a reading size, while the work that produced it stays at 12 and reads
 as an aside. Bold is 600, not 700, since answers that lead every item with a bold sentence
@@ -318,9 +324,9 @@ than a Latin one to read as emphasis.
 | Role | Size / line-height / weight |
 |---|---|
 | New conversation heading | 22 / normal / 500 |
-| Answer headings | 21 / 18 / 16 (h1–h3), 14 below / 1.4 / 600 |
-| Conversation prose, sent messages, composer | 14 / 1.7 / 400 |
-| Answer tables | 13 / 1.6 / 400, header 600 muted on a tinted band |
+| Answer headings | 22 / 19 / 17 (h1–h3), 15 below / 1.4 / 600 |
+| Conversation prose, sent messages, composer | 15 / 1.7 / 400 |
+| Answer tables | 14 / 1.6 / 400, header 600 muted on a tinted band |
 | Agent name | 13.5 / 1.4 / 600 |
 | Sidebar rows | 13 / 1.7 / 400 |
 | Tool rows, thinking, model list, card bodies | 12 / 1.5 / 400 |
