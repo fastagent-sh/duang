@@ -244,7 +244,7 @@ export function Sidebar({
                           {error}
                         </span>
                       ) : (
-                        <span className="min-w-0 flex-1 line-clamp-2 break-words text-muted">
+                        <span className="min-w-0 flex-1 line-clamp-2 break-words font-prose text-muted">
                           {preview?.text ?? (preview ? "New conversation" : last?.label ?? "No conversations yet")}
                         </span>
                       )}
@@ -401,7 +401,7 @@ export function ConversationList({
               key={row.session}
               label="Conversation name"
               value={renaming.label}
-              className="my-0.5 block w-full text-[12.5px]"
+              className="my-0.5 block w-full font-prose text-[12.5px]"
               onCancel={() => endRename(row)}
               onCommit={(name) => {
                 endRename(row);
@@ -429,7 +429,7 @@ export function ConversationList({
                 }`}
               >
                 <span
-                  className={`min-w-0 flex-1 truncate text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
+                  className={`min-w-0 flex-1 truncate font-prose text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
                     row.unseen ? "font-semibold" : ""
                   }`}
                 >

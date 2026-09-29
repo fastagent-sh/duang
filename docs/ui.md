@@ -286,6 +286,12 @@ was tried for Latin prose and read poorly: a monospace line is a third wider and
 The CJK face is cut to GB2312 (1.1 MB a weight); a rarer character falls back to PingFang. Both
 fonts are OFL; their licences sit beside them in `src/renderer/fonts/`.
 
+The rule is ownership, not place: **the conversation's words wear `Prose` wherever they are
+quoted**, so a message does not change typeface between the bubble and the header. That is the
+roster row's preview line, the conversation title in the header and the rows of the conversation
+list with the field that renames one, at their own sizes. Everything the app says itself stays in the system face: names, times,
+badges, errors, controls and the trace.
+
 **Chinese is a first-class case, and CSS cannot see it.** CJK glyphs fill their em box and want more
 leading than Latin at the same size. A `:lang(zh)` rule is the obvious way to say so, and it does not
 work here: the document is `lang="en"` and nothing marks a Chinese message as Chinese, so the rule
