@@ -37,7 +37,8 @@ searches the whole `provider/id`, groups the models under their provider with th
 and ends with the conversation's effort: a track of the thinking levels the runtime lists for the
 conversation's model. A conversation has levels once it has a record, so a new conversation says so
 instead of offering a track, and a model with one level says it has no effort setting. The level is set
-on the open conversation only, and is refused while it runs. The picker shows no credential path and
+on the open conversation only, and is refused while it runs; a run of arrow presses is written once,
+when they pause. A list of more than 60 models says how many it left out. The picker shows no credential path and
 links to no provider page; with nothing connected its one offer is **Connect a provider**, which
 returns to the picker after connecting. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.

@@ -193,7 +193,11 @@ and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provi
 anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
 system face rather than mono, at 14px), and the effort. Effort is a native radio group drawn as a track
 with a stop per level, so the arrow keys and the announcement are the platform's; the runtime's list is
-the stops, and it is per conversation, so a conversation that has not begun says so. FastAgent gives a
+the stops, and it is per conversation, so a conversation that has not begun says so. The track shows a
+choice at once but writes it when the choosing pauses (300ms) or the picker closes: arrowing across
+four stops would otherwise put four levels into the conversation's record, and a refusal puts the
+track back where the runtime is. The list stops at 60 rows and says how many more there are, since a
+provider past the limit would not show even its heading. FastAgent gives a
 model's friendly name to nobody, and guessing one from the id would name a model the runtime does not,
 so the list shows ids. What the picker leaves out: the credential file's path (nothing the person can
 act on) and a Manage providers link (Settings is in the sidebar; the empty picker keeps its one

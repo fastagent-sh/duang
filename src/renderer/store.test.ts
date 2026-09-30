@@ -464,13 +464,13 @@ test("a thinking level goes to the open conversation, and a refusal reaches it v
     sent.push(args);
     return { ok: true };
   };
-  await store.setThinking("high");
+  assert.equal(await store.setThinking("high"), true);
   assert.deepEqual(sent, [["a", c.session, "high"]], "the level is set on the conversation the person is looking at");
   api.setThinking = async () => ({
     ok: false,
     error: { code: "invalid", message: 'thinking level "xhigh" is not supported', retryable: false },
   });
-  await store.setThinking("xhigh");
+  assert.equal(await store.setThinking("xhigh"), false, "the caller learns it was refused");
   const noted = c.items.filter((item) => item.kind === "note" && item.text === 'thinking level "xhigh" is not supported');
   assert.equal(noted.length, 1, "a refusal is shown, not swallowed");
   store.dispose();
@@ -494,6 +494,40 @@ test("a conversation that began after it opened learns its thinking levels when 
   assert.deepEqual(store.getSnapshot().conversation?.state?.availableThinkingLevels, ["off", "medium", "high"]);
   assert.equal(store.getSnapshot().conversation?.state?.thinkingLevel, "medium");
   store.dispose();
+});
+
+test("settings read for a conversation that is gone are dropped, and silence does not erase the model", async () => {
+  const { api, store, emit, closed } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const late = deferred<Awaited<ReturnType<typeof api.readState>>>();
+  api.readState = () => late.promise;
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "completed" });
+  // Walking away from an idle conversation releases it; the read is still out.
+  await store.newConversation();
+  assert.ok(closed.includes(c.subscription), "the conversation was released while its read was in flight");
+  late.resolve({
+    status: "idle",
+    pending: { steering: [], followUp: [] },
+    thinkingLevel: "high",
+    availableThinkingLevels: ["off", "high"],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(c.state?.availableThinkingLevels, undefined, "a late answer does not land on a released conversation");
+
+  // A read that finds no record answers without the three fields: the model an event reported stays.
+  const kept = harness();
+  await kept.store.load();
+  const open = kept.store.getSnapshot().conversation!;
+  kept.emit(open, "state_changed", { model: "provider/other" });
+  kept.api.readState = async () => ({ status: "idle", pending: { steering: [], followUp: [] } });
+  kept.emit(open, "run_started");
+  kept.emit(open, "run_settled", { status: "completed" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(kept.store.getSnapshot().conversation?.state?.model, "provider/other");
+  store.dispose();
+  kept.store.dispose();
 });
 
 test("the picker rereads models on every open, and a stale answer never lands", async () => {

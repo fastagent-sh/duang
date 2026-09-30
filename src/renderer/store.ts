@@ -518,8 +518,16 @@ export function createStore(api: DuangApi) {
   async function readSettings(c: Conversation) {
     try {
       const { model, thinkingLevel, availableThinkingLevels } = await api.readState(c.agentId, c.session);
+      // The read outlived the conversation (closed, or replaced by a reopen): it says nothing about this one.
       if (conversations.get(key(c.agentId, c.session)) !== c || !c.state) return;
-      c.state = { ...c.state, model, thinkingLevel, availableThinkingLevels };
+      // The runtime leaves all three out when it has no record to resolve them from; what the events already
+      // said about the model is not erased by that silence.
+      c.state = {
+        ...c.state,
+        ...(model !== undefined && { model }),
+        ...(thinkingLevel !== undefined && { thinkingLevel }),
+        ...(availableThinkingLevels !== undefined && { availableThinkingLevels }),
+      };
       publish();
     } catch (error) {
       note(error, c);
@@ -936,18 +944,21 @@ export function createStore(api: DuangApi) {
       }
     },
     /**
-     * The open conversation's thinking level. The new level arrives as the runtime's own `state_changed`,
-     * so nothing is shown that the runtime has not said; a refusal is shown as one.
+     * The open conversation's thinking level, and whether the runtime took it. The new level arrives as
+     * the runtime's own `state_changed`, so nothing is shown that the runtime has not said; a refusal is
+     * shown as one.
      */
-    async setThinking(level: string) {
+    async setThinking(level: string): Promise<boolean> {
       const id = view.agentId;
       const c = view.conversation;
-      if (!id || !c) return;
+      if (!id || !c) return false;
       try {
         const result = await api.setThinking(id, c.session, level);
         if (!result.ok) refusal(result.error.message, c);
+        return result.ok;
       } catch (error) {
         note(error, c);
+        return false;
       }
     },
     async scaffold() {

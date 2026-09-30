@@ -14,13 +14,39 @@ const levelName = (level: string) => LEVELS[level] ?? level;
  * How hard the conversation's model thinks: a row of stops on a track, a native radio group, so the
  * arrow keys and the announcement are the platform's. The runtime lists what the model supports.
  */
-function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => void }) {
-  const index = Math.max(0, levels.indexOf(level));
+/** `onPick` answers whether the runtime took the level. */
+function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => Promise<boolean> }) {
+  // Arrowing through the group moves the choice and fires `onChange` at every stop, and each one would be
+  // written into the conversation's record. The track shows the choice at once and commits it when the
+  // choosing pauses, or when the picker closes.
+  const [chosen, setChosen] = useState<string>();
+  const pending = useRef<string>(undefined);
+  const timer = useRef(0);
+  const commit = useRef(onPick);
+  commit.current = onPick;
+  const flush = () => {
+    window.clearTimeout(timer.current);
+    const level = pending.current;
+    pending.current = undefined;
+    // A refusal leaves the runtime where it was, and the track must say so rather than keep the refused stop.
+    if (level !== undefined) void commit.current(level).then((taken) => taken || setChosen(undefined));
+  };
+  // The runtime's word wins: once it reports a level, that is the one shown.
+  useEffect(() => setChosen(undefined), [level]);
+  useEffect(() => flush, []);
+  const pick = (name: string) => {
+    setChosen(name);
+    pending.current = name;
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(flush, 300);
+  };
+  const shown = chosen ?? level;
+  const index = Math.max(0, levels.indexOf(shown));
   return (
     <div className="px-3 pt-3 pb-2">
       <div className="mb-2 flex items-baseline justify-between text-[13px]">
         <span className="text-muted">Effort</span>
-        <span className="font-semibold">{levelName(level)}</span>
+        <span className="font-semibold">{levelName(shown)}</span>
       </div>
       <div role="radiogroup" aria-label="Effort" className="relative flex h-6 items-center justify-between">
         <span className="absolute inset-x-0 h-2 rounded-full bg-hover" />
@@ -34,8 +60,8 @@ function Effort({ levels, level, onPick }: { levels: string[]; level: string; on
             key={name}
             type="radio"
             name="effort"
-            checked={name === level}
-            onChange={() => onPick(name)}
+            checked={name === shown}
+            onChange={() => pick(name)}
             aria-label={levelName(name)}
             title={levelName(name)}
             className={`relative m-0 size-5 shrink-0 cursor-pointer appearance-none rounded-full bg-transparent before:absolute before:top-1/2 before:left-1/2 before:size-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full ${stop < index ? "before:bg-white/70" : "before:bg-muted/60"} checked:bg-white checked:shadow-[0_1px_4px_rgb(0_0_0/0.35)] checked:before:hidden focus-visible:outline-2 focus-visible:outline-accent`}
@@ -92,10 +118,12 @@ function ModelPicker({
     return () => el.close();
   }, []);
   const specs = models?.specs ?? [];
-  const shown = specs
+  const matching = specs
     .filter((m) => m.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => Number(b === current) - Number(a === current))
-    .slice(0, 60);
+    .sort((a, b) => Number(b === current) - Number(a === current));
+  const shown = matching.slice(0, 60);
+  // Cut off after grouping, a provider past the limit would not even show its heading: say so.
+  const hidden = matching.length - shown.length;
   // Providers in the order they first appear, which puts the current model's first.
   const groups = new Map<string, string[]>();
   for (const spec of shown) {
@@ -186,12 +214,17 @@ function ModelPicker({
               </section>
             ))}
             {models && shown.length === 0 && <p className="px-2.5 py-2 text-[13px] text-muted">Nothing matches.</p>}
+            {hidden > 0 && (
+              <p className="px-2.5 py-2 text-[12px] text-muted">
+                {hidden} more: search to narrow the list.
+              </p>
+            )}
           </div>
           <div className="border-t border-stroke">
             {!thinking ? (
               <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once the conversation has begun.</p>
             ) : thinking.levels.length > 1 ? (
-              <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => void store.setThinking(level)} />
+              <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => store.setThinking(level)} />
             ) : (
               <p className="px-4 py-3 text-[12px] text-muted">This model has no effort setting.</p>
             )}

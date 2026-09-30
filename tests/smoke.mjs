@@ -547,11 +547,28 @@ if (!process.versions.electron) {
       const chip = `document.querySelector('button[title^="Model for this agent"]')`;
       await evaluate(`${chip}.click()`);
       await until("document.querySelector('dialog [role=radiogroup][aria-label=Effort]')", "a reasoning model offers an effort track");
+      // The list stops at 60 rows, and a provider past them shows no heading: it says there are more.
+      await until("document.querySelectorAll('dialog button[data-model]').length > 0", "the models are listed");
+      assert.match(await evaluate("document.querySelector('dialog').innerText"), /\d+ more: search to narrow the list/, "a cut-off list says so");
       const levels = await evaluate(`[...document.querySelectorAll('dialog input[name=effort]')].map((input) => input.getAttribute('aria-label'))`);
       assert.ok(levels.length > 1 && levels.includes("High"), `the runtime's levels are the stops: ${levels}`);
       await evaluate(`document.querySelector('dialog input[aria-label="High"]').click()`);
       await until(`${chip}.textContent.includes('High')`, "the chip names the level the runtime reports");
       await until(`document.querySelector('dialog input[aria-label="High"]').checked`, "and so does the track");
+      // Arrowing through the track is one choice, not one write per stop: each write is a durable entry in
+      // the conversation's record.
+      const thinkingSession = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
+      const levelChanges = () =>
+        evaluate(`window.duang.readSession('configured', ${JSON.stringify(thinkingSession)}).then((r) => r.entries.filter((e) => e.kind === 'thinking_level_change').length)`);
+      const changesBefore = await levelChanges();
+      const target = levels[levels.indexOf("High") - 2];
+      await evaluate(`document.querySelector('dialog input[aria-label="High"]').focus()`);
+      for (let i = 0; i < 2; i++) {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Left" });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Left" });
+      }
+      await until(`${chip}.textContent.includes(${JSON.stringify(target)})`, `two arrow presses settle on ${target}`);
+      assert.equal((await levelChanges()) - changesBefore, 1, "two stops crossed, one level written");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "Escape closes the picker");
@@ -631,15 +648,19 @@ if (!process.versions.electron) {
       await until("document.body.innerText.includes('A skill the completion list should offer')", "list reopens");
       // ArrowUp from the first wraps to the last, which the list has to scroll to: a cursor on a row
       // cut in half by the list's edge is a cursor nobody can read.
-      const chosenInView = `(() => {
-        const row = document.querySelector('.composer .popover [data-chosen]').getBoundingClientRect();
+      // The cursor is on the row asked for (React has rendered the key) and that row is fully in view.
+      const chosenInView = (which) => `(() => {
+        const rows = [...document.querySelectorAll('.composer .popover button')];
+        const chosen = document.querySelector('.composer .popover [data-chosen]');
+        if (chosen !== rows.at(${which})) return false;
+        const row = chosen.getBoundingClientRect();
         const box = document.querySelector('.composer .popover').getBoundingClientRect();
         return row.top >= box.top && row.bottom <= box.bottom;
       })()`;
       await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
-      await until(chosenInView, "the cursor's row is scrolled fully into view");
+      await until(chosenInView(-1), "the last row is chosen and scrolled fully into view");
       await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))`);
-      await until(chosenInView, "and so is the first row again");
+      await until(chosenInView(0), "and the first row again");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
       await until("document.querySelector('textarea').value === '/skill:demo '", "Enter accepts the skill in the spelling pi runs, it does not send");
