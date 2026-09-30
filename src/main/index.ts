@@ -144,6 +144,8 @@ type Stream = {
   agentId: string;
   close: () => void;
   end: (reason: string, expected: boolean) => void;
+  /** Listens to the session again on the agent's current runtime, after the runtime was replaced. */
+  rebind: () => Promise<void>;
 };
 // The renderer retains background subscriptions only while their turns are running.
 const streams = new Map<string, Stream>();
@@ -154,6 +156,25 @@ function stopStream(key: string): void {
 }
 function stopWindowStreams(senderId: number): void {
   for (const [key, stream] of streams) if (stream.senderId === senderId) stopStream(key);
+}
+/**
+ * A model change replaces the agent's runtime, and a subscription is to a conversation, not to a runtime:
+ * each of the agent's subscriptions listens again on the new one under the same id, and the window sees
+ * nothing. One that cannot ends with the reason, like any other that stops.
+ */
+async function rebindAgentStreams(agentId: string): Promise<void> {
+  await Promise.all(
+    [...streams].flatMap(([key, stream]) =>
+      stream.agentId !== agentId
+        ? []
+        : [
+            stream.rebind().catch((error) => {
+              stream.end(String(error), false);
+              stopStream(key);
+            }),
+          ],
+    ),
+  );
 }
 /** Cutting an agent's subscriptions is invisible to the renderer unless each one says why it ended. */
 function stopAgentStreams(agentId: string, reason: string): void {
@@ -191,7 +212,7 @@ function register(): void {
     if (!(await modelsFor(row.dir)).specs.includes(model))
       return refuse("model_unavailable", `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
-    if (result.ok) stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
+    if (result.ok) await rebindAgentStreams(id);
     return result;
   });
   ipcMain.handle("session:state", async (_e, id: string, session: string) => {
@@ -342,7 +363,7 @@ function register(): void {
     requireSession(session);
     const key = `${e.sender.id}/${subscription}`;
     stopStream(key);
-    const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {}, end: () => {} };
+    const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {}, end: () => {}, rebind: async () => {} };
     streams.set(key, slot);
     const post = (frame: Omit<SessionFrame, "agentId" | "session" | "subscription">) => {
       if (!e.sender.isDestroyed() && streams.get(key) === slot) {
@@ -351,7 +372,10 @@ function register(): void {
     };
     const forward = (event: SessionEvent) => post({ event });
     slot.end = (reason, expected) => post({ ended: { reason, expected } });
-    try {
+    // The latest listen is the subscription's; an earlier one that was replaced stops without saying it ended.
+    let listening = 0;
+    const listen = async () => {
+      const mine = ++listening;
       const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
       if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
       const stream = bound.events();
@@ -365,14 +389,25 @@ function register(): void {
         // throw is a failure; a clean `done` is the runtime letting this subscriber go.
         let ending = { reason: "This conversation stopped receiving updates", expected: true };
         try {
-          for (let next = await iterator.next(); !next.done; next = await iterator.next()) forward(next.value);
+          for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+            if (mine === listening) forward(next.value);
+          }
         } catch (error) {
           ending = { reason: String(error), expected: false };
         }
+        if (mine !== listening) return;
         slot.end(ending.reason, ending.expected);
         if (streams.get(key) === slot) streams.delete(key);
       })();
       await stream.ready;
+      return bound;
+    };
+    slot.rebind = async () => {
+      slot.close();
+      await listen();
+    };
+    try {
+      const bound = await listen();
       return { entries: await bound.entries(), state: await bound.state() };
     } catch (error) {
       if (streams.get(key) === slot) stopStream(key);

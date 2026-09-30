@@ -932,9 +932,11 @@ export function createStore(api: DuangApi) {
         }
         publish({ agents: await api.listAgents() });
         if (request !== navigation) return;
-        if (c) close(c);
         publish({ loading: false, model, error: undefined, states: { ...view.states, [id]: "ready" } });
-        if (c) await open(c.session);
+        // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
+        // The runtime announced the change before that subscription listened again, so the model and
+        // levels are read, not waited for.
+        if (c) await readSettings(c);
         else await selectAgent(id);
       } catch (error) {
         if (request === navigation) {

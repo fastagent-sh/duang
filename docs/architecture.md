@@ -35,7 +35,9 @@ routines) is what a remote client builds on; bump the version with the feature t
 the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
 session and subscription id. Stale subscriptions cannot replace the current view. Idle subscriptions
 close on navigation; running conversations retain theirs until settlement, so switching away does
-not lose streamed output. Reloading or destroying the window closes its subscriptions, not its runs.
+not lose streamed output. Reloading or destroying the window closes its subscriptions, not its runs. A
+subscription is to a conversation, not to a runtime: when a model change replaces the agent's runtime, main
+listens again on the new one under the same subscription id, and the renderer does not reopen anything.
 
 **Plan usage is read in main.** For an OAuth login of `anthropic` or `openai-codex`, main takes the
 token from FastAgent's public `createPiModels({ authPath }).getAuth(provider)` (which refreshes an

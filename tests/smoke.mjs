@@ -536,10 +536,22 @@ if (!process.versions.electron) {
       assert.ok(models.specs.includes("local/m1"), "the agent's own models.json endpoint is pickable");
       assert.ok(!(await evaluate("window.duang.listModels('smoke')")).specs.includes("local/m1"), "another agent's endpoint is not");
       const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
+      // Replacing the runtime is main's business: the open conversation is not reloaded, its scroll stays, and
+      // it is not told anything broke. The answer below proves its subscription listens on the new runtime.
+      await evaluate(`window.__transcript = document.querySelector('[aria-label="Transcript"]'); window.__scroll = window.__transcript.scrollTop;`);
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "cross-provider model picker");
       await chooseModel("anthropic/claude-sonnet-4-5");
       await until("!document.querySelector('textarea').disabled && document.body.innerText.includes('anthropic/claude-sonnet-4-5')", "selected conversation changes provider");
+      assert.ok(
+        await evaluate(`document.querySelector('[aria-label="Transcript"]') === window.__transcript`),
+        "a model change leaves the transcript standing: it is the same element, not one rebuilt",
+      );
+      assert.equal(await evaluate("window.__transcript.scrollTop"), await evaluate("window.__scroll"), "and where it was scrolled");
+      assert.ok(
+        !/Reconnect|runtime was rebuilt/.test(await evaluate("document.querySelector('main').innerText")),
+        "and it does not say its subscription was cut",
+      );
       await message("Use the Anthropic conversation model.");
       await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main .bounce')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);

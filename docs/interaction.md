@@ -30,6 +30,9 @@ broken agent shows its original failure with a way to retry, reveal or remove it
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
+A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
+moves to the new runtime in main, so the transcript stays as it is (the same rows, the same scroll position)
+and only the chip and the effort track are read again.
 The picker lists the models the open agent can run: pi's built-ins, the agent's own
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to providers with a
 configured credential: in the credential file, in an environment variable, or as a key written in

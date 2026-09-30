@@ -415,9 +415,9 @@ test("an expected end of a subscription is reported without pretending the conve
   await store.load();
   const c = store.getSnapshot().conversation!;
   emit(c, "run_started");
-  end(c, "The agent's runtime was rebuilt for the new model", true);
+  end(c, "The agent was removed", true);
   const current = store.getSnapshot().conversation!;
-  assert.equal(current.ended, "The agent's runtime was rebuilt for the new model");
+  assert.equal(current.ended, "The agent was removed");
   assert.equal(current.error, undefined, "an intended end is not a failure");
   assert.ok(
     current.items.every((item) => item.kind !== "note"),
@@ -452,6 +452,30 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
   assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
+  store.dispose();
+});
+
+test("a model change leaves the open conversation as it is and reads its model and levels again", async () => {
+  const { api, store, opens, closed } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const items = c.items;
+  const opened = opens.length;
+  api.readState = async () => ({
+    status: "idle",
+    pending: { steering: [], followUp: [] },
+    model: "provider/other",
+    thinkingLevel: "low",
+    availableThinkingLevels: ["low", "high"],
+  });
+  await store.pickModel("provider/other");
+  assert.equal(store.getSnapshot().conversation, c, "the same conversation, not a reopened one");
+  assert.equal(c.items, items, "its transcript is not reloaded, so nothing flickers and the scroll stays");
+  assert.equal(opens.length, opened, "main moved the subscription; the window does not open another");
+  assert.equal(closed.length, 0, "and does not close the one it has");
+  assert.equal(store.getSnapshot().model, "provider/other");
+  assert.equal(c.state?.model, "provider/other", "the chip and the effort track follow the new model");
+  assert.deepEqual(c.state?.availableThinkingLevels, ["low", "high"]);
   store.dispose();
 });
 
