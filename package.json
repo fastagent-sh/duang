@@ -36,7 +36,6 @@
     "vite": "^7.0.0"
   },
   "allowScripts": {
-    "electron@44.4.1": true,
     "esbuild": false,
     "protobufjs": false,
     "@google/genai": false,
