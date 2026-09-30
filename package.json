@@ -38,6 +38,7 @@
     "electron@44.4.1": true,
     "esbuild": false,
     "protobufjs": false,
-    "@google/genai": false
+    "@google/genai": false,
+    "fsevents": false
   }
 }
