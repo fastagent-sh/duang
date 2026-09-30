@@ -13,7 +13,7 @@ export function createLevelWriter<T>(options: {
   /** Whether the runtime took the level. */
   write: (target: T, level: string) => Promise<boolean>;
   /** The runtime did not take a level that was written. */
-  refused: (target: T) => void;
+  refused: (target: T, level: string) => void;
 }) {
   let waiting: { target: T; level: string } | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -25,7 +25,7 @@ export function createLevelWriter<T>(options: {
     waiting = undefined;
     if (!choice) return;
     void options.write(choice.target, choice.level).then((taken) => {
-      if (!taken) options.refused(choice.target);
+      if (!taken) options.refused(choice.target, choice.level);
     });
   }
 

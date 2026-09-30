@@ -41,12 +41,13 @@ function Effort({
 }) {
   const [chosen, setChosen] = useState<string>();
   const byKey = useRef(false);
-  // A refusal leaves the runtime where it was, and the track must say so rather than keep the refused stop.
+  // A refusal leaves the runtime where it was, and the track must say so rather than keep the refused stop:
+  // only that stop. A later choice, still waiting or already written, is not the one that was refused.
   const [writer] = useState(() =>
     createLevelWriter<Conversation>({
       pauseMs: KEY_PAUSE_MS,
       write: (c, l) => onPick(l, c),
-      refused: () => setChosen(undefined),
+      refused: (_c, l) => setChosen((current) => (current === l ? undefined : current)),
     }),
   );
   useEffect(() => writer.flush, [writer]);

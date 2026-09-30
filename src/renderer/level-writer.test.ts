@@ -11,7 +11,7 @@ function rig(taken = true) {
       written.push(`${target}:${level}`);
       return taken;
     },
-    refused: (target) => refused.push(target),
+    refused: (target, level) => refused.push(`${target}:${level}`),
   });
   return { writer, written, refused };
 }
@@ -71,11 +71,11 @@ test("a waiting choice is written to the conversation it was made for", () => {
   }
 });
 
-test("a level the runtime did not take is reported, for the conversation it was written to", async () => {
+test("a level the runtime did not take is reported, with the conversation and level it was written for", async () => {
   const { writer, refused } = rig(false);
   writer.choose("c1", "xhigh", false);
   await settle();
-  assert.deepEqual(refused, ["c1"]);
+  assert.deepEqual(refused, ["c1:xhigh"]);
   const accepted = rig(true);
   accepted.writer.choose("c1", "high", false);
   await settle();
