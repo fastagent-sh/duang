@@ -2,7 +2,7 @@
 import { Fragment } from "react";
 import { ListBullets } from "@phosphor-icons/react";
 import type { ProviderUsage } from "../preload/index.ts";
-import { pace, paceLabel, resetLabel, tightest, tokens } from "./usage.ts";
+import { pace, paceLabel, resetLabel, tokens } from "./usage.ts";
 import { ago } from "./sessions.ts";
 import { Avatar, Badge, Button } from "./ui.tsx";
 import { location } from "./paths.ts";
@@ -99,25 +99,25 @@ export function UsageDetail({ plan, context, now = Date.now() }: Usage) {
 }
 
 /**
- * The header's right edge: only the limit closest to running out, with the rest a hover or a focus
- * away. Every window with its reset and pace, then the context, made that edge the densest text on
- * screen for numbers read once in a while. A plan read that failed or an API key adds no windows,
- * never a stale percentage.
+ * The header's right edge: how full this conversation's context is, and only that. It is the one number
+ * that is about this conversation and moves as it goes; the plan's windows belong to the account and
+ * change slowly, so they wait in the table a hover or a focus away, with the context's own size. Mixing
+ * them in one slot (whichever is fuller) would change what the slot means from one glance to the next. A
+ * plan read that failed or an API key adds no windows, never a stale percentage.
  */
 export function UsageMeter({ plan, context, now }: Usage) {
-  const windows = plan?.data?.windows ?? [];
-  const shown = tightest([
-    ...windows,
-    ...(context ? [{ label: "context", percent: (context.used / context.window) * 100 }] : []),
-  ]);
-  if (!shown) return null;
+  if (!context) return null;
+  const percent = (context.used / context.window) * 100;
+  // A meter at 0% says nothing and sits at the header's most looked-at edge: it appears once there is
+  // something to read, and the table with it.
+  if (Math.round(percent) === 0) return null;
   return (
     // Focusable so the table is reachable without a pointer; it is information, not a control.
     <div tabIndex={0} aria-label="Usage" className="group pointer-events-auto relative shrink-0 text-[11px] text-muted tabular-nums">
       <span className="flex items-center gap-1.5">
-        {shown.label}
-        <Bar percent={shown.percent} />
-        {shown.percent.toFixed(0)}%
+        context
+        <Bar percent={percent} />
+        {percent.toFixed(0)}%
       </span>
       <div className="popover absolute top-full right-0 mt-3 hidden group-hover:block group-focus-visible:block">
         <UsageDetail plan={plan} context={context} now={now} />

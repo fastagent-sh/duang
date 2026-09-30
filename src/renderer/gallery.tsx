@@ -69,7 +69,7 @@ export default function Gallery() {
           <Button disabled="This agent is not ready">Reveal in Finder</Button>
         </Section>
 
-        <Section title="Plan usage" note="the header's right edge keeps the fullest limit; hover opens every window, its reset and pace">
+        <Section title="Context and plan usage" note="the header's right edge is the context; hover opens the plan's windows, their reset and pace, and the context's size">
           {(() => {
             const now = Date.UTC(2026, 8, 23, 12);
             const plan = (week: number) => ({
@@ -87,7 +87,7 @@ export default function Gallery() {
               <div className="flex items-start gap-8">
                 <div className="space-y-2">
                   <UsageMeter plan={plan(18)} context={context} now={now} />
-                  <UsageMeter plan={plan(88)} context={context} now={now} />
+                  <UsageMeter plan={plan(88)} context={{ used: 880_000, window: 1_000_000 }} now={now} />
                 </div>
                 <div className="popover">
                   <UsageDetail plan={plan(88)} context={context} now={now} />

@@ -179,13 +179,15 @@ over wallpaper, ours is a document that has to stay readable — so the transcri
 the chrome floats. The transcript starts below the header, then slides underneath it when scrolled;
 a soft lower shadow keeps the two readable without stopping the page.
 
-Its right edge says how much is left, in muted 11px text, and only for the limit closest to running
-out: `7d ▬ 88%` with a 40px bar, where the plan's windows and the context compete on percentage.
-Hovering or focusing it opens a small table of every limit: each window's share and reset, the pace
-of a day-or-longer window as a green `▼` or red `▲` percentage, the context as `45% of 1.0M`, and
-which plan and when it was read. Every one of those in a row made the header's right edge the
-densest text on screen for numbers read once in a while. No threshold colours: the percentage is the
-signal.
+Its right edge is how full the conversation's context is, in muted 11px text: `context ▬ 12%` with a 40px
+bar, drawn once it is above 0%. It is the one number about this conversation that moves as it goes.
+The plan's windows belong to the account and change slowly, so they are not in the edge: hovering or
+focusing it opens a small table of each window's share and reset, the pace of a day-or-longer window
+as a green `▼` or red `▲` percentage, the context as `45% of 1.0M`, and which plan and when it was
+read. Letting whichever of the two is fuller take the one slot would change what the slot means from
+one glance to the next. Every window in a row would make the
+edge the densest text on screen for numbers read once in a while. No threshold colours: the
+percentage is the signal.
 
 **The model chip and its picker follow Codex's, on duang's terms.** The chip names the provider quietly
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
@@ -205,7 +207,7 @@ act on) and a Manage providers link (Settings is in the sidebar; the empty picke
 **Connect a provider**).
 
 **The header is two parts.** What you are looking at (avatar, agent and conversation, directory,
-`working`, the plan and context meter, `queued`) is one pill, and the one action on it, the
+`working`, the context meter, `queued`) is one pill, and the one action on it, the
 conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
 and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
 card in the middle of a page. The composer does not: it sits in the reading column, its attach and

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pace, paceLabel, resetLabel, tightest, tokens } from "./usage.ts";
+import { pace, paceLabel, resetLabel, tokens } from "./usage.ts";
 
 const HOUR = 3600;
 const DAY = 24 * HOUR;
@@ -27,13 +27,4 @@ test("a reset reads as a time inside a day, and as a weekday beyond one", () => 
 test("a context window prints the way model pages print it", () => {
   assert.equal(tokens(1_000_000), "1.0M");
   assert.equal(tokens(200_000), "200K");
-});
-
-test("the header keeps the limit closest to running out", () => {
-  const five = { label: "5h", percent: 4 };
-  const week = { label: "7d", percent: 88 };
-  assert.equal(tightest([five, week, { label: "context", percent: 45 }]), week);
-  assert.equal(tightest([five, { label: "context", percent: 60 }])?.label, "context");
-  assert.equal(tightest([week, { label: "5h", percent: 88 }]), week, "a tie keeps the first");
-  assert.equal(tightest([]), undefined);
 });
