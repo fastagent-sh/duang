@@ -387,7 +387,7 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   assert.equal(store.getSnapshot().conversation, old);
   await store.abort();
   assert.ok(old.items.some((item) => item.kind === "note" && item.text === "runtime refused"));
-  await store.open(old.session);
+  await store.retry(); // closes the subscription and opens the conversation again
   const current = store.getSnapshot().conversation!;
   emit(old, "message_delta", { delta: "stale" });
   assert.deepEqual(current.items, []);
@@ -452,6 +452,43 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
   assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
+  store.dispose();
+});
+
+test("opening the conversation that is already open changes nothing", async () => {
+  const { store, opens } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const seen: unknown[] = [];
+  const stop = store.subscribe(() => seen.push(store.getSnapshot().conversation));
+  const opened = opens.length;
+  await store.open(c.session);
+  stop();
+  assert.equal(store.getSnapshot().conversation, c, "the same conversation, not a rebuilt one");
+  assert.ok(seen.every((shown) => shown === c), "the view is never cleared on the way, which would remount it");
+  assert.equal(opens.length, opened, "and nothing is read again");
+  store.dispose();
+});
+
+test("where a conversation was left above the latest line is remembered until it or its agent is gone", async () => {
+  const { store } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  assert.equal(store.scrollOf(c.agentId, c.session), undefined, "a conversation opens at its latest line");
+  store.rememberScroll(c.agentId, c.session, 420);
+  store.rememberScroll("b", "b-1", 90);
+  assert.equal(store.scrollOf(c.agentId, c.session), 420);
+  assert.equal(store.scrollOf("b", "b-1"), 90, "each conversation has its own place");
+  store.rememberScroll(c.agentId, c.session, undefined);
+  assert.equal(store.scrollOf(c.agentId, c.session), undefined, "scrolling back to the latest line forgets it");
+
+  store.rememberScroll(c.agentId, c.session, 420);
+  await store.deleteSession(c.agentId, c.session);
+  assert.equal(store.scrollOf(c.agentId, c.session), undefined, "a deleted conversation leaves no place behind");
+  store.rememberScroll("a", "later", 10);
+  await store.removeAgent();
+  assert.equal(store.scrollOf("a", "later"), undefined, "a removed agent leaves none behind");
+  assert.equal(store.scrollOf("b", "b-1"), 90, "another agent's places are not touched");
   store.dispose();
 });
 

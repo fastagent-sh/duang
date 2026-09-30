@@ -246,6 +246,12 @@ export function createStore(api: DuangApi) {
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
   const drafts = new Map<string, string>(readDrafts());
+  /**
+   * Where each conversation was left scrolled, only while it was above the latest line: a conversation
+   * closes when it is left and its view unmounts (Settings, another agent), and what the person was
+   * reading is where they expect to come back to. Presentation only, kept for the window's life.
+   */
+  const scrolls = new Map<string, number>();
   let persisted = "";
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
@@ -409,6 +415,10 @@ export function createStore(api: DuangApi) {
   async function open(session: string) {
     const agentId = view.agentId;
     if (!agentId) return;
+    // Already on screen: clearing the view to show the same conversation again would rebuild it, and lose
+    // the place being read. (A conversation that was closed, as a retry does, is not on screen.)
+    const open = view.conversation;
+    if (open?.agentId === agentId && open.session === session && conversations.get(key(agentId, session)) === open) return;
     // Looking at it is what spends the mark.
     unseen.delete(key(agentId, session));
     lastOpened.set(agentId, session);
@@ -696,6 +706,13 @@ export function createStore(api: DuangApi) {
 
   return {
     getSnapshot: () => view,
+    /** Where this conversation was left, if it was left above the latest line. */
+    scrollOf: (agentId: string, session: string) => scrolls.get(key(agentId, session)),
+    /** `undefined`: at the latest line, which is where a conversation opens anyway. */
+    rememberScroll(agentId: string, session: string, top: number | undefined) {
+      if (top === undefined) scrolls.delete(key(agentId, session));
+      else scrolls.set(key(agentId, session), top);
+    },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => {
@@ -987,6 +1004,7 @@ export function createStore(api: DuangApi) {
         if (!result.ok) return note(result.error.message);
         for (const c of conversations.values()) if (c.agentId === id) close(c);
         for (const draftKey of [...drafts.keys()]) if (draftKey.startsWith(`${id}/`)) drafts.delete(draftKey);
+        for (const scrollKey of [...scrolls.keys()]) if (scrollKey.startsWith(`${id}/`)) scrolls.delete(scrollKey);
         publish({ agents: await api.listAgents() });
         if (view.agentId !== id) return;
         ++navigation;
@@ -1030,6 +1048,7 @@ export function createStore(api: DuangApi) {
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
+        scrolls.delete(key(id, session));
         // The runtime confirmed the deletion, so the row goes now, whichever agent it belongs to.
         publish({
           sessions: { ...view.sessions, [id]: (view.sessions[id] ?? []).filter((s) => s.session !== session) },

@@ -101,7 +101,11 @@ the input method. `⌘N` or the sidebar's New conversation action starts a conve
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it; the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow
 navigation, and the transcript is focusable. Scrolling up suspends tail-follow; a control returns
-to the latest turn. A closed or failed subscription reports that it is no longer receiving updates
+to the latest turn. A conversation is opened at its latest turn, or, when it was left scrolled up, where it was
+left, through Settings or another agent and back (for the window's life, not across launches; a card that was
+expanded comes back folded, so the place is the same distance from the top, not the same line). The place is held
+while the layout settles and until the person scrolls. A view that was at the latest turn stays there while its
+content grows by itself, and choosing the conversation that is already open rebuilds nothing. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.
 
 Closing the window does not stop main-process work. Quitting with active local work warns that it

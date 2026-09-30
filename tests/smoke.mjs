@@ -887,6 +887,65 @@ if (!process.versions.electron) {
         })()`),
         "the transcript is at the bottom again",
       );
+
+      // Where a conversation was left is where it comes back to: a click on the conversation already open
+      // rebuilds nothing, and Settings or another agent and back restores the place being read (the view is
+      // rebuilt by both). The content grows for a moment after a rebuild, so each is polled.
+      const reading = `document.querySelector('[aria-label="Transcript"]')`;
+      const nearly = (want) => `${reading} !== null && Math.abs(${reading}.scrollTop - ${want}) <= 2 && ${backToLatest} !== null`;
+      const scrollAway = async () => {
+        // The person scrolls: a wheel event is what ends a view's holding of its place.
+        await evaluate(`${reading}.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }))`);
+        await until(
+          `(() => { const el = ${reading}; el.scrollTop = Math.floor((el.scrollHeight - el.clientHeight) / 2); return ${backToLatest} !== null; })()`,
+          "scrolled into the middle of the conversation",
+        );
+        return evaluate(`Math.round(${reading}.scrollTop)`);
+      };
+      const left = await scrollAway();
+      assert.ok(left > 20, `there is a place to come back to: ${left}`);
+      await evaluate(`window.__reading = ${reading}`);
+      await showConversations();
+      await evaluate(`document.querySelector('#conversations button[data-session][aria-current="page"]').click()`);
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      assert.equal(await evaluate(`${reading} === window.__reading`), true, "opening the open conversation rebuilds nothing");
+      assert.equal(await evaluate(`Math.round(${reading}.scrollTop)`), left, "and moves nothing");
+
+      const openAgent = await evaluate(`document.querySelector('aside [aria-label="Agents"] button[aria-current="true"]').getAttribute('aria-label')`);
+      await evaluate(`[...document.querySelectorAll('aside button')].find((b) => b.textContent.trim() === 'Settings').click()`);
+      await until("document.querySelector('#providers-heading') !== null || document.querySelector('[aria-label=\"Transcript\"]') === null", "Settings shows");
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
+      await until(nearly(left), "after Settings the conversation is where it was left");
+      const other = ["Smoke", "Configured"].find((name) => name !== openAgent);
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(other)}]').click()`);
+      await until(`document.querySelector('main').innerText.length > 0 && document.querySelector('button[aria-label=${JSON.stringify(other)}]').getAttribute('aria-current') === 'true'`, "the other agent is open");
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
+      await until(nearly(left), "after another agent the conversation is where it was left");
+      // At the latest line it stays there, rather than landing short of it while the content grows.
+      await evaluate(`${reading}.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }))`);
+      await until(atBottom, "back at the latest line");
+      // Left in the same task as the scroll to the latest line, before its scroll event has fired: what the
+      // view reports as it goes is what is remembered, not the last event it happened to hear.
+      await scrollAway();
+      await evaluate(`(() => {
+        const el = ${reading};
+        el.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }));
+        el.scrollTop = el.scrollHeight;
+        [...document.querySelectorAll('aside button')].find((b) => b.textContent.trim() === 'Settings').click();
+      })()`);
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
+      await until(
+        `(() => { const el = ${reading}; return el && el.scrollHeight - el.scrollTop - el.clientHeight < 4 && ${backToLatest} === null; })()`,
+        "a conversation left at its latest line comes back at it, once the content has grown",
+      );
+      // Content that grows on its own (a code block highlighted late) keeps a view that follows the latest line
+      // on it: nothing scrolls and no item arrives, so only watching the content's size can notice.
+      await evaluate(`(() => { const pad = document.createElement('div'); pad.id = 'grow-probe'; pad.style.height = '400px'; ${reading}.firstElementChild.append(pad); })()`);
+      await until(
+        `(() => { const el = ${reading}; return el.scrollHeight - el.scrollTop - el.clientHeight < 4; })()`,
+        "a view following the latest line stays on it while its content grows",
+      );
+      await evaluate(`document.getElementById('grow-probe').remove()`);
       win.setSize(size[0], size[1]);
 
       // The row's actions control follows its own focus: the row keeps focus after a click, which

@@ -1,5 +1,5 @@
 /** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowsOut,
@@ -105,6 +105,9 @@ function gap(previous: string | undefined, kind: string): string {
 /** An answer ends its turn unless the run goes on to work after it; only then does it get a footer. */
 const ends = (next: Line | Work | undefined, busy: boolean) => (next ? next.kind !== "work" : !busy);
 
+/** Within a line or two of the end: where a conversation opens, and what "following" means. */
+const atLatest = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+
 export function Transcript({
   items,
   waiting,
@@ -112,6 +115,8 @@ export function Transcript({
   status,
   started,
   bottomGap,
+  resume,
+  onRest,
 }: {
   items: Item[];
   /**
@@ -127,9 +132,22 @@ export function Transcript({
   started?: number;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
+  /** Where this conversation was left, read once when the view mounts; absent means the latest line. */
+  resume?: number;
+  /** Where the view rests now: a position above the latest line, or undefined while it follows. */
+  onRest: (top: number | undefined) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
+  const follow = useRef(resume === undefined);
+  /**
+   * A view that returns to where it was left holds that place while its layout settles (a remounted
+   * conversation grows for a moment as its fonts and code blocks arrive, and reading "near the bottom"
+   * from the short first layout would forget the place), until the person scrolls.
+   */
+  const restoring = useRef(resume !== undefined);
+  const scrolled = () => {
+    restoring.current = false;
+  };
   // Scrolling up during a long run stops the tail following, and the only way back was to scroll:
   // the control appears exactly while that is true.
   const [away, setAway] = useState(false);
@@ -141,9 +159,26 @@ export function Transcript({
   const check = () => {
     const el = box.current;
     if (!el) return;
-    follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    if (restoring.current) {
+      if (el.scrollTop !== resume) el.scrollTop = resume!;
+      follow.current = false;
+      setAway(true);
+      return;
+    }
+    follow.current = atLatest(el);
     setAway(!follow.current);
+    onRest(follow.current ? undefined : el.scrollTop);
   };
+  // Before the first paint, so the conversation is never seen at the bottom first.
+  useLayoutEffect(() => {
+    if (resume !== undefined) box.current!.scrollTop = resume;
+    // A scroll event that has not fired yet cannot tell the place a view is leaving from, so it is read
+    // here, while the element is still attached. A view still holding a place keeps what it was given.
+    return () => {
+      const el = box.current;
+      if (el && !restoring.current) onRest(atLatest(el) ? undefined : el.scrollTop);
+    };
+  }, []);
 
   const queue = (opening: boolean) =>
     waiting.map(({ item, listed, opens }, index) =>
@@ -173,7 +208,24 @@ export function Transcript({
     if (!el) return;
     const observer = new ResizeObserver(check);
     observer.observe(el);
-    return () => observer.disconnect();
+    // Content also grows after it is laid out (fonts, code blocks), with no scroll event and no new item:
+    // a view that was at the latest line stays on it, and one holding a place keeps the place. "Was" is
+    // judged against the height before this growth, because the growth itself puts the end out of reach.
+    let height = 0;
+    const grown = new ResizeObserver(() => {
+      const wasAtEnd = height - el.scrollTop - el.clientHeight < 40;
+      height = el.scrollHeight;
+      if (restoring.current) check();
+      else if (wasAtEnd) {
+        el.scrollTop = el.scrollHeight;
+        check();
+      }
+    });
+    if (el.firstElementChild) grown.observe(el.firstElementChild);
+    return () => {
+      observer.disconnect();
+      grown.disconnect();
+    };
   }, []);
 
   return (
@@ -185,6 +237,7 @@ export function Transcript({
           onClick={() => {
             const el = box.current;
             if (!el) return;
+            scrolled();
             // Not smooth: every frame of an animated scroll fires `scroll`, and until the last one
             // the transcript is not at the bottom, so the button it came from flickers back.
             el.scrollTop = el.scrollHeight;
@@ -205,6 +258,11 @@ export function Transcript({
       role="region"
       aria-label="Transcript"
       onScroll={check}
+      // What the person does to move it, as opposed to the scroll events that layout and restoring cause.
+      onWheel={scrolled}
+      onKeyDown={scrolled}
+      onPointerDown={scrolled}
+      onTouchStart={scrolled}
       // pt clears the floating header; the first message starts below it, not behind it. The
       // scrollbar's track is reserved on both sides, so the column centres where the composer does.
       className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 [scrollbar-gutter:stable_both-edges]"
