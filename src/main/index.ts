@@ -17,7 +17,7 @@ import {
   workingAgents,
   type AgentRow,
 } from "./agents.ts";
-import { authPath, modelsFor } from "./credentials.ts";
+import { authPath, modelsFor, refreshModels } from "./credentials.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
 import { forgetUsage, providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
@@ -257,6 +257,7 @@ function register(): void {
   });
   ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
+  ipcMain.handle("models:refresh", async (_e, id: string) => refreshModels((await requireAgent(id)).dir));
   // Model providers, in duang's own credential file. `empty` is never written: it is where a provider's
   // environment variable is read with no stored credential in front of it. In this user's own data,
   // not a shared temporary directory where anyone could put a file at that path.

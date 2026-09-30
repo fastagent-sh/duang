@@ -196,7 +196,8 @@ percentage is the signal.
 button it is beside the field's own text, names the provider quietly
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
 `openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
-anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
+anchored to the chip's right edge: a search row (with a quiet refresh button at its end, and under it, once
+pressed, one line of what it found or why it failed), the models under their provider (ids only, in the
 system face rather than mono, at 13px), and the effort. Effort is a track with a stop per
 level; the runtime's list is the stops, and it is per conversation, so a conversation that has not begun
 says so. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime

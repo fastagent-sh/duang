@@ -68,6 +68,11 @@ const api = {
    * configured credential (the credential file, an environment variable or a key in `models.json`).
    */
   listModels: (agentId: string): Promise<Models> => ipcRenderer.invoke("models:list", agentId),
+  /**
+   * Fetches models released after the bundled catalog and saves them in `models-store.json` in the
+   * agent's folder, then answers with the new list. Only on request; rejects with FastAgent's reason.
+   */
+  refreshModels: (agentId: string): Promise<Models> => ipcRenderer.invoke("models:refresh", agentId),
   /** duang's own preferences and the route requests take now. Rejects when the settings file is unreadable. */
   getSettings: (): Promise<{ network: Network; route: Route }> => ipcRenderer.invoke("settings:get"),
   /** Saves and applies at once; new requests use it, a running turn keeps its connection. */

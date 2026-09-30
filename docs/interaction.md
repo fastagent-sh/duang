@@ -45,6 +45,16 @@ on the open conversation only, and is refused while it runs; the arrow keys move
 and write nothing, and Enter, Space or a click choose. A list of more than 60 models says how many it left out. The picker shows no credential path and
 links to no provider page; with nothing connected its one offer is **Connect a provider**, which
 returns to the picker after connecting. Configuration is not a provider probe.
+The list is what pi's bundled catalog knows, so a model released since the installed pi is missing until
+the catalog is refreshed. The refresh button at the end of the search row asks for that, only when pressed:
+pi.dev is asked for the providers the agent's credentials authenticate, over the same proxy route as a model
+call, and the answer is saved as `models-store.json` in the agent's folder, FastAgent's own file and part of
+the agent's definition (commit it and it ships with a deploy). The button spins while it runs and is pressed
+once at a time; a line under the search says how many models arrived, or none, and a failure shows
+FastAgent's reason verbatim (which provider, a timeout after 15 seconds, `PI_OFFLINE`) with the list left as it
+was. The answer belongs to the agent that asked and to the picker opening it: reopening the picker, or leaving
+the agent, drops a late one. A model it adds can be chosen at once, because choosing rebuilds the agent's runtime
+from the file.
 The model on a historical conversation can differ from the agent's default.
 
 Settings open from the App menu's **Settings…** (`⌘,`) or the Settings row at the foot of the

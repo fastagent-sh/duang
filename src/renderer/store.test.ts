@@ -42,6 +42,7 @@ function harness() {
     revealAgent: async () => {},
     revealRegistry: async () => {},
     listModels: async () => ({ specs: ["provider/model"] }),
+    refreshModels: async () => ({ specs: ["provider/model"] }),
     providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
     getSettings: async () => ({ network: { mode: "automatic" }, route: { source: "system" } }),
     setNetwork: async () => ({ source: "system" }),
@@ -664,6 +665,70 @@ test("the picker rereads models on every open, and a stale answer never lands", 
   slow.resolve({ specs: ["provider/stale"] });
   await pending;
   assert.deepEqual(store.getSnapshot().models?.specs, ["provider/current"]);
+  store.dispose();
+});
+
+test("refreshing models reports what arrived, keeps the list on failure, and answers only the agent and picker that asked", async () => {
+  const { api, store } = harness();
+  const asked: string[] = [];
+  api.listModels = async () => ({ specs: ["provider/old"] });
+  api.refreshModels = async (agentId) => {
+    asked.push(agentId);
+    return { specs: ["provider/old", "provider/new", "provider/newer"] };
+  };
+  await store.load();
+  await store.loadModels();
+
+  await store.refreshModels();
+  assert.deepEqual(asked, [store.getSnapshot().agentId], "the open agent's own catalog is what is refreshed");
+  assert.deepEqual(store.getSnapshot().models?.specs, ["provider/old", "provider/new", "provider/newer"]);
+  assert.deepEqual(store.getSnapshot().modelsRefresh, { status: "done", added: 2 }, "the person is told what changed");
+
+  api.refreshModels = async () => ({ specs: ["provider/old", "provider/new", "provider/newer"] });
+  await store.refreshModels();
+  assert.deepEqual(store.getSnapshot().modelsRefresh, { status: "done", added: 0 }, "nothing new is an answer too");
+
+  // A failed refresh leaves the models that are there runnable, and says why in FastAgent's own words.
+  api.refreshModels = async () => {
+    throw new Error("Error invoking remote method 'models:refresh': Error: could not refresh the model catalog: anthropic: 401");
+  };
+  await store.refreshModels();
+  assert.deepEqual(store.getSnapshot().modelsRefresh, {
+    status: "failed",
+    error: "could not refresh the model catalog: anthropic: 401",
+  });
+  assert.equal(store.getSnapshot().models?.specs.length, 3, "a failed refresh does not empty or stale the list");
+
+  // One at a time: a second press while one runs is not a second request.
+  const slow = deferred<{ specs: string[] }>();
+  let calls = 0;
+  api.refreshModels = () => (calls++, slow.promise);
+  const first = store.refreshModels();
+  void store.refreshModels(); // not awaited: without the guard it would wait on `slow` forever
+  assert.equal(calls, 1, "pressing again while the refresh runs does not start another");
+  assert.deepEqual(store.getSnapshot().modelsRefresh, { status: "running" });
+  slow.resolve({ specs: ["provider/old"] });
+  await first;
+
+  // The picker reopened meanwhile reads the list itself; the older answer must not overwrite it.
+  const late = deferred<{ specs: string[] }>();
+  api.refreshModels = () => late.promise;
+  const pending = store.refreshModels();
+  api.listModels = async () => ({ specs: ["provider/current"] });
+  await store.loadModels();
+  late.resolve({ specs: ["provider/stale"] });
+  await pending;
+  assert.deepEqual(store.getSnapshot().models?.specs, ["provider/current"]);
+  assert.equal(store.getSnapshot().modelsRefresh, undefined, "and a superseded refresh leaves no 'running' behind");
+
+  // An answer for an agent the person has left belongs to that agent, not the one now open.
+  const away = deferred<{ specs: string[] }>();
+  api.refreshModels = () => away.promise;
+  const gone = store.refreshModels();
+  await store.selectAgent("b");
+  away.resolve({ specs: ["provider/from-a"] });
+  await gone;
+  assert.deepEqual(store.getSnapshot().models?.specs, ["provider/current"], "agent A's list is not agent B's");
   store.dispose();
 });
 

@@ -1,6 +1,6 @@
 /** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, CaretDown, Check, MagnifyingGlass, Microphone, Paperclip, Stop } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Microphone, Paperclip, Stop } from "@phosphor-icons/react";
 import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
@@ -90,7 +90,7 @@ function ModelPicker({
   /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
 }) {
-  const { models, modelsError: error } = view;
+  const { models, modelsError: error, modelsRefresh: refresh } = view;
   const onRetry = () => void store.loadModels();
   const [filter, setFilter] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
@@ -180,7 +180,30 @@ function ModelPicker({
               placeholder="Search models"
               className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted"
             />
+            <Button
+              kind="ghost"
+              size={28}
+              aria-label="Refresh models"
+              title="Check for newly released models. They are saved in models-store.json in this agent's folder."
+              disabled={refresh?.status === "running" && "Checking for new models…"}
+              onClick={() => void store.refreshModels()}
+              icon={<ArrowClockwise size={15} className={refresh?.status === "running" ? "animate-spin motion-reduce:animate-none" : ""} />}
+            />
           </div>
+          {refresh && (
+            <p
+              role={refresh.status === "failed" ? "alert" : "status"}
+              className={`px-4 pb-2 text-[12px] leading-snug break-words ${refresh.status === "failed" ? "text-danger" : "text-muted"}`}
+            >
+              {refresh.status === "running"
+                ? "Checking pi.dev for new models…"
+                : refresh.status === "failed"
+                  ? refresh.error
+                  : refresh.added === 0
+                    ? "No new models."
+                    : `${refresh.added} new model${refresh.added === 1 ? "" : "s"}.`}
+            </p>
+          )}
           <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1.5">
             {!models && (
               <p role="status" className="p-2.5 text-[13px] text-muted">

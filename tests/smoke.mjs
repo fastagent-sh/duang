@@ -776,6 +776,23 @@ if (!process.versions.electron) {
         input.dispatchEvent(new Event('input', { bubbles: true }));
       })()`);
       await until("document.querySelector('dialog').innerText.includes('Nothing matches')", "no filter matches");
+
+      // A refresh asks pi.dev, which a test must never reach: under PI_OFFLINE (set for this one press; the
+      // app shares this process) FastAgent refuses it by name. The person sees that, in its own words, and the
+      // list and the button stay usable.
+      process.env.PI_OFFLINE = "1";
+      await evaluate(`document.querySelector('dialog button[aria-label="Refresh models"]').click()`);
+      await until(
+        "document.querySelector('dialog [role=alert]')?.innerText.includes('PI_OFFLINE is set')",
+        "the refresh failure, in FastAgent's words",
+      );
+      delete process.env.PI_OFFLINE;
+      assert.ok(await evaluate("document.querySelector('dialog input') !== null"), "a failed refresh keeps the list");
+      assert.notEqual(
+        await evaluate(`document.querySelector('dialog button[aria-label="Refresh models"]').getAttribute('aria-disabled')`),
+        "true",
+        "and the button can be pressed again",
+      );
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "picker closes again");

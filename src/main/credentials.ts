@@ -5,7 +5,7 @@
  */
 import { join } from "node:path";
 import { app } from "electron";
-import { availableModelsFromDir } from "@fastagent-sh/fastagent/pi";
+import { availableModelsFromDir, refreshModelCatalog } from "@fastagent-sh/fastagent/pi";
 
 export const authPath = join(app.getPath("userData"), "auth.json");
 
@@ -14,17 +14,31 @@ export interface Models {
   specs: string[];
 }
 
+/** The credential file every read here goes through. */
+const credentials = {
+  authPath,
+  // A corrupt or unreadable file must be an error here, not an empty list.
+  warn(message: string): never {
+    throw new Error(message);
+  },
+};
+
 /**
  * The agent's own list — built-ins plus its `models.json` — read through the file its runtime uses.
  * Configuration, not a network health check: OAuth refresh and provider errors are left to execution.
  */
 export async function modelsFor(dir: string): Promise<Models> {
-  const specs = await availableModelsFromDir(dir, {
-    authPath,
-    // A corrupt or unreadable file must be an error here, not an empty list.
-    warn(message) {
-      throw new Error(message);
-    },
-  });
-  return { specs };
+  return { specs: await availableModelsFromDir(dir, credentials) };
+}
+
+/**
+ * Asks pi.dev for models released after the bundled catalog, for the providers this agent's credentials
+ * authenticate, and saves the answer as `models-store.json` in the agent's folder (FastAgent's own
+ * file: it is part of the agent's definition). Only a person asking does this: nothing refreshes on
+ * its own. It rejects, naming each provider that failed, on an error, after 15 seconds, or under
+ * `PI_OFFLINE`; the old list stays valid.
+ */
+export async function refreshModels(dir: string): Promise<Models> {
+  await refreshModelCatalog(dir, credentials);
+  return modelsFor(dir);
 }
