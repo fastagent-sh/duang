@@ -1224,8 +1224,9 @@ if (!process.versions.electron) {
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
 
-      // The agent takes the whole header when its conversation has the same name; otherwise it
-      // leaves room for the topic. Both cases retain the full agent name as a tooltip.
+      // The header names the agent and, under it, where the agent lives: a long name stays inside the header
+      // with the whole of it as a tooltip, and the folder is a button that opens it. The conversation's title
+      // is not there: renaming the conversation changes the list, not the header.
       const longName = "An agent with a deliberately long descriptive name for this workspace";
       await evaluate(`document.querySelector('button[aria-label="Smoke"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
       await until("document.querySelector('aside input[aria-label=\"Agent name\"]')", "agent rename opens");
@@ -1238,34 +1239,34 @@ if (!process.versions.electron) {
       const headerName = `(() => {
         const line = document.querySelector('main > header .drag');
         const name = line.firstElementChild;
-        const topic = line.children[1];
+        const folder = document.querySelector('main > header button[title^="/"]');
         return {
           width: name.getBoundingClientRect().width,
           available: line.clientWidth,
           title: name.title,
           lines: line.childElementCount,
-          stacked: topic ? topic.getBoundingClientRect().top >= name.getBoundingClientRect().bottom - 1 : undefined,
+          folder: folder?.title,
+          text: document.querySelector('main > header').innerText,
         };
       })()`;
       await until(`document.querySelector('main > header .drag > div')?.textContent === ${JSON.stringify(longName)}`, "renamed agent in header");
-      const withTopic = await evaluate(headerName);
-      assert.equal(withTopic.lines, 2, "the name and, under it, the topic");
-      assert.equal(withTopic.stacked, true, "the topic is its own line, not beside the name");
-      assert.ok(withTopic.width <= withTopic.available + 1, "the name stays inside the header");
-      assert.ok(withTopic.title.startsWith(`${longName}\n/`), "hovering the name says where the agent lives");
+      const named = await evaluate(headerName);
+      assert.equal(named.lines, 1, "the name alone in the drag handle");
+      assert.ok(named.width <= named.available + 1, "the name stays inside the header");
+      assert.equal(named.title, longName, "with the whole of it as a tooltip");
+      assert.ok(named.folder?.startsWith("/"), "and the folder under it, a button that opens it");
       await showConversations();
       await evaluate(`document.querySelector('#conversations button[aria-current="page"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
       await until("document.querySelector('#conversations input[aria-label=\"Conversation name\"]')", "conversation rename opens");
+      const topic = "A topic that the header must not print";
       await evaluate(`(() => {
         const input = document.querySelector('#conversations input[aria-label="Conversation name"]');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(longName)});
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(topic)});
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
-      await until(`document.querySelector('main > header .drag')?.childElementCount === 1`, "matching names share the header");
-      const alone = await evaluate(headerName);
-      assert.ok(alone.width <= alone.available + 1, "the agent name stays inside the header");
-      assert.ok(alone.title.startsWith(`${longName}\n/`), "and still says where the agent lives");
+      await until(`document.querySelector('#conversations')?.innerText.includes(${JSON.stringify(topic)})`, "the conversation is renamed in the list");
+      assert.ok(!(await evaluate(headerName)).text.includes(topic), "and the header does not print its title");
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);

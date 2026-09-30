@@ -27,7 +27,7 @@ drafted work stays attached to its originating agent and conversation when navig
 
 Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
-has Reveal in Finder, and the header names the agent's folder on hover. Removal deletes
+has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
 The picker lists the models the open agent can run: pi's built-ins, the agent's own

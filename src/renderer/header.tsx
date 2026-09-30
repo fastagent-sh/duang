@@ -2,6 +2,7 @@
 import { Fragment } from "react";
 import { ListBullets } from "@phosphor-icons/react";
 import type { ProviderUsage } from "../preload/index.ts";
+import { location } from "./paths.ts";
 import { pace, paceLabel, resetLabel, tokens } from "./usage.ts";
 import { ago } from "./sessions.ts";
 import { Avatar, Badge, Button } from "./ui.tsx";
@@ -133,23 +134,22 @@ export function UsageMeter({ plan, context, now }: Usage) {
 }
 
 /**
- * What you are looking at, floating over it: the conversation, the workspace it runs in, and what is
- * left of the plan and the context, beside the one action on it. It hovers rather than sits in a bar
+ * What you are looking at, floating over it: the agent, the workspace it runs in, and how full the
+ * context is, beside the one action on it. It hovers rather than sits in a bar
  * because the transcript is the page, and a full-width bar would cut it in two. Translucent, so text
  * passing underneath reads as scrolled away rather than deleted.
  */
 export function ConversationHeader({
   agent,
-  title,
   dir,
   working,
   context,
   plan,
   queued,
   list,
+  onReveal,
 }: {
   agent: string;
-  title: string;
   dir?: string;
   working: boolean;
   context?: { used: number; window: number };
@@ -157,6 +157,7 @@ export function ConversationHeader({
   queued?: number;
   /** The button that shows and hides this agent's conversations; absent while it has none to list. */
   list?: { open: boolean; unseen: number };
+  onReveal: () => void;
 }) {
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
@@ -170,18 +171,23 @@ export function ConversationHeader({
           {/* The same avatar as in the roster: whose work this is should not need reading. */}
           <Avatar name={agent} size={30} working={working} />
           <div className="min-w-0 flex-1">
-            {/* The two lines double as the window's drag handle, which the frameless title bar needs. The name says
-                where the agent lives on hover: the folder is the agent's identity, and the roster's menu opens it. */}
+            {/* The name doubles as the window's drag handle, which the frameless title bar needs. */}
             <div className="pointer-events-auto min-w-0 drag">
-              <div className="truncate font-prose font-semibold" title={dir ? `${agent}\n${dir}` : agent}>
+              <div className="truncate font-prose font-semibold" title={agent}>
                 {agent}
               </div>
-              {title !== agent && (
-                <div className="truncate font-prose text-[12px] text-muted" title={title}>
-                  {title}
-                </div>
-              )}
             </div>
+            {/* Where the agent lives, not what this conversation is called: an agent is a contact, and a
+                person talking to one is not asked to think about sessions. A click opens the folder. */}
+            {dir && (
+              <button
+                onClick={onReveal}
+                title={dir}
+                className="pointer-events-auto block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
+              >
+                {location(dir)}
+              </button>
+            )}
           </div>
           {working && <Badge tone="accent" pulse>working</Badge>}
           <UsageMeter plan={plan} context={context} />

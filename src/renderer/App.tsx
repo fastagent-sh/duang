@@ -173,7 +173,6 @@ export default function App() {
             {agent && (
               <ConversationHeader
                 agent={agent.name}
-                title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
                 dir={agent.dir}
                 working={!!view.running[agent.id]?.length}
                 context={
@@ -188,6 +187,7 @@ export default function App() {
                     ? { open: listOpen, unseen: Object.keys(view.unseen[agent.id] ?? {}).length }
                     : undefined
                 }
+                onReveal={() => void store.reveal()}
               />
             )}
             {agent && agentState === "ready" && (

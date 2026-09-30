@@ -106,10 +106,10 @@ feels alive — beside three lines of text. The first is the agent's name, with 
 row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
 two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
 unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
-row. The directory is in the tooltip of the row and of the agent's name in the header, and the row's
-menu has **Reveal in Finder**; it is not printed in the header, since a path is not what a person reading a
-conversation needs, only what they need to find its files. The header's two lines are the agent's
-name and, under it, the conversation's title in 12px muted; when the two names match there is one line.
+row. The header's two lines are the agent's name and, under it, where the agent lives (a click opens
+the folder, as does **Reveal in Finder** in the row's menu). The conversation's title is not in the header:
+an agent is a contact, a person talking to one is not asked to think about sessions, and the path at
+least says where the work is. The titles are in the conversation list.
 
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
