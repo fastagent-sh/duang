@@ -805,6 +805,19 @@ if (!process.versions.electron) {
         "document.activeElement.closest('aside [aria-label=Agents]') !== null",
         "Tab enters the roster from outside it",
       );
+      // The list clips what sticks out of it, and a focus ring sticks out by its width plus its offset: the
+      // first and last rows keep their ring only if the list pads by at least that, top and bottom.
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const list = document.querySelector('aside [aria-label=Agents]');
+          const ring = getComputedStyle(document.activeElement);
+          const reach = parseFloat(ring.outlineWidth) + parseFloat(ring.outlineOffset);
+          const pad = getComputedStyle(list);
+          return [reach > 0, parseFloat(pad.paddingTop) >= reach, parseFloat(pad.paddingBottom) >= reach];
+        })()`),
+        [true, true, true],
+        "the roster leaves room for its focus ring above the first row and below the last",
+      );
 
       // Keys go one at a time: two in the same tick would be read against state React has not
       // re-rendered yet, which is not how anyone types.
