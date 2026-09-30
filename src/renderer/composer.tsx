@@ -14,14 +14,22 @@ const levelName = (level: string) => LEVELS[level] ?? level;
  * How hard the conversation's model thinks: a row of stops on a track, a native radio group, so the
  * arrow keys and the announcement are the platform's. The runtime lists what the model supports.
  */
+/**
+ * How long the arrow keys must rest before the level they stopped on is written. Short enough that the
+ * chip follows a stop you meant, long enough to span the presses of one run across the track (macOS
+ * repeats a held key every ~30ms after 375ms). Not measured against real use: adjust it by feel.
+ */
+const KEY_PAUSE_MS = 150;
+
 /** `onPick` answers whether the runtime took the level. */
 function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => Promise<boolean> }) {
-  // Arrowing through the group moves the choice and fires `onChange` at every stop, and each one would be
-  // written into the conversation's record. The track shows the choice at once and commits it when the
-  // choosing pauses, or when the picker closes.
+  // A click is one choice and is written at once. Arrowing through the group fires `onChange` at every
+  // stop, and each write is a durable entry in the conversation's record, so the keys wait for a pause
+  // (or for the picker to close). The track shows the choice either way, without waiting.
   const [chosen, setChosen] = useState<string>();
   const pending = useRef<string>(undefined);
   const timer = useRef(0);
+  const byKey = useRef(false);
   const commit = useRef(onPick);
   commit.current = onPick;
   const flush = () => {
@@ -38,7 +46,8 @@ function Effort({ levels, level, onPick }: { levels: string[]; level: string; on
     setChosen(name);
     pending.current = name;
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(flush, 300);
+    if (byKey.current) timer.current = window.setTimeout(flush, KEY_PAUSE_MS);
+    else flush();
   };
   const shown = chosen ?? level;
   const index = Math.max(0, levels.indexOf(shown));
@@ -61,6 +70,8 @@ function Effort({ levels, level, onPick }: { levels: string[]; level: string; on
             type="radio"
             name="effort"
             checked={name === shown}
+            onPointerDown={() => (byKey.current = false)}
+            onKeyDown={() => (byKey.current = true)}
             onChange={() => pick(name)}
             aria-label={levelName(name)}
             title={levelName(name)}
