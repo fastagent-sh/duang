@@ -180,7 +180,8 @@ the chrome floats. The transcript starts below the header, then slides underneat
 a soft lower shadow keeps the two readable without stopping the page.
 
 Its right edge is how full the conversation's context is, in muted 11px text: `context ▬ 12%` with a 40px
-bar, drawn once it is above 0%. It is the one number about this conversation that moves as it goes.
+bar, and `–` while the runtime has none to report (a new conversation). It is the one number about
+this conversation that moves as it goes, and it is always there, so the table below has somewhere to hang.
 The plan's windows belong to the account and change slowly, so they are not in the edge: hovering or
 focusing it opens a small table of each window's share and reset, the pace of a day-or-longer window
 as a green `▼` or red `▲` percentage, the context as `45% of 1.0M`, and which plan and when it was

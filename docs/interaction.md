@@ -71,9 +71,9 @@ bypass a route the person chose. A settings file that cannot be read is reported
 the page, with Reveal and Retry, and is never shown as or overwritten with the defaults; the
 network follows the system proxy until it is fixed.
 
-The conversation header's right edge is how full the conversation's context is, once it is above 0%
-(`context ▬ 12%`), and only that: it is about this conversation and moves as it goes. On hover or focus
-a table adds, for a Claude or ChatGPT subscription login of the conversation's own provider, each of
+The conversation header's right edge is how full the conversation's context is (`context ▬ 12%`), and
+only that: it is about this conversation and moves as it goes. It is always there: a new conversation
+has no context to report until its first answer, and says `–`. On hover or focus a table adds, for a Claude or ChatGPT subscription login of the conversation's own provider, each of
 the plan's windows: its share used, its reset time, and for windows of a day or more the pace against
 the clock (`▼` under, `▲` over), then the context as `45% of 1.0M`. An API key has no plan windows, so
 the table is the context alone. Opening a conversation, changing its provider and a run starting or ending ask again; main

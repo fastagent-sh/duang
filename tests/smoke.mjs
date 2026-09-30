@@ -587,6 +587,20 @@ if (!process.versions.electron) {
       assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%[\s\S]*7d[\s\S]*18%/, "the hover table lists every window");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
 
+      // The edge is there before there is a context to report: a new conversation says `–`, and the plan's
+      // windows are still one hover away (the table does not hang off the context reading).
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
+      await until("document.body.innerText.includes('What should we work on?')", "a new conversation");
+      await until(
+        "/5h[\\s\\S]*4%[\\s\\S]*7d[\\s\\S]*18%/.test(document.querySelector('header [aria-label=Usage]')?.textContent ?? '')",
+        "the plan's windows are one hover away in a conversation with no context yet",
+      );
+      assert.match(await evaluate("document.querySelector('header').innerText"), /context\s*–/, "and the context says it is not known yet");
+      // Back to the conversation the rest of this run goes on in.
+      await showConversations();
+      await evaluate(`[...document.querySelectorAll('#conversations button')].find((b) => b.textContent.includes('Use the configured model')).click()`);
+      await until("document.querySelector('main').innerText.includes('Anthropic smoke answer')", "back in the conversation with its history");
+
       // Change only the agent default, then reopen Anthropic history through a fresh renderer.
       // The read issued alongside the change must wait for the new runtime instead of reporting a
       // broken agent. Whether it lands inside the window is main's to schedule, so assert only the

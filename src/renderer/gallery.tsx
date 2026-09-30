@@ -88,6 +88,7 @@ export default function Gallery() {
                 <div className="space-y-2">
                   <UsageMeter plan={plan(18)} context={context} now={now} />
                   <UsageMeter plan={plan(88)} context={{ used: 880_000, window: 1_000_000 }} now={now} />
+                  <UsageMeter plan={plan(18)} now={now} />
                 </div>
                 <div className="popover">
                   <UsageDetail plan={plan(88)} context={context} now={now} />
