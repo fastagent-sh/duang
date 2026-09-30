@@ -193,12 +193,11 @@ and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provi
 anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
 system face rather than mono, at 14px), and the effort. Effort is a track with a stop per
 level; the runtime's list is the stops, and it is per conversation, so a conversation that has not begun
-says so. The track shows the level the runtime reports and nothing ahead of it (a choice reaches the
-runtime and comes back as `state_changed` in a few milliseconds, measured at 2 to 3). Choosing writes a
-durable entry into the conversation's record, so choosing is explicit: the stops are buttons in a
-`radiogroup`, the arrow keys move the focus along them, and Enter, Space or a click choose. A native radio
-group chooses at every stop the arrows cross, which is what this replaced, and it needed a timer, an
-optimistic state and a reconciliation to undo. The list stops at 60 rows and says how many more there are, since a
+says so. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
+and comes back as `state_changed`. Choosing writes a durable entry into the conversation's record, so
+choosing is explicit: the stops are buttons in a `radiogroup`, the arrow keys move the focus along them,
+and Enter, Space or a click choose (a native radio group would choose at every stop the arrows cross).
+The list stops at 60 rows and says how many more there are, since a
 provider past the limit would not show even its heading. FastAgent gives a
 model's friendly name to nobody, and guessing one from the id would name a model the runtime does not,
 so the list shows ids. What the picker leaves out: the credential file's path (nothing the person can
@@ -208,7 +207,7 @@ act on) and a Manage providers link (Settings is in the sidebar; the empty picke
 **The header is two parts.** What you are looking at (avatar, agent and conversation, directory,
 `working`, the plan and context meter, `queued`) is one pill, and the one action on it, the
 conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
-and menu. The header runs the pane's width: it is chrome, and held to the reading column it read as a
+and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
 card in the middle of a page. The composer does not: it sits in the reading column, its attach and
 voice/send discs on the text's edges, because the eye goes from the last line down to the field and
 a field wider than the text made that a jump. The disc is alone because nothing else on a
@@ -314,7 +313,7 @@ looking alike.
 --font-avatar: "Avatar", "Prose", "PingFang SC", sans-serif;
 ```
 
-Controls, navigation and the trace use the system face, paired with the system's own CJK face. The stack leads with `system-ui`, the only name Chromium maps to SF: `-apple-system` is Safari's spelling and "SF Pro Text" is not handed out by name, and a stack that led with them fell through to PingFang SC and drew the chrome's Latin in it, hyphens at 0.6em where SF's are 0.43. This is
+Controls, navigation and the trace use the system face, paired with the system's own CJK face. The stack leads with `system-ui`, the only name Chromium maps to SF: `-apple-system` is Safari's spelling and "SF Pro Text" is not handed out by name, so a stack that leads with them falls through to PingFang SC and draws the chrome's Latin in it, hyphens at 0.6em where SF's are 0.43. This is
 a native window with a hidden title bar, and a web font in its chrome reads as a page rather than an
 app. The conversation is the exception (below). Do not force CJK into the monospace
 family; let it fall back to PingFang SC inside code contexts rather than deforming it. Maple Mono is
@@ -465,8 +464,7 @@ change it?* A bubble is a good anchor precisely because it is small and visually
 840px wide, which paragraphs, lists, code, tables and the composer share, so every edge lines up
 and the eye goes straight down from the text to the field. That is a line of about 56 Chinese
 characters at 15px. At 920 a line runs to 61 and the eye loses its way back to the next line; 768
-(51) was the width until it read as narrow. The composer was 768 before the transcript was, and the
-header is the one piece that does not take the column. The transcript reserves its scrollbar track
+(51) reads as narrow. The header is the one piece that does not take the column. The transcript reserves its scrollbar track
 on both sides so its column centres where the composer's does. Spacing groups rather than separates, on the §7 scale: two paragraphs sit 12 apart, but a
 paragraph and the list it introduces only 4; a heading stands 24 below what came before and 8 above
 what it introduces; code blocks, tables and quotes take 16, a rule 24. One gap for every pair, which

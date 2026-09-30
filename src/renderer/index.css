@@ -48,8 +48,8 @@
   /* The system face, paired with the system's own CJK face: this is a native window with a hidden
      title bar, and a web font beside it reads as a page rather than an app. */
   /* `system-ui` first: it is what Chromium maps to SF. `-apple-system` is Safari's spelling and "SF Pro Text"
-     is not a name the system will hand out, so a stack that led with them fell through both to PingFang SC
-     and drew every Latin letter of the chrome in it, with its wide hyphen and punctuation. */
+     is not a name the system will hand out, so a stack that leads with them falls through both to PingFang SC
+     and draws every Latin letter of the chrome in it, with its wide hyphen and punctuation. */
   --font-sans: system-ui, "PingFang SC", sans-serif;
   /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
      what terminal output actually contains. The rest are fallbacks for machines without it. */
@@ -315,7 +315,7 @@ pre,
 details::details-content {
   block-size: 0;
   /* Only the height is clipped, for the growing: a tool card reaches 10px past its column on each side,
-     and `overflow: hidden` cut its ring and corners off at the column's edge. */
+     and `overflow: hidden` would cut its ring and corners off at the column's edge. */
   overflow-x: visible;
   overflow-y: clip;
   transition:
@@ -404,8 +404,8 @@ summary:focus-visible,
 /* The header still floats over the transcript; its lower edge, not a hard strip across the page,
    separates the moving text from the controls. */
 /* The drop shadows below go in `--tw-shadow`, not `box-shadow`: the elements carry `ring-1`, which is a
-   box-shadow too, and a rule that set `box-shadow` itself replaced it. In light mode that took the hairline
-   off the composer, its discs and the header, and took the focus ring off the field. */
+   box-shadow too, and a rule that set `box-shadow` itself would replace it, taking the hairline off the
+   composer, its discs and the header and the focus ring off the field. */
 .conversation-header {
   --tw-shadow: 0 12px 24px -18px oklch(0 0 0 / 70%);
 }

@@ -285,8 +285,8 @@ if (!process.versions.electron) {
         !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
         "the scaffold offer must not be contradicted by the runtime's `run fastagent init` error",
       );
-      // The chrome's Latin is SF, not PingFang's: a stack that led with names Chromium does not resolve
-      // fell through to PingFang, whose hyphen is 0.6em wide against SF's 0.43.
+      // The chrome's Latin is SF, not PingFang's: a stack that leads with names Chromium does not resolve
+      // falls through to PingFang, whose hyphen is 0.6em wide against SF's 0.43.
       assert.ok(
         await evaluate(`(() => {
           const ruler = document.createElement('canvas').getContext('2d');
@@ -347,8 +347,8 @@ if (!process.versions.electron) {
         "visible",
         "a disclosure clips its height, not its width",
       );
-      // The composer's field and discs and the header are drawn with a `ring-1` hairline; their own drop
-      // shadows once replaced it (they set `box-shadow`, and the ring is one), leaving white on white in
+      // The composer's field and discs and the header are drawn with a `ring-1` hairline; a drop shadow of
+      // their own that set `box-shadow` (the ring is one) would replace it, leaving white on white in
       // light mode.
       assert.deepEqual(
         await evaluate(`['.composer-card', '.conversation-header'].map((selector) => /0px 0px 0px 1px/.test(getComputedStyle(document.querySelector(selector)).boxShadow))`),
