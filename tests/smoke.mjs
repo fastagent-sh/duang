@@ -124,7 +124,7 @@ if (!process.versions.electron) {
         assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
         anthropicRequests++;
         const events = [
-          { type: "message_start", message: { id: "msg_synthetic", type: "message", role: "assistant", content: [], model: "claude-sonnet-4-5", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } },
+          { type: "message_start", message: { id: "msg_synthetic", type: "message", role: "assistant", content: [], model: "claude-sonnet-4-5", stop_reason: null, usage: { input_tokens: 100000, output_tokens: 0 } } },
           { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
           { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Anthropic smoke answer" } },
           { type: "content_block_stop", index: 0 },
@@ -578,10 +578,28 @@ if (!process.versions.electron) {
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "Escape closes the picker");
-      await until("/7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's fullest plan window");
-      assert.ok(!(await evaluate("document.querySelector('header').innerText")).includes("5h"), "the other windows wait for a hover");
-      assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%/, "the hover table lists every window");
+      // The header's edge is the context, always: whichever of the plan's windows or the context is
+      // fuller would take the slot, and its label would change with it: the plan's 7d is at 18% here, above the
+      // context's 10%, and must still not be what the slot says. The plan waits in the hover table.
+      await until("/context[\\s\\S]*10%/.test(document.querySelector('header').innerText)", "the header shows the conversation's context");
+      const header = await evaluate("document.querySelector('header').innerText");
+      assert.ok(!header.includes("7d") && !header.includes("5h"), "the plan's windows wait for a hover");
+      assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%[\s\S]*7d[\s\S]*18%/, "the hover table lists every window");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
+
+      // The edge is there before there is a context to report: a new conversation says `–`, and the plan's
+      // windows are still one hover away (the table does not hang off the context reading).
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
+      await until("document.body.innerText.includes('What should we work on?')", "a new conversation");
+      await until(
+        "/5h[\\s\\S]*4%[\\s\\S]*7d[\\s\\S]*18%/.test(document.querySelector('header [aria-label=Usage]')?.textContent ?? '')",
+        "the plan's windows are one hover away in a conversation with no context yet",
+      );
+      assert.match(await evaluate("document.querySelector('header').innerText"), /context\s*–/, "and the context says it is not known yet");
+      // Back to the conversation the rest of this run goes on in.
+      await showConversations();
+      await evaluate(`[...document.querySelectorAll('#conversations button')].find((b) => b.textContent.includes('Use the configured model')).click()`);
+      await until("document.querySelector('main').innerText.includes('Anthropic smoke answer')", "back in the conversation with its history");
 
       // Change only the agent default, then reopen Anthropic history through a fresh renderer.
       // The read issued alongside the change must wait for the new runtime instead of reporting a

@@ -71,14 +71,15 @@ bypass a route the person chose. A settings file that cannot be read is reported
 the page, with Reveal and Retry, and is never shown as or overwritten with the defaults; the
 network follows the system proxy until it is fixed.
 
-The conversation header shows what is left of the plan paying for it: for a Claude or ChatGPT
-subscription login of the conversation's own provider, the fullest of its windows and the context,
-and on hover or focus each window's share used, its reset time, and for windows of a day or more the
-pace against the clock (`▼` under, `▲` over). An API key has no plan windows, so only the context
-shows. Opening a conversation, changing its provider and a run starting or ending ask again; main
+The conversation header's right edge is how full the conversation's context is (`context ▬ 12%`), and
+only that: it is about this conversation and moves as it goes. It is always there: a new conversation
+has no context to report until its first answer, and says `–`. On hover or focus a table adds, for a Claude or ChatGPT subscription login of the conversation's own provider, each of
+the plan's windows: its share used, its reset time, and for windows of a day or more the pace against
+the clock (`▼` under, `▲` over), then the context as `45% of 1.0M`. An API key has no plan windows, so
+the table is the context alone. Opening a conversation, changing its provider and a run starting or ending ask again; main
 answers from a three-minute cache, since Anthropic's route answers 429 when polled. A failed read
 shows no plan windows, never a stale percentage: the numbers are a glance, and a failure there is
-not something to act on. Context joins them as `45% of 1.0M` once FastAgent reports it
+not something to act on. The context is FastAgent's, once it reports it
 ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)).
 
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent

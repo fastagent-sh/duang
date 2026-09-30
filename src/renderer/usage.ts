@@ -31,10 +31,3 @@ export const paceLabel = (diff: number) => `${diff > 0 ? "▲" : "▼"}${Math.ab
 export function tokens(n: number): string {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`;
 }
-
-/** A share of some limit: one of the plan's windows, or the model's context. */
-export type Meter = { label: string; percent: number };
-
-/** The limit closest to running out, the one the header keeps showing; a tie keeps the first. */
-export const tightest = (meters: Meter[]): Meter | undefined =>
-  meters.reduce<Meter | undefined>((a, b) => (a && a.percent >= b.percent ? a : b), undefined);
