@@ -356,8 +356,6 @@ if (!process.versions.electron) {
         "the composer and the header keep their hairline",
       );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
-      // A fresh conversation has used none of its context: a meter reading 0% is noise, so there is none.
-      assert.equal(await evaluate("!!document.querySelector('header [aria-label=Usage]')"), false, "no usage meter at 0%");
       // The header floats over the transcript, as Telegram's does: text scrolls beneath it, the
       // transcript's own top padding starts the first turn below it, and it lets the wheel through.
       assert.ok(

@@ -110,9 +110,7 @@ export function UsageMeter({ plan, context, now }: Usage) {
     ...windows,
     ...(context ? [{ label: "context", percent: (context.used / context.window) * 100 }] : []),
   ]);
-  // A meter at 0% says nothing and sits at the header's most looked-at edge: it appears once there is
-  // something to read, and the table with it.
-  if (!shown || Math.round(shown.percent) === 0) return null;
+  if (!shown) return null;
   return (
     // Focusable so the table is reachable without a pointer; it is information, not a control.
     <div tabIndex={0} aria-label="Usage" className="group pointer-events-auto relative shrink-0 text-[11px] text-muted tabular-nums">
