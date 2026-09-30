@@ -68,8 +68,8 @@ snapshot of the agent definition; edits on the laptop do not silently change the
 Routine execution is not guaranteed by a suspended machine: a cron instant does not wake it. Start
 with a resident machine and show its cost. Consider an external clock only once it reliably wakes
 scheduled work and reports failure or skipped runs; a manual `POST /run` alone is not an external
-scheduler. FastAgent's routine API and deployment residency differ between the currently pinned
-revision and newer upstream; reconcile that contract before implementing hosting. See
+scheduler. FastAgent's routine API and deployment residency are the locked version's; check that
+contract before implementing hosting. See
 [architecture](docs/architecture.md#online-execution-and-routines).
 
 The desktop client and preset sharing are free. duang cloud is an optional paid host, not a
@@ -115,7 +115,7 @@ price threshold yet. Do not claim an online or shared flow has shipped based on 
 ## Run it
 
 ```bash
-npm ci          # needs a sibling ../fastagent already built at the pinned revision
+npm ci          # FastAgent is an exact version from npm
 npm run dev     # Electron + Vite; main/preload edits restart the app
 npm test        # registry, routing, selection, drafts, transcript and command regressions
 npm run test:smoke  # real Electron + IPC + FastAgent, with a fake model HTTP response
@@ -128,9 +128,8 @@ Anthropic requests through the real IPC path, so it spends model credits and nee
 It skips itself without `DUANG_LIVE=1`, isolates the registry and agent directory, and prints no
 credential values.
 
-The FastAgent dependency is `file:../fastagent` while both move together; it becomes a version
-range when duang ships a build. Fresh-checkout setup, the pinned revision, review and merge
-workflow: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+FastAgent is pinned to an exact published version. Setup, review and merge workflow:
+[CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
 Point *Add agent* at a FastAgent directory or a plain project. A plain project offers to create
 `fastagent/fastagent.config.ts` and `.gitignore` after confirmation; an existing `fastagent/`

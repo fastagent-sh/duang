@@ -10,6 +10,6 @@ updates:
       github-actions:
         patterns: ['*']
 
-# npm version-update automation is deferred while file:../fastagent needs a
-# separately checked-out/built repository. Review npm and FastAgent updates in
-# ordinary PRs; enable npm automation when that dependency is standalone.
+# npm version-update automation is not enabled. FastAgent is pinned to an exact
+# version and bumped with the change that consumes it; review other npm updates
+# in ordinary PRs.

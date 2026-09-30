@@ -7,19 +7,12 @@ A working implementation is not evidence that all of a milestone's user workflow
 
 ## Set up and verify locally
 
-Use Node 24 and npm. duang currently depends on `file:../fastagent`; a standalone duang checkout
-cannot build that dependency. CI uses sibling checkouts and pins FastAgent in
-[.github/fastagent-revision](.github/fastagent-revision), rather than following a moving branch.
-
-For fresh sibling checkouts:
+Use Node 24 and npm. FastAgent is an exact version from npm (`@fastagent-sh/fastagent` in
+`package.json` and the lockfile), so a standalone checkout is all there is to set up:
 
 ```bash
-git clone https://github.com/fastagent-sh/fastagent.git fastagent
 git clone https://github.com/fastagent-sh/duang.git duang
 cd duang
-read -r revision < .github/fastagent-revision
-git -C ../fastagent checkout --detach "$revision"
-(cd ../fastagent && npm ci && npm run build)
 npm ci
 npm test
 npm run build
@@ -27,9 +20,10 @@ npm run dev
 ```
 
 `npm run build` includes TypeScript checking and the Electron main/preload/renderer builds.
-Do not detach, reset or overwrite an existing sibling checkout containing someone else's work;
-use a separate checkout/worktree instead. A FastAgent API change must land upstream first, then
-update the pinned revision in the same duang PR that consumes it.
+duang does not follow a moving FastAgent branch or a local checkout of it: what CI runs is what
+you run. A FastAgent API change must be released upstream first, then the exact version is bumped
+in the same duang PR that consumes it (`npm install @fastagent-sh/fastagent@X.Y.Z --save-exact`),
+with `npm test`, `npm run build` and `npm run test:smoke` run against it.
 
 Verify locally before pushing. CI is confirmation, not the first debugging environment.
 
@@ -146,8 +140,8 @@ git fetch --prune origin
 - Actions are SHA-pinned. Default `GITHUB_TOKEN` permissions are read-only; the metadata-only
   labeler alone gets PR-write permission and must never check out or execute PR code.
 - Dependabot checks GitHub Actions weekly. npm/FastAgent version updates remain ordinary reviewed
-  PRs while the linked sibling dependency prevents a standalone updater/install workflow. Keep
-  `package.json`, the lockfile and the FastAgent pin consistent when applicable.
+  PRs; FastAgent is pinned to an exact version and bumped with the change that consumes it.
+  Keep `package.json` and the lockfile consistent.
 - Vulnerability alerts are enabled. Review alerts and fix dependencies manually as needed; do not
   assume automatic npm fixes or advisory/code scanning cover every dependency.
 - CodeQL is unavailable without this private repository's Advanced Security entitlement. CodeQL

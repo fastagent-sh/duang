@@ -9,7 +9,7 @@
 - [ ] `npm run build` (includes TypeScript checking)
 - [ ] Added or updated the smallest relevant regression check, or explained why none is needed
 
-<!-- Include actual results, the FastAgent revision used, and checks not run. -->
+<!-- Include actual results, the FastAgent version used, and checks not run. -->
 <!-- UI changes: include sanitized screenshots and keyboard/IME checks. -->
 <!-- Run/control changes: verify switching conversations, background runs and failure recovery. -->
 <!-- Distinguish mocked HTTP evidence from authorized real-provider/OAuth/proxy verification. -->
