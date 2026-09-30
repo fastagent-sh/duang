@@ -460,12 +460,13 @@ export function Composer({
               // The chip truncates a long spec, so the tooltip carries the whole name in both states.
               disabled={modelReason && model ? `${modelReason} (${model})` : modelReason}
               title={model ? `Model for this agent: ${model}` : "Model for this agent"}
-              className={`max-w-full ${!model && needsModel ? "text-warning" : ""}`}
+              // Tinted, so it reads as the button it is beside the field's own text.
+              className={`max-w-full bg-hover ${!model && needsModel ? "text-warning" : ""}`}
             >
               {model ? (
                 // The provider is quieter than the id but never dropped: `openai/` and `openai-codex/`
                 // offer the same ids and are paid for differently.
-                <span className="min-w-0 truncate text-[12px]">
+                <span className="min-w-0 truncate text-[13px]">
                   <span className="text-muted">{model.slice(0, model.indexOf("/") + 1)}</span>
                   <span className="text-text">{model.slice(model.indexOf("/") + 1)}</span>
                 </span>
@@ -473,7 +474,7 @@ export function Composer({
                 <span className="truncate">{needsModel ? "pick a model" : "reading model…"}</span>
               )}
               {thinking && thinking.levels.length > 1 && (
-                <span className="shrink-0 text-[12px] text-muted">{levelName(thinking.level)}</span>
+                <span className="shrink-0 text-[13px] text-muted">{levelName(thinking.level)}</span>
               )}
               <CaretDown size={12} className="shrink-0" />
             </Button>

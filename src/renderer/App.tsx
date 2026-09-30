@@ -151,6 +151,7 @@ export default function App() {
         }}
         onSettings={openSettings}
         onRename={(id, name) => void store.renameAgent(id, name)}
+        onReveal={(id) => void store.reveal(id)}
         onMenu={duang.menu}
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
@@ -187,7 +188,6 @@ export default function App() {
                     ? { open: listOpen, unseen: Object.keys(view.unseen[agent.id] ?? {}).length }
                     : undefined
                 }
-                onReveal={() => void store.reveal()}
               />
             )}
             {agent && agentState === "ready" && (

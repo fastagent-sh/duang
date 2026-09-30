@@ -969,10 +969,10 @@ export function createStore(api: DuangApi) {
         if (request === navigation) note(error);
       }
     },
-    async reveal() {
+    async reveal(agentId = view.agentId) {
       try {
-        // No selected agent means the list itself is what failed; show that file instead.
-        await (view.agentId ? api.revealAgent(view.agentId) : api.revealRegistry());
+        // No agent to name means the list itself is what failed; show that file instead.
+        await (agentId ? api.revealAgent(agentId) : api.revealRegistry());
       } catch (error) {
         note(error);
       }

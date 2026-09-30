@@ -106,8 +106,10 @@ feels alive — beside three lines of text. The first is the agent's name, with 
 row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
 two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
 unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
-row. The directory is in the row's tooltip and below the agent name and conversation title in the
-header. When those names match, the agent name uses the full header line and retains its tooltip.
+row. The directory is in the tooltip of the row and of the agent's name in the header, and the row's
+menu has **Reveal in Finder**; it is not printed in the header, since a path is not what a person reading a
+conversation needs, only what they need to find its files. The header's two lines are the agent's
+name and, under it, the conversation's title in 12px muted; when the two names match there is one line.
 
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
@@ -190,7 +192,8 @@ one glance to the next. Every window in a row would make the
 edge the densest text on screen for numbers read once in a while. No threshold colours: the
 percentage is the signal.
 
-**The model chip and its picker follow Codex's, on duang's terms.** The chip names the provider quietly
+**The model chip and its picker follow Codex's, on duang's terms.** The chip, 13px on a faint tint so it reads as the
+button it is beside the field's own text, names the provider quietly
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
 `openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
 anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
@@ -376,7 +379,7 @@ than a Latin one to read as emphasis.
 
 | Role | Size / line-height / weight |
 |---|---|
-| New conversation heading | 22 / normal / 500 |
+| New conversation heading (centred over the field) | 22 / normal / 500 |
 | Answer headings | 22 / 19 / 17 (h1–h3), 15 below / 1.4 / 600 |
 | Conversation prose, sent messages, composer | 15 / 1.7 / 400 |
 | Answer tables | 14 / 1.6 / 400, header 600 muted on a tinted band |

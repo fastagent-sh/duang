@@ -5,7 +5,6 @@ import type { ProviderUsage } from "../preload/index.ts";
 import { pace, paceLabel, resetLabel, tokens } from "./usage.ts";
 import { ago } from "./sessions.ts";
 import { Avatar, Badge, Button } from "./ui.tsx";
-import { location } from "./paths.ts";
 
 /** How full a limit is, as a 40px bar beside its percentage. */
 function Bar({ percent }: { percent: number }) {
@@ -148,7 +147,6 @@ export function ConversationHeader({
   plan,
   queued,
   list,
-  onReveal,
 }: {
   agent: string;
   title: string;
@@ -159,7 +157,6 @@ export function ConversationHeader({
   queued?: number;
   /** The button that shows and hides this agent's conversations; absent while it has none to list. */
   list?: { open: boolean; unseen: number };
-  onReveal: () => void;
 }) {
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
@@ -173,20 +170,18 @@ export function ConversationHeader({
           {/* The same avatar as in the roster: whose work this is should not need reading. */}
           <Avatar name={agent} size={30} working={working} />
           <div className="min-w-0 flex-1">
-            {/* The title doubles as the window's drag handle, which the frameless title bar needs. */}
-            <div className="pointer-events-auto flex min-w-0 items-baseline gap-1.5 drag">
-              <span className={`${title === agent ? "max-w-full" : "max-w-[35%]"} shrink-0 truncate font-prose font-semibold`} title={agent}>{agent}</span>
-              {title !== agent && <span className="min-w-0 truncate font-prose text-muted" title={title}>· {title}</span>}
+            {/* The two lines double as the window's drag handle, which the frameless title bar needs. The name says
+                where the agent lives on hover: the folder is the agent's identity, and the roster's menu opens it. */}
+            <div className="pointer-events-auto min-w-0 drag">
+              <div className="truncate font-prose font-semibold" title={dir ? `${agent}\n${dir}` : agent}>
+                {agent}
+              </div>
+              {title !== agent && (
+                <div className="truncate font-prose text-[12px] text-muted" title={title}>
+                  {title}
+                </div>
+              )}
             </div>
-            {dir && (
-              <button
-                onClick={onReveal}
-                title={dir}
-                className="pointer-events-auto block max-w-full truncate text-left text-[11px] text-muted hover:text-text"
-              >
-                {location(dir)}
-              </button>
-            )}
           </div>
           {working && <Badge tone="accent" pulse>working</Badge>}
           <UsageMeter plan={plan} context={context} />

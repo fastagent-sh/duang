@@ -1236,14 +1236,23 @@ if (!process.versions.electron) {
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
       const headerName = `(() => {
-        const line = document.querySelector('main > header .drag.flex');
+        const line = document.querySelector('main > header .drag');
         const name = line.firstElementChild;
-        return { width: name.getBoundingClientRect().width, available: line.clientWidth, title: name.title };
+        const topic = line.children[1];
+        return {
+          width: name.getBoundingClientRect().width,
+          available: line.clientWidth,
+          title: name.title,
+          lines: line.childElementCount,
+          stacked: topic ? topic.getBoundingClientRect().top >= name.getBoundingClientRect().bottom - 1 : undefined,
+        };
       })()`;
-      await until(`document.querySelector('main > header .drag.flex span')?.textContent === ${JSON.stringify(longName)}`, "renamed agent in header");
+      await until(`document.querySelector('main > header .drag > div')?.textContent === ${JSON.stringify(longName)}`, "renamed agent in header");
       const withTopic = await evaluate(headerName);
-      assert.ok(withTopic.width <= withTopic.available * 0.35 + 1, "the topic keeps its space");
-      assert.equal(withTopic.title, longName);
+      assert.equal(withTopic.lines, 2, "the name and, under it, the topic");
+      assert.equal(withTopic.stacked, true, "the topic is its own line, not beside the name");
+      assert.ok(withTopic.width <= withTopic.available + 1, "the name stays inside the header");
+      assert.ok(withTopic.title.startsWith(`${longName}\n/`), "hovering the name says where the agent lives");
       await showConversations();
       await evaluate(`document.querySelector('#conversations button[aria-current="page"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
       await until("document.querySelector('#conversations input[aria-label=\"Conversation name\"]')", "conversation rename opens");
@@ -1253,11 +1262,10 @@ if (!process.versions.electron) {
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
-      await until(`document.querySelector('main > header .drag.flex')?.childElementCount === 1`, "matching names share the header");
+      await until(`document.querySelector('main > header .drag')?.childElementCount === 1`, "matching names share the header");
       const alone = await evaluate(headerName);
-      assert.ok(alone.width > alone.available * 0.35 + 1, "the agent name uses the free width");
       assert.ok(alone.width <= alone.available + 1, "the agent name stays inside the header");
-      assert.equal(alone.title, longName);
+      assert.ok(alone.title.startsWith(`${longName}\n/`), "and still says where the agent lives");
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
