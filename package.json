@@ -5,6 +5,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
+    "postinstall": "node -e \"require('electron')\"",
     "dev": "electron-vite dev --watch",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
@@ -14,7 +15,7 @@
     "shots": "npm run build && node tests/shot.mjs"
   },
   "dependencies": {
-    "@fastagent-sh/fastagent": "file:../fastagent",
+    "@fastagent-sh/fastagent": "0.23.0",
     "@phosphor-icons/react": "^2.1.10",
     "react-shiki": "^0.11.1",
     "shiki": "^4.4.3",
@@ -35,6 +36,9 @@
     "vite": "^7.0.0"
   },
   "allowScripts": {
-    "electron@44.4.1": true
+    "esbuild": false,
+    "protobufjs": false,
+    "@google/genai": false,
+    "fsevents": false
   }
 }

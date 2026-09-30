@@ -26,29 +26,10 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: duang
     steps:
       - name: Check out duang
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          path: duang
-          persist-credentials: false
-
-      - name: Read the pinned FastAgent revision
-        id: fastagent
-        run: |
-          read -r revision < .github/fastagent-revision
-          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected a full FastAgent commit SHA" >&2; exit 1; }
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
-
-      # package.json uses file:../fastagent. Both repositories must be siblings,
-      # and FastAgent must be built before duang installs/loads its linked package.
-      - name: Check out FastAgent
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: fastagent-sh/fastagent
-          ref: ${{ steps.fastagent.outputs.revision }}
-          path: fastagent
           persist-credentials: false
 
       - name: Set up Node.js
@@ -56,15 +37,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            duang/package-lock.json
-            fastagent/package-lock.json
 
-      - name: Install and build FastAgent
-        working-directory: fastagent
-        run: npm ci && npm run build
-
-      - name: Install duang
+      # FastAgent is an exact version in package.json and the lockfile, installed from npm.
+      - name: Install
         run: npm ci
 
       - name: Test

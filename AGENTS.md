@@ -45,8 +45,8 @@ Electron/Chromium behavior; avoid speculative layers. Separate refactoring from 
 Add the smallest regression that exposes the failure, including proving protective checks can fail
 when their protection is removed.
 
-FastAgent is a sibling `file:` dependency. CI pins its revision in `.github/fastagent-revision`;
-follow `CONTRIBUTING.md` for fresh-checkout setup rather than modifying someone else's checkout.
+FastAgent is an exact npm version in `package.json` and the lockfile, never a local checkout or a
+moving branch; `CONTRIBUTING.md` says how it is bumped.
 
 ```bash
 npm test
