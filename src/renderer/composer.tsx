@@ -5,70 +5,42 @@ import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
 import { home } from "./paths.ts";
-import { createLevelWriter } from "./level-writer.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
 const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
 const levelName = (level: string) => LEVELS[level] ?? level;
 
 /**
- * How long the arrow keys must rest before the level they stopped on is written. Short enough that the
- * chip follows a stop you meant, long enough to span the presses of one run across the track (macOS
- * repeats a held key every ~30ms after 375ms). Not measured against real use: adjust it by feel.
- */
-const KEY_PAUSE_MS = 150;
-
-type Conversation = NonNullable<View["conversation"]>;
-
-/**
- * How hard the conversation's model thinks: a row of stops on a track, a native radio group, so the
- * arrow keys and the announcement are the platform's. The runtime lists what the model supports.
+ * How hard the conversation's model thinks: a row of stops on a track. The runtime lists what the model
+ * supports, and the track shows the level the runtime reports, nothing ahead of it: a choice is written
+ * and the runtime's `state_changed` moves the track a few milliseconds later.
  *
- * The track shows a choice at once. Writing it is `createLevelWriter`'s: a click goes now, the keys wait
- * for a rest, and either is written to the conversation it was made for. `onPick` answers whether the
- * runtime took the level.
+ * Choosing writes a durable entry into the conversation's record, so choosing is explicit. A native
+ * radio group would choose at every stop the arrow keys cross; these are buttons, where the arrows move
+ * the focus and Enter, Space or a click choose.
  */
-function Effort({
-  conversation,
-  levels,
-  level,
-  onPick,
-}: {
-  conversation: Conversation;
-  levels: string[];
-  level: string;
-  onPick: (level: string, conversation: Conversation) => Promise<boolean>;
-}) {
-  const [chosen, setChosen] = useState<string>();
-  const byKey = useRef(false);
-  // A refusal leaves the runtime where it was, and the track must say so rather than keep the refused stop:
-  // only that stop. A later choice, still waiting or already written, is not the one that was refused.
-  const [writer] = useState(() =>
-    createLevelWriter<Conversation>({
-      pauseMs: KEY_PAUSE_MS,
-      write: (c, l) => onPick(l, c),
-      refused: (_c, l) => setChosen((current) => (current === l ? undefined : current)),
-    }),
-  );
-  useEffect(() => writer.flush, [writer]);
-  // The runtime's word ends a choice: once it reports the level that was chosen, that is the one shown.
-  // Another level arriving (an earlier write of a run of keys) leaves a later choice standing.
-  useEffect(() => {
-    if (chosen !== undefined && chosen === level) setChosen(undefined);
-  }, [chosen, level]);
-  const pick = (name: string) => {
-    setChosen(name);
-    writer.choose(conversation, name, byKey.current);
-  };
-  const shown = chosen ?? level;
-  const index = Math.max(0, levels.indexOf(shown));
+function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => void }) {
+  const stops = useRef<(HTMLButtonElement | null)[]>([]);
+  const index = Math.max(0, levels.indexOf(level));
+  const focusStop = (to: number) => stops.current[Math.min(levels.length - 1, Math.max(0, to))]?.focus();
   return (
     <div className="px-3 pt-3 pb-2">
       <div className="mb-2 flex items-baseline justify-between text-[13px]">
         <span className="text-muted">Effort</span>
-        <span className="font-semibold">{levelName(shown)}</span>
+        <span className="font-semibold">{levelName(level)}</span>
       </div>
-      <div role="radiogroup" aria-label="Effort" className="relative flex h-6 items-center justify-between">
+      <div
+        role="radiogroup"
+        aria-label="Effort"
+        className="relative flex h-6 items-center justify-between"
+        onKeyDown={(event) => {
+          const at = stops.current.indexOf(document.activeElement as HTMLButtonElement);
+          const to = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: levels.length - 1 }[event.key];
+          if (to === undefined || at < 0) return;
+          event.preventDefault();
+          focusStop(to);
+        }}
+      >
         <span className="absolute inset-x-0 h-2 rounded-full bg-hover" />
         {/* Filled to the centre of the chosen stop (stops are 20px wide); the stops it covers turn light. */}
         <span
@@ -76,17 +48,20 @@ function Effort({
           style={{ width: `calc((100% - 20px) * ${levels.length > 1 ? index / (levels.length - 1) : 0} + 10px)` }}
         />
         {levels.map((name, stop) => (
-          <input
+          <button
             key={name}
-            type="radio"
-            name="effort"
-            checked={name === shown}
-            onPointerDown={() => (byKey.current = false)}
-            onKeyDown={() => (byKey.current = true)}
-            onChange={() => pick(name)}
+            ref={(el) => {
+              stops.current[stop] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={name === level}
             aria-label={levelName(name)}
             title={levelName(name)}
-            className={`relative m-0 size-5 shrink-0 cursor-pointer appearance-none rounded-full bg-transparent before:absolute before:top-1/2 before:left-1/2 before:size-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full ${stop < index ? "before:bg-white/70" : "before:bg-muted/60"} checked:bg-white checked:shadow-[0_1px_4px_rgb(0_0_0/0.35)] checked:before:hidden focus-visible:outline-2 focus-visible:outline-accent`}
+            // One tab stop for the group, on the chosen level, as a radio group has.
+            tabIndex={name === level ? 0 : -1}
+            onClick={() => name !== level && onPick(name)}
+            className={`relative size-5 shrink-0 cursor-pointer rounded-full before:absolute before:top-1/2 before:left-1/2 before:size-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full ${stop < index ? "before:bg-white/70" : "before:bg-muted/60"} aria-checked:bg-white aria-checked:shadow-[0_1px_4px_rgb(0_0_0/0.35)] aria-checked:before:hidden focus-visible:outline-2 focus-visible:outline-accent`}
           />
         ))}
       </div>
@@ -110,7 +85,7 @@ function ModelPicker({
   store: Store;
   current?: string;
   /** Absent until the conversation has begun: the runtime lists levels for a conversation, not for an agent. */
-  thinking?: { level: string; levels: string[]; conversation: Conversation };
+  thinking?: { level: string; levels: string[] };
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
@@ -246,12 +221,7 @@ function ModelPicker({
             {!thinking ? (
               <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once the conversation has begun.</p>
             ) : thinking.levels.length > 1 ? (
-              <Effort
-                conversation={thinking.conversation}
-                levels={thinking.levels}
-                level={thinking.level}
-                onPick={(level, conversation) => store.setThinking(level, conversation)}
-              />
+              <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => void store.setThinking(level)} />
             ) : (
               <p className="px-4 py-3 text-[12px] text-muted">This model has no effort setting.</p>
             )}
@@ -305,7 +275,7 @@ export function Composer({
   // The levels are the runtime's, per conversation and per model; before the conversation has begun there is none to offer.
   const thinking =
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
-      ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels, conversation: c }
+      ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
       : undefined;
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";
@@ -423,7 +393,11 @@ export function Composer({
               {suggestions.map((command, index) => (
                 <button
                   key={command.name}
-                  onMouseEnter={() => {
+                  // Moved, not entered: the list scrolls under a pointer that is resting on it when the keys
+                  // step, the browser then reports the row now under it as entered, and the cursor would be
+                  // taken from the keys by a mouse nobody moved.
+                  onMouseMove={(event) => {
+                    if (!event.movementX && !event.movementY) return;
                     stepped.current = false;
                     setCursor(index);
                   }}

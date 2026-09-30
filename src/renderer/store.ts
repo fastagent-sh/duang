@@ -944,20 +944,18 @@ export function createStore(api: DuangApi) {
       }
     },
     /**
-     * A conversation's thinking level, and whether the runtime took it. The conversation is the one the
-     * choice was made for, not whichever is open when the write goes out: the arrow keys wait for a
-     * rest, and the person can have moved on by then. The track shows a choice at once; the choice ends
-     * when the runtime reports that level as its own `state_changed`, or when it refuses it (shown as
-     * one). Until then the track can be ahead of the runtime, and if the subscription has ended it stays so.
+     * The open conversation's thinking level. Nothing is shown ahead of the runtime: the new level
+     * arrives as its own `state_changed`, and a refusal is shown as one.
      */
-    async setThinking(level: string, c: Conversation): Promise<boolean> {
+    async setThinking(level: string) {
+      const id = view.agentId;
+      const c = view.conversation;
+      if (!id || !c) return;
       try {
-        const result = await api.setThinking(c.agentId, c.session, level);
+        const result = await api.setThinking(id, c.session, level);
         if (!result.ok) refusal(result.error.message, c);
-        return result.ok;
       } catch (error) {
         note(error, c);
-        return false;
       }
     },
     async scaffold() {

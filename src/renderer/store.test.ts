@@ -455,7 +455,7 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   store.dispose();
 });
 
-test("a thinking level goes to the conversation it was chosen for, and a refusal reaches that one verbatim", async () => {
+test("a thinking level goes to the open conversation, and a refusal reaches it verbatim", async () => {
   const { api, store } = harness();
   await store.load();
   const c = store.getSnapshot().conversation!;
@@ -464,23 +464,15 @@ test("a thinking level goes to the conversation it was chosen for, and a refusal
     sent.push(args);
     return { ok: true };
   };
-  assert.equal(await store.setThinking("high", c), true);
-  assert.deepEqual(sent, [["a", c.session, "high"]]);
-  // The person has moved on to a new conversation by the time a waiting choice is written.
-  await store.newConversation();
-  const other = store.getSnapshot().conversation!;
-  assert.notEqual(other, c);
-  sent.length = 0;
-  await store.setThinking("low", c);
-  assert.deepEqual(sent, [["a", c.session, "low"]], "not the conversation that happens to be open");
+  await store.setThinking("high");
+  assert.deepEqual(sent, [["a", c.session, "high"]], "the level is set on the conversation the person is looking at");
   api.setThinking = async () => ({
     ok: false,
     error: { code: "invalid", message: 'thinking level "xhigh" is not supported', retryable: false },
   });
-  assert.equal(await store.setThinking("xhigh", c), false, "the caller learns it was refused");
-  const noted = (x: typeof c) => x.items.filter((item) => item.kind === "note" && item.text === 'thinking level "xhigh" is not supported');
-  assert.equal(noted(c).length, 1, "a refusal is shown, not swallowed");
-  assert.equal(noted(other).length, 0, "and not shown on another conversation");
+  await store.setThinking("xhigh");
+  const noted = c.items.filter((item) => item.kind === "note" && item.text === 'thinking level "xhigh" is not supported');
+  assert.equal(noted.length, 1, "a refusal is shown, not swallowed");
   store.dispose();
 });
 

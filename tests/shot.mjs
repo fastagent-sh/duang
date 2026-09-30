@@ -271,8 +271,8 @@ if (!process.versions.electron) {
     await until(`!document.querySelector('dialog') && document.querySelector('button[title^="Model for this agent"]')?.textContent.includes('gpt-5')`, "a reasoning model chosen");
     await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
     await until(`document.querySelector('dialog [role=radiogroup]')`, "the effort track");
-    await evaluate(`document.querySelector('dialog input[aria-label="Medium"]').click()`);
-    await until(`document.querySelector('dialog input[aria-label="Medium"]').checked`, "a middle level chosen");
+    await evaluate(`document.querySelector('dialog [role=radio][aria-label="Medium"]').click()`);
+    await until(`document.querySelector('dialog [role=radio][aria-label="Medium"]').getAttribute('aria-checked') === 'true'`, "a middle level chosen");
     await capture("models-effort");
     await evaluate(`document.querySelector('dialog').close()`);
 

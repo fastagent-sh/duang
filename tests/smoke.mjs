@@ -550,25 +550,31 @@ if (!process.versions.electron) {
       // The list stops at 60 rows, and a provider past them shows no heading: it says there are more.
       await until("document.querySelectorAll('dialog button[data-model]').length > 0", "the models are listed");
       assert.match(await evaluate("document.querySelector('dialog').innerText"), /\d+ more: search to narrow the list/, "a cut-off list says so");
-      const levels = await evaluate(`[...document.querySelectorAll('dialog input[name=effort]')].map((input) => input.getAttribute('aria-label'))`);
+      const levels = await evaluate(`[...document.querySelectorAll('dialog [role=radio]')].map((stop) => stop.getAttribute('aria-label'))`);
       assert.ok(levels.length > 1 && levels.includes("High"), `the runtime's levels are the stops: ${levels}`);
-      await evaluate(`document.querySelector('dialog input[aria-label="High"]').click()`);
+      await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').click()`);
       await until(`${chip}.textContent.includes('High')`, "the chip names the level the runtime reports");
-      await until(`document.querySelector('dialog input[aria-label="High"]').checked`, "and so does the track");
-      // Arrowing through the track is one choice, not one write per stop: each write is a durable entry in
-      // the conversation's record.
+      await until(`document.querySelector('dialog [role=radio][aria-label="High"]').getAttribute('aria-checked') === 'true'`, "and so does the track");
+      // Choosing is explicit: each choice is a durable entry in the conversation's record, so the arrow
+      // keys move the focus along the track and write nothing, and Enter chooses.
       const thinkingSession = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
       const levelChanges = () =>
         evaluate(`window.duang.readSession('configured', ${JSON.stringify(thinkingSession)}).then((r) => r.entries.filter((e) => e.kind === 'thinking_level_change').length)`);
       const changesBefore = await levelChanges();
       const target = levels[levels.indexOf("High") - 2];
-      await evaluate(`document.querySelector('dialog input[aria-label="High"]').focus()`);
+      await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').focus()`);
       for (let i = 0; i < 2; i++) {
         win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Left" });
         win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Left" });
       }
-      await until(`${chip}.textContent.includes(${JSON.stringify(target)})`, `two arrow presses settle on ${target}`);
-      assert.equal((await levelChanges()) - changesBefore, 1, "two stops crossed, one level written");
+      await until(`document.activeElement.getAttribute('aria-label') === ${JSON.stringify(target)}`, `two arrow presses move the focus to ${target}`);
+      assert.equal(await levelChanges(), changesBefore, "moving along the track writes nothing");
+      assert.ok(await evaluate(`${chip}.textContent.includes('High')`), "and the chip still names the runtime's level");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+      win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+      await until(`${chip}.textContent.includes(${JSON.stringify(target)})`, `Enter chooses ${target}`);
+      assert.equal((await levelChanges()) - changesBefore, 1, "and it is one level written");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "Escape closes the picker");
@@ -659,6 +665,18 @@ if (!process.versions.electron) {
       })()`;
       await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
       await until(chosenInView(-1), "the last row is chosen and scrolled fully into view");
+      // A pointer resting on the list is not moving: the row the scroll puts under it is reported as entered,
+      // and must not take the cursor from the keys. A pointer that moves does.
+      await evaluate(`document.querySelector('.composer .popover button').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.ok(await evaluate(chosenInView(-1)), "a row entered by a resting pointer does not take the cursor");
+      await evaluate(`document.querySelector('.composer .popover button').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, movementX: 4 }))`);
+      await until(
+        "document.querySelector('.composer .popover [data-chosen]') === document.querySelector('.composer .popover button')",
+        "a pointer that moves does",
+      );
+      await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
+      await until(chosenInView(-1), "and the keys take it back");
       await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))`);
       await until(chosenInView(0), "and the first row again");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });

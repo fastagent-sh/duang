@@ -191,13 +191,14 @@ signal.
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
 `openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
 anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
-system face rather than mono, at 14px), and the effort. Effort is a native radio group drawn as a track
-with a stop per level, so the arrow keys and the announcement are the platform's; the runtime's list is
-the stops, and it is per conversation, so a conversation that has not begun says so. The track shows a
-choice at once. A click is written at once; the arrow keys are written when they pause (150ms) or the
-picker closes, because arrowing across four stops would otherwise put four levels into the conversation's record, and a refusal puts the
-track back where the runtime is. A choice is written to the conversation it was made for, however long
-it waits: moving to another conversation first writes the waiting one, it does not move it. The list stops at 60 rows and says how many more there are, since a
+system face rather than mono, at 14px), and the effort. Effort is a track with a stop per
+level; the runtime's list is the stops, and it is per conversation, so a conversation that has not begun
+says so. The track shows the level the runtime reports and nothing ahead of it (a choice reaches the
+runtime and comes back as `state_changed` in a few milliseconds, measured at 2 to 3). Choosing writes a
+durable entry into the conversation's record, so choosing is explicit: the stops are buttons in a
+`radiogroup`, the arrow keys move the focus along them, and Enter, Space or a click choose. A native radio
+group chooses at every stop the arrows cross, which is what this replaced, and it needed a timer, an
+optimistic state and a reconciliation to undo. The list stops at 60 rows and says how many more there are, since a
 provider past the limit would not show even its heading. FastAgent gives a
 model's friendly name to nobody, and guessing one from the id would name a model the runtime does not,
 so the list shows ids. What the picker leaves out: the credential file's path (nothing the person can
