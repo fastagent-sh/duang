@@ -5,6 +5,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
+    "postinstall": "node -e \"require('electron')\"",
     "dev": "electron-vite dev --watch",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
