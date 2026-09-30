@@ -243,7 +243,7 @@ export function Transcript({
 
 /**
  * Only `code` is overridden. Streamdown's own `pre` is what marks a child as a fenced block, so
- * replacing it — as an earlier version did — turns every code block into an inline span.
+ * replacing it turns every code block into an inline span.
  */
 const markdownComponents = { code: MarkdownCode };
 

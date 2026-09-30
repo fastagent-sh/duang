@@ -455,8 +455,8 @@ summary:focus-visible,
 }
 
 /*
- * Scrollbars: present where the pointer is, invisible otherwise, which is what macOS does and what
- * this rule used to claim while drawing a permanent grey bar down the transcript. The track keeps
+ * Scrollbars: present where the pointer is, invisible otherwise, which is what macOS does. A rule that only
+ * claimed it would draw a permanent grey bar down the transcript. The track keeps
  * its width either way — fading it in is a colour change, so nothing reflows when it appears.
  */
 ::-webkit-scrollbar {

@@ -860,7 +860,7 @@ if (!process.versions.electron) {
       win.setSize(size[0], size[1]);
 
       // The row's actions control follows its own focus: the row keeps focus after a click, which
-      // used to keep the control on screen. Reaching the actions by keyboard is the context menu's
+      // would keep the control on screen. Reaching the actions by keyboard is the context menu's
       // job (Shift+F10) and Delete's, not the tab order's. Opacity is read after the transition
       // settles, not during it.
       await showConversations();
