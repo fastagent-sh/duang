@@ -117,7 +117,7 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
 
 /**
  * A filled pill, Telegram's unread mark: the one thing in the roster that has to be seen from
- * across the room. A tinted word was missed in testing, repeatedly — this is louder on purpose and
+ * across the room. A tinted word is missed: this is louder on purpose and
  * exists only for outcomes nobody has looked at yet (§9). A lone count stays round, as Telegram's does.
  */
 export function Pill({ tone, children }: { tone: "accent" | "danger"; children: ReactNode }) {

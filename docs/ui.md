@@ -232,9 +232,9 @@ the layout stops wanting it.
 The strips past the header and the composer, above one and below the other, are veiled rather than painted over: the canvas
 at 65% over a 3px blur, strongest at the window's edge and clear by the bar's inner edge. A line
 passing there stays faintly visible, the way the header shows it, and reads as moving on; left bare,
-the gap above the header showed sharp cut lines, and painted solid, the text stopped at an edge. Tried and reverted: a header in its own row with a
-masked top edge (#58), and a solid backdrop behind the composer with a 40px fade above it (#62).
-Both stopped text at a line, which made the conversation read as a framed box rather than a
+the gap above the header would show sharp cut lines, and painted solid, the text would stop at an edge.
+A header in its own row with a masked top edge, or a solid backdrop behind the composer with a 40px fade
+above it, both stop text at a line, which makes the conversation read as a framed box rather than a
 continuous page.
 
 Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
@@ -326,14 +326,14 @@ Latin and Resource Han Rounded for Chinese. A system sans there made the answer 
 from every other chat app. Resource Han Rounded is the design Maple Mono CN draws its CJK from, so the
 answer and the code it quotes share their Chinese letterforms; it is used on its own because Maple's
 CJK sits in 1.2em cells to align in a terminal, which spreads a paragraph apart. Maple Mono itself
-was tried for Latin prose and read poorly: a monospace line is a third wider and has no word shapes.
+is not used for Latin prose: a monospace line is a third wider and has no word shapes.
 The CJK face is cut to GB2312 (1.1 MB a weight); a rarer character falls back to PingFang. Both
 fonts are OFL; their licences sit beside them in `src/renderer/fonts/`. Nunito is set 10% up
 (`size-adjust`): its x-height is 0.48em against Resource Han Rounded's 0.54, and at the same nominal
 size its words read a step smaller than the Chinese beside them. Each Latin face and its Chinese
 partner declare identical weight and style: Chromium picks one descriptor bucket before it reads
-`unicode-range`, and when Nunito was declared `200 1000` beside `400` and `600` it was never loaded,
-so Latin silently fell back to PingFang. The smoke test checks that the Latin face loads. Italic and bold italic are faces of their own (Latin 400 and 600, Chinese 400 and 700), so emphasis keeps its weight; Chinese has no italic and the browser does not slant a face declared italic, so it stays upright inside emphasis.
+`unicode-range`, and a mismatch (Nunito declared `200 1000` beside `400` and `600`) is never loaded,
+so Latin silently falls back to PingFang. The smoke test checks that the Latin face loads. Italic and bold italic are faces of their own (Latin 400 and 600, Chinese 400 and 700), so emphasis keeps its weight; Chinese has no italic and the browser does not slant a face declared italic, so it stays upright inside emphasis.
 
 The rule is ownership, not place: **words a person wrote wear `Prose` wherever they are quoted**,
 so a message does not change typeface between the bubble and the header. That is the roster row's
@@ -343,9 +343,8 @@ sizes. A name is one of those words: the user chose it, and an agent is a contac
 says itself stays in the system face: times, badges, errors, controls and the trace.
 
 **An avatar's initials wear `Avatar`**: Fredoka 600 cut to Latin (16 KB, OFL, licence in
-`src/renderer/fonts/`). It is the roundest and bounciest of the faces tried (Nunito, Baloo 2, Quicksand,
-Sniglet, Grandstander, Lilita One, Chewy, Bubblegum Sans, Varela Round, Comfortaa), and still reads at the
-30px header size, where Sniglet's blobs already blur `AM` and `WR`. Two letters do not need more, so
+`src/renderer/fonts/`). It is round and bouncy, and still reads at the 30px header size, where a
+blobby face like Sniglet already blurs `AM` and `WR`. Two letters do not need more, so
 there is no reason to give an avatar the answer's face. A Chinese name is not in Fredoka and falls
 through to Prose's Chinese face. The smoke test checks that the face loads.
 
@@ -500,9 +499,9 @@ Everything else follows from those two:
   transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
   (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
   reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking), and
-  how long the run has taken. No capsule, border or icon: tried, they made one line of status the
-  loudest thing on screen. A bare `working…` answered neither "is it alive" nor "what is it on", and
-  it came and went between steps. The clock counts
+  how long the run has taken. No capsule, border or icon: they would make one line of status the
+  loudest thing on screen. A bare `working…` answers neither "is it alive" nor "what is it on", and
+  it comes and goes between steps. The clock counts
   from when this window saw the run start, so a run that was already going when the conversation
   opened shows none rather than a wrong one.
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
@@ -617,9 +616,8 @@ you come back to them, so a run that settles while you are reading something els
 conversation row says `done` or `failed` as a filled pill with its label in semibold, the agent row
 counts them in a round pill the way Telegram counts unread messages (red when any of them failed,
 and said in words for assistive technology and in the tooltip), the header's list button carries a
-dot, and the dock carries the total so it is answerable without duang being the window in front. Tested as a tinted word first, and
-missed several times in a row — this is the one mark in the interface that has to be seen from
-across the room, so it is Telegram's unread pill and nothing quieter. Opening the conversation
+dot, and the dock carries the total so it is answerable without duang being the window in front. This is the one mark in the interface that has to be seen from
+across the room, so it is Telegram's unread pill and nothing quieter: a tinted word is missed. Opening the conversation
 spends the mark, the way an unread count is spent by reading — its whole purpose is to disappear. A run you stopped yourself leaves nothing,
 because you already know. The mark lives in memory: it is a fact about this window's attention, and
 the transcript stays the only durable record of what happened.
