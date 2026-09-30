@@ -187,10 +187,27 @@ which plan and when it was read. Every one of those in a row made the header's r
 densest text on screen for numbers read once in a while. No threshold colours: the percentage is the
 signal.
 
+**The model chip and its picker follow Codex's, on duang's terms.** The chip names the provider quietly
+and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
+`openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
+anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
+system face rather than mono, at 14px), and the effort. Effort is a track with a stop per
+level; the runtime's list is the stops, and it is per conversation, so a conversation that has not begun
+says so. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
+and comes back as `state_changed`. Choosing writes a durable entry into the conversation's record, so
+choosing is explicit: the stops are buttons in a `radiogroup`, the arrow keys move the focus along them,
+and Enter, Space or a click choose (a native radio group would choose at every stop the arrows cross).
+The list stops at 60 rows and says how many more there are, since a
+provider past the limit would not show even its heading. FastAgent gives a
+model's friendly name to nobody, and guessing one from the id would name a model the runtime does not,
+so the list shows ids. What the picker leaves out: the credential file's path (nothing the person can
+act on) and a Manage providers link (Settings is in the sidebar; the empty picker keeps its one
+**Connect a provider**).
+
 **The header is two parts.** What you are looking at (avatar, agent and conversation, directory,
 `working`, the plan and context meter, `queued`) is one pill, and the one action on it, the
 conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
-and menu. The header runs the pane's width: it is chrome, and held to the reading column it read as a
+and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
 card in the middle of a page. The composer does not: it sits in the reading column, its attach and
 voice/send discs on the text's edges, because the eye goes from the last line down to the field and
 a field wider than the text made that a jump. The disc is alone because nothing else on a
@@ -202,7 +219,11 @@ in Telegram's shape: an attach button, the field, and one round button that is w
 action is (voice while the field is empty, Send once it holds text, Stop while a run is live). What
 belongs to the next message rather than to the app, the model chip, sits inside the field at its
 right end, where Telegram keeps its emoji. The field is a 40px pill that grows into a rounded
-rectangle as it takes lines (up to eight), and the buttons stay level with its last line. Attach and
+rectangle as it takes lines (up to eight), and the buttons stay level with its last line. The chip
+sits beside the text while the draft is one line and drops to a row of its own under the text once it
+is not (a newline, or a line wider than the room beside the chip): beside a taller draft it reserved
+a column down every line and left the first lines wrapping short of the field's edge. The choice is
+made from the draft and the room, not from how the text wraps, so the change of width cannot flip it back. Attach and
 voice are shown but disabled with their reason: attachments have no path through duang yet, and a
 sent image would not come back in the transcript, because FastAgent's `user_message` leaves images out.
 They are placeholders by decision, kept for the layout's sake, and each goes when the feature lands or
@@ -286,13 +307,13 @@ looking alike.
 ## 5. Typography
 
 ```css
---font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+--font-sans: system-ui, "PingFang SC", sans-serif;
 --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
 --font-prose: "Prose", "PingFang SC", sans-serif;
 --font-avatar: "Avatar", "Prose", "PingFang SC", sans-serif;
 ```
 
-Controls, navigation and the trace use the system face, paired with the system's own CJK face. This is
+Controls, navigation and the trace use the system face, paired with the system's own CJK face. The stack leads with `system-ui`, the only name Chromium maps to SF: `-apple-system` is Safari's spelling and "SF Pro Text" is not handed out by name, so a stack that leads with them falls through to PingFang SC and draws the chrome's Latin in it, hyphens at 0.6em where SF's are 0.43. This is
 a native window with a hidden title bar, and a web font in its chrome reads as a page rather than an
 app. The conversation is the exception (below). Do not force CJK into the monospace
 family; let it fall back to PingFang SC inside code contexts rather than deforming it. Maple Mono is
@@ -414,8 +435,11 @@ and it pulses only while the state is still happening.
 
 Popovers share one surface — `surface`, a rounded hairline and a shadow — even
 though the model list is a modal dialog that takes focus and the slash completion list deliberately
-does not. The model picker labels its purpose, puts the selected model first, shows a short credential-file label,
-and expands that label to reveal the full path. Both highlight the current item with `accent-weak`.
+does not. The model picker is a search field over the models grouped under their provider, the selected one
+first with a check on a neutral row, and the conversation's effort under a hairline. The slash list
+is the same surface and the same rows (14px, neutral highlight on the current item, the command's
+description and source quieter beside it), and it steps aside while the picker is open. The arrow keys scroll the list to keep the cursor's row fully
+in view (it scrolls past eight names); the pointer never needs to.
 
 ## 7. Space, radius, elevation
 
@@ -440,8 +464,7 @@ change it?* A bubble is a good anchor precisely because it is small and visually
 840px wide, which paragraphs, lists, code, tables and the composer share, so every edge lines up
 and the eye goes straight down from the text to the field. That is a line of about 56 Chinese
 characters at 15px. At 920 a line runs to 61 and the eye loses its way back to the next line; 768
-(51) was the width until it read as narrow. The composer was 768 before the transcript was, and the
-header is the one piece that does not take the column. The transcript reserves its scrollbar track
+(51) reads as narrow. The header is the one piece that does not take the column. The transcript reserves its scrollbar track
 on both sides so its column centres where the composer's does. Spacing groups rather than separates, on the §7 scale: two paragraphs sit 12 apart, but a
 paragraph and the list it introduces only 4; a heading stands 24 below what came before and 8 above
 what it introduces; code blocks, tables and quotes take 16, a rule 24. One gap for every pair, which
@@ -815,7 +838,6 @@ MANUAL PROXY                               (only while Manual is chosen)
   follows within a frame does not flash it. There is no Cancel: the row's header closes it.
 - Success closes the row and marks the provider in the list above with a `success` badge
   (`connected`, 4 s) or a `warning` one (`saved · key not checked`, 8 s), scrolled into view.
-- Reasoning effort is a `ghost` chip beside the model chip, with the same popover list.
 
 ## 13. Shipped Week 1 visual pass
 

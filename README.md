@@ -144,7 +144,7 @@ existing row, and removing an agent never deletes the directory or conversation 
 
 The picker, every conversation and plan usage use duang's own credential file, `auth.json` in its
 user data (`~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
-`~/.config/duang/` on Linux). The picker displays its path. duang reads no other store: not the
+`~/.config/duang/` on Linux). duang reads no other store: not the
 `fastagent` CLI's (`~/.fastagent/.secrets/auth.json`), not a project's `.secrets/auth.json`, not
 pi's, and `FASTAGENT_AUTH_PATH` does not redirect it. Copying a login between files would put one
 OAuth grant in two places, and whichever refreshes first invalidates the other. SDK-supported

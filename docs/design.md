@@ -80,8 +80,7 @@ next run or a success badge requires an authoritative clock/outcome source, not 
 
 The first run must not require a terminal, and a preset recipient must be able to add their own
 credentials. Settings open in the content area (the App menu's Settings… `⌘,`, or the Settings
-row at the foot of the sidebar, or the model picker's **Manage providers…** / empty-state **Connect a
-provider**); the sidebar stays visible so running work remains in view. One page, two groups, no
+row at the foot of the sidebar, or the model picker's empty-state **Connect a provider**); the sidebar stays visible so running work remains in view. One page, two groups, no
 empty categories: Model providers, then Network.
 
 **Model providers.** The goal: on a new machine, from installing duang to the first answer
@@ -137,8 +136,8 @@ in effect, the agent's own commands (`git`, `npm`, `curl`) receive one proxy in 
 variables, as a terminal user would export it; per-host PAC rules and the system bypass list do not
 reach them.
 
-Reasoning effort is not a setting: it sits beside the model on the conversation and applies to that
-conversation. Per-agent material (tool secrets, inherited machine skills) belongs to the agent
+Reasoning effort is not a setting: it sits with the model in the composer's picker and applies to that
+conversation, once the conversation has begun (a default per agent needs FastAgent to accept one). Per-agent material (tool secrets, inherited machine skills) belongs to the agent
 detail view above. Appearance follows the system; shortcuts, notifications, a global default model
 and accounts are not settings until a shipped feature needs them.
 

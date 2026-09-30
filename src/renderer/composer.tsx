@@ -1,25 +1,94 @@
 /** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
-import { type ReactNode, useEffect, useRef, useState } from "react";
-import { ArrowUp, CaretDown, Check, Microphone, Paperclip, Stop, X } from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowUp, CaretDown, Check, MagnifyingGlass, Microphone, Paperclip, Stop } from "@phosphor-icons/react";
 import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
-import { home, location } from "./paths.ts";
+import { home } from "./paths.ts";
 
-/** The model list, floating above the composer chip that opened it. */
-function ModelPopover({
+/** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
+const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
+const levelName = (level: string) => LEVELS[level] ?? level;
+
+/**
+ * How hard the conversation's model thinks: a row of stops on a track. The runtime lists what the model
+ * supports, and the track shows the level the runtime reports, nothing ahead of it: a choice is written
+ * and the runtime's `state_changed` moves the track a few milliseconds later.
+ *
+ * Choosing writes a durable entry into the conversation's record, so choosing is explicit. A native
+ * radio group would choose at every stop the arrow keys cross; these are buttons, where the arrows move
+ * the focus and Enter, Space or a click choose.
+ */
+function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => void }) {
+  const stops = useRef<(HTMLButtonElement | null)[]>([]);
+  const index = Math.max(0, levels.indexOf(level));
+  const focusStop = (to: number) => stops.current[Math.min(levels.length - 1, Math.max(0, to))]?.focus();
+  return (
+    <div className="px-3 pt-3 pb-2">
+      <div className="mb-2 flex items-baseline justify-between text-[13px]">
+        <span className="text-muted">Effort</span>
+        <span className="font-semibold">{levelName(level)}</span>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="Effort"
+        className="relative flex h-6 items-center justify-between"
+        onKeyDown={(event) => {
+          const at = stops.current.indexOf(document.activeElement as HTMLButtonElement);
+          const to = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: levels.length - 1 }[event.key];
+          if (to === undefined || at < 0) return;
+          event.preventDefault();
+          focusStop(to);
+        }}
+      >
+        <span className="absolute inset-x-0 h-2 rounded-full bg-hover" />
+        {/* Filled to the centre of the chosen stop (stops are 20px wide); the stops it covers turn light. */}
+        <span
+          className="absolute left-0 h-2 rounded-full bg-accent-fill"
+          style={{ width: `calc((100% - 20px) * ${levels.length > 1 ? index / (levels.length - 1) : 0} + 10px)` }}
+        />
+        {levels.map((name, stop) => (
+          <button
+            key={name}
+            ref={(el) => {
+              stops.current[stop] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={name === level}
+            aria-label={levelName(name)}
+            title={levelName(name)}
+            // One tab stop for the group, on the chosen level, as a radio group has.
+            tabIndex={name === level ? 0 : -1}
+            onClick={() => name !== level && onPick(name)}
+            className={`relative size-5 shrink-0 cursor-pointer rounded-full before:absolute before:top-1/2 before:left-1/2 before:size-1.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full ${stop < index ? "before:bg-white/70" : "before:bg-muted/60"} aria-checked:bg-white aria-checked:shadow-[0_1px_4px_rgb(0_0_0/0.35)] aria-checked:before:hidden focus-visible:outline-2 focus-visible:outline-accent`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The model list and the conversation's effort, floating above the composer chip that opened them.
+ * Models sit under their provider, the current one first; the search matches the whole `provider/id`.
+ */
+function ModelPicker({
   view,
   store,
   current,
+  thinking,
   onClose,
   onProviders,
 }: {
   view: View;
   store: Store;
   current?: string;
+  /** Absent until the conversation has begun: the runtime lists levels for a conversation, not for an agent. */
+  thinking?: { level: string; levels: string[] };
   onClose: () => void;
-  /** Opens Settings → Model providers; `connect` scrolls it to the providers to add. */
-  onProviders: (connect: boolean) => void;
+  /** Opens Settings on the providers to add; a connection made there returns here. */
+  onProviders: () => void;
 }) {
   const { models, modelsError: error } = view;
   const onRetry = () => void store.loadModels();
@@ -34,19 +103,30 @@ function ModelPopover({
   useEffect(() => {
     const el = dialog.current!;
     const anchor = el.parentElement!.getBoundingClientRect();
-    el.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - 336))}px`;
+    // Right edges aligned: the chip is at the composer's right end, and the list opens toward the text.
+    el.style.left = `${Math.max(8, Math.min(anchor.right - 300, window.innerWidth - 308))}px`;
     el.style.bottom = `${window.innerHeight - anchor.top + 8}px`;
-    el.style.maxHeight = `${Math.max(100, anchor.top - 16)}px`;
+    // Tall enough for a dozen rows and the effort track; the list scrolls, the search and the track do not.
+    el.style.maxHeight = `${Math.min(480, Math.max(160, anchor.top - 16))}px`;
     el.showModal();
-    // showModal() moves focus itself, after React has honoured autoFocus, so it lands on the close
-    // button. Typing is what this list is for; the filter gets the caret.
+    // showModal() moves focus itself, after React has honoured autoFocus. Typing is what this list is
+    // for; the filter gets the caret.
     el.querySelector("input")?.focus();
     return () => el.close();
   }, []);
-  const matches = (models?.specs ?? [])
+  const specs = models?.specs ?? [];
+  const matching = specs
     .filter((m) => m.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => Number(b === current) - Number(a === current))
-    .slice(0, 60);
+    .sort((a, b) => Number(b === current) - Number(a === current));
+  const shown = matching.slice(0, 60);
+  // Cut off after grouping, a provider past the limit would not even show its heading: say so.
+  const hidden = matching.length - shown.length;
+  // Providers in the order they first appear, which puts the current model's first.
+  const groups = new Map<string, string[]>();
+  for (const spec of shown) {
+    const provider = spec.slice(0, spec.indexOf("/"));
+    groups.set(provider, [...(groups.get(provider) ?? []), spec]);
+  }
 
   return (
     <dialog
@@ -72,81 +152,88 @@ function ModelPopover({
         )
           close();
       }}
-      className="popover fixed m-0 top-auto right-auto w-80 overflow-y-auto text-text backdrop:bg-transparent"
+      className="popover fixed m-0 top-auto right-auto w-[300px] flex-col overflow-hidden p-0 text-text open:flex backdrop:bg-transparent"
     >
-      <div className="flex items-center justify-between pl-2 pt-1 pb-1">
-        <span className="text-[12px] font-semibold">Choose a model</span>
-        <Button kind="ghost" size={28} onClick={close} aria-label="Close model picker" icon={<X size={14} />} />
-      </div>
-      {models && (
-        <details className="mb-2 px-2 text-muted text-[11px]" title={models.authPath}>
-          <summary className="cursor-pointer truncate">Credentials · {location(models.authPath)}</summary>
-          <code className="block break-all p-1 select-text">{models.authPath}</code>
-        </details>
-      )}
       {error ? (
-        <div role="alert" className="text-danger p-2 space-y-2">
+        <div role="alert" className="space-y-2 p-4 text-danger">
           <p>{error}</p>
           <Button kind="ghost" size={28} onClick={onRetry}>
             Retry
           </Button>
         </div>
       ) : models?.specs.length === 0 ? (
-        <div className="text-muted text-[12px] p-2 leading-relaxed space-y-2">
+        <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
           <p>No provider is connected yet. Sign in with a subscription or paste an API key.</p>
-          <Button kind="primary" size={28} onClick={() => onProviders(true)}>
+          <Button kind="primary" size={28} onClick={onProviders}>
             Connect a provider
           </Button>
         </div>
       ) : (
         <>
-          <input
-            autoFocus
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            aria-label="Filter models"
-            placeholder="filter models"
-            className="w-full h-8 bg-bg rounded-card px-2.5 mb-1.5 text-[12px] outline-none ring-1 ring-stroke focus:ring-accent/60 placeholder:text-muted"
-          />
-          <div className="max-h-64 overflow-y-auto">
+          <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+            <MagnifyingGlass size={15} className="shrink-0 text-muted" aria-hidden />
+            <input
+              autoFocus
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              aria-label="Filter models"
+              placeholder="Search models"
+              className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted"
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1.5">
             {!models && (
-              <p role="status" className="text-muted p-2">
+              <p role="status" className="p-2.5 text-[13px] text-muted">
                 Loading models…
               </p>
             )}
-            {matches.map((model) => (
-              <button
-                key={model}
-                onClick={() => {
-                  dialog.current?.close();
-                  onClose();
-                  void store.pickModel(model);
-                }}
-                aria-current={model === current ? "true" : undefined}
-                className={`flex w-full items-center gap-2 text-left px-2 py-2 font-mono text-[12px] rounded-card hover:bg-hover ${
-                  model === current ? "bg-accent-weak text-accent" : ""
-                }`}
-              >
-                <span className="min-w-0 flex-1 truncate">{model}</span>
-                {model === current && <Check size={13} aria-hidden />}
-              </button>
+            {[...groups].map(([provider, members]) => (
+              <section key={provider} aria-label={provider}>
+                <h3 className="px-2.5 pt-2 pb-1 text-[12px] font-normal text-muted">{provider}</h3>
+                {members.map((model) => (
+                  <button
+                    key={model}
+                    data-model={model}
+                    onClick={() => {
+                      dialog.current?.close();
+                      onClose();
+                      void store.pickModel(model);
+                    }}
+                    aria-current={model === current ? "true" : undefined}
+                    className={`flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[14px] hover:bg-hover ${
+                      model === current ? "bg-hover" : ""
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{model.slice(model.indexOf("/") + 1)}</span>
+                    {model === current && <Check size={15} aria-hidden />}
+                  </button>
+                ))}
+              </section>
             ))}
-            {models && matches.length === 0 && <p className="text-muted text-[11px] px-2 py-1.5">Nothing matches.</p>}
+            {models && shown.length === 0 && <p className="px-2.5 py-2 text-[13px] text-muted">Nothing matches.</p>}
+            {hidden > 0 && (
+              <p className="px-2.5 py-2 text-[12px] text-muted">
+                {hidden} more: search to narrow the list.
+              </p>
+            )}
           </div>
-          {models && (
-            <button
-              type="button"
-              onClick={() => onProviders(false)}
-              className="mt-1 w-full rounded-card border-t border-stroke px-2 py-2 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
-            >
-              Manage providers…
-            </button>
-          )}
+          <div className="border-t border-stroke">
+            {!thinking ? (
+              <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once the conversation has begun.</p>
+            ) : thinking.levels.length > 1 ? (
+              <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => void store.setThinking(level)} />
+            ) : (
+              <p className="px-4 py-3 text-[12px] text-muted">This model has no effort setting.</p>
+            )}
+          </div>
         </>
       )}
     </dialog>
   );
 }
+
+/** For measuring a line of the draft in the field's own font, without laying it out. */
+const ruler = document.createElement("canvas").getContext("2d")!;
 
 /**
  * The floating disc behind a round composer button that is not the primary action. It is a wrapper
@@ -177,7 +264,7 @@ export function Composer({
 }: {
   view: View;
   store: Store;
-  onProviders: (connect: boolean) => void;
+  onProviders: () => void;
 }) {
   const { agentId, conversation: c, busy } = view;
   const agent = view.agents.find((row) => row.id === agentId);
@@ -185,6 +272,11 @@ export function Composer({
   // What the conversation will RUN with, else the agent's own default. Nothing else may answer
   // this: a chip that names a model the turn will not use is the failure worth avoiding.
   const model = c?.state?.model ?? view.model;
+  // The levels are the runtime's, per conversation and per model; before the conversation has begun there is none to offer.
+  const thinking =
+    c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
+      ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
+      : undefined;
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";
   const modelDisabled = view.loading || !!c?.loading || state === "broken" || state === "no_agent";
@@ -199,6 +291,34 @@ export function Composer({
   const empty = value.trim() === "";
 
   const input = useRef<HTMLTextAreaElement>(null);
+  const field = useRef<HTMLDivElement>(null);
+  const chip = useRef<HTMLDivElement>(null);
+  // The model chip sits beside the text while the draft is one line, and under it once it is not:
+  // beside a taller draft it would reserve a column down every line for something that fits on one.
+  // Decided from the draft and the room, never from how the text happens to wrap, so it cannot flip
+  // back and forth as the change of width changes the wrapping.
+  const [stacked, setStacked] = useState(false);
+  const [fieldWidth, setFieldWidth] = useState(0);
+  useEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setFieldWidth(entry!.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const text = input.current;
+    const box = field.current;
+    const side = chip.current;
+    if (!text || !box || !side) return;
+    const style = getComputedStyle(text);
+    const padding = getComputedStyle(box);
+    // What is left of the field's width for the text, once the chip and the gap after it are paid for; 12px
+    // of margin so a line that only just fits is not left to wrap.
+    const room = box.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight) - side.offsetWidth - 8 - 12;
+    ruler.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    setStacked(value.includes("\n") || ruler.measureText(value).width > room);
+  }, [value, fieldWidth, model, thinking?.level]);
   useEffect(() => {
     const el = input.current;
     if (!el) return;
@@ -206,9 +326,15 @@ export function Composer({
     const style = getComputedStyle(el);
     const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
     el.style.height = `${Math.min(el.scrollHeight, parseFloat(style.lineHeight) * 8 + padding)}px`;
-  }, [value]);
+  }, [value, stacked]);
   const [dismissed, setDismissed] = useState(false);
   const [cursor, setCursor] = useState(0);
+  const list = useRef<HTMLDivElement>(null);
+  /** The arrow keys moved the cursor, so its row has to be brought into view; the pointer only ever lands on rows already in it. */
+  const stepped = useRef(false);
+  useEffect(() => {
+    if (stepped.current) list.current?.querySelector("[data-chosen]")?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
   const [picking, setPicking] = useState(false);
   // An agent with no model cannot start: open the list rather than leave the person guessing.
   useEffect(() => setPicking(needsModel), [agentId, needsModel]);
@@ -224,7 +350,8 @@ export function Composer({
   }, [picking, agentId, store]);
 
   const query = completionQuery(value);
-  const suggestions = query === undefined || dismissed ? [] : matches(view.commands, query);
+  // Not while the model picker is open: two floating lists over one composer read as a mistake.
+  const suggestions = query === undefined || dismissed || picking ? [] : matches(view.commands, query);
   const chosen = suggestions[Math.min(cursor, suggestions.length - 1)];
 
   // The first `/` is what asks for the names; the store decides they are fetched once per agent.
@@ -236,6 +363,7 @@ export function Composer({
   useEffect(() => {
     setDismissed(false);
     setCursor(0);
+    list.current?.scrollTo(0, 0);
   }, [query]);
 
   return (
@@ -258,22 +386,31 @@ export function Composer({
         <Disc>
           <Button kind="ghost" size={40} disabled="Attachments are not supported yet" aria-label="Attach" icon={<Paperclip size={20} />} />
         </Disc>
-        <div className="composer-card relative flex min-w-0 flex-1 items-end gap-2 rounded-composer bg-surface py-1.5 pr-1.5 pl-4 ring-1 ring-stroke focus-within:ring-accent/50">
+        <div ref={field} className="composer-card relative flex min-w-0 flex-1 flex-wrap items-end gap-x-2 gap-y-1 rounded-composer bg-surface py-1.5 pr-1.5 pl-4 ring-1 ring-stroke focus-within:ring-accent/50">
           {suggestions.length > 0 && (
-            <div className="popover absolute bottom-full left-0 mb-2 w-96 max-h-64 overflow-y-auto z-20">
+            // The model picker's surface and rows: one list look, so the two floating lists read as the same kind of thing.
+            <div ref={list} className="popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-[420px] max-w-full overflow-y-auto">
               {suggestions.map((command, index) => (
                 <button
                   key={command.name}
-                  onMouseEnter={() => setCursor(index)}
+                  // Moved, not entered: the list scrolls under a pointer that is resting on it when the keys
+                  // step, the browser then reports the row now under it as entered, and the cursor would be
+                  // taken from the keys by a mouse nobody moved.
+                  onMouseMove={(event) => {
+                    if (!event.movementX && !event.movementY) return;
+                    stepped.current = false;
+                    setCursor(index);
+                  }}
                   onClick={() => store.setDraft(complete(command))}
-                  className={`flex w-full items-baseline gap-2 rounded-card px-2 py-1.5 text-left ${
-                    command === chosen ? "bg-accent-weak text-accent" : ""
+                  data-chosen={command === chosen || undefined}
+                  className={`flex w-full scroll-my-1.5 items-baseline gap-2.5 rounded-card px-2.5 py-2 text-left text-[14px] ${
+                    command === chosen ? "bg-hover" : ""
                   }`}
                 >
                   {/* What accepting it inserts: a bare `/weather` typed by hand would reach the model as text. */}
-                  <span className="font-mono text-[12px]">/{spelling(command)}</span>
-                  <span className="truncate text-[11px] text-muted flex-1">{command.description}</span>
-                  <span className="ml-auto text-[11px] text-muted">{command.source}</span>
+                  <span className="shrink-0">/{spelling(command)}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{command.description}</span>
+                  <span className="shrink-0 text-[12px] text-muted">{command.source}</span>
                 </button>
               ))}
             </div>
@@ -289,6 +426,7 @@ export function Composer({
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault();
                   const step = e.key === "ArrowDown" ? 1 : suggestions.length - 1;
+                  stepped.current = true;
                   return setCursor((c) => (Math.min(c, suggestions.length - 1) + step) % suggestions.length);
                 }
                 if (e.key === "Escape") {
@@ -312,30 +450,43 @@ export function Composer({
             // The field matches the leading of the bubble it turns into: a composer that types tighter
             // than it sends makes a long message reflow the moment it is sent. The 1px keeps one line
             // as tall as the model chip beside it (28).
-            className="bubble min-h-7 min-w-0 flex-1 resize-none bg-transparent py-px outline-none placeholder:text-muted disabled:opacity-40"
+            className={`bubble min-h-7 min-w-0 resize-none bg-transparent py-px outline-none ${stacked ? "basis-full" : "flex-1"}  placeholder:text-muted disabled:opacity-40`}
           />
-          <div className="relative min-w-0 max-w-[45%]">
+          <div ref={chip} className="relative ml-auto min-w-0 max-w-[45%]">
             <Button
               kind="ghost"
               size={28}
               onClick={() => setPicking(!picking)}
-              // The chip truncates a long id, so the tooltip carries the whole name in both states.
+              // The chip truncates a long spec, so the tooltip carries the whole name in both states.
               disabled={modelReason && model ? `${modelReason} (${model})` : modelReason}
               title={model ? `Model for this agent: ${model}` : "Model for this agent"}
-              className={`max-w-full font-mono ${!model && needsModel ? "text-warning" : ""}`}
+              className={`max-w-full ${!model && needsModel ? "text-warning" : ""}`}
             >
-              <span className="truncate">{model ?? (needsModel ? "pick a model" : "reading model…")}</span>
+              {model ? (
+                // The provider is quieter than the id but never dropped: `openai/` and `openai-codex/`
+                // offer the same ids and are paid for differently.
+                <span className="min-w-0 truncate text-[12px]">
+                  <span className="text-muted">{model.slice(0, model.indexOf("/") + 1)}</span>
+                  <span className="text-text">{model.slice(model.indexOf("/") + 1)}</span>
+                </span>
+              ) : (
+                <span className="truncate">{needsModel ? "pick a model" : "reading model…"}</span>
+              )}
+              {thinking && thinking.levels.length > 1 && (
+                <span className="shrink-0 text-[12px] text-muted">{levelName(thinking.level)}</span>
+              )}
               <CaretDown size={12} className="shrink-0" />
             </Button>
             {picking && agentId && !busy && !modelDisabled && (
-              <ModelPopover
+              <ModelPicker
                 view={view}
                 store={store}
                 current={model}
+                thinking={thinking}
                 onClose={() => setPicking(false)}
-                onProviders={(connect) => {
+                onProviders={() => {
                   setPicking(false);
-                  onProviders(connect);
+                  onProviders();
                 }}
               />
             )}

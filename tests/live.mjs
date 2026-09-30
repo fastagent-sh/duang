@@ -74,7 +74,8 @@ if (!process.versions.electron) {
       `${real} does not exist. Connect Codex and Anthropic in duang (Settings → Model providers), or ` +
         `sign in with the CLI pointed at it: FASTAGENT_AUTH_PATH="${real}" fastagent login`,
     );
-    symlinkSync(real, join(data, "auth.json"));
+    const authFile = join(data, "auth.json");
+    symlinkSync(real, authFile);
 
     const loaded = new Promise((resolve) => {
       app.once("browser-window-created", (_event, window) => {
@@ -86,13 +87,13 @@ if (!process.versions.electron) {
     await loaded;
 
     const models = await call("listModels", "live");
-    const before = await readFile(models.authPath, "utf8");
+    const before = await readFile(authFile, "utf8");
     // Not simply the first Codex spec: the picker also lists models a ChatGPT account may not run
     // (see the note in issue #5), and this check is about credentials, not entitlements.
     const codex = process.env.DUANG_LIVE_CODEX ?? models.specs.find((spec) => spec === "openai-codex/gpt-5.5");
     const anthropic = models.specs.find((spec) => spec.startsWith("anthropic/claude-sonnet"));
-    assert.ok(codex && anthropic, `needs Codex and Anthropic in ${models.authPath}, got ${models.specs.join(", ")}`);
-    console.log(`Credential file: ${models.authPath}\nUsing: ${codex} + ${anthropic}`);
+    assert.ok(codex && anthropic, `needs Codex and Anthropic in ${authFile}, got ${models.specs.join(", ")}`);
+    console.log(`Credential file: ${authFile}\nUsing: ${codex} + ${anthropic}`);
 
     // 1. Agent default (Codex) runs with the credentials already on this machine.
     assert.deepEqual(await call("setModel", "live", codex), { ok: true });
@@ -122,7 +123,7 @@ if (!process.versions.electron) {
     console.log(`Anthropic history (${history.model}) reply: ${JSON.stringify(history.text)}`);
 
     // Refresh may legitimately rewrite tokens; it must stay a readable file with the same providers.
-    const after = await readFile(models.authPath, "utf8");
+    const after = await readFile(authFile, "utf8");
     assert.deepEqual(Object.keys(JSON.parse(after)).sort(), Object.keys(JSON.parse(before)).sort());
     console.log(`Credential file ${after === before ? "unchanged" : "rewritten by OAuth refresh"}, providers intact.`);
     console.log("Live check passed: real Codex default, real Anthropic history, one credential file.");

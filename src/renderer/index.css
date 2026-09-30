@@ -47,7 +47,10 @@
 
   /* The system face, paired with the system's own CJK face: this is a native window with a hidden
      title bar, and a web font beside it reads as a page rather than an app. */
-  --font-sans: -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  /* `system-ui` first: it is what Chromium maps to SF. `-apple-system` is Safari's spelling and "SF Pro Text"
+     is not a name the system will hand out, so a stack that leads with them falls through both to PingFang SC
+     and draws every Latin letter of the chrome in it, with its wide hyphen and punctuation. */
+  --font-sans: system-ui, "PingFang SC", sans-serif;
   /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
      what terminal output actually contains. The rest are fallbacks for machines without it. */
   --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
@@ -311,7 +314,10 @@ pre,
  */
 details::details-content {
   block-size: 0;
-  overflow: hidden;
+  /* Only the height is clipped, for the growing: a tool card reaches 10px past its column on each side,
+     and `overflow: hidden` would cut its ring and corners off at the column's edge. */
+  overflow-x: visible;
+  overflow-y: clip;
   transition:
     block-size 200ms var(--ease-ui),
     content-visibility 200ms allow-discrete;
@@ -397,8 +403,11 @@ summary:focus-visible,
 
 /* The header still floats over the transcript; its lower edge, not a hard strip across the page,
    separates the moving text from the controls. */
+/* The drop shadows below go in `--tw-shadow`, not `box-shadow`: the elements carry `ring-1`, which is a
+   box-shadow too, and a rule that set `box-shadow` itself would replace it, taking the hairline off the
+   composer, its discs and the header and the focus ring off the field. */
 .conversation-header {
-  box-shadow: 0 12px 24px -18px oklch(0 0 0 / 70%);
+  --tw-shadow: 0 12px 24px -18px oklch(0 0 0 / 70%);
 }
 
 /* The roster's hairline starts where the text does (8px row padding + 48px avatar + 12px gap) and
@@ -655,13 +664,13 @@ summary:focus-visible,
   }
   .conversation-header {
     background: oklch(0.995 0.003 80 / 94%);
-    box-shadow:
+    --tw-shadow:
       0 2px 5px -2px oklch(0.26 0.02 285 / 12%),
       0 14px 26px -17px oklch(0.26 0.02 285 / 25%);
   }
   .composer-card {
     background: oklch(1 0 0);
-    box-shadow: 0 14px 36px -24px oklch(0.3 0.02 285 / 26%);
+    --tw-shadow: 0 14px 36px -24px oklch(0.3 0.02 285 / 26%);
   }
   .composer button[aria-label="Send"][aria-disabled="true"] {
     background: var(--color-surface-2);

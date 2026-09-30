@@ -78,6 +78,14 @@ if (!process.versions.electron) {
       join(configured, "skills", "demo", "SKILL.md"),
       "---\nname: demo\ndescription: A skill the completion list should offer.\n---\n\nSay demo.\n",
     );
+    // More names than the list shows at once, so it scrolls and the keyboard cursor can leave the view.
+    for (const suffix of "abcdefghi") {
+      await mkdir(join(configured, "skills", `demo-${suffix}`), { recursive: true });
+      await writeFile(
+        join(configured, "skills", `demo-${suffix}`, "SKILL.md"),
+        `---\nname: demo-${suffix}\ndescription: Another skill for the list to scroll past.\n---\n\nSay ${suffix}.\n`,
+      );
+    }
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(
       join(data, "agents.json"),
@@ -226,8 +234,8 @@ if (!process.versions.electron) {
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(model)});
         input.dispatchEvent(new Event('input', { bubbles: true }));
       })()`);
-      await until(`document.querySelector('dialog').innerText.includes(${JSON.stringify(model)})`, "filtered model");
-      await click(model);
+      await until(`document.querySelector('dialog button[data-model="${model}"]')`, "filtered model");
+      await evaluate(`document.querySelector('dialog button[data-model="${model}"]').click()`);
     }
     async function type(text) {
       await evaluate(`(() => {
@@ -277,8 +285,22 @@ if (!process.versions.electron) {
         !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
         "the scaffold offer must not be contradicted by the runtime's `run fastagent init` error",
       );
+      // The chrome's Latin is SF, not PingFang's: a stack that leads with names Chromium does not resolve
+      // falls through to PingFang, whose hyphen is 0.6em wide against SF's 0.43.
+      assert.ok(
+        await evaluate(`(() => {
+          const ruler = document.createElement('canvas').getContext('2d');
+          ruler.font = '100px ' + getComputedStyle(document.body).fontFamily;
+          return ruler.measureText('-').width < 50;
+        })()`),
+        "the chrome's Latin is drawn in the system font",
+      );
       await click("Create agent here");
       await until("document.querySelector('dialog[open]') !== null", "first model picker opens automatically");
+      await until(
+        "document.querySelector('dialog').innerText.includes('Effort can be set once the conversation has begun')",
+        "a conversation that has not begun has no effort to set yet: the runtime lists levels per conversation",
+      );
       await chooseModel("openai/gpt-4o-mini");
       await until("document.querySelector('dialog') === null", "first model picker closes");
       await until(
@@ -317,6 +339,21 @@ if (!process.versions.electron) {
           return card && card.textContent.includes('Hello from the workspace') && !card.textContent.includes('running');
         })()`,
         "tool trace finishes",
+      );
+      // A card reaches 10px past its column on each side; the disclosure's content slot clips the height
+      // for the growing, and must not clip the width, or the card's right ring and corners are cut off.
+      assert.equal(
+        await evaluate("getComputedStyle(document.querySelector('details'), '::details-content').overflowX"),
+        "visible",
+        "a disclosure clips its height, not its width",
+      );
+      // The composer's field and discs and the header are drawn with a `ring-1` hairline; a drop shadow of
+      // their own that set `box-shadow` (the ring is one) would replace it, leaving white on white in
+      // light mode.
+      assert.deepEqual(
+        await evaluate(`['.composer-card', '.conversation-header'].map((selector) => /0px 0px 0px 1px/.test(getComputedStyle(document.querySelector(selector)).boxShadow))`),
+        [true, true],
+        "the composer and the header keep their hairline",
       );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
       // The header floats over the transcript, as Telegram's does: text scrolls beneath it, the
@@ -362,11 +399,19 @@ if (!process.versions.electron) {
       await until("document.querySelector('dialog button[aria-current=\"true\"]') !== null", "model picker reopens with the current model");
       assert.equal(
         await evaluate(`(() => {
-          const selected = document.querySelector('dialog button[aria-current="true"]');
-          return selected?.parentElement.firstElementChild === selected ? selected.textContent.trim() : undefined;
+          const first = document.querySelector('dialog button[data-model]');
+          return first.getAttribute('aria-current') === 'true' ? first.dataset.model : undefined;
         })()`),
         "openai/gpt-4o-mini",
         "the current model appears first in the picker",
+      );
+      assert.ok(
+        !(await evaluate("document.querySelector('dialog').innerText")).includes("Credentials"),
+        "the credential file's path is not the picker's business",
+      );
+      assert.ok(
+        (await evaluate("document.querySelector('dialog').innerText")).includes("This model has no effort setting"),
+        "a model with one level offers no track",
       );
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
@@ -485,7 +530,6 @@ if (!process.versions.electron) {
       await until("document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')", "configured model uses the same credential file");
 
       const models = await evaluate("window.duang.listModels('configured')");
-      assert.equal(models.authPath, selectedAuth);
       assert.ok(models.specs.includes("anthropic/claude-sonnet-4-5"));
       const codexModel = models.specs.find((spec) => spec.startsWith("openai-codex/"));
       assert.ok(codexModel);
@@ -499,6 +543,41 @@ if (!process.versions.electron) {
       await message("Use the Anthropic conversation model.");
       await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main .bounce')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
+      // Effort is the conversation's own level, from the list its runtime gives for the model it runs.
+      const chip = `document.querySelector('button[title^="Model for this agent"]')`;
+      await evaluate(`${chip}.click()`);
+      await until("document.querySelector('dialog [role=radiogroup][aria-label=Effort]')", "a reasoning model offers an effort track");
+      // The list stops at 60 rows, and a provider past them shows no heading: it says there are more.
+      await until("document.querySelectorAll('dialog button[data-model]').length > 0", "the models are listed");
+      assert.match(await evaluate("document.querySelector('dialog').innerText"), /\d+ more: search to narrow the list/, "a cut-off list says so");
+      const levels = await evaluate(`[...document.querySelectorAll('dialog [role=radio]')].map((stop) => stop.getAttribute('aria-label'))`);
+      assert.ok(levels.length > 1 && levels.includes("High"), `the runtime's levels are the stops: ${levels}`);
+      await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').click()`);
+      await until(`${chip}.textContent.includes('High')`, "the chip names the level the runtime reports");
+      await until(`document.querySelector('dialog [role=radio][aria-label="High"]').getAttribute('aria-checked') === 'true'`, "and so does the track");
+      // Choosing is explicit: each choice is a durable entry in the conversation's record, so the arrow
+      // keys move the focus along the track and write nothing, and Enter chooses.
+      const thinkingSession = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
+      const levelChanges = () =>
+        evaluate(`window.duang.readSession('configured', ${JSON.stringify(thinkingSession)}).then((r) => r.entries.filter((e) => e.kind === 'thinking_level_change').length)`);
+      const changesBefore = await levelChanges();
+      const target = levels[levels.indexOf("High") - 2];
+      await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').focus()`);
+      for (let i = 0; i < 2; i++) {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Left" });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Left" });
+      }
+      await until(`document.activeElement.getAttribute('aria-label') === ${JSON.stringify(target)}`, `two arrow presses move the focus to ${target}`);
+      assert.equal(await levelChanges(), changesBefore, "moving along the track writes nothing");
+      assert.ok(await evaluate(`${chip}.textContent.includes('High')`), "and the chip still names the runtime's level");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+      win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+      await until(`${chip}.textContent.includes(${JSON.stringify(target)})`, `Enter chooses ${target}`);
+      assert.equal((await levelChanges()) - changesBefore, 1, "and it is one level written");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("document.querySelector('dialog') === null", "Escape closes the picker");
       await until("/7d[\\s\\S]*18%/.test(document.querySelector('header').innerText)", "the header shows the subscription's fullest plan window");
       assert.ok(!(await evaluate("document.querySelector('header').innerText")).includes("5h"), "the other windows wait for a hover");
       assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%/, "the hover table lists every window");
@@ -573,6 +652,33 @@ if (!process.versions.electron) {
       );
       await type("/d");
       await until("document.body.innerText.includes('A skill the completion list should offer')", "list reopens");
+      // ArrowUp from the first wraps to the last, which the list has to scroll to: a cursor on a row
+      // cut in half by the list's edge is a cursor nobody can read.
+      // The cursor is on the row asked for (React has rendered the key) and that row is fully in view.
+      const chosenInView = (which) => `(() => {
+        const rows = [...document.querySelectorAll('.composer .popover button')];
+        const chosen = document.querySelector('.composer .popover [data-chosen]');
+        if (chosen !== rows.at(${which})) return false;
+        const row = chosen.getBoundingClientRect();
+        const box = document.querySelector('.composer .popover').getBoundingClientRect();
+        return row.top >= box.top && row.bottom <= box.bottom;
+      })()`;
+      await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
+      await until(chosenInView(-1), "the last row is chosen and scrolled fully into view");
+      // A pointer resting on the list is not moving: the row the scroll puts under it is reported as entered,
+      // and must not take the cursor from the keys. A pointer that moves does.
+      await evaluate(`document.querySelector('.composer .popover button').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.ok(await evaluate(chosenInView(-1)), "a row entered by a resting pointer does not take the cursor");
+      await evaluate(`document.querySelector('.composer .popover button').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, movementX: 4 }))`);
+      await until(
+        "document.querySelector('.composer .popover [data-chosen]') === document.querySelector('.composer .popover button')",
+        "a pointer that moves does",
+      );
+      await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
+      await until(chosenInView(-1), "and the keys take it back");
+      await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))`);
+      await until(chosenInView(0), "and the first row again");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
       await until("document.querySelector('textarea').value === '/skill:demo '", "Enter accepts the skill in the spelling pi runs, it does not send");
@@ -794,6 +900,15 @@ if (!process.versions.electron) {
         })()`),
         "the composer scrolls instead of growing past eight lines",
       );
+      // The model chip has a row of its own under a draft of several lines, and sits beside a single one.
+      const chipBelow = `(() => {
+        const text = document.querySelector('textarea').getBoundingClientRect();
+        const chip = document.querySelector('button[title^="Model for this agent"]').getBoundingClientRect();
+        return chip.top >= text.bottom;
+      })()`;
+      assert.ok(await evaluate(chipBelow), "a draft of several lines gives the model chip a row of its own");
+      await type("one line");
+      assert.ok(!(await evaluate(chipBelow)), "and a single line keeps it beside the text");
       await type("");
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
       await until("document.body.innerText.includes('What should we work on?')", "⌘N starts a conversation");
@@ -927,10 +1042,12 @@ if (!process.versions.electron) {
         await until(providersListed, "Settings lists the providers");
       };
       const fromPicker = async () => {
+        // With nothing connected, the picker's one way forward is to connect a provider.
+        await writeFile(selectedAuth, "{}");
         await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
-        await until("[...document.querySelectorAll('dialog button')].some((b) => b.textContent.trim() === 'Manage providers…')", "the picker offers Manage providers…");
-        await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Manage providers…').click()`);
-        await until(providersListed, "Manage providers… opens Settings");
+        await until("[...document.querySelectorAll('dialog button')].some((b) => b.textContent.trim() === 'Connect a provider')", "the empty picker offers Connect a provider");
+        await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Connect a provider').click()`);
+        await until(providersListed, "Connect a provider opens Settings");
       };
       /** A closed row in the Add card, found by search, opened, and its API key way chosen. */
       const pickKey = async (id, query) => {
@@ -1043,11 +1160,13 @@ if (!process.versions.electron) {
       await pickKey("deepseek", "deep");
       await answer("sk-good");
       await until(
-        "!document.querySelector('#providers-heading') && document.querySelector('dialog[aria-label=\"Choose a model\"]')?.innerText.includes('deepseek/')",
+        "!document.querySelector('#providers-heading') && document.querySelector('dialog[aria-label=\"Choose a model\"] button[data-model^=\"deepseek/\"]')",
         "a connection started at the picker returns to it, listing the new models",
       );
       escape();
       await until("!document.querySelector('dialog')", "Escape closes the picker");
+      // What the empty picker needed is put back, beside the provider it just connected.
+      await writeFile(selectedAuth, JSON.stringify({ ...stored, ...JSON.parse(await readFile(selectedAuth, "utf8")) }));
 
       // A route duang cannot take (SOCKS4, from a PAC file) is shown, not fatal: a send still goes
       // out, agent commands just get no proxy, and the page says both. Choosing again recovers.

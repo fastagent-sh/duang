@@ -95,6 +95,21 @@ if (!process.versions.electron) {
     // duang reads only its own credential file, in its user data.
     await writeFile(join(data, "auth.json"), JSON.stringify({ openai: { type: "api_key", key: "shot-key" } }));
     await writeFile(join(workspace, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
+    // Skills are what the composer's `/` completion lists.
+    for (const [name, description] of [
+      ["review", "Review a change for correctness and over-engineering before it is merged."],
+      ["release-notes", "Write the release notes for everything merged since the last tag."],
+      ["translate", "Translate a document and keep its formatting."],
+      ["summarize", "Summarize a long thread into the decisions and the open questions."],
+      ["triage", "Sort new issues by severity and propose an owner for each."],
+      ["changelog", "Draft a changelog entry from the commits on this branch."],
+      ["explain", "Explain a piece of code to someone who has not seen it."],
+      ["migrate", "Plan a migration and list what breaks on the way."],
+      ["outline", "Outline a document before it is written."],
+    ]) {
+      await mkdir(join(workspace, "fastagent", "skills", name), { recursive: true });
+      await writeFile(join(workspace, "fastagent", "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n\nDo ${name}.\n`);
+    }
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(join(second, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
     await writeFile(join(data, "agents.json"), JSON.stringify([
@@ -224,6 +239,15 @@ if (!process.versions.electron) {
       })()`),
     );
     await capture("app");
+    // The `/` list: the same surface and rows as the model picker.
+    await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, '/'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await until(`document.querySelector('.composer .popover button')`, "the command list");
+    // The cursor at the last row of a list that scrolls: the row is brought fully into view.
+    await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await capture("commands");
+    await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await until(`!document.querySelector('.composer .popover button')`, "the command list closes");
     await evaluate(`document.querySelector('details').open = false`);
     await capture("app-start", "top");
     // Wide enough that the column stops growing: where its centring and its edges against the
@@ -242,9 +266,15 @@ if (!process.versions.electron) {
     await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
     await until(`document.querySelector('dialog[open]')`, "model picker");
     await capture("models");
-    await evaluate(`document.querySelector('dialog summary').click()`);
-    await capture("models-credentials");
-    await evaluate(`document.querySelector('button[aria-label="Close model picker"]').click()`);
+    // A model that thinks in levels: the effort track appears under the list.
+    await evaluate(`document.querySelector('dialog button[data-model="openai/gpt-5"]').click()`);
+    await until(`!document.querySelector('dialog') && document.querySelector('button[title^="Model for this agent"]')?.textContent.includes('gpt-5')`, "a reasoning model chosen");
+    await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
+    await until(`document.querySelector('dialog [role=radiogroup]')`, "the effort track");
+    await evaluate(`document.querySelector('dialog [role=radio][aria-label="Medium"]').click()`);
+    await until(`document.querySelector('dialog [role=radio][aria-label="Medium"]').getAttribute('aria-checked') === 'true'`, "a middle level chosen");
+    await capture("models-effort");
+    await evaluate(`document.querySelector('dialog').close()`);
 
     // Reopened, the conversation is history: nothing in it arrived just now, so nothing in it may
     // float in as if it had. Printed rather than asserted, like the clearance above — and 0 is the
