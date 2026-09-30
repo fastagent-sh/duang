@@ -275,7 +275,7 @@ export function Message({
       return (
         <div className="flex flex-col items-end gap-1">
           <div
-            className={`bubble max-w-[80%] rounded-card rounded-br-[4px] bg-accent-weak px-3.5 py-2 whitespace-pre-wrap ${
+            className={`bubble max-w-[80%] rounded-float rounded-br-[4px] bg-accent-weak px-3.5 py-2 whitespace-pre-wrap ${
               item.steered ? "border-r-2 border-accent" : ""
             } ${waiting ? "opacity-60" : ""}`}
           >

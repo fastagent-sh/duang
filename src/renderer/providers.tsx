@@ -43,7 +43,7 @@ const LOGOS: Record<string, string> = {
 
 function ProviderMark({ provider, size = 32 }: { provider: ProviderRow; size?: number }) {
   const svg = svgs[`./provider-logos/${LOGOS[provider.id]}.svg`];
-  const tile = "grid shrink-0 place-items-center rounded-[9px] bg-bg text-text ring-1 ring-stroke";
+  const tile = "grid shrink-0 place-items-center rounded-card bg-bg text-text ring-1 ring-stroke";
   // Without a logo, the same tile holds the name's initials, so every row keeps one shape.
   if (!svg)
     return (
@@ -412,7 +412,7 @@ function Ways({ provider, onChoose }: { provider: ProviderRow; onChoose: (way: W
             onClick={() => onChoose(way)}
             className="flex min-w-0 items-center gap-2.5 rounded-card bg-surface px-3 py-2 text-left ring-1 ring-stroke outline-none transition-shadow hover:ring-accent/60 focus-visible:ring-2 focus-visible:ring-accent/70"
           >
-            <span className="grid size-7 shrink-0 place-items-center rounded-badge bg-accent-weak text-accent" aria-hidden>
+            <span className="grid size-7 shrink-0 place-items-center rounded-card bg-accent-weak text-accent" aria-hidden>
               {way.method === "api_key" ? <Key size={15} /> : <Globe size={15} />}
             </span>
             <span className="min-w-0">
@@ -555,7 +555,7 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
                   <CaretRight size={11} className="transition-transform group-open:rotate-90" />
                   What {provider.name} said
                 </summary>
-                <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[11.5px] text-muted">{info.message}</p>
+                <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] text-muted">{info.message}</p>
               </details>
             )}
           </div>
@@ -620,7 +620,7 @@ function DeviceCode({ device, store }: { device: NonNullable<SignIn["device"]>; 
         detail={left === undefined ? undefined : left > 0 ? `The code expires in ${Math.ceil(left / 60)} min.` : "The code expired. Close this and start again."}
       />
       <div className="flex flex-wrap items-center gap-2 pl-6">
-        <span className="rounded-card bg-surface px-3 py-1 font-mono text-[20px] tracking-[0.18em] ring-1 ring-stroke select-all">
+        <span className="rounded-card bg-surface px-3 py-1 font-mono text-[22px] tracking-[0.18em] ring-1 ring-stroke select-all">
           {device.userCode}
         </span>
         <CopyButton text={device.userCode} label="Copy code" />
@@ -635,7 +635,7 @@ function DeviceCode({ device, store }: { device: NonNullable<SignIn["device"]>; 
 }
 
 const fieldClass =
-  "h-7 min-w-0 flex-1 rounded-card bg-surface px-2.5 text-[12.5px] outline-none ring-1 ring-stroke placeholder:font-sans placeholder:text-muted focus:ring-accent/60 disabled:opacity-60";
+  "h-7 min-w-0 flex-1 rounded-card bg-surface px-2.5 outline-none ring-1 ring-stroke placeholder:font-sans placeholder:text-muted focus:ring-accent/60 disabled:opacity-60";
 
 /**
  * The key, shown as typed so a paste can be checked by eye. One field for the whole exchange: it
@@ -672,7 +672,7 @@ function KeyField({ promptId, store, label }: { promptId?: string; store: Store;
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder="Paste your key"
-          className={`${fieldClass} font-mono`}
+          className={`${fieldClass} font-mono text-[12.5px]`}
         />
         <Button kind="primary" size={28} onClick={submit} disabled={checking ? "Checking the key" : undefined}>
           {checking ? "Checking…" : "Connect"}
@@ -754,7 +754,7 @@ function Answer({
           aria-label={text}
           placeholder={placeholder ?? prompt.placeholder}
           // Typed values are keys, codes and addresses, read character by character; hints are prose.
-          className={`${fieldClass} font-mono`}
+          className={`${fieldClass} font-mono text-[12.5px]`}
         />
         <Button kind="primary" size={28} onClick={submit}>
           {action}

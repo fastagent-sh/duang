@@ -191,7 +191,7 @@ signal.
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
 `openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
 anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
-system face rather than mono, at 14px), and the effort. Effort is a track with a stop per
+system face rather than mono, at 13px), and the effort. Effort is a track with a stop per
 level; the runtime's list is the stops, and it is per conversation, so a conversation that has not begun
 says so. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
 and comes back as `state_changed`. Choosing writes a durable entry into the conversation's record, so
@@ -377,16 +377,18 @@ than a Latin one to read as emphasis.
 | Answer headings | 22 / 19 / 17 (h1–h3), 15 below / 1.4 / 600 |
 | Conversation prose, sent messages, composer | 15 / 1.7 / 400 |
 | Answer tables | 14 / 1.6 / 400, header 600 muted on a tinted band |
-| Agent name | 13.5 / 1.4 / 600 |
+| Agent name | 13 / 1.4 / 600 |
 | Sidebar rows | 13 / 1.7 / 400 |
-| Tool rows, thinking, model list, card bodies | 12 / 1.5 / 400 |
+| Model and command lists, their search | 13 / 1.5 / 400, secondary text 12–13 |
+| Tool rows, thinking, card bodies | 12 / 1.5 / 400 |
 | Code, paths, tool output | 12.5 / 1.625 / 400, mono |
 | Inline code | 0.875em of its line (11 at least) / 400, mono |
 | Badges, timestamps, labels | 11 / 1 / 400–500 |
 
 Mono sits half a step above the sans beside it on purpose: its x-height is smaller, so the same
-nominal size reads smaller. Nothing is drawn at 10 or 11.5 — a half-pixel step is invisible, and all
-it does is stop two things that should match from matching.
+nominal size reads smaller. Nothing else is drawn at a half step: it is invisible, and all it does is stop two things that should
+match from matching. The chrome's scale is 11, 12, 13, 15 and 22 (the page title), with the mono's 12.5
+as the one exception; a test reads the components and fails on any other size.
 
 Emphasis uses weight, never hue. Body text is never coloured.
 
@@ -436,16 +438,18 @@ Popovers share one surface — `surface`, a rounded hairline and a shadow — ev
 though the model list is a modal dialog that takes focus and the slash completion list deliberately
 does not. The model picker is a search field over the models grouped under their provider, the selected one
 first with a check on a neutral row, and the conversation's effort under a hairline. The slash list
-is the same surface and the same rows (14px, neutral highlight on the current item, the command's
+is the same surface and the same rows (13px, neutral highlight on the current item, the command's
 description and source quieter beside it), and it steps aside while the picker is open. The arrow keys scroll the list to keep the cursor's row fully
 in view (it scrolls past eight names); the pointer never needs to.
 
 ## 7. Space, radius, elevation
 
 - Spacing scale: 4, 8, 12, 16, 24, 32.
-- Radius: 6 (badges, small controls), 10/12 (dark/light cards, bubbles, inputs), 14/18
-  (dark/light floating panels). A bubble's trailing corner drops to 4 — that asymmetry is what
-  makes it read as speech.
+- Radius, the same in both modes: 8 (rows, buttons, inputs, table heads), 14 (bubbles, the sidebar,
+  floating panels, code blocks), 20 (the composer and the header, which are pills at one line).
+  Corners are concentric: a popover is 14 with 6 of padding, so what sits in it is 8. A bubble's
+  trailing corner and an inline code span are 4 — that asymmetry is what makes a bubble read as speech.
+  A test fails on any other radius written into a component.
 - Dark panels use value and a hairline; the header has a quiet lower shadow. In light mode the
   sidebar, header and composer get restrained shadows, while reading content stays flat.
 - No divider between sidebar and conversation: the material change is the separation.
@@ -793,8 +797,9 @@ MANUAL PROXY                               (only while Manual is chosen)
 ╭ HTTP / HTTPS / SOCKS5, one checked ╮  ╭ Server │ Port ╮  [Use this proxy]
 ```
 
-- Shipped, drawn the way Telegram draws its settings: a small-caps muted heading over an inset card
-  (`surface`, hairline ring, radius 14) on the plain canvas, rows divided by hairlines that start
+- Shipped, drawn the way Telegram draws its settings: a muted heading over an inset card
+  (`surface`, hairline ring, radius 14; the heading is sentence case at 12, like every other label,
+  since small caps appear nowhere else in the app) on the plain canvas, rows divided by hairlines that start
   where the text does, the choice marked by a trailing accent ✓ rather than a leading radio, and
   fields as rows (a label, then the value) rather than one URL to spell. The chosen row carries the
   connection's state as its second line — `connected · 320 ms` in the accent, or `unreachable

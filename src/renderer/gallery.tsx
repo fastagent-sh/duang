@@ -33,7 +33,7 @@ export default function Gallery() {
     <div className="h-full overflow-y-auto p-8">
       <div className="column space-y-8">
         <header>
-          <h1 className="text-[20px] font-medium">
+          <h1 className="text-[22px] font-medium">
             duang<span className="text-accent">·</span> components
           </h1>
           <p className="text-muted text-[12px]">docs/ui.md §6b. Every section renders the real components.</p>

@@ -89,7 +89,7 @@ export function Settings({
     <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="mx-auto max-w-[600px] px-6 pt-6 pb-10">
         <div className="flex items-center gap-2 mb-6">
-          <h1 className="flex-1 text-[20px] font-medium drag">Settings</h1>
+          <h1 className="flex-1 text-[22px] font-medium drag">Settings</h1>
           <Button kind="ghost" size={28} onClick={onClose} aria-label="Close settings" title="Close (Esc)" icon={<X size={14} />} />
         </div>
 
@@ -185,7 +185,7 @@ export function Group({ id, title, children }: { id?: string; title?: string; ch
   return (
     <section aria-labelledby={id} className="space-y-1.5">
       {title && (
-        <h2 id={id} className="px-4 text-[11px] font-medium uppercase tracking-[0.05em] text-muted">
+        <h2 id={id} className="px-4 text-[12px] font-medium text-muted">
           {title}
         </h2>
       )}
@@ -341,7 +341,7 @@ function Status({ route, check, onRefresh }: { route: Route; check?: Connection;
         }}
         aria-label="Check the connection again"
         title="Check again"
-        className="rounded-badge p-0.5 text-muted hover:text-text hover:bg-hover"
+        className="rounded-card p-0.5 text-muted hover:text-text hover:bg-hover"
       >
         <ArrowClockwise size={12} aria-hidden />
       </button>

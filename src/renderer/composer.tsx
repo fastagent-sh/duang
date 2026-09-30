@@ -178,7 +178,7 @@ function ModelPicker({
               onChange={(e) => setFilter(e.target.value)}
               aria-label="Filter models"
               placeholder="Search models"
-              className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted"
+              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted"
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1.5">
@@ -200,7 +200,7 @@ function ModelPicker({
                       void store.pickModel(model);
                     }}
                     aria-current={model === current ? "true" : undefined}
-                    className={`flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[14px] hover:bg-hover ${
+                    className={`flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[13px] hover:bg-hover ${
                       model === current ? "bg-hover" : ""
                     }`}
                   >
@@ -403,7 +403,7 @@ export function Composer({
                   }}
                   onClick={() => store.setDraft(complete(command))}
                   data-chosen={command === chosen || undefined}
-                  className={`flex w-full scroll-my-1.5 items-baseline gap-2.5 rounded-card px-2.5 py-2 text-left text-[14px] ${
+                  className={`flex w-full scroll-my-1.5 items-baseline gap-2.5 rounded-card px-2.5 py-2 text-left text-[13px] ${
                     command === chosen ? "bg-hover" : ""
                   }`}
                 >

@@ -186,7 +186,7 @@ export function Sidebar({
                   <RenameField
                     label="Agent name"
                     value={agent.name}
-                    className="min-w-0 flex-1 font-prose text-[13.5px]"
+                    className="min-w-0 flex-1 font-prose text-[13px]"
                     onCancel={() => endRename(agent.id)}
                     onCommit={(name) => {
                       endRename(agent.id);
@@ -221,7 +221,7 @@ export function Sidebar({
                   <Avatar name={agent.name} size={48} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate font-prose text-[13.5px] font-semibold">{agent.name}</span>
+                      <span className="min-w-0 flex-1 truncate font-prose text-[13px] font-semibold">{agent.name}</span>
                       {/* Busy is said in words where the time goes: the preview below is the work
                           itself, streaming, and must not be replaced by a word about it. */}
                       {busy > 0 ? (
@@ -232,7 +232,7 @@ export function Sidebar({
                         at !== undefined && <span className="shrink-0 text-[11px] text-muted tabular-nums">{stamp(at)}</span>
                       )}
                     </span>
-                    <span id={status} className="mt-0.5 flex h-[34px] items-start gap-2 text-[12.5px] leading-[17px]">
+                    <span id={status} className="mt-0.5 flex h-[34px] items-start gap-2 text-[13px] leading-[17px]">
                       {/* A setup problem beats the preview, since there is no output to quote, and
                           is said in words, never a coloured dot alone (§9). */}
                       {state !== "ready" ? (
@@ -276,7 +276,7 @@ export function Sidebar({
           onClick={onSettings}
           aria-current={settingsOpen ? "page" : undefined}
           title="Settings (⌘,)"
-          className={`flex w-full items-center gap-2.5 rounded-card h-8 px-3 text-left text-[12.5px] transition-colors ${
+          className={`flex w-full items-center gap-2.5 rounded-card h-8 px-3 text-left text-[13px] transition-colors ${
             settingsOpen ? "bg-accent-weak text-accent" : "text-muted hover:bg-hover hover:text-text"
           }`}
         >
@@ -401,7 +401,7 @@ export function ConversationList({
               key={row.session}
               label="Conversation name"
               value={renaming.label}
-              className="my-0.5 block w-full font-prose text-[12.5px]"
+              className="my-0.5 block w-full font-prose text-[13px]"
               onCancel={() => endRename(row)}
               onCommit={(name) => {
                 endRename(row);
@@ -429,7 +429,7 @@ export function ConversationList({
                 }`}
               >
                 <span
-                  className={`min-w-0 flex-1 truncate font-prose text-[12.5px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
+                  className={`min-w-0 flex-1 truncate font-prose text-[13px] ${row.fresh ? `${current ? "" : "text-muted"} italic` : ""} ${
                     row.unseen ? "font-semibold" : ""
                   }`}
                 >
