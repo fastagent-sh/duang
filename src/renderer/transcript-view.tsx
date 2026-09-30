@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
+  ArrowsOut,
   CaretDown,
   Check,
   Copy,
@@ -15,6 +16,7 @@ import {
   PencilSimple,
   Terminal,
   WarningCircle,
+  X,
 } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
 import { MarkdownCode } from "./code.tsx";
@@ -248,6 +250,9 @@ const markdownComponents = { code: MarkdownCode };
 /** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 
+/** Streamdown draws its table controls in Lucide; the code block's copy button is Phosphor, and the two sat side by side in different hands. */
+const markdownIcons = { CopyIcon: Copy, CheckIcon: Check, Maximize2Icon: ArrowsOut, XIcon: X };
+
 /**
  * Streamdown caps a table at 300px and scrolls the rest inside it: a scroll region in a scrolling
  * transcript steals the wheel and hides how much is there (the same reason tool output folds). */
@@ -297,7 +302,7 @@ export function Message({
             {/* The cursor is appended to the text rather than to the container: Streamdown emits
                 block elements, so a sibling span would start its own line instead of trailing the
                 last word. Token arrival is the animation (§8, §10). */}
-            <Streamdown components={markdownComponents} controls={markdownControls} tableMaxHeight={TABLE_FULL_HEIGHT}>
+            <Streamdown components={markdownComponents} controls={markdownControls} icons={markdownIcons} tableMaxHeight={TABLE_FULL_HEIGHT}>
               {item.open ? `${item.text}▍` : item.text}
             </Streamdown>
           </div>

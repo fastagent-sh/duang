@@ -194,6 +194,18 @@ function register(): void {
     if (result.ok) stopAgentStreams(id, "The agent's runtime was rebuilt for the new model");
     return result;
   });
+  ipcMain.handle("session:state", async (_e, id: string, session: string) => {
+    requireSession(session);
+    const { control } = await openAgent(await requireAgent(id));
+    return control.sessions.get(session).state();
+  });
+  ipcMain.handle("session:setThinking", async (_e, id: string, session: string, level: string) => {
+    requireSession(session);
+    if (typeof level !== "string") throw new Error("Thinking level must be a string");
+    const { control } = await openAgent(await requireAgent(id));
+    // FastAgent checks the level against what this conversation's model supports, and refuses while it runs.
+    return control.sessions.get(session).update({ thinkingLevel: level });
+  });
   ipcMain.handle("agent:remove", async (_e, id: string) => {
     const result = await removeAgent(id);
     if (result.ok) stopAgentStreams(id, "The agent was removed");

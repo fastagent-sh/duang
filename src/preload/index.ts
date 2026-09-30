@@ -46,6 +46,12 @@ const api = {
    */
   setModel: (agentId: string, model: string, session?: string): Promise<SessionResult> =>
     ipcRenderer.invoke("agent:setModel", agentId, model, session),
+  /**
+   * Sets how hard the conversation's model thinks, one of the levels its `state()` lists. Refused, as a
+   * value, while the conversation runs or if its model does not support the level.
+   */
+  setThinking: (agentId: string, session: string, level: string): Promise<SessionResult> =>
+    ipcRenderer.invoke("session:setThinking", agentId, session, level),
   /** The roster's name for the agent. duang's label only; the directory keeps its name. */
   renameAgent: (agentId: string, name: string): Promise<void> => ipcRenderer.invoke("agent:rename", agentId, name),
   /** Forgets duang's row. Refuses while a conversation is running; the directory is never touched. */
@@ -117,6 +123,9 @@ const api = {
     subscription: string,
   ): Promise<{ state: SessionState; entries: SessionEntries }> =>
     ipcRenderer.invoke("session:open", agentId, session, subscription),
+  /** The conversation's state as the runtime reports it now, without a subscription. */
+  readState: (agentId: string, session: string): Promise<SessionState> =>
+    ipcRenderer.invoke("session:state", agentId, session),
   closeSession: (subscription: string): Promise<void> => ipcRenderer.invoke("session:close", subscription),
   /** A conversation's history, read once with no subscription: what a roster row quotes. */
   readSession: (agentId: string, session: string): Promise<SessionEntries> =>

@@ -23,7 +23,7 @@ export default function App() {
   // is not remembered across launches. Settings reached from the model picker carries that with it:
   // its "Connect a provider" lands on the providers to add, and a connection made from there
   // returns to the picker. It is part of the same state so that every way out of Settings drops it.
-  const [settings, setSettings] = useState<false | { fromPicker?: { connect: boolean } }>(false);
+  const [settings, setSettings] = useState<false | { fromPicker?: true }>(false);
   const openSettings = () => setSettings((open) => open || {});
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
@@ -105,7 +105,7 @@ export default function App() {
     <Composer
       view={view}
       store={store}
-      onProviders={(connect) => setSettings({ fromPicker: { connect } })}
+      onProviders={() => setSettings({ fromPicker: true })}
     />
   );
   // States whose own panel already explains the setup problem and offers the fix. Repeating the
@@ -158,7 +158,7 @@ export default function App() {
           <Settings
             view={view}
             store={store}
-            connectOnOpen={settings.fromPicker?.connect}
+            connectOnOpen={settings.fromPicker}
             onConnected={() => {
               if (!settings.fromPicker) return;
               store.requestPicker();

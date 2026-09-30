@@ -33,8 +33,13 @@ The picker lists the models the open agent can run: pi's built-ins, the agent's 
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to providers with a
 configured credential: in the credential file, in an environment variable, or as a key written in
 that `models.json`. Switching agents with the picker open reads the new agent's list. It
-leads with the selected model and a short credential-file label; expanding the label reveals the
-complete FastAgent path. Configuration is not a provider probe.
+searches the whole `provider/id`, groups the models under their provider with the selected one first,
+and ends with the conversation's effort: a track of the thinking levels the runtime lists for the
+conversation's model. A conversation has levels once it has a record, so a new conversation says so
+instead of offering a track, and a model with one level says it has no effort setting. The level is set
+on the open conversation only, and is refused while it runs. The picker shows no credential path and
+links to no provider page; with nothing connected its one offer is **Connect a provider**, which
+returns to the picker after connecting. Configuration is not a provider probe.
 The model on a historical conversation can differ from the agent's default.
 
 Settings open from the App menu's **Settings…** (`⌘,`) or the Settings row at the foot of the
@@ -85,7 +90,7 @@ to cancel a non-cancellable tool.
 The composer is one row: an attach button, the field with the model chip inside its right end, and
 one round button that is the next action: voice while the draft is empty (whitespace is empty),
 Send once it has text, Stop while a run is live. Attach and voice are disabled and say why; neither is implemented.
-It sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
+The model chip moves under the text once the draft is more than one line. It sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
 the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it; the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow

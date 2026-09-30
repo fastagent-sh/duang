@@ -9,10 +9,9 @@ import { availableModelsFromDir } from "@fastagent-sh/fastagent/pi";
 
 export const authPath = join(app.getPath("userData"), "auth.json");
 
-/** What the picker shows: the specs this agent can run, and the credential file its runtimes use. */
+/** What the picker shows: the specs this agent can run. */
 export interface Models {
   specs: string[];
-  authPath: string;
 }
 
 /**
@@ -27,5 +26,5 @@ export async function modelsFor(dir: string): Promise<Models> {
       throw new Error(message);
     },
   });
-  return { specs, authPath };
+  return { specs };
 }

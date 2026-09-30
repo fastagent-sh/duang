@@ -34,12 +34,14 @@ function harness() {
     addAgent: async () => undefined,
     openAgent: async () => ready,
     setModel: async () => ({ ok: true }) as SessionResult,
+    setThinking: async () => ({ ok: true }) as SessionResult,
+    readState: async () => ({ status: "idle", pending: { steering: [], followUp: [] } }),
     removeAgent: async () => ({ ok: true }) as SessionResult,
     scaffoldAgent: async () => "/a/fastagent",
     listCommands: async () => [],
     revealAgent: async () => {},
     revealRegistry: async () => {},
-    listModels: async () => ({ specs: ["provider/model"], authPath: "/synthetic/auth.json" }),
+    listModels: async () => ({ specs: ["provider/model"] }),
     providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
     getSettings: async () => ({ network: { mode: "automatic" }, route: { source: "system" } }),
     setNetwork: async () => ({ source: "system" }),
@@ -453,6 +455,47 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   store.dispose();
 });
 
+test("a thinking level goes to the open conversation, and a refusal reaches it verbatim", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const sent: unknown[][] = [];
+  api.setThinking = async (...args) => {
+    sent.push(args);
+    return { ok: true };
+  };
+  await store.setThinking("high");
+  assert.deepEqual(sent, [["a", c.session, "high"]], "the level is set on the conversation the person is looking at");
+  api.setThinking = async () => ({
+    ok: false,
+    error: { code: "invalid", message: 'thinking level "xhigh" is not supported', retryable: false },
+  });
+  await store.setThinking("xhigh");
+  const noted = c.items.filter((item) => item.kind === "note" && item.text === 'thinking level "xhigh" is not supported');
+  assert.equal(noted.length, 1, "a refusal is shown, not swallowed");
+  store.dispose();
+});
+
+test("a conversation that began after it opened learns its thinking levels when a run settles", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  assert.equal(c.state?.availableThinkingLevels, undefined, "no record when it opened, so no levels");
+  api.readState = async () => ({
+    status: "idle",
+    pending: { steering: [], followUp: [] },
+    model: "provider/model",
+    thinkingLevel: "medium",
+    availableThinkingLevels: ["off", "medium", "high"],
+  });
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "completed" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(store.getSnapshot().conversation?.state?.availableThinkingLevels, ["off", "medium", "high"]);
+  assert.equal(store.getSnapshot().conversation?.state?.thinkingLevel, "medium");
+  store.dispose();
+});
+
 test("the picker rereads models on every open, and a stale answer never lands", async () => {
   const { api, store } = harness();
   let listed = 0;
@@ -460,12 +503,12 @@ test("the picker rereads models on every open, and a stale answer never lands", 
   api.listModels = async (agentId) => {
     listed++;
     askedFor.push(agentId);
-    return { specs: ["provider/model"], authPath: "/tmp/auth.json" };
+    return { specs: ["provider/model"] };
   };
   await store.load();
 
   await store.loadModels();
-  assert.deepEqual(store.getSnapshot().models, { specs: ["provider/model"], authPath: "/tmp/auth.json" });
+  assert.deepEqual(store.getSnapshot().models, { specs: ["provider/model"] });
   assert.deepEqual(askedFor, [store.getSnapshot().agentId], "the list is the open agent's own (its models.json)");
   await store.loadModels();
   assert.equal(listed, 2, "a login while duang runs must show up without a restart");
@@ -478,12 +521,12 @@ test("the picker rereads models on every open, and a stale answer never lands", 
   assert.equal(store.getSnapshot().models, undefined, "a failed read must not show stale models as current");
 
   // A slow first read must not overwrite what the reopened picker already showed.
-  const slow = deferred<{ specs: string[]; authPath: string }>();
+  const slow = deferred<{ specs: string[] }>();
   api.listModels = () => slow.promise;
   const pending = store.loadModels();
-  api.listModels = async () => ({ specs: ["provider/current"], authPath: "/tmp/auth.json" });
+  api.listModels = async () => ({ specs: ["provider/current"] });
   await store.loadModels();
-  slow.resolve({ specs: ["provider/stale"], authPath: "/tmp/old.json" });
+  slow.resolve({ specs: ["provider/stale"] });
   await pending;
   assert.deepEqual(store.getSnapshot().models?.specs, ["provider/current"]);
   store.dispose();

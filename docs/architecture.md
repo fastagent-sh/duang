@@ -49,7 +49,7 @@ provider probe or `FASTAGENT_AUTH_PATH`. Only that file is read: no fallback to 
 store, because one OAuth grant in two files is invalidated by whichever refreshes first. Provider
 environment variables still apply when the file has no credential for a provider. FastAgent
 resolves credentials for the actual session model and owns OAuth refresh/writeback. The renderer
-receives model specs and the file's path, never credential contents. The file is plain JSON
+receives model specs, never the file's path or credential contents. The file is plain JSON
 (`0600`); OS-backed storage needs a pluggable credential store in FastAgent
 ([fastagent#652](https://github.com/fastagent-sh/fastagent/issues/652)). Tests follow the same
 rule, without an override: the smoke writes synthetic credentials into its isolated userData's

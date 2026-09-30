@@ -511,6 +511,20 @@ export function createStore(api: DuangApi) {
     }
   }
 
+  /**
+   * The model and thinking levels the runtime lists for a conversation exist once it has a record. One
+   * that began in this window opened before that, so it has none until a run settles and it is read again.
+   */
+  async function readSettings(c: Conversation) {
+    try {
+      const { model, thinkingLevel, availableThinkingLevels } = await api.readState(c.agentId, c.session);
+      if (conversations.get(key(c.agentId, c.session)) !== c || !c.state) return;
+      c.state = { ...c.state, model, thinkingLevel, availableThinkingLevels };
+      publish();
+    } catch (error) {
+      note(error, c);
+    }
+  }
   function fold(c: Conversation, event: SessionEvent) {
     const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
     const e = known(event);
@@ -522,6 +536,7 @@ export function createStore(api: DuangApi) {
       dropQueued(c, state.pending.steering);
       c.started = undefined;
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
+      if (c.state.availableThinkingLevels === undefined) void readSettings(c);
       // A run that ends while you are reading something else is the thing you came back for. A run
       // you stopped yourself is not news.
       if (c !== view.conversation && e.data.status !== "aborted")
@@ -918,6 +933,21 @@ export function createStore(api: DuangApi) {
           publish({ loading: false });
           note(error, c);
         }
+      }
+    },
+    /**
+     * The open conversation's thinking level. The new level arrives as the runtime's own `state_changed`,
+     * so nothing is shown that the runtime has not said; a refusal is shown as one.
+     */
+    async setThinking(level: string) {
+      const id = view.agentId;
+      const c = view.conversation;
+      if (!id || !c) return;
+      try {
+        const result = await api.setThinking(id, c.session, level);
+        if (!result.ok) refusal(result.error.message, c);
+      } catch (error) {
+        note(error, c);
       }
     },
     async scaffold() {
