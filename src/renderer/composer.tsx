@@ -5,15 +5,12 @@ import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
 import { home } from "./paths.ts";
+import { createLevelWriter } from "./level-writer.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
 const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
 const levelName = (level: string) => LEVELS[level] ?? level;
 
-/**
- * How hard the conversation's model thinks: a row of stops on a track, a native radio group, so the
- * arrow keys and the announcement are the platform's. The runtime lists what the model supports.
- */
 /**
  * How long the arrow keys must rest before the level they stopped on is written. Short enough that the
  * chip follows a stop you meant, long enough to span the presses of one run across the track (macOS
@@ -21,33 +18,46 @@ const levelName = (level: string) => LEVELS[level] ?? level;
  */
 const KEY_PAUSE_MS = 150;
 
-/** `onPick` answers whether the runtime took the level. */
-function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => Promise<boolean> }) {
-  // A click is one choice and is written at once. Arrowing through the group fires `onChange` at every
-  // stop, and each write is a durable entry in the conversation's record, so the keys wait for a pause
-  // (or for the picker to close). The track shows the choice either way, without waiting.
+type Conversation = NonNullable<View["conversation"]>;
+
+/**
+ * How hard the conversation's model thinks: a row of stops on a track, a native radio group, so the
+ * arrow keys and the announcement are the platform's. The runtime lists what the model supports.
+ *
+ * The track shows a choice at once. Writing it is `createLevelWriter`'s: a click goes now, the keys wait
+ * for a rest, and either is written to the conversation it was made for. `onPick` answers whether the
+ * runtime took the level.
+ */
+function Effort({
+  conversation,
+  levels,
+  level,
+  onPick,
+}: {
+  conversation: Conversation;
+  levels: string[];
+  level: string;
+  onPick: (level: string, conversation: Conversation) => Promise<boolean>;
+}) {
   const [chosen, setChosen] = useState<string>();
-  const pending = useRef<string>(undefined);
-  const timer = useRef(0);
   const byKey = useRef(false);
-  const commit = useRef(onPick);
-  commit.current = onPick;
-  const flush = () => {
-    window.clearTimeout(timer.current);
-    const level = pending.current;
-    pending.current = undefined;
-    // A refusal leaves the runtime where it was, and the track must say so rather than keep the refused stop.
-    if (level !== undefined) void commit.current(level).then((taken) => taken || setChosen(undefined));
-  };
-  // The runtime's word wins: once it reports a level, that is the one shown.
-  useEffect(() => setChosen(undefined), [level]);
-  useEffect(() => flush, []);
+  // A refusal leaves the runtime where it was, and the track must say so rather than keep the refused stop.
+  const [writer] = useState(() =>
+    createLevelWriter<Conversation>({
+      pauseMs: KEY_PAUSE_MS,
+      write: (c, l) => onPick(l, c),
+      refused: () => setChosen(undefined),
+    }),
+  );
+  useEffect(() => writer.flush, [writer]);
+  // The runtime's word ends a choice: once it reports the level that was chosen, that is the one shown.
+  // Another level arriving (an earlier write of a run of keys) leaves a later choice standing.
+  useEffect(() => {
+    if (chosen !== undefined && chosen === level) setChosen(undefined);
+  }, [chosen, level]);
   const pick = (name: string) => {
     setChosen(name);
-    pending.current = name;
-    window.clearTimeout(timer.current);
-    if (byKey.current) timer.current = window.setTimeout(flush, KEY_PAUSE_MS);
-    else flush();
+    writer.choose(conversation, name, byKey.current);
   };
   const shown = chosen ?? level;
   const index = Math.max(0, levels.indexOf(shown));
@@ -99,7 +109,7 @@ function ModelPicker({
   store: Store;
   current?: string;
   /** Absent until the conversation has begun: the runtime lists levels for a conversation, not for an agent. */
-  thinking?: { level: string; levels: string[] };
+  thinking?: { level: string; levels: string[]; conversation: Conversation };
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
@@ -235,7 +245,12 @@ function ModelPicker({
             {!thinking ? (
               <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once the conversation has begun.</p>
             ) : thinking.levels.length > 1 ? (
-              <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => store.setThinking(level)} />
+              <Effort
+                conversation={thinking.conversation}
+                levels={thinking.levels}
+                level={thinking.level}
+                onPick={(level, conversation) => store.setThinking(level, conversation)}
+              />
             ) : (
               <p className="px-4 py-3 text-[12px] text-muted">This model has no effort setting.</p>
             )}
@@ -289,7 +304,7 @@ export function Composer({
   // The levels are the runtime's, per conversation and per model; before the conversation has begun there is none to offer.
   const thinking =
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
-      ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
+      ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels, conversation: c }
       : undefined;
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";

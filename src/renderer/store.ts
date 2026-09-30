@@ -944,16 +944,14 @@ export function createStore(api: DuangApi) {
       }
     },
     /**
-     * The open conversation's thinking level, and whether the runtime took it. The new level arrives as
-     * the runtime's own `state_changed`, so nothing is shown that the runtime has not said; a refusal is
-     * shown as one.
+     * A conversation's thinking level, and whether the runtime took it. The conversation is the one the
+     * choice was made for, not whichever is open when the write goes out: the arrow keys wait for a
+     * rest, and the person can have moved on by then. The new level arrives as the runtime's own
+     * `state_changed`, so nothing is shown that the runtime has not said; a refusal is shown as one.
      */
-    async setThinking(level: string): Promise<boolean> {
-      const id = view.agentId;
-      const c = view.conversation;
-      if (!id || !c) return false;
+    async setThinking(level: string, c: Conversation): Promise<boolean> {
       try {
-        const result = await api.setThinking(id, c.session, level);
+        const result = await api.setThinking(c.agentId, c.session, level);
         if (!result.ok) refusal(result.error.message, c);
         return result.ok;
       } catch (error) {
