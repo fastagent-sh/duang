@@ -1268,6 +1268,29 @@ if (!process.versions.electron) {
       await until(`document.querySelector('#conversations')?.innerText.includes(${JSON.stringify(topic)})`, "the conversation is renamed in the list");
       assert.ok(!(await evaluate(headerName)).text.includes(topic), "and the header does not print its title");
 
+      // Both routes to an agent's folder open the folder of the agent they are on, not the open one's: the
+      // header's button is the open agent, and a row's menu is the row's, wherever the selection is. The
+      // shell and the native menu are stubbed here, which is as far as a test reaches.
+      const revealed = [];
+      const showItemInFolder = electron.shell.showItemInFolder;
+      const popup = electron.Menu.prototype.popup;
+      electron.shell.showItemInFolder = (path) => void revealed.push(path);
+      electron.Menu.prototype.popup = function () {
+        this.items.find((item) => item.label === "Reveal in Finder").click();
+      };
+      try {
+        await evaluate(`document.querySelector('main > header button[title^="/"]').click()`);
+        await until("true", "the header's folder button is pressed");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.deepEqual(revealed, [workspace], "the header's folder is the open agent's");
+        await evaluate(`document.querySelector('button[aria-label="Configured"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.deepEqual(revealed, [workspace, configured], "a row's menu reveals that row's agent, not the open one");
+      } finally {
+        electron.shell.showItemInFolder = showItemInFolder;
+        electron.Menu.prototype.popup = popup;
+      }
+
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
 

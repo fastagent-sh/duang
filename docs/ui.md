@@ -210,7 +210,7 @@ so the list shows ids. What the picker leaves out: the credential file's path (n
 act on) and a Manage providers link (Settings is in the sidebar; the empty picker keeps its one
 **Connect a provider**).
 
-**The header is two parts.** What you are looking at (avatar, agent and conversation, directory,
+**The header is two parts.** What you are looking at (avatar, agent name, folder,
 `working`, the context meter, `queued`) is one pill, and the one action on it, the
 conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
 and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
@@ -344,9 +344,8 @@ partner declare identical weight and style: Chromium picks one descriptor bucket
 so Latin silently falls back to PingFang. The smoke test checks that the Latin face loads. Italic and bold italic are faces of their own (Latin 400 and 600, Chinese 400 and 700), so emphasis keeps its weight; Chinese has no italic and the browser does not slant a face declared italic, so it stays upright inside emphasis.
 
 The rule is ownership, not place: **words a person wrote wear `Prose` wherever they are quoted**,
-so a message does not change typeface between the bubble and the header. That is the roster row's
-preview line, the agent's name (in the row, its rename field and the header), the conversation title
-in the header and the rows of the conversation list with the field that renames one, at their own
+so a message does not change typeface between the bubble and the roster's quote of it. That is the roster row's
+preview line, the agent's name (in the row, its rename field and the header), the rows of the conversation list with the field that renames one, at their own
 sizes. A name is one of those words: the user chose it, and an agent is a contact. Everything the app
 says itself stays in the system face: times, badges, errors, controls and the trace.
 
