@@ -134,10 +134,10 @@ export function UsageMeter({ plan, context, now }: Usage) {
 }
 
 /**
- * What you are looking at, floating over it: the agent, the workspace it runs in, and how full the
- * context is, beside the one action on it. It hovers rather than sits in a bar
- * because the transcript is the page, and a full-width bar would cut it in two. Translucent, so text
- * passing underneath reads as scrolled away rather than deleted.
+ * What you are looking at, floating over it: the agent, the folder it lives in, and its context and plan
+ * usage, beside the one action on it. It hovers rather than sits in a bar because the transcript is the
+ * page, and a full-width bar would cut it in two. Translucent, so text passing underneath reads as
+ * scrolled away rather than deleted.
  */
 export function ConversationHeader({
   agent,

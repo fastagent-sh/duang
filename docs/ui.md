@@ -277,7 +277,9 @@ theme — small steps, almost no chroma — with one change of relationship: the
 the darkest layer and every panel sits above it, so a panel reads as lifted rather than as a hole.
 Light mode is not that set mirrored. A warm, nearly white reading canvas and a slightly deeper
 sidebar separate work from navigation; the code block takes a cooler neutral, while the floating
-composer remains white. Violet stays in selections and actions rather than tinting every surface.
+composer remains white. Violet stays in selections and actions rather than tinting every surface: the
+sidebar's `+` is text-coloured, since an "add an agent" button in violet competes with Send for the one
+primary action.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
