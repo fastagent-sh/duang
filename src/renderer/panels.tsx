@@ -118,7 +118,7 @@ export function NewConversation({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
       <div className="column -mt-16">
-        <h1 className="text-[22px] font-medium mb-5">What should we work on?</h1>
+        <h1 className="mb-5 text-center text-[22px] font-medium">What should we work on?</h1>
         {children}
       </div>
     </div>

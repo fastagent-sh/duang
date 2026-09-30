@@ -106,8 +106,10 @@ feels alive — beside three lines of text. The first is the agent's name, with 
 row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
 two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
 unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
-row. The directory is in the row's tooltip and below the agent name and conversation title in the
-header. When those names match, the agent name uses the full header line and retains its tooltip.
+row. The header's two lines are the agent's name and, under it, where the agent lives (a click opens
+the folder, as does **Reveal in Finder** in the row's menu). The conversation's title is not in the header:
+an agent is a contact, a person talking to one is not asked to think about sessions, and the path at
+least says where the work is. The titles are in the conversation list.
 
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
@@ -190,7 +192,8 @@ one glance to the next. Every window in a row would make the
 edge the densest text on screen for numbers read once in a while. No threshold colours: the
 percentage is the signal.
 
-**The model chip and its picker follow Codex's, on duang's terms.** The chip names the provider quietly
+**The model chip and its picker follow Codex's, on duang's terms.** The chip, 13px on a faint tint so it reads as the
+button it is beside the field's own text, names the provider quietly
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
 `openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
 anchored to the chip's right edge: a search row, the models under their provider (ids only, in the
@@ -207,7 +210,7 @@ so the list shows ids. What the picker leaves out: the credential file's path (n
 act on) and a Manage providers link (Settings is in the sidebar; the empty picker keeps its one
 **Connect a provider**).
 
-**The header is two parts.** What you are looking at (avatar, agent and conversation, directory,
+**The header is two parts.** What you are looking at (avatar, agent name, folder,
 `working`, the context meter, `queued`) is one pill, and the one action on it, the
 conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
 and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
@@ -274,7 +277,9 @@ theme — small steps, almost no chroma — with one change of relationship: the
 the darkest layer and every panel sits above it, so a panel reads as lifted rather than as a hole.
 Light mode is not that set mirrored. A warm, nearly white reading canvas and a slightly deeper
 sidebar separate work from navigation; the code block takes a cooler neutral, while the floating
-composer remains white. Violet stays in selections and actions rather than tinting every surface.
+composer remains white. Violet stays in selections and actions rather than tinting every surface: the
+sidebar's `+` is text-coloured, since an "add an agent" button in violet competes with Send for the one
+primary action.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
@@ -339,9 +344,8 @@ partner declare identical weight and style: Chromium picks one descriptor bucket
 so Latin silently falls back to PingFang. The smoke test checks that the Latin face loads. Italic and bold italic are faces of their own (Latin 400 and 600, Chinese 400 and 700), so emphasis keeps its weight; Chinese has no italic and the browser does not slant a face declared italic, so it stays upright inside emphasis.
 
 The rule is ownership, not place: **words a person wrote wear `Prose` wherever they are quoted**,
-so a message does not change typeface between the bubble and the header. That is the roster row's
-preview line, the agent's name (in the row, its rename field and the header), the conversation title
-in the header and the rows of the conversation list with the field that renames one, at their own
+so a message does not change typeface between the bubble and the roster's quote of it. That is the roster row's
+preview line, the agent's name (in the row, its rename field and the header), the rows of the conversation list with the field that renames one, at their own
 sizes. A name is one of those words: the user chose it, and an agent is a contact. Everything the app
 says itself stays in the system face: times, badges, errors, controls and the trace.
 
@@ -376,7 +380,7 @@ than a Latin one to read as emphasis.
 
 | Role | Size / line-height / weight |
 |---|---|
-| New conversation heading | 22 / normal / 500 |
+| New conversation heading (centred over the field) | 22 / normal / 500 |
 | Answer headings | 22 / 19 / 17 (h1–h3), 15 below / 1.4 / 600 |
 | Conversation prose, sent messages, composer | 15 / 1.7 / 400 |
 | Answer tables | 14 / 1.6 / 400, header 600 muted on a tinted band |

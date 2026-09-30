@@ -530,6 +530,28 @@ test("settings read for a conversation that is gone are dropped, and silence doe
   kept.store.dispose();
 });
 
+test("reveal opens the agent it is given, else the open one, and the registry when there is none", async () => {
+  const { api, store } = harness();
+  const revealed: string[] = [];
+  api.revealAgent = async (id) => void revealed.push(`agent:${id}`);
+  api.revealRegistry = async () => void revealed.push("registry");
+  await store.load();
+  await store.reveal("b");
+  await store.reveal();
+  assert.deepEqual(revealed, ["agent:b", "agent:a"], "a row's menu names its own agent; the header's default is the open one");
+  store.dispose();
+
+  const empty = harness();
+  empty.api.listAgents = async () => [];
+  empty.api.revealAgent = async (id) => void revealed.push(`agent:${id}`);
+  empty.api.revealRegistry = async () => void revealed.push("registry");
+  await empty.store.load();
+  revealed.length = 0;
+  await empty.store.reveal();
+  assert.deepEqual(revealed, ["registry"], "with no agent, the list itself is what there is to show");
+  empty.store.dispose();
+});
+
 test("the picker rereads models on every open, and a stale answer never lands", async () => {
   const { api, store } = harness();
   let listed = 0;

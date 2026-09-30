@@ -90,6 +90,7 @@ export function Sidebar({
   onAdd,
   onSettings,
   onRename,
+  onReveal,
   onMenu,
 }: {
   agents: AgentRow[];
@@ -111,7 +112,9 @@ export function Sidebar({
   onAdd: () => void;
   onSettings: () => void;
   onRename: (id: string, name: string) => void;
-  /** Raises the row's own menu — Rename lives there, which is where macOS keeps it. */
+  /** Opens the agent's folder in Finder. */
+  onReveal: (id: string) => void;
+  /** Raises the row's own menu — Rename and Reveal in Finder live there, which is where macOS keeps them. */
   onMenu: DuangApi["menu"];
 }) {
   /**
@@ -211,7 +214,13 @@ export function Sidebar({
                   onDoubleClick={rename}
                   onContextMenu={(event) => {
                     event.preventDefault();
-                    void onMenu([{ id: "rename", label: "Rename…" }]).then((chosen) => chosen === "rename" && rename());
+                    void onMenu([
+                      { id: "rename", label: "Rename…" },
+                      { id: "reveal", label: "Reveal in Finder" },
+                    ]).then((chosen) => {
+                      if (chosen === "rename") rename();
+                      if (chosen === "reveal") onReveal(agent.id);
+                    });
                   }}
                   title={`${agent.name}\n${agent.dir}\n${busy ? "Working" : says[state]}`}
                   className={`flex w-full items-center gap-3 rounded-card px-2 py-2 text-left transition-colors ${

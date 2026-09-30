@@ -151,6 +151,7 @@ export default function App() {
         }}
         onSettings={openSettings}
         onRename={(id, name) => void store.renameAgent(id, name)}
+        onReveal={(id) => void store.reveal(id)}
         onMenu={duang.menu}
       />
       <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
@@ -172,7 +173,6 @@ export default function App() {
             {agent && (
               <ConversationHeader
                 agent={agent.name}
-                title={sessionRows.find((row) => row.session === c?.session)?.label ?? agent.name}
                 dir={agent.dir}
                 working={!!view.running[agent.id]?.length}
                 context={

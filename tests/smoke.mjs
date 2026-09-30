@@ -1224,8 +1224,9 @@ if (!process.versions.electron) {
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
 
-      // The agent takes the whole header when its conversation has the same name; otherwise it
-      // leaves room for the topic. Both cases retain the full agent name as a tooltip.
+      // The header names the agent and, under it, where the agent lives: a long name stays inside the header
+      // with the whole of it as a tooltip, and the folder is a button that opens it. The conversation's title
+      // is not there: renaming the conversation changes the list, not the header.
       const longName = "An agent with a deliberately long descriptive name for this workspace";
       await evaluate(`document.querySelector('button[aria-label="Smoke"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
       await until("document.querySelector('aside input[aria-label=\"Agent name\"]')", "agent rename opens");
@@ -1236,28 +1237,59 @@ if (!process.versions.electron) {
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
       const headerName = `(() => {
-        const line = document.querySelector('main > header .drag.flex');
+        const line = document.querySelector('main > header .drag');
         const name = line.firstElementChild;
-        return { width: name.getBoundingClientRect().width, available: line.clientWidth, title: name.title };
+        const folder = document.querySelector('main > header button[title^="/"]');
+        return {
+          width: name.getBoundingClientRect().width,
+          available: line.clientWidth,
+          title: name.title,
+          lines: line.childElementCount,
+          folder: folder?.title,
+          text: document.querySelector('main > header').innerText,
+        };
       })()`;
-      await until(`document.querySelector('main > header .drag.flex span')?.textContent === ${JSON.stringify(longName)}`, "renamed agent in header");
-      const withTopic = await evaluate(headerName);
-      assert.ok(withTopic.width <= withTopic.available * 0.35 + 1, "the topic keeps its space");
-      assert.equal(withTopic.title, longName);
+      await until(`document.querySelector('main > header .drag > div')?.textContent === ${JSON.stringify(longName)}`, "renamed agent in header");
+      const named = await evaluate(headerName);
+      assert.equal(named.lines, 1, "the name alone in the drag handle");
+      assert.ok(named.width <= named.available + 1, "the name stays inside the header");
+      assert.equal(named.title, longName, "with the whole of it as a tooltip");
+      assert.ok(named.folder?.startsWith("/"), "and the folder under it, a button that opens it");
       await showConversations();
       await evaluate(`document.querySelector('#conversations button[aria-current="page"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
       await until("document.querySelector('#conversations input[aria-label=\"Conversation name\"]')", "conversation rename opens");
+      const topic = "A topic that the header must not print";
       await evaluate(`(() => {
         const input = document.querySelector('#conversations input[aria-label="Conversation name"]');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(longName)});
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(topic)});
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
-      await until(`document.querySelector('main > header .drag.flex')?.childElementCount === 1`, "matching names share the header");
-      const alone = await evaluate(headerName);
-      assert.ok(alone.width > alone.available * 0.35 + 1, "the agent name uses the free width");
-      assert.ok(alone.width <= alone.available + 1, "the agent name stays inside the header");
-      assert.equal(alone.title, longName);
+      await until(`document.querySelector('#conversations')?.innerText.includes(${JSON.stringify(topic)})`, "the conversation is renamed in the list");
+      assert.ok(!(await evaluate(headerName)).text.includes(topic), "and the header does not print its title");
+
+      // Both routes to an agent's folder open the folder of the agent they are on, not the open one's: the
+      // header's button is the open agent, and a row's menu is the row's, wherever the selection is. The
+      // shell and the native menu are stubbed here, which is as far as a test reaches.
+      const revealed = [];
+      const showItemInFolder = electron.shell.showItemInFolder;
+      const popup = electron.Menu.prototype.popup;
+      electron.shell.showItemInFolder = (path) => void revealed.push(path);
+      electron.Menu.prototype.popup = function () {
+        this.items.find((item) => item.label === "Reveal in Finder").click();
+      };
+      try {
+        await evaluate(`document.querySelector('main > header button[title^="/"]').click()`);
+        await until("true", "the header's folder button is pressed");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.deepEqual(revealed, [workspace], "the header's folder is the open agent's");
+        await evaluate(`document.querySelector('button[aria-label="Configured"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.deepEqual(revealed, [workspace, configured], "a row's menu reveals that row's agent, not the open one");
+      } finally {
+        electron.shell.showItemInFolder = showItemInFolder;
+        electron.Menu.prototype.popup = popup;
+      }
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
