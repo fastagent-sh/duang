@@ -1,16 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { avatarGradient, GRADIENT, INK, PALETTE } from "./avatar-colours.ts";
+import { avatarGradient, avatarHex, GRADIENT, INK, linearSrgb, PALETTE } from "./avatar-colours.ts";
 
 type Lch = readonly [number, number, number];
 const lab = ([l, c, h]: Lch) => [l, c * Math.cos((h * Math.PI) / 180), c * Math.sin((h * Math.PI) / 180)] as const;
 const distance = (a: Lch, b: Lch) => Math.hypot(...(lab(a).map((v, i) => v - lab(b)[i]!) as [number, number, number]));
-/** OKLCH to linear sRGB (Ottosson), unclamped: a value outside 0..1 means the colour is outside the gamut. */
-function linear([l, c, h]: Lch) {
-  const [, a, b] = lab([l, c, h]);
-  const [x, y, z] = [l + 0.3963377774 * a + 0.2158037573 * b, l - 0.1055613458 * a - 0.0638541728 * b, l - 0.0894841775 * a - 1.291485548 * b].map((v) => v ** 3) as [number, number, number];
-  return [4.0767416621 * x - 3.3077115913 * y + 0.2309699292 * z, -1.2684380046 * x + 2.6097574011 * y - 0.3413193965 * z, -0.0041960863 * x - 0.7034186147 * y + 1.707614701 * z] as const;
-}
+const linear = linearSrgb;
 const inGamut = (c: Lch) => linear(c).every((v) => v >= -1e-4 && v <= 1 + 1e-4);
 const gamma = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
 const luminance = (c: Lch) => {
@@ -54,4 +49,13 @@ test("agents numbered one after another get different, far-apart colours, and ev
     const apart = Math.abs(Number(at(colour)) - Number(at(colour + 1)));
     assert.ok(Math.min(apart, 360 - apart) >= 60, `agents ${colour} and ${colour + 1} are only ${apart}° apart in hue`);
   }
+});
+
+test("an agent's solid colour is its palette entry, written as hex", () => {
+  assert.match(avatarHex(0), /^#[0-9a-f]{6}$/);
+  assert.notEqual(avatarHex(0), avatarHex(1), "next-door agents differ");
+  assert.equal(avatarHex(PALETTE.length), avatarHex(0), "and the palette repeats where the gradient's does");
+  // rose, the first entry, is a light warm pink: red over green over blue, all of them high.
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(avatarHex(0).slice(i, i + 2), 16)) as [number, number, number];
+  assert.ok(r > g && r > b && b > 150, `rose is ${avatarHex(0)}`);
 });

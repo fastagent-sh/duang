@@ -44,8 +44,9 @@ function harness() {
     listModels: async () => ({ specs: ["provider/model"] }),
     refreshModels: async () => ({ specs: ["provider/model"] }),
     providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
-    getSettings: async () => ({ network: { mode: "automatic" }, route: { source: "system" } }),
+    getSettings: async () => ({ network: { mode: "automatic" }, avatar: "gaze", route: { source: "system" } }),
     setNetwork: async () => ({ source: "system" }),
+    setAvatar: async () => {},
     revealSettings: async () => {},
     testNetwork: async () => ({ status: 200, ms: 1, route: { source: "system" } }),
     onOpenSettings: () => () => {},
@@ -1188,7 +1189,7 @@ test("settings are read fresh each time, and only the newest change and check la
   const freshCheck = deferred<Checked>();
   const checks = [staleCheck.promise, freshCheck.promise];
   api.testNetwork = () => checks.shift()!;
-  api.getSettings = async () => ({ network: { mode: "automatic" }, route: { source: "system" } });
+  api.getSettings = async () => ({ network: { mode: "automatic" }, avatar: "gaze", route: { source: "system" } });
   assert.deepEqual((await store.loadSettings())?.network, { mode: "automatic" });
   assert.equal(store.getSnapshot().settingsError, undefined);
   assert.deepEqual(store.getSnapshot().connection, { checking: true });

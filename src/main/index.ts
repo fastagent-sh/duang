@@ -21,7 +21,7 @@ import { authPath, modelsFor, refreshModels } from "./credentials.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
 import { forgetUsage, providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
-import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
+import { avatar, DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { follow } from "./follow.ts";
 import { send } from "./send.ts";
@@ -233,7 +233,20 @@ function register(): void {
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
   // Read on every open of the page: a file fixed by hand shows up without a restart, and a broken one
   // is reported there rather than shown as the defaults.
-  ipcMain.handle("settings:get", async () => ({ network: (await readSettings(settingsFile())).network, route: await describeRoute() }));
+  ipcMain.handle("settings:get", async () => {
+    const { network, avatar } = await readSettings(settingsFile());
+    return { network, avatar, route: await describeRoute() };
+  });
+  ipcMain.handle("settings:setAvatar", (_e, value: unknown) => {
+    // In the same queue as the network: both rewrite the one file, and neither may lose the other's change.
+    const run = settingsChange.then(async () => {
+      const next = avatar(value);
+      const settings = await readSettings(settingsFile());
+      await writeSettings(settingsFile(), { ...settings, avatar: next });
+    });
+    settingsChange = run.catch(() => {});
+    return run;
+  });
   ipcMain.handle("settings:setNetwork", (_e, value: unknown) => {
     // One change at a time: two quick choices must end with the file, Chromium's configuration and
     // the answer all saying the second one, not whichever await finished last.

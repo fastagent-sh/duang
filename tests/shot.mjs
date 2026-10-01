@@ -294,6 +294,9 @@ if (!process.versions.electron) {
     await evaluate(`[...document.querySelectorAll('[role="radio"]')].find((row) => row.textContent.startsWith('Off')).click()`);
     await until(`document.body.innerText.includes('connected ·')`, "mocked network check");
     await capture("settings");
+    // The avatar styles, each showing itself.
+    await evaluate(`document.querySelector('#appearance-heading').scrollIntoView({ block: "start" })`);
+    await capture("settings-avatars", "keep");
 
     // The component sheet, in the same window and the same build as the app it documents.
     // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.

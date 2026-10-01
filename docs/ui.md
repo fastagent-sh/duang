@@ -53,10 +53,10 @@ made it work there, and whether that premise holds here.
   removing controls rather than adding them.
   **Refused, with reasons:** *bubbles on both sides* — their premise is that the heavy work lives on
   the Bot's own computer panel, so the transcript carries short reports; ours is fact 5, where the
-  transcript is the work. *An avatar that performs a lifecycle* — their premise is one
-  conversation per Bot plus an expressive character to animate; ours is a lettered avatar and parallel
-  conversations, so the avatar carries agent presence as a quiet ring while the conversation rows say
-  which one is running. *Pin and hide* — their premise is a roster of up to 50 Bots; ours starts with the few agents
+  transcript is the work. *A character that performs a lifecycle* — their premise is one
+  conversation per Bot and a character to animate; ours keeps the drawing fixed (it is who the agent is)
+  and lets only its face follow the agent's state, in small motions, while the conversation rows say
+  which conversation is running. *Pin and hide* — their premise is a roster of up to 50 Bots; ours starts with the few agents
   you actually use. Online contacts may change the size of that list later.
 - **Claude Code desktop** — parallel sessions stay visible and are filterable by state, because
   parallel work is the normal case for a coding agent. Same premise as our fact 4.
@@ -168,14 +168,37 @@ answer; a new conversation shows as an italic `New conversation` until its first
 creating one moves focus to its input once the new session is ready.
 
 **Presence is told at two levels.** The avatar carries the agent's own presence: while any of its
-conversations is working, a slow accent ring breathes around it, its row says `working` in words,
-and its quote streams. The conversation list carries which one: a pulsing dot and the word on that row. The ring is
-never the only signal, so colour is never doing the work alone (§9).
+conversations is working, a still accent ring stands around it, its face shows what kind of work it
+is, its row says `working` in words, and its quote streams. The conversation list carries which one:
+a pulsing dot and the word on that row. Neither the ring nor the face is ever the only signal, so
+colour and motion never do the work alone (§9).
 
-What the avatar does not do is act. Products where the avatar performs a lifecycle — thinking,
-waiting, celebrating — have one conversation per agent, an expressive character to animate, and a
-consumer's relationship with it. Ours is two letters standing for a directory; a breathing ring is
-presence, a performance would be costume.
+**An avatar has three layers, kept apart** (`avatar.tsx`, `face.ts`). The *drawing* (its shape and
+colour, from the agent's id and the registry's colour number) is who the agent is: it never changes
+with state, and a rename does not change it. The *face* (eyes and motion) follows what the agent is
+doing. The *ring* is presence. One face at a time, by how much it asks of the person:
+
+| Face | When | Shown as |
+|---|---|---|
+| `asleep` | needs a model | eyes closed, slow breathing |
+| `unborn` | no agent yet | an outline, no face |
+| `broken` | broken | grey, eyes closed, still |
+| `thinking` | a run is thinking, starting or compacting | ring; eyes drift up and aside |
+| `tool` | a run is using a tool | ring; eyes scan left and right |
+| `answering` | a run is writing its answer | ring; a small bob, as if talking |
+| `failed` | an outcome failed while you were away | small eyes looking down; one shake when it lands |
+| `done` | an outcome finished while you were away | happy eyes; one hop when it lands |
+| `open` | the agent on screen | looks toward its conversation |
+| `idle` | otherwise | blinks now and then, each agent on its own clock |
+
+The kind of work is the run status line's own word (`phase`), for the conversations this window holds.
+Motion is small, continuous only while an agent works, and an outcome plays once, when it lands. With
+reduced motion every face keeps its pose (closed, looking down, happy) and loses its movement, so the
+states stay apart. Gaze's identity eyes come from seven neutral pairs; the expressive ones (happy, small
+looking down) are kept for faces, so an agent whose own eyes were happy could not look happy about
+anything else. The drawn styles other than Gaze have no eyes to move (Moods and Initial face can only
+blink, Bottts and Initials nothing): they show the same rings, hops, shakes, breathing, grey and
+outline, and the words carry the rest.
 
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
 rather than a column filling them, and the conversation's header floats over the transcript as a
@@ -251,9 +274,9 @@ continuous page.
 
 Isolated fixture snapshots: [reading, light](screenshots/reading-light.png),
 [narrow, dark](screenshots/reading-narrow-dark.png),
-[conversation list, light](screenshots/conversation-list-light.png), and
-[model picker, light](screenshots/model-picker-light.png), and
-[settings, light](screenshots/settings-light.png). Regenerate the full dark/light set with
+[conversation list, light](screenshots/conversation-list-light.png),
+[model picker, light](screenshots/model-picker-light.png),
+[settings, light](screenshots/settings-light.png) and [its avatar styles](screenshots/settings-avatars-light.png). Regenerate the full dark/light set with
 `npm run shots`.
 
 Future contacts can be local, owned online or invited online at the same time: no global
@@ -316,7 +339,8 @@ this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `
 
 An avatar's colour is the agent's own number, given by the registry when the agent is added: the lowest
 no other agent has, kept for the agent's life (a rename does not recolour it) and reused once its owner is
-removed. `avatar-colours.ts` maps it onto a palette of sixteen bright colours, `PALETTE[(n * 5) % 16]`:
+removed. `avatar-colours.ts` maps it onto a palette of sixteen bright colours (Gaze's body and the
+Initials gradient wear it; the other drawn styles keep their own), `PALETTE[(n * 5) % 16]`:
 five and sixteen share no factor, so agents numbered one after another land a third of the wheel apart
 (Telegram's idea of a shuffle) and every colour is reached. Two agents therefore never share a colour
 until there are more than sixteen. The sixteen are chosen to be told apart at a glance rather than to
@@ -620,7 +644,7 @@ away, so "is it still working" must be answerable from the sidebar without openi
 | Tier | States | How it is shown |
 |---|---|---|
 | **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
-| **Reassurance only** | working, thinking, running | A breathing ring on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, and at the end of the transcript one live status line: the current step and the run's clock. |
+| **Reassurance only** | working, thinking, running | A still ring and a working face on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, and at the end of the transcript one live status line: the current step and the run's clock. |
 | **Nothing to do** | ready, done *(already seen)* | Show nothing. A tool that worked wears no badge; a trace where nine cards in ten say `done` is how the one that failed gets lost. |
 
 One vocabulary everywhere — the same condition must not be `working` in one place and `running` in
@@ -661,7 +685,7 @@ person's to edit; a failed run did run, and its effects may already exist.
 the tool for the person's decision.
 
 **Presence is layered, never duplicated.** The avatar answers *is this agent busy at all* with a
-breathing ring, the agent row says it in words (`working`, `2 working`), and the rows of the
+ring and a working face, the agent row says it in words (`working`, `2 working`), and the rows of the
 conversation list answer *which one* with a pulsing dot and the word. Each level adds information the one above cannot
 give; none of them repeats the other, and none of them is colour alone. A conversation holding
 unsent text says `unsent` in the same place, because that is also work that is not finished.
@@ -696,8 +720,8 @@ Electron on a known Chromium, so the feature is simply available. Both disclosur
 tool call and a thinking block, go from one line to a block of output, which was the jump that made
 the transcript feel like it was redrawing itself.
 
-Hover backgrounds are 100ms, popovers 120ms, and presence breathes at 1.8s — the avatar ring and
-the conversation dot together. Streaming text is not animated: token arrival is the animation, and a
+Hover backgrounds are 100ms, popovers 120ms, and the conversation dot breathes at 1.8s. An avatar's
+ring stands still: its face moves instead (a blink every 4.4s, a scan of 1.6s, a hop of 0.9s, §3). Streaming text is not animated: token arrival is the animation, and a
 transition on top of it produces jitter. Everything collapses to instant under
 `prefers-reduced-motion`.
 
@@ -766,10 +790,14 @@ dark mode, and slightly bolder (600, -0.025em) in light mode. The name is playfu
 
 Agent avatars are circles, because the product's whole metaphor is "an agent is a contact" and the
 roster should read as one; rounded squares ("squares are programs") kept it reading as a list of
-tools. The avatar shows the first two letters or digits (punctuation skipped: `a-very-long-name` is
-`AV`, not `A-`) in near-black over a gradient whose colour is the agent's own (§4). Identity is the avatar; presence is the ring
-around it (§9), never a change to the avatar itself, so an agent looks like the same agent whether
-it is busy or idle.
+tools. Settings offers six styles, each previewed on the same four agents: **Gaze** (the default:
+shapes with eyes, in the agent's own colour, the one style whose eyes can move), **Moods**, **Bottts**,
+**Pixelbot**, **Initial face** and **Initials** (the first two letters or digits, punctuation skipped,
+`a-very-long-name` is `AV`, in near-black over a gradient in the agent's colour, §4). The drawn ones
+are DiceBear's (CC0, except Bottts, which Pablo Stanley gives free for personal and commercial use),
+made in the page as inline SVG, nothing fetched; every style but Gaze, a shape on nothing, is cut to a
+circle, and Gaze is drawn at 1.2 so its shape fills one. The drawing is the agent's identity and never
+changes; its face follows the state (§3), so an agent looks like the same agent whether it is busy or idle.
 
 ## 12b. Settings: model providers and network (shipped)
 
@@ -877,7 +905,7 @@ See [README.md](../README.md#delivery-stages) for those acceptance gates.
 2. **Components.** Buttons (primary, secondary, ghost, danger; heights 28 and 32), badges, cards,
    popovers, composer.
 3. **Status.** The single vocabulary, the three tiers, `stopped`, and presence at both levels — the
-   avatar ring and the conversation dot.
+   avatar's ring and face, and the conversation dot.
 4. **Sidebar.** Merge rail and list into one 240–320px column: agent rows, running and drafted
    conversations always listed, the rest folded. This one changes navigation, so every smoke
    assertion that locates a control by label has to be re-checked.

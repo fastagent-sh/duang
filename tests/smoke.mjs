@@ -319,7 +319,6 @@ if (!process.versions.electron) {
         "[...document.fonts].some((f) => f.family === 'Prose' && f.unicodeRange.startsWith('U+0-FF') && f.style === 'normal' && f.status === 'loaded')",
         "the answer's Latin face loads",
       );
-      await until("[...document.fonts].some((f) => f.family === 'Avatar' && f.status === 'loaded')", "the avatar face loads");
       // Bold italic must be a face of its own: with only a 400 italic declared, `***x***` matched it and
       // lost its weight (index.css).
       assert.deepEqual(
@@ -450,6 +449,22 @@ if (!process.versions.electron) {
       );
       assert.match(await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').title"), /\nWorking$/);
       assert.match(await evaluate("document.querySelector('aside').innerText"), /working/, "state is readable, not hovered");
+      // Its avatar is drawn (Gaze, the default) and wears a working face: a still ring, and eyes or body moving
+      // with the work. The eyes are <defs> drawn through <use>, so this reads the animation on the original,
+      // which the drawn copies inherit; a selector that misses them leaves the face frozen with no error.
+      const smokeAvatar = `document.querySelector('button[aria-label="Smoke"] .avatar')`;
+      await until(`!!${smokeAvatar}?.querySelector('svg .dbga-eye')`, "the default avatars are drawn");
+      await until(`['thinking', 'tool', 'answering'].includes(${smokeAvatar}.dataset.face)`, "a working agent wears a working face");
+      assert.ok(await evaluate(`${smokeAvatar}.classList.contains('ring-2')`), "and the presence ring");
+      // Read from the pixels, not from computed styles: those are the original's, which can be right while
+      // the drawn copies stand still (a descendant selector reaches the one and not the other).
+      const face = await evaluate(`(() => { const r = ${smokeAvatar}.getBoundingClientRect(); return { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()`);
+      const frames = [];
+      for (let i = 0; i < 8; i++) {
+        frames.push((await win.webContents.capturePage(face)).toBitmap());
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      assert.ok(frames.some((frame) => !frame.equals(frames[0])), "and the drawn face moves while it works");
       // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
       // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
       // machine delivers a real Escape inside that gap.
@@ -499,6 +514,12 @@ if (!process.versions.electron) {
       gate = undefined;
       const unseenMark = "document.querySelector('aside [title$=\"while you were away\"]')";
       await until(`${unseenMark}?.textContent.startsWith('1')`, "an outcome nobody saw is counted on its agent's row");
+      assert.equal(
+        await evaluate(`document.querySelector('button[aria-label="Smoke"] .avatar').dataset.face`),
+        "done",
+        "and its avatar is pleased about it, over being the open one",
+      );
+      assert.ok(await evaluate(`document.querySelector('button[aria-label="Smoke"] .avatar svg').innerHTML.includes('id="eyes-happy')`), "with happy eyes");
       assert.equal(electron.app.getBadgeCount(), 1, "and counted on the dock");
       // The count sits on the first line of what the row quotes, under the time: not a line below a short quote.
       assert.deepEqual(
@@ -767,6 +788,11 @@ if (!process.versions.electron) {
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`);
       await until("document.querySelector('button[aria-label=\"Gone for good\"]') !== null", "the roster shows the new name");
+      assert.equal(
+        await evaluate(`document.querySelector('button[aria-label="Gone for good"] .avatar').dataset.face`),
+        "unborn",
+        "a directory with no agent yet has an outline, not a face",
+      );
       assert.equal(
         JSON.parse(await readFile(join(data, "agents.json"), "utf8")).find((row) => row.id === "gone").name,
         "Gone for good",
@@ -1157,8 +1183,8 @@ if (!process.versions.electron) {
       // One tab stop per choice group, on the checked row; the arrows move the choice and wrap.
       assert.deepEqual(
         await evaluate(`[...document.querySelectorAll('[role=radiogroup]')].map((g) => g.querySelectorAll('[role=radio][tabindex="0"]').length)`),
-        [1],
-        "the Proxy group is one tab stop",
+        [1, 1],
+        "the Proxy group and the Avatar style group are one tab stop each",
       );
       const key = (keyCode) => {
         win.webContents.sendInputEvent({ type: "keyDown", keyCode });
@@ -1169,6 +1195,17 @@ if (!process.versions.electron) {
       await until("!!document.querySelector('[data-source=off]')", "ArrowUp from the first row wraps to Off and chooses it");
       key("Down");
       await until("!!document.querySelector('[data-source=system]') && document.activeElement?.textContent.trim().startsWith('Automatic')", "ArrowDown wraps back to Automatic");
+      // An avatar style chosen here is saved and redraws every avatar at once, leaving the network alone.
+      const chooseStyle = (label) =>
+        evaluate(`[...document.querySelectorAll('[role=radiogroup][aria-label="Avatar style"] [role=radio]')].find((row) => row.textContent.startsWith(${JSON.stringify(label)})).click()`);
+      await chooseStyle("Initials");
+      await until(`!document.querySelector('aside .avatar svg') && document.querySelector('aside .avatar').textContent.trim() !== ''`, "the roster is redrawn in initials");
+      // Initials are the one style drawn in a font of its own; it is only asked for once something uses it.
+      await until("[...document.fonts].some((f) => f.family === 'Avatar' && f.status === 'loaded')", "the initials' face loads");
+      // The roster changes once the file is written (store.setAvatar), so the file already says so.
+      assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")), { network: { mode: "automatic" }, avatar: "initials" });
+      await chooseStyle("Gaze");
+      await until(`!!document.querySelector('aside .avatar svg .dbga-eye')`, "and back in Gaze");
       await writeFile(settingsFile, "{broken");
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
       await until("!document.querySelector('#network-heading')", "the close control leaves Settings");

@@ -14,7 +14,8 @@ outcomes nobody has looked at yet. The quote streams while duang holds that conv
 screen, or running in the background); otherwise it is read once from the conversation's history
 and again when the session list says it moved on, so a run driven from outside duang appears when
 the list is next read. While one of its conversations runs the row says `working` in place of the
-time; a setup problem or an unreadable list or history replaces the quote. Reading every row's list
+time, and its avatar's face shows what kind of work it is (docs/ui.md §3); a setup problem or an
+unreadable list or history replaces the quote. Reading every row's list
 at launch boots each agent's runtime. A failed list read is shown on
 that agent's row, not as an empty list. An agent's name can be changed from its row's context menu
 or by double-clicking it; this renames duang's registry entry, never the directory.
@@ -80,6 +81,9 @@ with a user name or password (`http://user:pass@proxy:8080`) cannot be used, bec
 authenticate to a proxy yet: *Automatic* then shows `unsupported proxy route` and every request
 fails with that reason rather than the proxy's bare 407; relaunch without them, or choose *Manual*
 or *Off*. Each choice group is one tab stop on its checked row; the arrow keys move the choice.
+**Avatars** offers six styles, each shown on the same four sample agents, and is saved to the same file;
+choosing one redraws every avatar at once. Gaze is the default. An unreadable settings file leaves the
+avatars in the default until it is fixed: main says so when it starts and the page says so when opened.
 A model request through an unreachable proxy fails with whatever its provider SDK reports, often only a
 connection error; duang never falls back to a direct connection, which may be blocked or may
 bypass a route the person chose. A settings file that cannot be read is reported at launch and on

@@ -9,6 +9,8 @@
  */
 import { ArrowUp, FolderOpen, Plus, Stop, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
+import { Avatar } from "./avatar.tsx";
+import type { Face } from "./face.ts";
 import { CodeBlock } from "./code.tsx";
 import { UsageDetail, UsageMeter } from "./header.tsx";
 import { Message, RunStatus, Tool, WorkBlock } from "./transcript-view.tsx";
@@ -115,6 +117,15 @@ export default function Gallery() {
           <Badge tone="warning">needs a model</Badge>
           <Badge tone="warning">no agent yet</Badge>
           <Badge tone="danger">broken</Badge>
+        </Section>
+
+        <Section title="Avatars — one face per state" note="the drawing is who it is and never changes; the face is what it is doing; the words say it too">
+          {(["idle", "open", "thinking", "tool", "answering", "done", "failed", "asleep", "unborn", "broken"] satisfies Face[]).map((face, colour) => (
+            <div key={face} className="flex flex-col items-center gap-1.5 text-[11px] text-muted">
+              <Avatar id={`gallery-${face}`} name={face} colour={colour} size={48} face={face} />
+              {face}
+            </div>
+          ))}
         </Section>
 
         <Section title="Surfaces" note="flat reading surfaces; soft shadows on floating chrome and popovers">

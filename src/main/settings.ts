@@ -1,5 +1,5 @@
 /**
- * duang's own preferences — today only the network route. Not navigation memory like the window
+ * duang's own preferences: the network route and the avatar style. Not navigation memory like the window
  * bounds: a manual proxy someone typed must not silently turn into "automatic", so a file that
  * cannot be read or parsed is an error, and only a missing file is a first run.
  */
@@ -8,10 +8,14 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export type Network = { mode: "automatic" } | { mode: "manual"; url: string } | { mode: "off" };
+/** How agents' avatars are drawn (the renderer's `avatar.tsx`); the first is the default. */
+export const AVATARS = ["gaze", "moods", "bottts", "pixelbot", "initialFace", "initials"] as const;
+export type AvatarStyle = (typeof AVATARS)[number];
 export interface Settings {
   network: Network;
+  avatar: AvatarStyle;
 }
-export const DEFAULTS: Settings = { network: { mode: "automatic" } };
+export const DEFAULTS: Settings = { network: { mode: "automatic" }, avatar: AVATARS[0] };
 
 /** The port a scheme implies, written out so a saved proxy always names its port. */
 const DEFAULT_PORTS: Record<string, string> = { "http:": "80", "https:": "443", "socks5:": "1080" };
@@ -39,6 +43,11 @@ export function network(value: unknown): Network {
   throw new Error(`Unknown network mode: ${JSON.stringify(mode)}`);
 }
 
+export function avatar(value: unknown): AvatarStyle {
+  if (AVATARS.includes(value as AvatarStyle)) return value as AvatarStyle;
+  throw new Error(`Unknown avatar style: ${JSON.stringify(value)}`);
+}
+
 export async function readSettings(file: string): Promise<Settings> {
   let text: string;
   try {
@@ -48,8 +57,12 @@ export async function readSettings(file: string): Promise<Settings> {
     throw error;
   }
   try {
-    const parsed = JSON.parse(text) as { network?: unknown };
-    return { network: parsed.network === undefined ? DEFAULTS.network : network(parsed.network) };
+    const parsed = JSON.parse(text) as { network?: unknown; avatar?: unknown };
+    // A setting the file does not name was never chosen: it is the default, not an error.
+    return {
+      network: parsed.network === undefined ? DEFAULTS.network : network(parsed.network),
+      avatar: parsed.avatar === undefined ? DEFAULTS.avatar : avatar(parsed.avatar),
+    };
   } catch (error) {
     // The person has to know which file to open, not which column of it.
     throw new Error(`${file}: ${(error as Error).message}`, { cause: error });

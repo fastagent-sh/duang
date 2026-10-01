@@ -14,8 +14,8 @@ import type { AgentRow } from "../main/agent-files.ts";
 export type { Models } from "../main/credentials.ts";
 import type { Models } from "../main/credentials.ts";
 export type { ProviderUsage, UsageWindow } from "../main/usage.ts";
-export type { Network } from "../main/settings.ts";
-import type { Network } from "../main/settings.ts";
+export type { AvatarStyle, Network } from "../main/settings.ts";
+import type { AvatarStyle, Network } from "../main/settings.ts";
 export type { Route } from "../main/proxy.ts";
 export type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
 import type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
@@ -74,7 +74,9 @@ const api = {
    */
   refreshModels: (agentId: string): Promise<Models> => ipcRenderer.invoke("models:refresh", agentId),
   /** duang's own preferences and the route requests take now. Rejects when the settings file is unreadable. */
-  getSettings: (): Promise<{ network: Network; route: Route }> => ipcRenderer.invoke("settings:get"),
+  getSettings: (): Promise<{ network: Network; avatar: AvatarStyle; route: Route }> => ipcRenderer.invoke("settings:get"),
+  /** Saves how avatars are drawn. Rejects when the settings file is unreadable, leaving it as it was. */
+  setAvatar: (style: AvatarStyle): Promise<void> => ipcRenderer.invoke("settings:setAvatar", style),
   /** Saves and applies at once; new requests use it, a running turn keeps its connection. */
   setNetwork: (network: Network): Promise<Route> => ipcRenderer.invoke("settings:setNetwork", network),
   revealSettings: (): Promise<void> => ipcRenderer.invoke("settings:reveal"),

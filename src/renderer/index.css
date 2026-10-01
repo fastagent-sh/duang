@@ -325,12 +325,107 @@ details[open]::details-content {
 }
 
 /* Motion is decoration here; every one of these states is also said in words. */
+/* Avatars (avatar.tsx, face.ts): the drawing is who the agent is and never changes; the face is what it
+   is doing. Motion is small, continuous only while it works, and an outcome plays once, when it lands.
+   Gaze's eyes are <defs> drawn through <use>: only a plain class selector reaches those copies, so the
+   face reaches them as inherited variables, which is DiceBear's own pattern. Units inside the drawing are
+   its 100-unit viewBox, so the same numbers suit the 48px roster and the 30px header. */
+.avatar {
+  position: relative;
+  --blink: avatar-blink 4.4s linear var(--delay) infinite;
+}
+.avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.avatar-face {
+  transform-origin: 50% 100%;
+  animation: var(--body-a, none);
+}
+.dbga-eye,
+.dbga-look {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.dbga-eye {
+  transform: var(--eye-t, none);
+  animation: var(--eye-a, none);
+}
+.dbga-look {
+  transform: var(--look-t, none);
+  animation: var(--look-a, none);
+}
+@keyframes avatar-blink {
+  0%, 94%, 97%, 100% { transform: scaleY(1); }
+  95.5% { transform: scaleY(0.06); }
+}
+@keyframes avatar-ponder {
+  0%, 100% { transform: translate(-2.5px, -3.5px); }
+  50% { transform: translate(2.5px, -4px); }
+}
+@keyframes avatar-scan {
+  0%, 100% { transform: translate(-4px, 0.6px); }
+  50% { transform: translate(4px, 0.6px); }
+}
+@keyframes avatar-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5%); }
+}
+@keyframes avatar-hop {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  20% { transform: translateY(0) scale(1.07, 0.93); }
+  50% { transform: translateY(-12%) scale(0.96, 1.05); }
+  80% { transform: translateY(0) scale(1.05, 0.95); }
+}
+@keyframes avatar-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6%); }
+  40% { transform: translateX(6%); }
+  60% { transform: translateX(-4%); }
+  80% { transform: translateX(3%); }
+}
+@keyframes avatar-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.avatar[data-face="idle"] { --eye-a: var(--blink); }
+/* The agent on screen looks toward its conversation. */
+.avatar[data-face="open"] { --eye-a: var(--blink); --look-t: translate(3.5px, 0.6px); }
+.avatar[data-face="thinking"] { --eye-a: var(--blink); --look-a: avatar-ponder 3.2s ease-in-out var(--delay) infinite; }
+.avatar[data-face="tool"] { --eye-a: var(--blink); --look-a: avatar-scan 1.6s ease-in-out var(--delay) infinite; }
+.avatar[data-face="answering"] { --eye-a: var(--blink); --body-a: avatar-bob 0.9s ease-in-out var(--delay) infinite; }
+/* Happy eyes (avatar-svg.ts), and one hop when the outcome lands. */
+.avatar[data-face="done"] { --body-a: avatar-hop 0.9s ease-out 1; }
+/* Small eyes looking down, and one shake. */
+.avatar[data-face="failed"] { --look-t: translate(0, 3px); --body-a: avatar-shake 0.7s ease-out 1; }
+.avatar[data-face="asleep"] { --eye-t: scaleY(0.14); --body-a: avatar-breathe 4s ease-in-out var(--delay) infinite; }
+.avatar[data-face="broken"] { --eye-t: scaleY(0.14); }
+.avatar[data-face="broken"] .avatar-face { filter: grayscale(1) opacity(0.5); }
+/* Not born yet: an outline where it will be, and no face. */
+.avatar[data-face="unborn"] .avatar-face { opacity: 0; }
+.avatar[data-face="unborn"]::after {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  border: 1.5px dashed currentColor;
+  opacity: 0.35;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .enter,
   .pop,
   .bounce,
   .shimmer {
     animation: none;
+  }
+  /* Every face keeps its pose (eyes closed, looking down, happy) and loses its movement. */
+  .avatar[data-face] {
+    --eye-a: none;
+    --look-a: none;
+    --body-a: none;
   }
   .shimmer {
     color: var(--color-muted);

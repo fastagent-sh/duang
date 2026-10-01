@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { DEFAULTS, network, proxyUrl, readSettings, writeSettings } from "./settings.ts";
+import { AVATARS, avatar, DEFAULTS, network, proxyUrl, readSettings, writeSettings } from "./settings.ts";
 
 test("only a missing file is a first run; an unreadable one names itself", async () => {
   const dir = await mkdtemp(join(tmpdir(), "duang-settings-"));
@@ -17,9 +17,21 @@ test("only a missing file is a first run; an unreadable one names itself", async
   await writeFile(file, JSON.stringify({ network: { mode: "sometimes" } }));
   await assert.rejects(readSettings(file), /Unknown network mode: "sometimes"/);
 
-  await writeSettings(file, { network: { mode: "manual", url: "socks5://127.0.0.1:7891" } });
-  assert.deepEqual(await readSettings(file), { network: { mode: "manual", url: "socks5://127.0.0.1:7891" } });
+  await writeSettings(file, { network: { mode: "manual", url: "socks5://127.0.0.1:7891" }, avatar: "moods" });
+  assert.deepEqual(await readSettings(file), { network: { mode: "manual", url: "socks5://127.0.0.1:7891" }, avatar: "moods" });
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")).network.mode, "manual");
+});
+
+test("the avatar style is one duang draws; a file that names none has the default, one that names another is an error", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "duang-settings-"));
+  const file = join(dir, "settings.json");
+  assert.equal(DEFAULTS.avatar, "gaze");
+  await writeFile(file, JSON.stringify({ network: { mode: "off" } }));
+  assert.deepEqual(await readSettings(file), { network: { mode: "off" }, avatar: "gaze" }, "never chosen is the default");
+  await writeFile(file, JSON.stringify({ avatar: "sparkles" }));
+  await assert.rejects(readSettings(file), (error: Error) => error.message === `${file}: Unknown avatar style: "sparkles"`);
+  for (const style of AVATARS) assert.equal(avatar(style), style);
+  assert.throws(() => avatar(undefined), /Unknown avatar style/);
 });
 
 test("a proxy URL is normalised to scheme and host, and anything else is refused", () => {
