@@ -23,6 +23,7 @@ import { forgetUsage, providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
+import { follow } from "./follow.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
@@ -160,21 +161,10 @@ function stopWindowStreams(senderId: number): void {
 /**
  * A model change replaces the agent's runtime, and a subscription is to a conversation, not to a runtime:
  * each of the agent's subscriptions listens again on the new one under the same id, and the window sees
- * nothing. One that cannot ends with the reason, like any other that stops.
+ * nothing. One that cannot ends with the reason, like any other that stops (`follow` reports it).
  */
 async function rebindAgentStreams(agentId: string): Promise<void> {
-  await Promise.all(
-    [...streams].flatMap(([key, stream]) =>
-      stream.agentId !== agentId
-        ? []
-        : [
-            stream.rebind().catch((error) => {
-              stream.end(String(error), false);
-              stopStream(key);
-            }),
-          ],
-    ),
-  );
+  await Promise.all([...streams.values()].filter((stream) => stream.agentId === agentId).map((stream) => stream.rebind()));
 }
 /** Cutting an agent's subscriptions is invisible to the renderer unless each one says why it ended. */
 function stopAgentStreams(agentId: string, reason: string): void {
@@ -363,51 +353,33 @@ function register(): void {
     requireSession(session);
     const key = `${e.sender.id}/${subscription}`;
     stopStream(key);
-    const slot: Stream = { senderId: e.sender.id, agentId: id, close: () => {}, end: () => {}, rebind: async () => {} };
-    streams.set(key, slot);
     const post = (frame: Omit<SessionFrame, "agentId" | "session" | "subscription">) => {
       if (!e.sender.isDestroyed() && streams.get(key) === slot) {
         e.sender.send("session:event", { agentId: id, session, subscription, ...frame });
       }
     };
-    const forward = (event: SessionEvent) => post({ event });
-    slot.end = (reason, expected) => post({ ended: { reason, expected } });
-    // The latest listen is the subscription's; an earlier one that was replaced stops without saying it ended.
-    let listening = 0;
-    const listen = async () => {
-      const mine = ++listening;
-      const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
-      if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
-      const stream = bound.events();
-      const iterator = stream[Symbol.asyncIterator]();
-      slot.close = () => {
-        void iterator.return?.().catch((error) => console.error("session close:", error));
-      };
-      void (async () => {
-        // Both endings leave the renderer deaf: FastAgent closing its subscriber looks like a normal
-        // `done`, and a silent one would keep the conversation running on screen forever. Only the
-        // throw is a failure; a clean `done` is the runtime letting this subscriber go.
-        let ending = { reason: "This conversation stopped receiving updates", expected: true };
-        try {
-          for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
-            if (mine === listening) forward(next.value);
-          }
-        } catch (error) {
-          ending = { reason: String(error), expected: false };
-        }
-        if (mine !== listening) return;
-        slot.end(ending.reason, ending.expected);
+    const following = follow(
+      async () => {
+        const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
+        if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
+        return bound;
+      },
+      (event: SessionEvent) => post({ event }),
+      (reason, expected) => {
+        post({ ended: { reason, expected } });
         if (streams.get(key) === slot) streams.delete(key);
-      })();
-      await stream.ready;
-      return bound;
+      },
+    );
+    const slot: Stream = {
+      senderId: e.sender.id,
+      agentId: id,
+      close: following.close,
+      end: (reason, expected) => post({ ended: { reason, expected } }),
+      rebind: following.rebind,
     };
-    slot.rebind = async () => {
-      slot.close();
-      await listen();
-    };
+    streams.set(key, slot);
     try {
-      const bound = await listen();
+      const bound = await following.start();
       return { entries: await bound.entries(), state: await bound.state() };
     } catch (error) {
       if (streams.get(key) === slot) stopStream(key);
