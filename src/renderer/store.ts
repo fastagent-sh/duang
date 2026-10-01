@@ -155,6 +155,8 @@ export interface View {
   /** The model picker's contents: undefined while loading, so the picker can say so. */
   models?: Models;
   modelsError?: string;
+  /** What the picker's last "refresh models" is doing or said; cleared whenever the list is read again. */
+  modelsRefresh?: { status: "running" } | { status: "done"; added: number } | { status: "failed"; error: string };
   /** The `/` completion list for the selected agent. */
   commands: AgentCommand[];
   commandsError?: string;
@@ -750,13 +752,36 @@ export function createStore(api: DuangApi) {
     async loadModels() {
       const id = view.agentId;
       const request = ++modelsRequest;
-      publish({ models: undefined, modelsError: undefined });
+      publish({ models: undefined, modelsError: undefined, modelsRefresh: undefined });
       if (!id) return;
       try {
         const models = await api.listModels(id);
         if (request === modelsRequest) publish({ models });
       } catch (error) {
         if (request === modelsRequest) publish({ modelsError: message(error) });
+      }
+    },
+    /**
+     * Fetches models released after the bundled catalog, for the open agent, when the person asks.
+     * The list stays as it was on a failure, with the reason beside it: a failed refresh does not
+     * make the models already there any less runnable. A reopened picker reads the list itself and
+     * drops this one's answer, as does a switch to another agent.
+     */
+    async refreshModels() {
+      const id = view.agentId;
+      // Not before the list has arrived: there would be nothing to count against, and the reading in flight
+      // would be dropped (a failure then leaves a picker with no list and nothing to retry).
+      if (!id || !view.models || view.modelsRefresh?.status === "running") return;
+      const request = ++modelsRequest;
+      const before = new Set(view.models.specs);
+      publish({ modelsRefresh: { status: "running" } });
+      try {
+        const models = await api.refreshModels(id);
+        if (request !== modelsRequest || view.agentId !== id) return;
+        publish({ models, modelsRefresh: { status: "done", added: models.specs.filter((spec) => !before.has(spec)).length } });
+      } catch (error) {
+        if (request === modelsRequest && view.agentId === id)
+          publish({ modelsRefresh: { status: "failed", error: message(error) } });
       }
     },
     /**

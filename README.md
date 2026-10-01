@@ -159,6 +159,8 @@ The picker lists what the open agent can run, including endpoints from its own
 configured credential, whether in that file, an environment variable or a key written in a
 `models.json`. It checks credential configuration without refreshing OAuth or testing the provider.
 Reopening it or pressing Retry rereads the file, so external login changes need no app restart.
+A model released after the installed pi appears once the picker's refresh button has fetched the catalog
+from pi.dev for that agent (saved as `models-store.json` in its folder); nothing refreshes on its own.
 Execution resolves the actual conversation's provider, including history that differs from the
 agent default; OAuth refresh and provider errors remain visible. OAuth refresh writes back to the
 same file through the SDK. Behind a proxy, every request follows the system's proxy settings as
