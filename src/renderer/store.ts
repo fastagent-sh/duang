@@ -424,7 +424,8 @@ export function createStore(api: DuangApi) {
     lastOpened.set(agentId, session);
     lastAgent = agentId;
     writeStored(SELECTION_KEY, JSON.stringify({ agentId, perAgent: [...lastOpened] } satisfies Selection));
-    leave();
+    // No `leave()` first: clearing the view to put another conversation in it renders the screen for "no
+    // conversation" in between. Publishing the next one is what makes the previous one stop being current.
     const existing = conversations.get(key(agentId, session));
     if (existing) {
       publish({ conversation: existing, error: undefined });

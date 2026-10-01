@@ -104,7 +104,10 @@ navigation, and the transcript is focusable. Scrolling up suspends tail-follow; 
 to the latest turn. A conversation is opened at its latest turn, or, when it was left scrolled up, where it was
 left, through Settings or another agent and back (for the window's life, not across launches; a card that was
 expanded comes back folded, so the place is the same distance from the top, not the same line). The place is held
-while the layout settles and until the person scrolls. A view that was at the latest turn stays there while its
+while the layout settles and until the person scrolls. While the history of a conversation the runtime already
+has is being read (and while an agent that has conversations opens), the pane is empty with the composer in
+place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment
+before the real one arrives. A view that was at the latest turn stays there while its
 content grows by itself, and choosing the conversation that is already open rebuilds nothing. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.
 

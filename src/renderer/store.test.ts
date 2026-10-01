@@ -470,6 +470,24 @@ test("opening the conversation that is already open changes nothing", async () =
   store.dispose();
 });
 
+test("moving to another conversation never passes through having none", async () => {
+  const { store, closed } = harness();
+  await store.load();
+  const first = store.getSnapshot().conversation!;
+  const seen: unknown[] = [];
+  const stop = store.subscribe(() => seen.push(store.getSnapshot().conversation));
+  await store.open("another");
+  stop();
+  assert.ok(seen.length > 0, "the move was published");
+  assert.ok(
+    seen.every((shown) => shown !== undefined),
+    "the view is never cleared on the way: that renders the screen for no conversation, for a frame",
+  );
+  assert.notEqual(store.getSnapshot().conversation, first);
+  assert.ok(closed.includes(first.subscription), "and the one left is still closed, as soon as it is not the open one");
+  store.dispose();
+});
+
 test("where a conversation was left above the latest line is remembered until it or its agent is gone", async () => {
   const { store } = harness();
   await store.load();

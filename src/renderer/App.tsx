@@ -117,8 +117,18 @@ export default function App() {
   const usage = c?.state?.usage;
   const pending = c?.state?.pending;
   const waiting = c ? queueView(c.waiting, pending?.steering ?? []) : [];
+  // What is about to be shown is still being read: a conversation the runtime has a record of, or an
+  // agent that has some, whose history has not arrived. The new-conversation page is a different screen,
+  // and showing it for the moment between would be a flash of the wrong one.
+  const settling =
+    !!agentId &&
+    agentState === "ready" &&
+    (c
+      ? c.loading && !!sessions[agentId]?.some((s) => s.session === c.session)
+      : view.loading && (sessions[agentId]?.length ?? 0) > 0);
   // A transcript fills the pane, and the header and composer float over it.
-  const reading = !!agentId && agentState === "ready" && !!c && (c.items.length > 0 || waiting.length > 0);
+  const reading =
+    !!agentId && agentState === "ready" && (settling || (!!c && (c.items.length > 0 || waiting.length > 0)));
   // The plan that pays for this conversation: its own model's provider, which may differ from the
   // agent default.
   const provider = (c?.state?.model ?? view.model)?.split("/")[0];
@@ -242,6 +252,8 @@ export default function App() {
               />
             ) : agentState === "no_agent" ? (
               <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
+            ) : settling ? (
+              <div className="flex-1 min-h-0" aria-busy="true" />
             ) : !c || (c.items.length === 0 && waiting.length === 0) ? (
               <NewConversation>{composer}</NewConversation>
             ) : (

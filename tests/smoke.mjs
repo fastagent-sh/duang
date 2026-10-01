@@ -901,6 +901,28 @@ if (!process.versions.electron) {
         "the transcript is at the bottom again",
       );
 
+      // Moving to a conversation that has history never shows the new-conversation page on the way: the
+      // pane is empty while the history is read, not the screen for a conversation nobody has spoken in. A
+      // mutation observer sees every state the DOM passes through, which polling would miss.
+      const watchForStartScreen = () =>
+        evaluate(`(() => {
+          window.__startScreen = false;
+          window.__watch?.disconnect();
+          window.__watch = new MutationObserver(() => {
+            if (document.body.innerText.includes('What should we work on?')) window.__startScreen = true;
+          });
+          window.__watch.observe(document.body, { subtree: true, childList: true, characterData: true });
+        })()`);
+      const settledOnHistory = (what) =>
+        until(
+          `${reading} !== null && !document.body.innerText.includes('What should we work on?') && !document.querySelector('main .bounce')`,
+          what,
+        );
+      const noStartScreen = async (what) => {
+        assert.equal(await evaluate("window.__startScreen"), false, `${what} does not pass through the new-conversation page`);
+        await evaluate("window.__watch.disconnect()");
+      };
+
       // Where a conversation was left is where it comes back to: a click on the conversation already open
       // rebuilds nothing, and Settings or another agent and back restores the place being read (the view is
       // rebuilt by both). The content grows for a moment after a rebuild, so each is polled.
@@ -930,10 +952,13 @@ if (!process.versions.electron) {
       await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
       await until(nearly(left), "after Settings the conversation is where it was left");
       const other = ["Smoke", "Configured"].find((name) => name !== openAgent);
+      await watchForStartScreen();
       await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(other)}]').click()`);
       await until(`document.querySelector('main').innerText.length > 0 && document.querySelector('button[aria-label=${JSON.stringify(other)}]').getAttribute('aria-current') === 'true'`, "the other agent is open");
+      await settledOnHistory("the other agent's conversation opens");
       await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
       await until(nearly(left), "after another agent the conversation is where it was left");
+      await noStartScreen("switching to another agent and back");
       // At the latest line it stays there, rather than landing short of it while the content grows.
       await evaluate(`${reading}.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }))`);
       await until(atBottom, "back at the latest line");
@@ -1374,6 +1399,33 @@ if (!process.versions.electron) {
         electron.shell.showItemInFolder = showItemInFolder;
         electron.Menu.prototype.popup = popup;
       }
+
+      // Between two conversations that both have history, from the list. The second is made here, last, so the
+      // rows the earlier steps count on are untouched.
+      await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
+      await until("document.body.innerText.includes('What should we work on?') && !document.querySelector('textarea').disabled", "a new conversation");
+      await message("A second conversation, with a history of its own.");
+      await until(
+        `${reading} !== null && ${reading}.querySelectorAll('.column > *').length >= 2 && !document.querySelector('main .bounce')`,
+        "the second conversation has settled",
+      );
+      await showConversations();
+      const secondSession = await evaluate(`document.querySelector('#conversations button[data-session][aria-current="page"]').dataset.session`);
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      await watchForStartScreen();
+      await showConversations();
+      await evaluate(
+        `[...document.querySelectorAll('#conversations button[data-session]')].find((b) => b.getAttribute('aria-current') !== 'page' && !b.textContent.includes('New conversation')).click()`,
+      );
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      await settledOnHistory("the agent's other conversation opens");
+      await noStartScreen("moving to another conversation");
+      await watchForStartScreen();
+      await showConversations();
+      await evaluate(`document.querySelector('#conversations button[data-session="${secondSession}"]').click()`);
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      await settledOnHistory("and back to the second");
+      await noStartScreen("moving back");
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
