@@ -794,7 +794,10 @@ shapes with eyes, in the agent's own colour, the one style whose eyes can move),
 `a-very-long-name` is `AV`, in near-black over a gradient in the agent's colour, §4). The drawn ones
 are DiceBear's (CC0, except Bottts, which Pablo Stanley gives free for personal and commercial use),
 made in the page as inline SVG, nothing fetched; every style but Gaze, a shape on nothing, is cut to a
-circle, and Gaze is drawn at 1.2 so its shape fills one. The drawing is the agent's identity and never
+circle, and Gaze is drawn at 1.2 so its shape fills one. Every style wears the agent's colour (§4) on its
+largest part (Moods' face, Clay's body, the Bottts and Initial face ground, Pixelbot's glow), so no two
+of the first sixteen agents share one in any style; left to DiceBear, the colour is a hash of the id
+into the style's own few, and a handful of agents often repeat one. The drawing is the agent's identity and never
 changes; its face follows the state (§3), so an agent looks like the same agent whether it is busy or idle.
 
 ## 12b. Settings: model providers and network (shipped)

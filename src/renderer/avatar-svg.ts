@@ -31,6 +31,20 @@ const STYLES: Record<DrawnStyle, Style> = {
 export const IDENTITY_EYES = ["dots", "big", "shine", "beans", "wide", "tall"] as const;
 const EXPRESSION: Partial<Record<Face, string>> = { done: "happy", failed: "small" };
 
+/**
+ * The part of each drawing that wears the agent's colour: its largest area, or for Pixelbot, whose
+ * ground is always dark, its glowing face. Left to the style, the colour is a hash of the id into the
+ * style's own few colours, and a handful of agents often share one (Clay has four browns in twelve).
+ */
+const COLOURED: Record<DrawnStyle, string> = {
+  gaze: "bodyColor",
+  moods: "faceColor",
+  clay: "bodyColor",
+  bottts: "backgroundColor",
+  pixelbot: "glowColor",
+  initialFace: "backgroundColor",
+};
+
 const drawn = new Map<string, string>();
 
 /**
@@ -53,7 +67,8 @@ export function avatarSvg(style: DrawnStyle, { id, name, colour, face }: { id: s
     ...(style === "gaze" ? {} : { borderRadius: 50 }),
     // Gaze draws its shape in about two thirds of the canvas; at 1.2 it fills the avatar's circle as the other
     // styles do, and every shape still clears the canvas edge at its widest rotation (1.3 clips a corner).
-    ...(style === "gaze" ? { scale: 1.2, bodyColor: [avatarHex(colour)], eyesVariant: eyes ? [eyes] : [...IDENTITY_EYES] } : {}),
+    ...(style === "gaze" ? { scale: 1.2, eyesVariant: eyes ? [eyes] : [...IDENTITY_EYES] } : {}),
+    [COLOURED[style]]: [avatarHex(colour)],
   }).toString();
   drawn.set(key, svg);
   return svg;

@@ -33,8 +33,10 @@ test("an avatar is drawn once, follows the agent rather than its name, and never
   const a = ids(avatarSvg("gaze", agent));
   const b = ids(avatarSvg("gaze", { ...agent, face: "done" }));
   assert.ok(a.size > 0 && [...a].every((id) => !b.has(id)), "one agent's two faces cannot draw each other's parts");
-  for (const style of ["moods", "clay", "bottts", "pixelbot", "initialFace"] as const)
-  {
+  for (const style of ["moods", "clay", "bottts", "pixelbot", "initialFace"] as const) {
+    // Named per style, not read from the module: two agents with different colour numbers never wear the same.
+    for (const colour of [0, 1, 2, 3, 4])
+      assert.ok(avatarSvg(style, { ...agent, colour }).includes(`"${avatarHex(colour)}"`), `${style} wears colour ${colour}`);
     // The clip's corner radius is half its side, in whatever units the style's canvas has (Bottts' is 120).
     const clip = /<clipPath[^>]*><rect width="(\d+)" height="\d+" rx="(\d+)"/.exec(avatarSvg(style, agent));
     assert.ok(clip && Number(clip[2]) * 2 === Number(clip[1]), `${style} is cut to a circle, as every avatar is: ${clip?.[0]}`);
