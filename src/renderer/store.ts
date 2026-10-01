@@ -769,9 +769,11 @@ export function createStore(api: DuangApi) {
      */
     async refreshModels() {
       const id = view.agentId;
-      if (!id || view.modelsRefresh?.status === "running") return;
+      // Not before the list has arrived: there would be nothing to count against, and the reading in flight
+      // would be dropped (a failure then leaves a picker with no list and nothing to retry).
+      if (!id || !view.models || view.modelsRefresh?.status === "running") return;
       const request = ++modelsRequest;
-      const before = new Set(view.models?.specs);
+      const before = new Set(view.models.specs);
       publish({ modelsRefresh: { status: "running" } });
       try {
         const models = await api.refreshModels(id);

@@ -456,6 +456,26 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   store.dispose();
 });
 
+test("refreshing models does nothing until the list has arrived", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const slow = deferred<{ specs: string[] }>();
+  let refreshed = 0;
+  api.listModels = () => slow.promise;
+  api.refreshModels = async () => {
+    refreshed++;
+    throw new Error("could not refresh");
+  };
+  const loading = store.loadModels();
+  await store.refreshModels();
+  assert.equal(refreshed, 0, "nothing was asked: the picker is still loading");
+  assert.equal(store.getSnapshot().modelsRefresh, undefined);
+  slow.resolve({ specs: ["provider/model"] });
+  await loading;
+  assert.deepEqual(store.getSnapshot().models?.specs, ["provider/model"], "the reading in flight still lands");
+  store.dispose();
+});
+
 test("opening the conversation that is already open changes nothing", async () => {
   const { store, opens } = harness();
   await store.load();

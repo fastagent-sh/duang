@@ -185,7 +185,7 @@ function ModelPicker({
               size={28}
               aria-label="Refresh models"
               title="Check for newly released models. They are saved in models-store.json in this agent's folder."
-              disabled={refresh?.status === "running" && "Checking for new models…"}
+              disabled={!models ? "Loading models…" : refresh?.status === "running" && "Checking for new models…"}
               onClick={() => void store.refreshModels()}
               icon={<ArrowClockwise size={15} className={refresh?.status === "running" ? "animate-spin motion-reduce:animate-none" : ""} />}
             />

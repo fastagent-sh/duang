@@ -6,6 +6,7 @@
 import { join } from "node:path";
 import { app } from "electron";
 import { availableModelsFromDir, refreshModelCatalog } from "@fastagent-sh/fastagent/pi";
+import { inflight } from "./inflight.ts";
 
 export const authPath = join(app.getPath("userData"), "auth.json");
 
@@ -36,9 +37,10 @@ export async function modelsFor(dir: string): Promise<Models> {
  * authenticate, and saves the answer as `models-store.json` in the agent's folder (FastAgent's own
  * file: it is part of the agent's definition). Only a person asking does this: nothing refreshes on
  * its own. It rejects, naming each provider that failed, on an error, after 15 seconds, or under
- * `PI_OFFLINE`; the old list stays valid.
+ * `PI_OFFLINE`; the old list stays valid. A refresh already running for the folder (the picker was
+ * reopened and pressed again) is joined, not repeated.
  */
-export async function refreshModels(dir: string): Promise<Models> {
+export const refreshModels = inflight(async (dir: string): Promise<Models> => {
   await refreshModelCatalog(dir, credentials);
   return modelsFor(dir);
-}
+});

@@ -49,8 +49,9 @@ The list is what pi's bundled catalog knows, so a model released since the insta
 the catalog is refreshed. The refresh button at the end of the search row asks for that, only when pressed:
 pi.dev is asked for the providers the agent's credentials authenticate, over the same proxy route as a model
 call, and the answer is saved as `models-store.json` in the agent's folder, FastAgent's own file and part of
-the agent's definition (commit it and it ships with a deploy). The button spins while it runs and is pressed
-once at a time; a line under the search says how many models arrived, or none, and a failure shows
+the agent's definition (commit it and it ships with a deploy). The button waits for the list to load, spins
+while a refresh runs and is pressed once at a time (a refresh already running for that agent, started before
+the picker was reopened, is joined rather than repeated); a line under the search says how many models arrived, or none, and a failure shows
 FastAgent's reason verbatim (which provider, a timeout after 15 seconds, `PI_OFFLINE`) with the list left as it
 was. The answer belongs to the agent that asked and to the picker opening it: reopening the picker, or leaving
 the agent, drops a late one. A model it adds can be chosen at once, because choosing rebuilds the agent's runtime
