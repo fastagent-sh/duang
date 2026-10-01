@@ -788,8 +788,8 @@ dark mode, and slightly bolder (600, -0.025em) in light mode. The name is playfu
 
 Agent avatars are circles, because the product's whole metaphor is "an agent is a contact" and the
 roster should read as one; rounded squares ("squares are programs") kept it reading as a list of
-tools. Settings offers six styles, each previewed on the same four agents: **Gaze** (the default:
-shapes with eyes, in the agent's own colour, the one style whose eyes can move), **Moods**, **Bottts**,
+tools. Settings offers seven styles, each previewed on the same four agents: **Gaze** (the default:
+shapes with eyes, in the agent's own colour, the one style whose eyes can move), **Moods**, **Clay**, **Bottts**,
 **Pixelbot**, **Initial face** and **Initials** (the first two letters or digits, punctuation skipped,
 `a-very-long-name` is `AV`, in near-black over a gradient in the agent's colour, §4). The drawn ones
 are DiceBear's (CC0, except Bottts, which Pablo Stanley gives free for personal and commercial use),

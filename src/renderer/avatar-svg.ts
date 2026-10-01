@@ -6,6 +6,7 @@
 import { Avatar as Drawn, Style } from "@dicebear/core";
 import gaze from "@dicebear/styles/gaze.json" with { type: "json" };
 import moods from "@dicebear/styles/moods.json" with { type: "json" };
+import clay from "@dicebear/styles/clay.json" with { type: "json" };
 import bottts from "@dicebear/styles/bottts-neutral.json" with { type: "json" };
 import pixelbot from "@dicebear/styles/pixelbot.json" with { type: "json" };
 import initialFace from "@dicebear/styles/initial-face.json" with { type: "json" };
@@ -17,6 +18,7 @@ export type DrawnStyle = Exclude<AvatarStyle, "initials">;
 const STYLES: Record<DrawnStyle, Style> = {
   gaze: new Style(gaze as never),
   moods: new Style(moods as never),
+  clay: new Style(clay as never),
   bottts: new Style(bottts as never),
   pixelbot: new Style(pixelbot as never),
   initialFace: new Style(initialFace as never),

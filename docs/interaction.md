@@ -81,7 +81,7 @@ with a user name or password (`http://user:pass@proxy:8080`) cannot be used, bec
 authenticate to a proxy yet: *Automatic* then shows `unsupported proxy route` and every request
 fails with that reason rather than the proxy's bare 407; relaunch without them, or choose *Manual*
 or *Off*. Each choice group is one tab stop on its checked row; the arrow keys move the choice.
-**Avatars** offers six styles, each shown on the same four sample agents, and is saved to the same file;
+**Avatars** offers seven styles, each shown on the same four sample agents, and is saved to the same file;
 choosing one redraws every avatar at once. Gaze is the default. An unreadable settings file leaves the
 avatars in the default until it is fixed: main says so when it starts and the page says so when opened.
 A model request through an unreachable proxy fails with whatever its provider SDK reports, often only a

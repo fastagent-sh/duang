@@ -33,7 +33,7 @@ test("an avatar is drawn once, follows the agent rather than its name, and never
   const a = ids(avatarSvg("gaze", agent));
   const b = ids(avatarSvg("gaze", { ...agent, face: "done" }));
   assert.ok(a.size > 0 && [...a].every((id) => !b.has(id)), "one agent's two faces cannot draw each other's parts");
-  for (const style of ["moods", "bottts", "pixelbot", "initialFace"] as const)
+  for (const style of ["moods", "clay", "bottts", "pixelbot", "initialFace"] as const)
   {
     // The clip's corner radius is half its side, in whatever units the style's canvas has (Bottts' is 120).
     const clip = /<clipPath[^>]*><rect width="(\d+)" height="\d+" rx="(\d+)"/.exec(avatarSvg(style, agent));

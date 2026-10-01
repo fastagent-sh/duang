@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 
 export type Network = { mode: "automatic" } | { mode: "manual"; url: string } | { mode: "off" };
 /** How agents' avatars are drawn (the renderer's `avatar.tsx`); the first is the default. */
-export const AVATARS = ["gaze", "moods", "bottts", "pixelbot", "initialFace", "initials"] as const;
+export const AVATARS = ["gaze", "moods", "clay", "bottts", "pixelbot", "initialFace", "initials"] as const;
 export type AvatarStyle = (typeof AVATARS)[number];
 export interface Settings {
   network: Network;

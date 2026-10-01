@@ -188,6 +188,7 @@ export function Settings({
 const STYLES: Record<AvatarStyle, { label: string; note: string }> = {
   gaze: { label: "Gaze", note: "Shapes with eyes that follow the work" },
   moods: { label: "Moods", note: "Round faces" },
+  clay: { label: "Clay", note: "Little clay figures" },
   bottts: { label: "Bottts", note: "Robots, drawn by Pablo Stanley" },
   pixelbot: { label: "Pixelbot", note: "Pixel robots" },
   initialFace: { label: "Initial face", note: "A face wearing the name's first letter" },
