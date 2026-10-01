@@ -237,6 +237,8 @@ function register(): void {
     const { network, avatar } = await readSettings(settingsFile());
     return { network, avatar, route: await describeRoute() };
   });
+  // The roster's one setting, read from the file alone: it must not wait on the proxy route.
+  ipcMain.handle("settings:avatar", async () => (await readSettings(settingsFile())).avatar);
   ipcMain.handle("settings:setAvatar", (_e, value: unknown) => {
     // In the same queue as the network: both rewrite the one file, and neither may lose the other's change.
     const run = settingsChange.then(async () => {

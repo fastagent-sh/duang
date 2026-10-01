@@ -324,7 +324,6 @@ details[open]::details-content {
   block-size: auto;
 }
 
-/* Motion is decoration here; every one of these states is also said in words. */
 /* Avatars (avatar.tsx, face.ts): the drawing is who the agent is and never changes; the face is what it
    is doing. Motion is small, continuous only while it works, and an outcome plays once, when it lands.
    Gaze's eyes are <defs> drawn through <use>: only a plain class selector reaches those copies, so the
@@ -414,6 +413,7 @@ details[open]::details-content {
   opacity: 0.35;
 }
 
+/* Motion is decoration here; every one of these states is also said in words. */
 @media (prefers-reduced-motion: reduce) {
   .enter,
   .pop,

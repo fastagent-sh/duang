@@ -75,6 +75,8 @@ const api = {
   refreshModels: (agentId: string): Promise<Models> => ipcRenderer.invoke("models:refresh", agentId),
   /** duang's own preferences and the route requests take now. Rejects when the settings file is unreadable. */
   getSettings: (): Promise<{ network: Network; avatar: AvatarStyle; route: Route }> => ipcRenderer.invoke("settings:get"),
+  /** How avatars are drawn, from the settings file alone. Rejects when the file is unreadable. */
+  getAvatar: (): Promise<AvatarStyle> => ipcRenderer.invoke("settings:avatar"),
   /** Saves how avatars are drawn. Rejects when the settings file is unreadable, leaving it as it was. */
   setAvatar: (style: AvatarStyle): Promise<void> => ipcRenderer.invoke("settings:setAvatar", style),
   /** Saves and applies at once; new requests use it, a running turn keeps its connection. */

@@ -701,14 +701,16 @@ export function createStore(api: DuangApi) {
   async function load() {
     listen();
     publish({ loading: true, error: undefined });
-    // The avatars' style is the one setting the roster needs before anything else. An unreadable settings
-    // file leaves the default: main says so when it starts, and the Settings page says so when opened.
-    void api.getSettings().then(
-      ({ avatar }) => publish({ avatar }),
+    // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
+    // the default style and then redrawn. Its one failure is an unreadable settings file, which leaves the
+    // default: main reports it when it starts, and the Settings page when it is opened.
+    const avatar = api.getAvatar().then(
+      (style) => publish({ avatar: style }),
       () => {},
     );
     try {
       const agents = await api.listAgents();
+      await avatar;
       publish({ agents, loading: false });
       // Reopen the agent this machine was last using; a removed one falls back to the first row.
       const start = agents.find((row) => row.id === lastAgent) ?? agents[0];
