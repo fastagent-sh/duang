@@ -102,10 +102,14 @@ of chats rather than as someone you work with.
 
 A row, holding Telegram's proportions at a tool's density: a round avatar 48 across with a two-stop
 gradient in its hue — flat avatars look printed, and the gradient is most of why Telegram's list
-feels alive — beside three lines of text. The first is the agent's name, with the time of what the
-row quotes trailing it: the clock today, the weekday within the week, a date before that. The other
-two quote the newest output of the conversation the row speaks for, clamped to two lines, with the
-unread count at their trailing edge. The height is fixed, so a one-line quote does not make a short
+feels alive — beside three lines of text. The first is the agent's name, at 15px so it reads above
+what it quotes (the two used to share a size and told apart by weight and colour alone), with the time of what the
+row quotes trailing it: the clock today, the weekday within the week, a date before that (`Jan 5`,
+and the year only when it is not this one: a string of numbers reads in a different order to each
+reader). The other two quote the newest output of the conversation the row speaks for, clamped to two
+lines. The unread count sits at their trailing edge on the *first* of them, under the time: the
+right-hand column is time over count whether the quote runs one line or two, and the count is never a
+line away from the words it belongs to. The height is fixed, so a one-line quote does not make a short
 row. The header's two lines are the agent's name and, under it, where the agent lives (a click opens
 the folder, as does **Reveal in Finder** in the row's menu). The conversation's title is not in the header:
 an agent is a contact, a person talking to one is not asked to think about sessions, and the path at
@@ -749,7 +753,8 @@ dark mode, and slightly bolder (600, -0.025em) in light mode. The name is playfu
 
 Agent avatars are circles, because the product's whole metaphor is "an agent is a contact" and the
 roster should read as one; rounded squares ("squares are programs") kept it reading as a list of
-tools. The avatar shows the first two letters over a background chosen by
+tools. The avatar shows the first two letters or digits (punctuation skipped: `a-very-long-name` is
+`AV`, not `A-`) over a background chosen by
 hashing the name across seven low-saturation hues. Identity is the avatar; presence is the ring
 around it (§9), never a change to the avatar itself, so an agent looks like the same agent whether
 it is busy or idle.

@@ -500,6 +500,17 @@ if (!process.versions.electron) {
       const unseenMark = "document.querySelector('aside [title$=\"while you were away\"]')";
       await until(`${unseenMark}?.textContent.startsWith('1')`, "an outcome nobody saw is counted on its agent's row");
       assert.equal(electron.app.getBadgeCount(), 1, "and counted on the dock");
+      // The count sits on the first line of what the row quotes, under the time: not a line below a short quote.
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const mark = ${unseenMark};
+          const quote = mark.parentElement.querySelector('span.font-prose');
+          const line = parseFloat(getComputedStyle(quote).lineHeight);
+          return [Math.round(mark.getBoundingClientRect().top - quote.getBoundingClientRect().top) < line];
+        })()`),
+        [true],
+        "the unread count is level with the quote's first line, not a line away from it",
+      );
       assert.equal(
         await evaluate("document.querySelector('main > header button[title=\"Conversations\"]').getAttribute('aria-label')"),
         "Conversations, 1 unseen",

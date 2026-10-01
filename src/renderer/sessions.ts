@@ -37,7 +37,11 @@ export function stamp(ts: number, now: number = Date.now()): string {
   const midnight = new Date(now).setHours(0, 0, 0, 0);
   return midnight - ts < 6 * 86_400_000
     ? at.toLocaleDateString([], { weekday: "short" })
-    : at.toLocaleDateString([], { year: "2-digit", month: "numeric", day: "numeric" });
+    : at.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        ...(at.getFullYear() === new Date(now).getFullYear() ? {} : { year: "numeric" }),
+      });
 }
 
 export function rows(

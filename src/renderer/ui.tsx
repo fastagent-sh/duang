@@ -8,6 +8,7 @@
  * is loud or quiet — is decided by a prop here instead.
  */
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { initials } from "./initials.ts";
 
 /**
  * Four kinds, three sizes, and no fourth option: 28 and 32 are rectangles; 40 is the round icon
@@ -110,7 +111,7 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
         backgroundImage: `linear-gradient(145deg, oklch(0.64 0.12 ${hue}), oklch(0.46 0.11 ${hue + 12}))`,
       }}
     >
-      {name.slice(0, 2)}
+      {initials(name)}
     </span>
   );
 }

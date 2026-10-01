@@ -232,7 +232,7 @@ export function Sidebar({
                   <Avatar name={agent.name} size={48} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate font-prose text-[13px] font-semibold">{agent.name}</span>
+                      <span className="min-w-0 flex-1 truncate font-prose text-[15px] leading-5 font-semibold">{agent.name}</span>
                       {/* Busy is said in words where the time goes: the preview below is the work
                           itself, streaming, and must not be replaced by a word about it. */}
                       {busy > 0 ? (
@@ -260,10 +260,12 @@ export function Sidebar({
                         </span>
                       )}
                       {/* What landed while you were away, spent as each conversation is opened.
-                          Failures are what the count is for, so they colour it. */}
+                          Failures are what the count is for, so they colour it. It sits on the first
+                          line of the quote, under the time: the right-hand column is the same for a
+                          one-line quote as for two, and the count is never a line away from the words. */}
                       {waiting.length > 0 && (
                         <span
-                          className="shrink-0 self-end"
+                          className="pop shrink-0 self-start"
                           title={`${waiting.length - failures} finished, ${failures} failed while you were away`}
                         >
                           <Pill tone={failures ? "danger" : "accent"}>{waiting.length}</Pill>
