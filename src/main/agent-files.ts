@@ -16,10 +16,7 @@ export interface AgentRow {
   colour: number;
 }
 
-/** A row as the file may hold it: one hand-edited, or from before colours, can lack its colour. */
-type StoredRow = Omit<AgentRow, "colour"> & { colour?: number };
-
-const lowestFree = (rows: StoredRow[]): number => {
+const lowestFree = (rows: AgentRow[]): number => {
   const used = new Set(rows.map((row) => row.colour));
   let colour = 0;
   while (used.has(colour)) colour++;
@@ -36,12 +33,10 @@ export class AgentRegistry {
 
   async list(): Promise<AgentRow[]> {
     await this.pending;
-    const rows = await this.read();
-    // A row without a colour is given one by `change`, which saves it.
-    return rows.every((row) => row.colour !== undefined) ? (rows as AgentRow[]) : this.change((all) => all);
+    return this.read();
   }
 
-  private async read(): Promise<StoredRow[]> {
+  private async read(): Promise<AgentRow[]> {
     let text: string;
     try {
       text = await readFile(this.file, "utf8");
@@ -65,7 +60,7 @@ export class AgentRegistry {
           typeof row.name !== "string" ||
           typeof row.dir !== "string" ||
           (row.model !== undefined && typeof row.model !== "string") ||
-          (row.colour !== undefined && !(Number.isInteger(row.colour) && row.colour >= 0)),
+          !(Number.isInteger(row.colour) && row.colour >= 0),
       ) ||
       new Set(rows.map((row) => row.id)).size !== rows.length
     ) {
@@ -76,10 +71,7 @@ export class AgentRegistry {
 
   private change<T>(edit: (rows: AgentRow[]) => T): Promise<T> {
     const operation = this.pending.then(async () => {
-      const stored = await this.read();
-      // Every agent has a colour: a row without one gets the lowest free, once, and keeps it.
-      for (const row of stored) row.colour ??= lowestFree(stored);
-      const rows = stored as AgentRow[];
+      const rows = await this.read();
       const result = edit(rows);
       await mkdir(dirname(this.file), { recursive: true });
       const temporary = `${this.file}.${randomUUID()}.tmp`;

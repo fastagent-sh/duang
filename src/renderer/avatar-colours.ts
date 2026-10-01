@@ -5,12 +5,10 @@
  *
  * Sixteen bright colours, picked by a search for the widest spread that keeps dark initials readable:
  * the closest pair is 0.093 apart in OKLab, where about 0.02 is the least anyone notices and 0.1 is
- * "different colours". (The ten before were dark enough for white initials and read as shades of one
- * colour; the seven before that had a closest pair of 0.060 and a muddy olive and brown.) Brightness
- * and white initials cannot go together: white falls under 3:1 above a lightness of about 0.64, while
- * dark initials on the same colour are above 5:1, so these wear dark ones. Each entry is
- * `[lightness, chroma, hue]` at the gradient's middle; the gradient runs 0.09 lighter to 0.09 darker and
- * 12° round the hue. The middle must hold the initials at 4.5:1, the darkest stop at 3:1, and every stop
+ * "different colours". Brightness and white initials cannot go together: white falls under 3:1 above a
+ * lightness of about 0.64, while dark initials on the same colour are above 5:1, so these wear dark ones.
+ * Each entry is `[lightness, chroma, hue]` at the gradient's middle; the gradient runs 0.09 lighter to 0.09
+ * darker and 12° round the hue. The middle must hold the initials at 4.5:1, the darkest stop at 3:1, and every stop
  * must be inside sRGB (`avatar-colours.test.ts` holds all of that, so a colour added later cannot repeat
  * one already here). Chroma is capped at 0.17 so the roster stays calm beside the rest of the palette.
  */

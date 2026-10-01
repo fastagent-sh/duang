@@ -55,29 +55,15 @@ test("each agent has a colour: the lowest one free, kept for its life, reused on
   }
 });
 
-test("a row without a colour (hand-edited, or from before colours) is given the lowest free and keeps it", async () => {
+test("every row names its colour, a whole number from zero; one without it is an invalid registry", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
   try {
     const file = join(root, "agents.json");
-    await writeFile(
-      file,
-      JSON.stringify([
-        { id: "kept", name: "Kept", dir: "/tmp/kept", colour: 1 },
-        { id: "old-a", name: "A", dir: "/tmp/a" },
-        { id: "old-b", name: "B", dir: "/tmp/b" },
-      ]),
-    );
-    const registry = new AgentRegistry(file);
-    assert.deepEqual((await registry.list()).map((row) => [row.id, row.colour]), [["kept", 1], ["old-a", 0], ["old-b", 2]]);
-    assert.deepEqual(
-      JSON.parse(await readFile(file, "utf8")).map((row: { colour: number }) => row.colour),
-      [1, 0, 2],
-      "it is saved, so the next read gives the same answer",
-    );
-    assert.deepEqual((await new AgentRegistry(file).list()).map((row) => row.colour), [1, 0, 2]);
-    for (const bad of [-1, 1.5, "3", null]) {
-      await writeFile(file, JSON.stringify([{ id: "x", name: "X", dir: "/tmp/x", colour: bad }]));
-      await assert.rejects(new AgentRegistry(file).list(), /invalid agent registry/, `colour ${JSON.stringify(bad)} is not a colour`);
+    for (const colour of [undefined, -1, 1.5, "3", null]) {
+      const stored = JSON.stringify([{ id: "x", name: "X", dir: "/tmp/x", ...(colour === undefined ? {} : { colour }) }]);
+      await writeFile(file, stored);
+      await assert.rejects(new AgentRegistry(file).list(), /invalid agent registry/, `colour ${JSON.stringify(colour)}`);
+      assert.equal(await readFile(file, "utf8"), stored, "and the file is left as it was");
     }
   } finally {
     await rm(root, { recursive: true, force: true });

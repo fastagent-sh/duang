@@ -12,7 +12,7 @@ test("a gaze avatar wears the agent's own colour, its own eyes at rest, and the 
   for (let i = 0; i < 60; i++) {
     const resting = eyesOf(avatarSvg("gaze", { ...agent, id: `agent-${i}` }))!;
     // Named here, not read from the module: the list under test cannot vouch for itself.
-    assert.ok(!["happy", "grin", "squint", "bars"].includes(resting), `agent-${i} rests with ${resting}, an expression`);
+    assert.ok(!["happy", "small", "grin", "squint", "bars"].includes(resting), `agent-${i} rests with ${resting}, an expression`);
   }
   assert.equal(eyesOf(avatarSvg("gaze", { ...agent, face: "done" })), "happy");
   assert.equal(eyesOf(avatarSvg("gaze", { ...agent, face: "failed" })), "small");

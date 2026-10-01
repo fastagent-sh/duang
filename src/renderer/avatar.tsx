@@ -2,7 +2,8 @@
  * An agent's avatar: a circle's worth of face, because an agent is a contact and the roster reads as one
  * (§12). Three layers, kept apart (docs/ui.md §3):
  * - identity, the drawing and its colour, from the agent's id and the registry's colour number: the same
- *   agent looks the same everywhere, in every state, and a rename does not change it;
+ *   agent looks the same everywhere and in every state; a rename keeps the colour, and the drawing too in
+ *   every style but Initials and Initial face, which draw the name;
  * - face, the eyes and how the avatar moves, which follow what the agent is doing (`face.ts`, index.css);
  * - presence, a still ring while it works.
  * The words beside it say all of this as well; an avatar is never the only signal.

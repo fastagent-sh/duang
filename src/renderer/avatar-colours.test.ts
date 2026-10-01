@@ -27,7 +27,7 @@ test("no two avatar colours are close enough to be taken for each other", () => 
   let closest = Infinity;
   for (const [i, a] of PALETTE.entries())
     for (const b of PALETTE.slice(i + 1)) closest = Math.min(closest, distance(middle(a), middle(b)));
-  // About 0.02 is the least anyone notices and 0.1 is "different colours"; the seven before had 0.060.
+  // About 0.02 is the least anyone notices and 0.1 is "different colours".
   assert.ok(closest >= 0.09, `the closest pair of colours is ${closest.toFixed(3)} apart in OKLab`);
 });
 

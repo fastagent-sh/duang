@@ -90,10 +90,10 @@ if (!process.versions.electron) {
     await writeFile(
       join(data, "agents.json"),
       JSON.stringify([
-        { id: "smoke", name: "Smoke", dir: workspace },
-        { id: "configured", name: "Configured", dir: configured },
+        { id: "smoke", name: "Smoke", dir: workspace, colour: 0 },
+        { id: "configured", name: "Configured", dir: configured, colour: 1 },
         // A directory that was registered and then moved or deleted: one broken agent, nothing else.
-        { id: "gone", name: "Gone", dir: join(root, "moved-away") },
+        { id: "gone", name: "Gone", dir: join(root, "moved-away"), colour: 2 },
       ]),
     );
 

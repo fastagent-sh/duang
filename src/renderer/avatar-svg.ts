@@ -23,10 +23,10 @@ const STYLES: Record<DrawnStyle, Style> = {
 };
 
 /**
- * Gaze's eyes are part of who an agent is, from these seven, and its expressions are kept apart from
- * them: an agent whose own eyes were the happy ones could not look happy about anything.
+ * Gaze's eyes are part of who an agent is, from these six, and the eyes its faces use (happy, small) are
+ * kept out of them: an agent whose own eyes were the happy ones could not look happy about anything.
  */
-export const IDENTITY_EYES = ["dots", "big", "small", "shine", "beans", "wide", "tall"] as const;
+export const IDENTITY_EYES = ["dots", "big", "shine", "beans", "wide", "tall"] as const;
 const EXPRESSION: Partial<Record<Face, string>> = { done: "happy", failed: "small" };
 
 const drawn = new Map<string, string>();

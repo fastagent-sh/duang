@@ -66,7 +66,7 @@ if (!process.versions.electron) {
     await mkdir(join(dir, "fastagent"), { recursive: true });
     await mkdir(data, { recursive: true });
     await writeFile(join(dir, "fastagent", "fastagent.config.ts"), "export default {};\n");
-    await writeFile(join(data, "agents.json"), JSON.stringify([{ id: "live", name: "Live", dir }]));
+    await writeFile(join(data, "agents.json"), JSON.stringify([{ id: "live", name: "Live", dir, colour: 0 }]));
     // The app's own data directory, named explicitly: this process is "Electron", not "duang".
     const real = join(app.getPath("appData"), "duang", "auth.json");
     assert.ok(

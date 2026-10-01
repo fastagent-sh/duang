@@ -175,7 +175,8 @@ colour and motion never do the work alone (§9).
 
 **An avatar has three layers, kept apart** (`avatar.tsx`, `face.ts`). The *drawing* (its shape and
 colour, from the agent's id and the registry's colour number) is who the agent is: it never changes
-with state, and a rename does not change it. The *face* (eyes and motion) follows what the agent is
+with state. A rename keeps the colour, and the drawing too in every style but Initials and Initial face,
+which draw the name. The *face* (eyes and motion) follows what the agent is
 doing. The *ring* is presence. One face at a time, by how much it asks of the person:
 
 | Face | When | Shown as |
@@ -194,11 +195,10 @@ doing. The *ring* is presence. One face at a time, by how much it asks of the pe
 The kind of work is the run status line's own word (`phase`), for the conversations this window holds.
 Motion is small, continuous only while an agent works, and an outcome plays once, when it lands. With
 reduced motion every face keeps its pose (closed, looking down, happy) and loses its movement, so the
-states stay apart. Gaze's identity eyes come from seven neutral pairs; the expressive ones (happy, small
-looking down) are kept for faces, so an agent whose own eyes were happy could not look happy about
-anything else. The drawn styles other than Gaze have no eyes to move (Moods and Initial face can only
-blink, Bottts and Initials nothing): they show the same rings, hops, shakes, breathing, grey and
-outline, and the words carry the rest.
+states stay apart. Gaze's identity eyes come from six neutral pairs; the ones its faces use (happy,
+small) are kept out of them, so an agent whose own eyes were happy could not look happy about anything
+else. Only Gaze's eyes move: the other styles show the same rings, hops, shakes, breathing, grey and
+outline, without blinking, looking or closing their eyes, and the words carry the rest.
 
 **Panels float on the window's canvas.** The sidebar is a rounded card inset from the window edges
 rather than a column filling them, and the conversation's header floats over the transcript as a
@@ -347,9 +347,7 @@ until there are more than sixteen. The sixteen are chosen to be told apart at a 
 look related: the closest pair is 0.093 apart in OKLab (about 0.02 is the least anyone notices, 0.1 is
 "different colours"). They are bright because white initials and brightness do not go together: white
 falls under 3:1 above a lightness of about 0.64, where near-black initials are above 5:1, so every
-avatar wears the dark ones, and the lightness is free to run from 0.66 to 0.82. (The ten before were
-dark enough for white initials and read as shades of one colour; the seven before those had a closest
-pair of 0.060 and a muddy olive and a brown.) Each is a gradient from 0.09 lighter to 0.09 darker,
+avatar wears the dark ones, and the lightness is free to run from 0.66 to 0.82. Each is a gradient from 0.09 lighter to 0.09 darker,
 turning 12° round the hue, with chroma capped at 0.17 to stay calm beside the violet accent. The
 middle must hold the initials at 4.5:1, the darkest stop at 3:1, and every stop must be a colour sRGB
 has. `avatar-colours.test.ts` holds all of that, so a colour added later cannot repeat one already there.
