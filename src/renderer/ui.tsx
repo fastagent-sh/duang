@@ -8,6 +8,7 @@
  * is loud or quiet — is decided by a prop here instead.
  */
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { avatarGradient } from "./avatar-colours.ts";
 import { initials } from "./initials.ts";
 
 /**
@@ -83,19 +84,12 @@ export function Button({
 
 /**
  * An agent's avatar: a circle, because an agent is a contact and the roster reads as one (§12).
- * The colour is the name's, so the same agent is the same avatar everywhere — hues are walked in a
- * shuffled order, Telegram's trick for keeping neighbours in a list distinguishable.
+ * The colour is the name's (`avatar-colours.ts`), so the same agent is the same avatar everywhere.
  *
  * Presence is the ring around it, never a change to the avatar: an agent looks like the same agent
  * whether it is busy or idle.
  */
-const HUES = [285, 150, 25, 235, 95, 330, 55] as const;
-const ORDER = [0, 4, 1, 6, 3, 5, 2] as const;
-
 export function Avatar({ name, size = 40, working }: { name: string; size?: number; working?: boolean }) {
-  let hash = 0;
-  for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)!) % 9973;
-  const hue = HUES[ORDER[hash % ORDER.length]!]!;
   return (
     <span
       aria-hidden
@@ -105,10 +99,9 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
       style={{
         width: size,
         height: size,
-        // The gradient is Telegram's, and it is most of why their avatars look alive rather than printed.
         borderRadius: "50%",
         fontSize: Math.round(size * 0.34),
-        backgroundImage: `linear-gradient(145deg, oklch(0.64 0.12 ${hue}), oklch(0.46 0.11 ${hue + 12}))`,
+        backgroundImage: avatarGradient(name),
       }}
     >
       {initials(name)}
