@@ -387,7 +387,7 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   assert.equal(store.getSnapshot().conversation, old);
   await store.abort();
   assert.ok(old.items.some((item) => item.kind === "note" && item.text === "runtime refused"));
-  await store.open(old.session);
+  await store.retry(); // closes the subscription and opens the conversation again
   const current = store.getSnapshot().conversation!;
   emit(old, "message_delta", { delta: "stale" });
   assert.deepEqual(current.items, []);
@@ -415,9 +415,9 @@ test("an expected end of a subscription is reported without pretending the conve
   await store.load();
   const c = store.getSnapshot().conversation!;
   emit(c, "run_started");
-  end(c, "The agent's runtime was rebuilt for the new model", true);
+  end(c, "The agent was removed", true);
   const current = store.getSnapshot().conversation!;
-  assert.equal(current.ended, "The agent's runtime was rebuilt for the new model");
+  assert.equal(current.ended, "The agent was removed");
   assert.equal(current.error, undefined, "an intended end is not a failure");
   assert.ok(
     current.items.every((item) => item.kind !== "note"),
@@ -452,6 +452,85 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
   assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
+  store.dispose();
+});
+
+test("opening the conversation that is already open changes nothing", async () => {
+  const { store, opens } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const seen: unknown[] = [];
+  const stop = store.subscribe(() => seen.push(store.getSnapshot().conversation));
+  const opened = opens.length;
+  await store.open(c.session);
+  stop();
+  assert.equal(store.getSnapshot().conversation, c, "the same conversation, not a rebuilt one");
+  assert.ok(seen.every((shown) => shown === c), "the view is never cleared on the way, which would remount it");
+  assert.equal(opens.length, opened, "and nothing is read again");
+  store.dispose();
+});
+
+test("moving to another conversation never passes through having none", async () => {
+  const { store, closed } = harness();
+  await store.load();
+  const first = store.getSnapshot().conversation!;
+  const seen: unknown[] = [];
+  const stop = store.subscribe(() => seen.push(store.getSnapshot().conversation));
+  await store.open("another");
+  stop();
+  assert.ok(seen.length > 0, "the move was published");
+  assert.ok(
+    seen.every((shown) => shown !== undefined),
+    "the view is never cleared on the way: that renders the screen for no conversation, for a frame",
+  );
+  assert.notEqual(store.getSnapshot().conversation, first);
+  assert.ok(closed.includes(first.subscription), "and the one left is still closed, as soon as it is not the open one");
+  store.dispose();
+});
+
+test("where a conversation was left above the latest line is remembered until it or its agent is gone", async () => {
+  const { store } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  assert.equal(store.scrollOf(c.agentId, c.session), undefined, "a conversation opens at its latest line");
+  store.rememberScroll(c.agentId, c.session, 420);
+  store.rememberScroll("b", "b-1", 90);
+  assert.equal(store.scrollOf(c.agentId, c.session), 420);
+  assert.equal(store.scrollOf("b", "b-1"), 90, "each conversation has its own place");
+  store.rememberScroll(c.agentId, c.session, undefined);
+  assert.equal(store.scrollOf(c.agentId, c.session), undefined, "scrolling back to the latest line forgets it");
+
+  store.rememberScroll(c.agentId, c.session, 420);
+  await store.deleteSession(c.agentId, c.session);
+  assert.equal(store.scrollOf(c.agentId, c.session), undefined, "a deleted conversation leaves no place behind");
+  store.rememberScroll("a", "later", 10);
+  await store.removeAgent();
+  assert.equal(store.scrollOf("a", "later"), undefined, "a removed agent leaves none behind");
+  assert.equal(store.scrollOf("b", "b-1"), 90, "another agent's places are not touched");
+  store.dispose();
+});
+
+test("a model change leaves the open conversation as it is and reads its model and levels again", async () => {
+  const { api, store, opens, closed } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const items = c.items;
+  const opened = opens.length;
+  api.readState = async () => ({
+    status: "idle",
+    pending: { steering: [], followUp: [] },
+    model: "provider/other",
+    thinkingLevel: "low",
+    availableThinkingLevels: ["low", "high"],
+  });
+  await store.pickModel("provider/other");
+  assert.equal(store.getSnapshot().conversation, c, "the same conversation, not a reopened one");
+  assert.equal(c.items, items, "its transcript is not reloaded, so nothing flickers and the scroll stays");
+  assert.equal(opens.length, opened, "main moved the subscription; the window does not open another");
+  assert.equal(closed.length, 0, "and does not close the one it has");
+  assert.equal(store.getSnapshot().model, "provider/other");
+  assert.equal(c.state?.model, "provider/other", "the chip and the effort track follow the new model");
+  assert.deepEqual(c.state?.availableThinkingLevels, ["low", "high"]);
   store.dispose();
 });
 

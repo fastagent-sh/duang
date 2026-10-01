@@ -536,10 +536,22 @@ if (!process.versions.electron) {
       assert.ok(models.specs.includes("local/m1"), "the agent's own models.json endpoint is pickable");
       assert.ok(!(await evaluate("window.duang.listModels('smoke')")).specs.includes("local/m1"), "another agent's endpoint is not");
       const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
+      // Replacing the runtime is main's business: the open conversation is not reloaded, its scroll stays, and
+      // it is not told anything broke. The answer below proves its subscription listens on the new runtime.
+      await evaluate(`window.__transcript = document.querySelector('[aria-label="Transcript"]'); window.__scroll = window.__transcript.scrollTop;`);
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "cross-provider model picker");
       await chooseModel("anthropic/claude-sonnet-4-5");
       await until("!document.querySelector('textarea').disabled && document.body.innerText.includes('anthropic/claude-sonnet-4-5')", "selected conversation changes provider");
+      assert.ok(
+        await evaluate(`document.querySelector('[aria-label="Transcript"]') === window.__transcript`),
+        "a model change leaves the transcript standing: it is the same element, not one rebuilt",
+      );
+      assert.equal(await evaluate("window.__transcript.scrollTop"), await evaluate("window.__scroll"), "and where it was scrolled");
+      assert.ok(
+        !/Reconnect|runtime was rebuilt/.test(await evaluate("document.querySelector('main').innerText")),
+        "and it does not say its subscription was cut",
+      );
       await message("Use the Anthropic conversation model.");
       await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main .bounce')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
@@ -793,6 +805,19 @@ if (!process.versions.electron) {
         "document.activeElement.closest('aside [aria-label=Agents]') !== null",
         "Tab enters the roster from outside it",
       );
+      // The list clips what sticks out of it, and a focus ring sticks out by its width plus its offset: the
+      // first and last rows keep their ring only if the list pads by at least that, top and bottom.
+      assert.deepEqual(
+        await evaluate(`(() => {
+          const list = document.querySelector('aside [aria-label=Agents]');
+          const ring = getComputedStyle(document.activeElement);
+          const reach = parseFloat(ring.outlineWidth) + parseFloat(ring.outlineOffset);
+          const pad = getComputedStyle(list);
+          return [reach > 0, parseFloat(pad.paddingTop) >= reach, parseFloat(pad.paddingBottom) >= reach];
+        })()`),
+        [true, true, true],
+        "the roster leaves room for its focus ring above the first row and below the last",
+      );
 
       // Keys go one at a time: two in the same tick would be read against state React has not
       // re-rendered yet, which is not how anyone types.
@@ -875,6 +900,90 @@ if (!process.versions.electron) {
         })()`),
         "the transcript is at the bottom again",
       );
+
+      // Moving to a conversation that has history never shows the new-conversation page on the way: the
+      // pane is empty while the history is read, not the screen for a conversation nobody has spoken in. A
+      // mutation observer sees every state the DOM passes through, which polling would miss.
+      const watchForStartScreen = () =>
+        evaluate(`(() => {
+          window.__startScreen = false;
+          window.__watch?.disconnect();
+          window.__watch = new MutationObserver(() => {
+            if (document.body.innerText.includes('What should we work on?')) window.__startScreen = true;
+          });
+          window.__watch.observe(document.body, { subtree: true, childList: true, characterData: true });
+        })()`);
+      const settledOnHistory = (what) =>
+        until(
+          `${reading} !== null && !document.body.innerText.includes('What should we work on?') && !document.querySelector('main .bounce')`,
+          what,
+        );
+      const noStartScreen = async (what) => {
+        assert.equal(await evaluate("window.__startScreen"), false, `${what} does not pass through the new-conversation page`);
+        await evaluate("window.__watch.disconnect()");
+      };
+
+      // Where a conversation was left is where it comes back to: a click on the conversation already open
+      // rebuilds nothing, and Settings or another agent and back restores the place being read (the view is
+      // rebuilt by both). The content grows for a moment after a rebuild, so each is polled.
+      const reading = `document.querySelector('[aria-label="Transcript"]')`;
+      const nearly = (want) => `${reading} !== null && Math.abs(${reading}.scrollTop - ${want}) <= 2 && ${backToLatest} !== null`;
+      const scrollAway = async () => {
+        // The person scrolls: a wheel event is what ends a view's holding of its place.
+        await evaluate(`${reading}.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }))`);
+        await until(
+          `(() => { const el = ${reading}; el.scrollTop = Math.floor((el.scrollHeight - el.clientHeight) / 2); return ${backToLatest} !== null; })()`,
+          "scrolled into the middle of the conversation",
+        );
+        return evaluate(`Math.round(${reading}.scrollTop)`);
+      };
+      const left = await scrollAway();
+      assert.ok(left > 20, `there is a place to come back to: ${left}`);
+      await evaluate(`window.__reading = ${reading}`);
+      await showConversations();
+      await evaluate(`document.querySelector('#conversations button[data-session][aria-current="page"]').click()`);
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      assert.equal(await evaluate(`${reading} === window.__reading`), true, "opening the open conversation rebuilds nothing");
+      assert.equal(await evaluate(`Math.round(${reading}.scrollTop)`), left, "and moves nothing");
+
+      const openAgent = await evaluate(`document.querySelector('aside [aria-label="Agents"] button[aria-current="true"]').getAttribute('aria-label')`);
+      await evaluate(`[...document.querySelectorAll('aside button')].find((b) => b.textContent.trim() === 'Settings').click()`);
+      await until("document.querySelector('#providers-heading') !== null || document.querySelector('[aria-label=\"Transcript\"]') === null", "Settings shows");
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
+      await until(nearly(left), "after Settings the conversation is where it was left");
+      const other = ["Smoke", "Configured"].find((name) => name !== openAgent);
+      await watchForStartScreen();
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(other)}]').click()`);
+      await until(`document.querySelector('main').innerText.length > 0 && document.querySelector('button[aria-label=${JSON.stringify(other)}]').getAttribute('aria-current') === 'true'`, "the other agent is open");
+      await settledOnHistory("the other agent's conversation opens");
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
+      await until(nearly(left), "after another agent the conversation is where it was left");
+      await noStartScreen("switching to another agent and back");
+      // At the latest line it stays there, rather than landing short of it while the content grows.
+      await evaluate(`${reading}.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }))`);
+      await until(atBottom, "back at the latest line");
+      // Left in the same task as the scroll to the latest line, before its scroll event has fired: what the
+      // view reports as it goes is what is remembered, not the last event it happened to hear.
+      await scrollAway();
+      await evaluate(`(() => {
+        const el = ${reading};
+        el.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }));
+        el.scrollTop = el.scrollHeight;
+        [...document.querySelectorAll('aside button')].find((b) => b.textContent.trim() === 'Settings').click();
+      })()`);
+      await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(openAgent)}]').click()`);
+      await until(
+        `(() => { const el = ${reading}; return el && el.scrollHeight - el.scrollTop - el.clientHeight < 4 && ${backToLatest} === null; })()`,
+        "a conversation left at its latest line comes back at it, once the content has grown",
+      );
+      // Content that grows on its own (a code block highlighted late) keeps a view that follows the latest line
+      // on it: nothing scrolls and no item arrives, so only watching the content's size can notice.
+      await evaluate(`(() => { const pad = document.createElement('div'); pad.id = 'grow-probe'; pad.style.height = '400px'; ${reading}.firstElementChild.append(pad); })()`);
+      await until(
+        `(() => { const el = ${reading}; return el.scrollHeight - el.scrollTop - el.clientHeight < 4; })()`,
+        "a view following the latest line stays on it while its content grows",
+      );
+      await evaluate(`document.getElementById('grow-probe').remove()`);
       win.setSize(size[0], size[1]);
 
       // The row's actions control follows its own focus: the row keeps focus after a click, which
@@ -1290,6 +1399,33 @@ if (!process.versions.electron) {
         electron.shell.showItemInFolder = showItemInFolder;
         electron.Menu.prototype.popup = popup;
       }
+
+      // Between two conversations that both have history, from the list. The second is made here, last, so the
+      // rows the earlier steps count on are untouched.
+      await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
+      await until("document.body.innerText.includes('What should we work on?') && !document.querySelector('textarea').disabled", "a new conversation");
+      await message("A second conversation, with a history of its own.");
+      await until(
+        `${reading} !== null && ${reading}.querySelectorAll('.column > *').length >= 2 && !document.querySelector('main .bounce')`,
+        "the second conversation has settled",
+      );
+      await showConversations();
+      const secondSession = await evaluate(`document.querySelector('#conversations button[data-session][aria-current="page"]').dataset.session`);
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      await watchForStartScreen();
+      await showConversations();
+      await evaluate(
+        `[...document.querySelectorAll('#conversations button[data-session]')].find((b) => b.getAttribute('aria-current') !== 'page' && !b.textContent.includes('New conversation')).click()`,
+      );
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      await settledOnHistory("the agent's other conversation opens");
+      await noStartScreen("moving to another conversation");
+      await watchForStartScreen();
+      await showConversations();
+      await evaluate(`document.querySelector('#conversations button[data-session="${secondSession}"]').click()`);
+      await evaluate(`document.querySelector('#conversations').hidePopover()`);
+      await settledOnHistory("and back to the second");
+      await noStartScreen("moving back");
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);

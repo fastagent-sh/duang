@@ -163,8 +163,10 @@ export function Sidebar({
       </div>
 
       {/* One flat list with a hairline that starts where the text does, and rows inset by 6px so a
-          selected one is a rounded shape sitting in the column rather than a slab cut by its walls. */}
-      <div role="navigation" aria-label="Agents" className="flex-1 overflow-y-auto min-h-0 px-1.5" onKeyDown={onKeyDown}>
+          selected one is a rounded shape sitting in the column rather than a slab cut by its walls.
+          The 4px above and below are the focus ring's reach (2px line, 2px offset): the list clips
+          what sticks out of it, so the first row's ring would lose its top edge against the header. */}
+      <div role="navigation" aria-label="Agents" className="flex-1 overflow-y-auto min-h-0 px-1.5 py-1" onKeyDown={onKeyDown}>
         {agents.map((agent) => {
           const selected = agent.id === agentId;
           const state = states[agent.id] ?? "ready";

@@ -1,0 +1,99 @@
+/**
+ * One window's subscription to one conversation, which outlives the runtime it listens on: a model
+ * change replaces the agent's runtime, and `rebind` makes the subscription listen on the new one without
+ * the window seeing a gap. Kept apart from Electron so its failure paths can be tested.
+ */
+
+/** What FastAgent's `bound.events()` gives: an async iterator that says when it is subscribed. */
+interface EventStream<E> extends AsyncIterable<E> {
+  ready: Promise<unknown>;
+}
+
+export function follow<E, B extends { events(): EventStream<E> }>(
+  /** The conversation on the runtime that is current now. Called again by every `rebind`. */
+  open: () => Promise<B>,
+  forward: (event: E) => void,
+  /** Said once, when the subscription stops without having been asked to: the renderer is told why. */
+  end: (reason: string, expected: boolean) => void,
+) {
+  // The latest listen is the subscription's. An earlier one that was replaced stops without saying it ended.
+  let generation = 0;
+  let stopCurrent = () => {};
+  let closed = false;
+  let chain: Promise<B>;
+
+  const listen = async (): Promise<B> => {
+    const mine = ++generation;
+    const bound = await open();
+    const stream = bound.events();
+    const iterator = stream[Symbol.asyncIterator]();
+    const stop = () => {
+      void iterator.return?.().catch((error) => console.error("session close:", error));
+    };
+    // Closed while the runtime was still opening: nothing is attached, and nothing may stay attached.
+    if (closed) {
+      stop();
+      return bound;
+    }
+    stopCurrent = stop;
+    void (async () => {
+      // Both endings leave the renderer deaf: FastAgent closing its subscriber looks like a normal
+      // `done`, and a silent one would keep the conversation running on screen forever. Only the
+      // throw is a failure; a clean `done` is the runtime letting this subscriber go.
+      let ending = { reason: "This conversation stopped receiving updates", expected: true };
+      try {
+        for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+          if (mine === generation) forward(next.value);
+        }
+      } catch (error) {
+        ending = { reason: String(error), expected: false };
+      }
+      if (mine === generation) end(ending.reason, ending.expected);
+    })();
+    await stream.ready;
+    return bound;
+  };
+
+  /** The newest runtime's conversation: a rebind that happened while an earlier listen was pending wins. */
+  const settled = async (): Promise<B> => {
+    for (;;) {
+      const tail = chain;
+      const bound = await tail;
+      if (tail === chain) return bound;
+    }
+  };
+
+  return {
+    /** Rejects when the conversation cannot be opened; the caller owns that failure. */
+    start(): Promise<B> {
+      chain = listen();
+      return settled();
+    },
+    /**
+     * Listens again on the runtime that replaced the old one. It waits for a listen still opening, so
+     * that one is closed rather than left attached to the old runtime. A subscription that cannot move
+     * ends with the reason instead of going quiet.
+     */
+    async rebind(): Promise<void> {
+      const previous = chain;
+      chain = (async () => {
+        await previous;
+        stopCurrent();
+        return listen();
+      })();
+      try {
+        await chain;
+      } catch (error) {
+        close();
+        end(String(error), false);
+      }
+    },
+    /** Stops listening. No ending is reported: the one who closes it knows. */
+    close,
+  };
+
+  function close(): void {
+    closed = true;
+    stopCurrent();
+  }
+}

@@ -30,6 +30,9 @@ broken agent shows its original failure with a way to retry, reveal or remove it
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
+A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
+moves to the new runtime in main, so the transcript stays as it is (the same rows, the same scroll position)
+and only the chip and the effort track are read again.
 The picker lists the models the open agent can run: pi's built-ins, the agent's own
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to providers with a
 configured credential: in the credential file, in an environment variable, or as a key written in
@@ -98,7 +101,14 @@ the input method. `⌘N` or the sidebar's New conversation action starts a conve
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it; the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow
 navigation, and the transcript is focusable. Scrolling up suspends tail-follow; a control returns
-to the latest turn. A closed or failed subscription reports that it is no longer receiving updates
+to the latest turn. A conversation is opened at its latest turn, or, when it was left scrolled up, where it was
+left, through Settings or another agent and back (for the window's life, not across launches; a card that was
+expanded comes back folded, so the place is the same distance from the top, not the same line). The place is held
+while the layout settles and until the person scrolls. While the history of a conversation the runtime already
+has is being read (and while an agent that has conversations opens), the pane is empty with the composer in
+place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment
+before the real one arrives. A view that was at the latest turn stays there while its
+content grows by itself, and choosing the conversation that is already open rebuilds nothing. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.
 
 Closing the window does not stop main-process work. Quitting with active local work warns that it

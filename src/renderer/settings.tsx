@@ -7,7 +7,7 @@
  * card, rows divided by hairlines that start where the text does, the choice marked by a trailing
  * check, and the connection's state written on the chosen row instead of behind a button.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
 import type { DuangApi, Network, Route } from "../preload/index.ts";
 import type { Connection, Store, View } from "./store.ts";
@@ -55,7 +55,9 @@ export function Settings({
       setPort(fields.port);
     }
   };
-  useEffect(() => {
+  // Before the first paint: the read starts by clearing what the last visit left, and in an ordinary
+  // effect the page would show that for a frame, then "Loading…", then the answer.
+  useLayoutEffect(() => {
     // Once per opening: a file fixed by hand shows up the next time the page opens, or on Retry.
     void load();
   }, []);
