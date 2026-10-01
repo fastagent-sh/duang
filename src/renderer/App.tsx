@@ -183,6 +183,7 @@ export default function App() {
             {agent && (
               <ConversationHeader
                 agent={agent.name}
+                colour={agent.colour}
                 dir={agent.dir}
                 working={!!view.running[agent.id]?.length}
                 context={

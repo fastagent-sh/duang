@@ -69,8 +69,8 @@ made it work there, and whether that premise holds here.
   - *Avatar colours.* `empty_userpic.cpp` picks from eight fixed colours by `order[id % 7]` with
     `order = [0, 7, 4, 1, 6, 3, 5]` — a deliberately shuffled table so that adjacent ids do not get
     adjacent hues. We take the stepping, not the palette: Telegram's avatars are saturated pastels
-    against a neutral UI, and ours sit beside a violet accent, so their chroma is capped (0.15) and the
-    set is our own (below).
+    against a neutral UI, and ours sit beside a violet accent, so their chroma is capped and the set is our
+    own (§4).
   - *Token naming.* `colors.palette` defines every role as a set — `windowBg`, `windowBgOver`,
     `windowBgRipple`, `windowFg`, `windowSubTextFg`, `windowBgActive`, `windowFgActive` — instead of
     letting components derive hover and active states themselves. §4 adopts that discipline.
@@ -314,17 +314,21 @@ Every interactive role is defined as a set, not derived at the call site — Tel
 this and it is why their themes stay coherent: `bg` / `bg-over` / `bg-active`, `text` / `muted` /
 `fill-fg`. A component picks a role; it never computes a hover colour itself.
 
-Avatars take one of ten colours (`avatar-colours.ts`), by `PALETTE[(hash * 3) % 10]`. The step of three
-is Telegram's idea of a shuffle: names that hash to neighbours (`agent1`, `agent2`) land a third of the
-wheel apart, so agents registered one after another do not come out looking alike. The ten are chosen to
-be told apart at a glance rather than to look related: the closest pair is 0.104 apart in OKLab (about
-0.02 is the least anyone notices, 0.1 is "different colours"), where the seven they replaced had a closest
-pair of 0.060 and included a muddy olive and a brown. Each is a gradient from 0.09 lighter to 0.09
-darker, turning 12° round the hue. White initials sit on it, so the light end reaches 3:1 and the
-middle 4:1, and every stop is a colour sRGB has. `avatar-colours.test.ts` holds all three (distance,
-contrast, gamut), so a colour added later cannot repeat one already there. Ten colours still collide
-once a roster passes a handful of agents; the initials tell two of a colour apart, as they do in
-Telegram, and a collision-free assignment would mean storing a colour per agent.
+An avatar's colour is the agent's own number, given by the registry when the agent is added: the lowest
+no other agent has, kept for the agent's life (a rename does not recolour it) and reused once its owner is
+removed. `avatar-colours.ts` maps it onto a palette of sixteen bright colours, `PALETTE[(n * 5) % 16]`:
+five and sixteen share no factor, so agents numbered one after another land a third of the wheel apart
+(Telegram's idea of a shuffle) and every colour is reached. Two agents therefore never share a colour
+until there are more than sixteen. The sixteen are chosen to be told apart at a glance rather than to
+look related: the closest pair is 0.093 apart in OKLab (about 0.02 is the least anyone notices, 0.1 is
+"different colours"). They are bright because white initials and brightness do not go together: white
+falls under 3:1 above a lightness of about 0.64, where near-black initials are above 5:1, so every
+avatar wears the dark ones, and the lightness is free to run from 0.66 to 0.82. (The ten before were
+dark enough for white initials and read as shades of one colour; the seven before those had a closest
+pair of 0.060 and a muddy olive and a brown.) Each is a gradient from 0.09 lighter to 0.09 darker,
+turning 12° round the hue, with chroma capped at 0.17 to stay calm beside the violet accent. The
+middle must hold the initials at 4.5:1, the darkest stop at 3:1, and every stop must be a colour sRGB
+has. `avatar-colours.test.ts` holds all of that, so a colour added later cannot repeat one already there.
 
 ## 5. Typography
 
@@ -763,8 +767,7 @@ dark mode, and slightly bolder (600, -0.025em) in light mode. The name is playfu
 Agent avatars are circles, because the product's whole metaphor is "an agent is a contact" and the
 roster should read as one; rounded squares ("squares are programs") kept it reading as a list of
 tools. The avatar shows the first two letters or digits (punctuation skipped: `a-very-long-name` is
-`AV`, not `A-`) over a background chosen by
-hashing the name across ten colours picked to be told apart (§4). Identity is the avatar; presence is the ring
+`AV`, not `A-`) in near-black over a gradient whose colour is the agent's own (§4). Identity is the avatar; presence is the ring
 around it (§9), never a change to the avatar itself, so an agent looks like the same agent whether
 it is busy or idle.
 

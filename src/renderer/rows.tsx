@@ -187,7 +187,7 @@ export function Sidebar({
             <div key={agent.id} className="roster-row" data-filled={filled || undefined}>
               {renaming === agent.id ? (
                 <div className="flex items-center gap-3 px-2 py-2">
-                  <Avatar name={agent.name} size={48} />
+                  <Avatar name={agent.name} colour={agent.colour} size={48} />
                   <RenameField
                     label="Agent name"
                     value={agent.name}
@@ -229,7 +229,7 @@ export function Sidebar({
                     filled ? "bg-accent-weak text-text" : "hover:bg-hover"
                   }`}
                 >
-                  <Avatar name={agent.name} size={48} working={busy > 0} />
+                  <Avatar name={agent.name} colour={agent.colour} size={48} working={busy > 0} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="min-w-0 flex-1 truncate font-prose text-[15px] leading-5 font-semibold">{agent.name}</span>

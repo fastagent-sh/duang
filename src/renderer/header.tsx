@@ -141,6 +141,7 @@ export function UsageMeter({ plan, context, now }: Usage) {
  */
 export function ConversationHeader({
   agent,
+  colour,
   dir,
   working,
   context,
@@ -150,6 +151,8 @@ export function ConversationHeader({
   onReveal,
 }: {
   agent: string;
+  /** The agent's avatar colour: the same number the roster wears. */
+  colour: number;
   dir?: string;
   working: boolean;
   context?: { used: number; window: number };
@@ -169,7 +172,7 @@ export function ConversationHeader({
       <div className="flex items-stretch gap-2">
         <div className="conversation-header flex min-w-0 flex-1 items-center gap-2.5 rounded-composer bg-surface/75 py-1.5 pr-4 pl-2 ring-1 ring-stroke backdrop-blur-xl">
           {/* The same avatar as in the roster: whose work this is should not need reading. */}
-          <Avatar name={agent} size={30} working={working} />
+          <Avatar name={agent} colour={colour} size={30} working={working} />
           <div className="min-w-0 flex-1">
             {/* The name doubles as the window's drag handle, which the frameless title bar needs. */}
             <div className="pointer-events-auto min-w-0 drag">

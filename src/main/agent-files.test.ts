@@ -35,6 +35,55 @@ test("registry serializes writes in one process, survives restart and deduplicat
   }
 });
 
+test("each agent has a colour: the lowest one free, kept for its life, reused once it is free again", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
+  try {
+    const registry = new AgentRegistry(join(root, "agents.json"));
+    const dirs = await Promise.all(["a", "b", "c", "d"].map(async (name) => {
+      await mkdir(join(root, name));
+      return join(root, name);
+    }));
+    const [a, b, c] = [await registry.add(dirs[0]!), await registry.add(dirs[1]!), await registry.add(dirs[2]!)];
+    assert.deepEqual([a.colour, b.colour, c.colour], [0, 1, 2], "no two agents share one while the palette lasts");
+    await registry.rename(b.id, "Renamed");
+    assert.equal((await registry.list()).find((row) => row.id === b.id)!.colour, 1, "a rename does not recolour it");
+    await registry.remove(b.id);
+    assert.equal((await registry.add(dirs[3]!)).colour, 1, "a removed agent's colour is the next one's");
+    assert.equal((await registry.list()).find((row) => row.id === a.id)!.colour, 0, "and the others keep theirs");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a row without a colour (hand-edited, or from before colours) is given the lowest free and keeps it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
+  try {
+    const file = join(root, "agents.json");
+    await writeFile(
+      file,
+      JSON.stringify([
+        { id: "kept", name: "Kept", dir: "/tmp/kept", colour: 1 },
+        { id: "old-a", name: "A", dir: "/tmp/a" },
+        { id: "old-b", name: "B", dir: "/tmp/b" },
+      ]),
+    );
+    const registry = new AgentRegistry(file);
+    assert.deepEqual((await registry.list()).map((row) => [row.id, row.colour]), [["kept", 1], ["old-a", 0], ["old-b", 2]]);
+    assert.deepEqual(
+      JSON.parse(await readFile(file, "utf8")).map((row: { colour: number }) => row.colour),
+      [1, 0, 2],
+      "it is saved, so the next read gives the same answer",
+    );
+    assert.deepEqual((await new AgentRegistry(file).list()).map((row) => row.colour), [1, 0, 2]);
+    for (const bad of [-1, 1.5, "3", null]) {
+      await writeFile(file, JSON.stringify([{ id: "x", name: "X", dir: "/tmp/x", colour: bad }]));
+      await assert.rejects(new AgentRegistry(file).list(), /invalid agent registry/, `colour ${JSON.stringify(bad)} is not a colour`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("invalid or unreadable registry fails visibly and is never replaced with an empty list", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
   try {

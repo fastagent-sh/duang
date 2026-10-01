@@ -28,8 +28,8 @@ function harness() {
   const opens: string[] = [];
   const api: DuangApi = {
     listAgents: async () => [
-      { id: "a", name: "A", dir: "/a" },
-      { id: "b", name: "B", dir: "/b" },
+      { id: "a", name: "A", dir: "/a", colour: 0 },
+      { id: "b", name: "B", dir: "/b", colour: 1 },
     ],
     addAgent: async () => undefined,
     openAgent: async () => ready,

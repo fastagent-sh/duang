@@ -8,7 +8,7 @@
  * is loud or quiet — is decided by a prop here instead.
  */
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
-import { avatarGradient } from "./avatar-colours.ts";
+import { avatarGradient, INK } from "./avatar-colours.ts";
 import { initials } from "./initials.ts";
 
 /**
@@ -84,16 +84,27 @@ export function Button({
 
 /**
  * An agent's avatar: a circle, because an agent is a contact and the roster reads as one (§12).
- * The colour is the name's (`avatar-colours.ts`), so the same agent is the same avatar everywhere.
+ * The colour is the agent's own number from the registry (`avatar-colours.ts`), so the same agent is the
+ * same avatar everywhere, and a rename does not change it.
  *
  * Presence is the ring around it, never a change to the avatar: an agent looks like the same agent
  * whether it is busy or idle.
  */
-export function Avatar({ name, size = 40, working }: { name: string; size?: number; working?: boolean }) {
+export function Avatar({
+  name,
+  colour,
+  size = 40,
+  working,
+}: {
+  name: string;
+  colour: number;
+  size?: number;
+  working?: boolean;
+}) {
   return (
     <span
       aria-hidden
-      className={`grid shrink-0 place-items-center font-avatar font-semibold uppercase text-white ${
+      className={`grid shrink-0 place-items-center font-avatar font-semibold uppercase ${
         working ? "ring-2 ring-accent ring-offset-2 ring-offset-surface animate-pulse" : ""
       }`}
       style={{
@@ -101,7 +112,8 @@ export function Avatar({ name, size = 40, working }: { name: string; size?: numb
         height: size,
         borderRadius: "50%",
         fontSize: Math.round(size * 0.34),
-        backgroundImage: avatarGradient(name),
+        backgroundImage: avatarGradient(colour),
+        color: INK,
       }}
     >
       {initials(name)}
