@@ -704,8 +704,8 @@ export function createStore(api: DuangApi) {
     // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
     // the default style and then redrawn. Its one failure is an unreadable settings file, which leaves the
     // default: main reports it when it starts, and the Settings page when it is opened.
-    const avatar = api.getAvatar().then(
-      (style) => publish({ avatar: style }),
+    const avatar = api.getSettings().then(
+      ({ avatar }) => publish({ avatar }),
       () => {},
     );
     try {
@@ -914,7 +914,7 @@ export function createStore(api: DuangApi) {
     async loadSettings(): Promise<{ network: Network; route: Route } | undefined> {
       publish({ settings: undefined, settingsError: undefined, connection: undefined });
       try {
-        const { network, route, avatar } = await api.getSettings();
+        const [{ network, avatar }, route] = await Promise.all([api.getSettings(), api.getRoute()]);
         const settings = { network, route };
         publish({ settings, avatar });
         void checkConnection();

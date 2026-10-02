@@ -1169,7 +1169,7 @@ if (!process.versions.electron) {
         now = (await stat(settingsFile)).mtimeMs;
       }
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "automatic" });
-      assert.equal((await evaluate("window.duang.getSettings()")).route.source, "system", "Chromium ended on the second choice too");
+      assert.equal((await evaluate("window.duang.getRoute()")).source, "system", "Chromium ended on the second choice too");
       await until("document.querySelector('[data-source=system]')?.textContent.includes('connected')", "the page ends on the second choice");
       // Enter on the refresh control checks again; it does not re-apply (rewrite) the choice.
       const written = (await stat(settingsFile)).mtimeMs;

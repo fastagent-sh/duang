@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { writeJsonAtomic } from "./json-file.ts";
 
 export interface AgentRow {
   id: string;
@@ -73,14 +74,7 @@ export class AgentRegistry {
     const operation = this.pending.then(async () => {
       const rows = await this.read();
       const result = edit(rows);
-      await mkdir(dirname(this.file), { recursive: true });
-      const temporary = `${this.file}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporary, JSON.stringify(rows, null, 2), { flag: "wx", mode: 0o600 });
-        await rename(temporary, this.file);
-      } finally {
-        await rm(temporary, { force: true });
-      }
+      await writeJsonAtomic(this.file, rows);
       return result;
     });
     // The caller receives the error; subsequent operations still get a chance to retry.

@@ -3,7 +3,9 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AVATARS, avatar, DEFAULTS, network, proxyUrl, readSettings, writeSettings } from "./settings.ts";
+import { AVATARS, avatar, DEFAULTS, network, proxyUrl, SettingsFile } from "./settings.ts";
+
+const readSettings = (file: string) => new SettingsFile(file).read();
 
 test("only a missing file is a first run; an unreadable one names itself", async () => {
   const dir = await mkdtemp(join(tmpdir(), "duang-settings-"));
@@ -17,7 +19,8 @@ test("only a missing file is a first run; an unreadable one names itself", async
   await writeFile(file, JSON.stringify({ network: { mode: "sometimes" } }));
   await assert.rejects(readSettings(file), /Unknown network mode: "sometimes"/);
 
-  await writeSettings(file, { network: { mode: "manual", url: "socks5://127.0.0.1:7891" }, avatar: "moods" });
+  await writeFile(file, "{}");
+  await new SettingsFile(file).change({ network: { mode: "manual", url: "socks5://127.0.0.1:7891" }, avatar: "moods" });
   assert.deepEqual(await readSettings(file), { network: { mode: "manual", url: "socks5://127.0.0.1:7891" }, avatar: "moods" });
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")).network.mode, "manual");
 });
@@ -45,4 +48,24 @@ test("a proxy URL is normalised to scheme and host, and anything else is refused
   assert.throws(() => proxyUrl("127.0.0.1:7890"), /http:\/\/, https:\/\/ or socks5:\/\/|Not a URL/);
   assert.deepEqual(network({ mode: "off" }), { mode: "off" });
   assert.throws(() => network({ mode: "manual" }), /needs a URL/);
+});
+
+test("changes go one at a time: two at once both land, a failed one leaves the file and the queue running", async () => {
+  const file = join(await mkdtemp(join(tmpdir(), "duang-settings-")), "settings.json");
+  const settings = new SettingsFile(file);
+  const order: string[] = [];
+  await Promise.all([
+    settings.change({ avatar: "clay" }, async () => void order.push("avatar")),
+    settings.change({ network: { mode: "off" } }, async () => void order.push("network")),
+  ]);
+  assert.deepEqual(await settings.read(), { network: { mode: "off" }, avatar: "clay" }, "neither change lost the other");
+  assert.deepEqual(order, ["avatar", "network"], "each change's follow-up runs in its own turn, in order");
+
+  // A file that cannot be read may hold what the person meant: it is not overwritten.
+  await writeFile(file, "{broken");
+  await assert.rejects(settings.change({ avatar: "moods" }), (error: Error) => error.message.startsWith(`${file}: `));
+  assert.equal(await readFile(file, "utf8"), "{broken");
+  await writeFile(file, "{}");
+  await settings.change({ avatar: "moods" });
+  assert.equal((await settings.read()).avatar, "moods", "the next change still runs");
 });
