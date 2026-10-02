@@ -14,36 +14,34 @@ import type { AvatarStyle } from "../preload/index.ts";
 import { avatarHex } from "./avatar-colours.ts";
 import type { Face } from "./face.ts";
 
-export type DrawnStyle = Exclude<AvatarStyle, "initials">;
-const STYLES: Record<DrawnStyle, Style> = {
-  gaze: new Style(gaze as never),
-  moods: new Style(moods as never),
-  clay: new Style(clay as never),
-  bottts: new Style(bottts as never),
-  pixelbot: new Style(pixelbot as never),
-  initialFace: new Style(initialFace as never),
+type DrawnStyle = Exclude<AvatarStyle, "initials">;
+/** Every style but Gaze fills its square canvas; an avatar is a circle (the roster's contacts), so they are cut to one. */
+const CIRCLE = { borderRadius: 50 };
+/**
+ * Each style, and what it needs to be an agent's: its DiceBear definition; the part that wears the agent's
+ * colour (its largest, or for Pixelbot, whose ground is always dark, its glowing face), because left to
+ * the style the colour is a hash of the id into its own few and a handful of agents often share one (Clay
+ * has four browns in twelve); and its other options. Each is seeded by the agent's id, so a rename keeps
+ * the drawing, except Initial face, which draws the name's first letter.
+ */
+const STYLES: Record<DrawnStyle, { definition: Style; coloured: string; options: object; seed?: "name" }> = {
+  // A shape on nothing: cutting it would only clip a corner. It draws in about two thirds of the canvas, and
+  // at 1.2 fills the avatar's circle as the others do; every shape still clears the edge at its widest
+  // rotation (1.3 clips a corner).
+  gaze: { definition: new Style(gaze as never), coloured: "bodyColor", options: { scale: 1.2 } },
+  moods: { definition: new Style(moods as never), coloured: "faceColor", options: CIRCLE },
+  clay: { definition: new Style(clay as never), coloured: "bodyColor", options: CIRCLE },
+  bottts: { definition: new Style(bottts as never), coloured: "backgroundColor", options: CIRCLE },
+  pixelbot: { definition: new Style(pixelbot as never), coloured: "glowColor", options: CIRCLE },
+  initialFace: { definition: new Style(initialFace as never), coloured: "backgroundColor", options: CIRCLE, seed: "name" },
 };
 
 /**
  * Gaze's eyes are part of who an agent is, from these six, and the eyes its faces use (happy, small) are
  * kept out of them: an agent whose own eyes were the happy ones could not look happy about anything.
  */
-export const IDENTITY_EYES = ["dots", "big", "shine", "beans", "wide", "tall"] as const;
+const IDENTITY_EYES = ["dots", "big", "shine", "beans", "wide", "tall"] as const;
 const EXPRESSION: Partial<Record<Face, string>> = { done: "happy", failed: "small" };
-
-/**
- * The part of each drawing that wears the agent's colour: its largest area, or for Pixelbot, whose
- * ground is always dark, its glowing face. Left to the style, the colour is a hash of the id into the
- * style's own few colours, and a handful of agents often share one (Clay has four browns in twelve).
- */
-const COLOURED: Record<DrawnStyle, string> = {
-  gaze: "bodyColor",
-  moods: "faceColor",
-  clay: "bodyColor",
-  bottts: "backgroundColor",
-  pixelbot: "glowColor",
-  initialFace: "backgroundColor",
-};
 
 const drawn = new Map<string, string>();
 
@@ -57,18 +55,14 @@ export function avatarSvg(style: DrawnStyle, { id, name, colour, face }: { id: s
   const key = `${style}\n${id}\n${name}\n${colour}\n${eyes}`;
   const cached = drawn.get(key);
   if (cached) return cached;
-  const svg = new Drawn(STYLES[style], {
-    // Initial face draws the name's first letter; every other style is seeded by the agent, so a rename
-    // does not give it a new face.
-    seed: style === "initialFace" ? name : id,
+  const { definition, coloured, options, seed } = STYLES[style];
+  const svg = new Drawn(definition, {
+    seed: seed === "name" ? name : id,
     idRandomization: true,
-    // Every style but Gaze fills its square canvas; an avatar is a circle (the roster's contacts), so they
-    // are cut to one. Gaze is a shape on nothing, and cutting it would only clip a corner.
-    ...(style === "gaze" ? {} : { borderRadius: 50 }),
-    // Gaze draws its shape in about two thirds of the canvas; at 1.2 it fills the avatar's circle as the other
-    // styles do, and every shape still clears the canvas edge at its widest rotation (1.3 clips a corner).
-    ...(style === "gaze" ? { scale: 1.2, eyesVariant: eyes ? [eyes] : [...IDENTITY_EYES] } : {}),
-    [COLOURED[style]]: [avatarHex(colour)],
+    ...options,
+    [coloured]: [avatarHex(colour)],
+    // Only Gaze's eyes move: its own pair at rest, an expressive one for an outcome.
+    ...(style === "gaze" && { eyesVariant: eyes ? [eyes] : [...IDENTITY_EYES] }),
   }).toString();
   drawn.set(key, svg);
   return svg;
