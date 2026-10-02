@@ -24,7 +24,7 @@ import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from ".
 import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { subscriptions, type Listener } from "./follow.ts";
-import { send } from "./send.ts";
+import { send, sends } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
 
@@ -138,6 +138,9 @@ function requireSession(session: string): void {
 
 /** The one sign-in in progress, and the window it belongs to. */
 let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
+
+/** Sends in main's hands, per conversation: a Stop before the run exists is answered here. */
+const inFlight = sends();
 
 const sessions = subscriptions(
   async (agentId: string, session: string) => (await openAgent(await requireAgent(agentId))).control.sessions.get(session),
@@ -328,17 +331,22 @@ function register(): void {
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
-    // The agent's commands spawn during this run; they get the route as it is now.
-    await syncCommandProxy();
-    // One credential file serves every runtime, and the picker only offered what this agent can
-    // authenticate through it.
-    return withAgentRun(await requireAgent(id), ({ agent, control }) =>
-      send(agent, control.sessions.get(session), text),
-    );
+    // Held before the first await: a Stop sent right after this message must find it.
+    return inFlight.hold(`${id}/${session}`, async (stopped) => {
+      // The agent's commands spawn during this run; they get the route as it is now.
+      await syncCommandProxy();
+      // One credential file serves every runtime, and the picker only offered what this agent can
+      // authenticate through it.
+      return withAgentRun(await requireAgent(id), ({ agent, control }) =>
+        send(agent, control.sessions.get(session), text, stopped),
+      );
+    });
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
     requireSession(session);
-    return (await openAgent(await requireAgent(id))).control.sessions.get(session).abort();
+    return inFlight.stop(`${id}/${session}`, async () =>
+      (await openAgent(await requireAgent(id))).control.sessions.get(session).abort(),
+    );
   });
 }
 

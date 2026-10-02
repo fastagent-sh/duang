@@ -1652,3 +1652,29 @@ test("a link the browser will not open is said in the running sign-in", async ()
   assert.equal(store.getSnapshot().signIn?.info?.message, "The browser did not open: no application to open https");
   store.dispose();
 });
+
+test("Stop before the run starts returns the message to the draft quietly; Stop after the run ended says nothing", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const sent = deferred<SessionResult>();
+  api.send = () => sent.promise;
+  api.abort = async () => {
+    // main marks the send it still holds as stopped, and that send gives up before reaching the runtime
+    sent.resolve({ ok: false, error: { code: "aborted", message: "Stopped before the run started", retryable: true } });
+    return { ok: true };
+  };
+  store.setDraft("hello");
+  const sending = store.send();
+  assert.equal(store.getSnapshot().busy, true, "Stop is offered at once");
+  await store.abort();
+  await sending;
+  assert.equal(c.draft, "hello");
+  assert.deepEqual(c.waiting, []);
+  assert.equal(store.getSnapshot().busy, false);
+
+  api.abort = async () => ({ ok: false, error: { code: "no_active_run", message: "no active run for this session", retryable: false } });
+  await store.abort();
+  assert.deepEqual(c.items, [], "neither Stop is reported as a failure");
+  store.dispose();
+});

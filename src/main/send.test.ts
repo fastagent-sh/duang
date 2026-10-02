@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import type { Session, SessionResult } from "@fastagent-sh/fastagent/session";
-import { send } from "./send.ts";
+import { send, sends } from "./send.ts";
 
 const ok: SessionResult = { ok: true };
 const refusal = (code: string): SessionResult => ({ ok: false, error: { code, message: code, retryable: true } });
@@ -47,4 +47,47 @@ test("send routes idle, live and both admission races without silently dropping 
     assert.equal(result.ok, !["failed", "refused"].includes(scenario));
     if (!result.ok && scenario === "failed") assert.equal(result.error.message, "original error");
   }
+});
+
+test("a Stop before a send reaches the runtime keeps it from starting a run; one after it is the run's abort", async () => {
+  const calls: string[] = [];
+  const bound = {
+    id: "s",
+    state: async () => ({ status: "idle" }),
+    steer: async () => {
+      calls.push("steer");
+      return ok;
+    },
+  } as unknown as Session;
+  const agent = {
+    async *invoke() {
+      calls.push("invoke");
+      yield { type: "completed" };
+    },
+  } as unknown as Agent;
+  const noRun = async () => refusal("no_active_run");
+  const held = sends();
+  assert.equal((await held.stop("a/s", noRun)).ok, false, "with nothing on its way, no run is no stop");
+
+  // Main is still resolving the proxy and opening the agent when the Stop arrives.
+  let opened!: () => void;
+  const opening = new Promise<void>((resolve) => (opened = resolve));
+  const early = held.hold("a/s", async (stopped) => {
+    await opening;
+    return send(agent, bound, "hello", stopped);
+  });
+  assert.equal((await held.stop("b/s", noRun)).ok, false, "another conversation's send is not this one's");
+  assert.equal((await held.stop("a/s", noRun)).ok, true);
+  opened();
+  const result = await early;
+  assert.deepEqual(calls, [], "nothing reached the runtime");
+  assert.equal(!result.ok && result.error.code, "aborted");
+
+  // Once the message is the runtime's, stopping is the run's abort, and its answer is the run's.
+  const late = await held.hold("a/s", (stopped) => send(agent, bound, "again", stopped));
+  assert.deepEqual(calls, ["invoke"]);
+  assert.equal(late.ok, true);
+  const failed = refusal("run_command_failed");
+  assert.equal(await held.stop("a/s", async () => failed), failed, "any other answer is passed on");
+  assert.equal((await held.stop("a/s", noRun)).ok, false, "a finished send is released");
 });

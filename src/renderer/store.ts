@@ -1,4 +1,10 @@
-import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
+import {
+  NO_ACTIVE_RUN_CODE,
+  type AgentCommand,
+  type SessionEvent,
+  type SessionState,
+  type SessionSummary,
+} from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
 import {
   apply,
@@ -979,7 +985,9 @@ export function createStore(api: DuangApi) {
       if (!c) return;
       try {
         const result = await api.abort(c.agentId, c.session);
-        if (!result.ok) note(result.error.message, c);
+        // Nothing left running: the run ended as Stop was pressed, and its own ending is already in the
+        // transcript. Main answers a Stop for a send that has not started a run yet with `ok`.
+        if (!result.ok && result.error.code !== NO_ACTIVE_RUN_CODE) note(result.error.message, c);
       } catch (error) {
         note(error, c);
       }
