@@ -3,7 +3,7 @@ import { createServer, request as httpRequest, type Server } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { test } from "node:test";
 import { fetch, getGlobalDispatcher, setGlobalDispatcher } from "undici";
-import { commandProxyEnv, hasCredentials, routeOf, RoutedDispatcher, tryRoute } from "./route.ts";
+import { commandProxyEnv, hasCredentials, routeOf, RoutedDispatcher, tryRoute, unreachable } from "./route.ts";
 
 test("a PAC answer becomes the proxy to use, and anything unsupported is an error", () => {
   assert.equal(routeOf("DIRECT"), undefined);
@@ -98,6 +98,10 @@ test("each request follows the route resolved for it, and a dead proxy is an err
     pac = `PROXY 127.0.0.1:${deadPort}`;
     await assert.rejects(fetch(url, { dispatcher }), (error: Error & { cause?: { code?: string } }) => {
       assert.equal(error.cause?.code, "ECONNREFUSED");
+      // The connection check's report of this same failure: the route in words, the code on its own.
+      const report = unreachable("example.test", `http://127.0.0.1:${deadPort}`, error);
+      assert.equal(report.code, "ECONNREFUSED");
+      assert.match(report.error, new RegExp(`^example\\.test via http://127\\.0\\.0\\.1:${deadPort}: ECONNREFUSED: `));
       return true;
     });
     assert.equal(proxy.used(), 1);

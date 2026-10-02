@@ -19,7 +19,7 @@ import type { AvatarStyle, Network, Settings } from "../main/settings.ts";
 export type { Route } from "../main/proxy.ts";
 export type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
 import type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
-import type { Route } from "../main/proxy.ts";
+import type { ConnectionCheck, Route } from "../main/proxy.ts";
 import type { Frame } from "../main/follow.ts";
 import type { ProviderUsage } from "../main/usage.ts";
 
@@ -76,8 +76,8 @@ const api = {
   /** Saves and applies at once; new requests use it, a running turn keeps its connection. */
   setNetwork: (network: Network): Promise<Route> => ipcRenderer.invoke("settings:setNetwork", network),
   revealSettings: (): Promise<void> => ipcRenderer.invoke("settings:reveal"),
-  /** One request over the model route: any HTTP status means it works; a rejection names the route. */
-  testNetwork: (): Promise<{ status: number; ms: number; route: Route }> => ipcRenderer.invoke("network:test"),
+  /** One request over the model route: any HTTP status means it works; a failure names the route. */
+  testNetwork: (): Promise<ConnectionCheck> => ipcRenderer.invoke("network:test"),
   /** What can be connected, and what serves each provider now. Rejects when duang's file is unreadable. */
   listProviders: (): Promise<ProviderRow[]> => ipcRenderer.invoke("providers:list"),
   /** Shows duang's credential file, or its folder before anything is connected. */

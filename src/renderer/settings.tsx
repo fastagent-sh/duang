@@ -340,9 +340,6 @@ function Field({
   );
 }
 
-/** "ECONNREFUSED" from main's "host via proxy: ECONNREFUSED: connect …", when there is one. */
-const errorCode = (error: string) => /: ([A-Z][A-Z_]+):/.exec(error)?.[1];
-
 /** The chosen row's second line: where requests go, and whether they get there. */
 function Status({ route, check, onRefresh }: { route: Route; check?: Connection; onRefresh: () => void }) {
   const result = !check
@@ -354,7 +351,7 @@ function Status({ route, check, onRefresh }: { route: Route; check?: Connection;
             // The row already says which route; the cause's code is what fits beside it, and the
             // whole sentence is one hover away.
             <span className="text-danger" title={check.error}>
-              unreachable{errorCode(check.error) ? ` (${errorCode(check.error)})` : ""}
+              unreachable{check.code ? ` (${check.code})` : ""}
             </span>
           )
         : <span className="text-accent" title={`api.anthropic.com answered HTTP ${check.status}`}>connected · {check.ms} ms</span>;

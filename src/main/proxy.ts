@@ -9,7 +9,7 @@
  */
 import { session } from "electron";
 import { setGlobalDispatcher } from "undici";
-import { commandProxyEnv, hasCredentials, RoutedDispatcher, tryRoute } from "./route.ts";
+import { commandProxyEnv, hasCredentials, RoutedDispatcher, tryRoute, unreachable } from "./route.ts";
 import type { Network } from "./settings.ts";
 
 /** Model traffic is what the route display is about. */
@@ -117,20 +117,21 @@ export async function syncCommandProxy(): Promise<void> {
   }
 }
 
-/** One request over the same route a model call takes, timed. Any HTTP answer means the network works. */
-export async function testConnection(): Promise<{ status: number; ms: number; route: Route }> {
+/**
+ * One check of the model route: any HTTP answer, timed, means it works. Not getting one is an answer too,
+ * in a sentence naming the route, and with the cause's code (`ECONNREFUSED`) when it has one.
+ */
+export type ConnectionCheck = { status: number; ms: number; route: Route } | { error: string; code?: string };
+
+/** One request over the same route a model call takes. */
+export async function testConnection(): Promise<ConnectionCheck> {
   const route = await describeRoute();
-  if (route.error) throw new Error(`${new URL(MODEL_HOST).host}: ${route.error}`);
+  if (route.error) return { error: `${new URL(MODEL_HOST).host}: ${route.error}` };
   const started = performance.now();
   try {
     const response = await fetch(MODEL_HOST, { method: "HEAD", signal: AbortSignal.timeout(TEST_TIMEOUT_MS) });
     return { status: response.status, ms: Math.round(performance.now() - started), route };
   } catch (error) {
-    // `fetch failed` alone says nothing; the cause and the route are what a person can act on.
-    const cause = (error as Error & { cause?: Error & { code?: string } }).cause;
-    const why = cause ? `${cause.code ? `${cause.code}: ` : ""}${cause.message}` : (error as Error).message;
-    throw new Error(`${new URL(MODEL_HOST).host} ${route.proxy ? `via ${route.proxy}` : "directly"}: ${why}`, {
-      cause: error,
-    });
+    return unreachable(new URL(MODEL_HOST).host, route.proxy, error);
   }
 }
