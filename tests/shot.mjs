@@ -113,8 +113,8 @@ if (!process.versions.electron) {
     await writeFile(join(workspace, "hello.txt"), "Hello from the workspace\n");
     await writeFile(join(second, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');
     await writeFile(join(data, "agents.json"), JSON.stringify([
-      { id: "shot", name: "amazonseo.ai", dir: workspace },
-      { id: "shot-2", name: "compass", dir: second },
+      { id: "shot", name: "amazonseo.ai", dir: workspace, colour: 0 },
+      { id: "shot-2", name: "compass", dir: second, colour: 1 },
     ]));
 
     // Turn 1 reads a file, turn 2 says what it found and fails a tool, turn 3 answers with the
@@ -294,6 +294,9 @@ if (!process.versions.electron) {
     await evaluate(`[...document.querySelectorAll('[role="radio"]')].find((row) => row.textContent.startsWith('Off')).click()`);
     await until(`document.body.innerText.includes('connected ·')`, "mocked network check");
     await capture("settings");
+    // The avatar styles, each showing itself.
+    await evaluate(`document.querySelector('#appearance-heading').scrollIntoView({ block: "start" })`);
+    await capture("settings-avatars", "keep");
 
     // The component sheet, in the same window and the same build as the app it documents.
     // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.

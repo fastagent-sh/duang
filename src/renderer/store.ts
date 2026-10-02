@@ -1,6 +1,7 @@
 import type { AgentCommand, SessionEvent, SessionState, SessionSummary } from "@fastagent-sh/fastagent/session";
 import type {
   AgentRow,
+  AvatarStyle,
   DuangApi,
   LoginOutcome,
   LoginStep,
@@ -11,7 +12,7 @@ import type {
   Route,
   SessionFrame,
 } from "../preload/index.ts";
-import { apply, claim, fromEntries, known, opensRun, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
+import { apply, claim, fromEntries, known, opensRun, phase, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
@@ -164,6 +165,8 @@ export interface View {
   settings?: { network: Network; route: Route };
   /** Why the settings file could not be read. The page says so rather than show the defaults. */
   settingsError?: string;
+  /** How avatars are drawn, from the settings file; the default until it has been read. */
+  avatar: AvatarStyle;
   /** The last check of the model route, or the one still running. */
   connection?: Connection;
   /** Model providers in duang's credential file: undefined while reading. */
@@ -182,6 +185,8 @@ export interface View {
   blocked?: string;
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
+  /** Per agent with a turn in flight, what it is doing, in the run status line's own word (`phase`). */
+  doing: Record<string, string>;
   /** Conversations holding unsent text, per agent, so a draft never becomes unreachable. */
   unsent: Record<string, string[]>;
   /**
@@ -239,7 +244,9 @@ export function createStore(api: DuangApi) {
     loading: false,
     busy: false,
     commands: [],
+    avatar: "gaze",
     running: {},
+    doing: {},
     unsent: {},
     unseen: {},
     usage: {},
@@ -319,6 +326,7 @@ export function createStore(api: DuangApi) {
     const running = [...conversations.values()].filter(busy);
     view.busy = !!view.conversation && busy(view.conversation);
     view.running = group(running.map((c) => [c.agentId, c.session]));
+    view.doing = Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).word]));
     // A conversation the runtime has never heard of exists only while it is on screen. Without a row
     // of its own, walking away from unsent text is the same as discarding it. The open conversation
     // holds its own draft, so read both here: this is the single view of what is unsent.
@@ -693,8 +701,16 @@ export function createStore(api: DuangApi) {
   async function load() {
     listen();
     publish({ loading: true, error: undefined });
+    // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
+    // the default style and then redrawn. Its one failure is an unreadable settings file, which leaves the
+    // default: main reports it when it starts, and the Settings page when it is opened.
+    const avatar = api.getAvatar().then(
+      (style) => publish({ avatar: style }),
+      () => {},
+    );
     try {
       const agents = await api.listAgents();
+      await avatar;
       publish({ agents, loading: false });
       // Reopen the agent this machine was last using; a removed one falls back to the first row.
       const start = agents.find((row) => row.id === lastAgent) ?? agents[0];
@@ -898,12 +914,22 @@ export function createStore(api: DuangApi) {
     async loadSettings(): Promise<{ network: Network; route: Route } | undefined> {
       publish({ settings: undefined, settingsError: undefined, connection: undefined });
       try {
-        const settings = await api.getSettings();
-        publish({ settings });
+        const { network, route, avatar } = await api.getSettings();
+        const settings = { network, route };
+        publish({ settings, avatar });
         void checkConnection();
         return settings;
       } catch (error) {
         publish({ settingsError: message(error) });
+      }
+    },
+    /** Saves how avatars are drawn. Returns why it failed, for the page that asked. */
+    async setAvatar(avatar: AvatarStyle): Promise<string | undefined> {
+      try {
+        await api.setAvatar(avatar);
+        publish({ avatar });
+      } catch (error) {
+        return message(error);
       }
     },
     /** Saves and applies a network choice. Returns why it failed, for the form that asked. */

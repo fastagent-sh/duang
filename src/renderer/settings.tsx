@@ -9,7 +9,8 @@
  */
 import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
-import type { DuangApi, Network, Route } from "../preload/index.ts";
+import type { AvatarStyle, DuangApi, Network, Route } from "../preload/index.ts";
+import { Avatar } from "./avatar.tsx";
 import type { Connection, Store, View } from "./store.ts";
 import { Button } from "./ui.tsx";
 import { ProvidersSection } from "./providers.tsx";
@@ -174,11 +175,59 @@ export function Settings({
                   {problem}
                 </p>
               )}
+              <Appearance view={view} store={store} />
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+/** Each style, in the order offered, with a line on what it draws. The first is the default. */
+const STYLES: Record<AvatarStyle, { label: string; note: string }> = {
+  gaze: { label: "Gaze", note: "Shapes with eyes that follow the work" },
+  moods: { label: "Moods", note: "Round faces" },
+  clay: { label: "Clay", note: "Little clay figures" },
+  bottts: { label: "Bottts", note: "Robots, drawn by Pablo Stanley" },
+  pixelbot: { label: "Pixelbot", note: "Pixel robots" },
+  initialFace: { label: "Initial face", note: "A face wearing the name's first letter" },
+  initials: { label: "Initials", note: "The name's first two letters" },
+};
+/** The same four in every preview, so the styles are compared on the same agents. */
+const SAMPLES = ["research", "ops-bot", "writer", "旅行助手"];
+
+/** How agents' avatars are drawn. Each choice shows itself, which a name alone could not. */
+function Appearance({ view, store }: { view: View; store: Store }) {
+  const [problem, setProblem] = useState<string>();
+  return (
+    <Group id="appearance-heading" title="Avatars">
+      <RadioGroup label="Avatar style">
+        {(Object.keys(STYLES) as AvatarStyle[]).map((style) => (
+          <Option
+            key={style}
+            label={STYLES[style].label}
+            checked={view.avatar === style}
+            onSelect={() => {
+              setProblem(undefined);
+              void store.setAvatar(style).then(setProblem);
+            }}
+          >
+            <span className="mt-1.5 flex items-center gap-2">
+              {SAMPLES.map((name, colour) => (
+                <Avatar key={name} id={`sample-${name}`} name={name} colour={colour} size={26} style={style} />
+              ))}
+              <span className="ml-1">{STYLES[style].note}</span>
+            </span>
+          </Option>
+        ))}
+      </RadioGroup>
+      {problem && (
+        <p role="alert" className="px-4 py-2 text-danger text-[12px]">
+          {problem}
+        </p>
+      )}
+    </Group>
   );
 }
 

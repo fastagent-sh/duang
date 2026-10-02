@@ -9,6 +9,8 @@ import { ConversationHeader } from "./header.tsx";
 import { Transcript } from "./transcript-view.tsx";
 import { Composer } from "./composer.tsx";
 import { Settings } from "./settings.tsx";
+import { AvatarStyleContext } from "./avatar.tsx";
+import { faceOf } from "./face.ts";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
@@ -139,159 +141,171 @@ export default function App() {
   return (
     // Panels float on the window's canvas rather than filling it edge to edge: the gap is what makes
     // the sidebar read as a surface of its own.
-    <div className="flex h-full gap-2 p-2">
-      <Sidebar
-        agents={agents}
-        agentId={agentId}
-        states={states}
-        running={view.running}
-        unseen={view.unseen}
-        previews={view.previews}
-        latest={(id) => rowsFor(id).find((row) => !row.fresh)}
-        errors={view.sessionsError}
-        settingsOpen={Boolean(settings)}
-        onSelect={(id) => {
-          // Any way into a conversation leaves Settings; the agent you were on comes back as it was.
-          setSettings(false);
-          if (id !== agentId) void store.selectAgent(id);
-        }}
-        onAdd={() => {
-          setSettings(false);
-          void store.addAgent();
-        }}
-        onSettings={openSettings}
-        onRename={(id, name) => void store.renameAgent(id, name)}
-        onReveal={(id) => void store.reveal(id)}
-        onMenu={duang.menu}
-      />
-      <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
-        {settings ? (
-          <Settings
-            view={view}
-            store={store}
-            connectOnOpen={settings.fromPicker}
-            onConnected={() => {
-              if (!settings.fromPicker) return;
-              store.requestPicker();
-              setSettings(false);
-            }}
-            onMenu={duang.menu}
-            onClose={() => setSettings(false)}
-          />
-        ) : (
-          <>
-            {agent && (
-              <ConversationHeader
-                agent={agent.name}
-                dir={agent.dir}
-                working={!!view.running[agent.id]?.length}
-                context={
-                  usage?.contextTokens !== undefined && usage.contextWindow
-                    ? { used: usage.contextTokens, window: usage.contextWindow }
-                    : undefined
-                }
-                plan={provider ? view.usage[provider] : undefined}
-                queued={pending ? pending.steering.length + pending.followUp.length : undefined}
-                list={
-                  agentState === "ready"
-                    ? { open: listOpen, unseen: Object.keys(view.unseen[agent.id] ?? {}).length }
-                    : undefined
-                }
-                onReveal={() => void store.reveal()}
-              />
-            )}
-            {agent && agentState === "ready" && (
-              <ConversationList
-                rows={sessionRows}
-                session={c?.session}
-                error={view.sessionsError[agent.id]}
-                disabled={view.loading}
-                onToggle={setListOpen}
-                onOpen={(session) => void store.open(session)}
-                onNew={newConversation}
-                onRename={(session, name) => void store.renameSession(agent.id, session, name)}
-                onDelete={(session) => {
-                  if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent.id, session);
-                }}
-                onMenu={duang.menu}
-              />
-            )}
-            {error ? (
-              <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
-                {error}{" "}
-                <button className="underline" onClick={() => void store.retry()}>
-                  Retry
-                </button>
-              </div>
-            ) : (
-              // An ended subscription is not a failure: the conversation is intact, this view stopped
-              // listening. Say it in the calm voice and offer the one action that fixes it.
-              c?.ended && (
-                <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
-                  {c.ended}{" "}
+    // Every avatar is drawn in the style Settings chose; a change there redraws them all at once.
+    <AvatarStyleContext.Provider value={view.avatar}>
+      <div className="flex h-full gap-2 p-2">
+        <Sidebar
+          agents={agents}
+          agentId={agentId}
+          states={states}
+          running={view.running}
+          doing={view.doing}
+          unseen={view.unseen}
+          previews={view.previews}
+          latest={(id) => rowsFor(id).find((row) => !row.fresh)}
+          errors={view.sessionsError}
+          settingsOpen={Boolean(settings)}
+          onSelect={(id) => {
+            // Any way into a conversation leaves Settings; the agent you were on comes back as it was.
+            setSettings(false);
+            if (id !== agentId) void store.selectAgent(id);
+          }}
+          onAdd={() => {
+            setSettings(false);
+            void store.addAgent();
+          }}
+          onSettings={openSettings}
+          onRename={(id, name) => void store.renameAgent(id, name)}
+          onReveal={(id) => void store.reveal(id)}
+          onMenu={duang.menu}
+        />
+        <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
+          {settings ? (
+            <Settings
+              view={view}
+              store={store}
+              connectOnOpen={settings.fromPicker}
+              onConnected={() => {
+                if (!settings.fromPicker) return;
+                store.requestPicker();
+                setSettings(false);
+              }}
+              onMenu={duang.menu}
+              onClose={() => setSettings(false)}
+            />
+          ) : (
+            <>
+              {agent && (
+                <ConversationHeader
+                  id={agent.id}
+                  agent={agent.name}
+                  colour={agent.colour}
+                  face={faceOf({
+                    state: agentState ?? "ready",
+                    doing: view.doing[agent.id],
+                    outcomes: Object.values(view.unseen[agent.id] ?? {}),
+                    open: false,
+                  })}
+                  dir={agent.dir}
+                  working={!!view.running[agent.id]?.length}
+                  context={
+                    usage?.contextTokens !== undefined && usage.contextWindow
+                      ? { used: usage.contextTokens, window: usage.contextWindow }
+                      : undefined
+                  }
+                  plan={provider ? view.usage[provider] : undefined}
+                  queued={pending ? pending.steering.length + pending.followUp.length : undefined}
+                  list={
+                    agentState === "ready"
+                      ? { open: listOpen, unseen: Object.keys(view.unseen[agent.id] ?? {}).length }
+                      : undefined
+                  }
+                  onReveal={() => void store.reveal()}
+                />
+              )}
+              {agent && agentState === "ready" && (
+                <ConversationList
+                  rows={sessionRows}
+                  session={c?.session}
+                  error={view.sessionsError[agent.id]}
+                  disabled={view.loading}
+                  onToggle={setListOpen}
+                  onOpen={(session) => void store.open(session)}
+                  onNew={newConversation}
+                  onRename={(session, name) => void store.renameSession(agent.id, session, name)}
+                  onDelete={(session) => {
+                    if (confirm("Delete this conversation? Its history is gone.")) void store.deleteSession(agent.id, session);
+                  }}
+                  onMenu={duang.menu}
+                />
+              )}
+              {error ? (
+                <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
+                  {error}{" "}
                   <button className="underline" onClick={() => void store.retry()}>
-                    Reconnect
+                    Retry
                   </button>
                 </div>
-              )
-            )}
-            {!agentId ? (
-              // An unreadable registry is not an empty one: offering "add your first agent" would deny the
-              // failure and hand over an action that cannot succeed until the file is fixed.
-              view.error ? (
-                <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
               ) : (
-                <NoAgents onAdd={() => void store.addAgent()} />
-              )
-            ) : agentState === "broken" ? (
-              <BrokenAgent
-                message={view.error ?? ""}
-                onRemove={remove}
-                onReveal={() => void store.reveal()}
-                onRetry={() => void store.retry()}
-              />
-            ) : agentState === "no_agent" ? (
-              <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
-            ) : settling ? (
-              <div className="flex-1 min-h-0" aria-busy="true" />
-            ) : !c || (c.items.length === 0 && waiting.length === 0) ? (
-              <NewConversation>{composer}</NewConversation>
-            ) : (
-              // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
-              // run streams, so this gap *is* where the newest line lands. At 16 the line you are
-              // reading sat on the composer's edge, half under the fade.
-              <Transcript
-                key={c.subscription}
-                items={c.items}
-                waiting={waiting}
-                busy={busy}
-                status={c.state?.status}
-                started={c.started}
-                bottomGap={composerHeight + 64}
-                resume={store.scrollOf(c.agentId, c.session)}
-                onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
-              />
-            )}
-            {reading && (
-              <>
-                {/* The edges past the floating bars are veiled, not painted over: text passing there
-                    stays faintly visible, dimmed and softened the way the header itself shows it, so
-                    it reads as moving on rather than cut off. The veil clears toward the page by the
-                    bar's inner edge; a solid edge stopped the text at a line (#58, #62). */}
-                <div className="veil pointer-events-none absolute inset-x-0 top-0 z-[5] h-12 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-                {/* Floating, not stacked: the transcript runs the full height of the pane and passes
-                    beneath this, which is what keeps the bottom of the window from reading as a seam. */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
-                  <div className="veil absolute inset-x-0 bottom-0 h-28 [mask-image:linear-gradient(to_top,black_50%,transparent)]" />
-                  <div ref={composerBox} className="column pointer-events-auto">
-                    {composer}
+                // An ended subscription is not a failure: the conversation is intact, this view stopped
+                // listening. Say it in the calm voice and offer the one action that fixes it.
+                c?.ended && (
+                  <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
+                    {c.ended}{" "}
+                    <button className="underline" onClick={() => void store.retry()}>
+                      Reconnect
+                    </button>
                   </div>
-                </div>
-              </>
-            )}
-          </>
-        )}
-      </main>
-    </div>
+                )
+              )}
+              {!agentId ? (
+                // An unreadable registry is not an empty one: offering "add your first agent" would deny the
+                // failure and hand over an action that cannot succeed until the file is fixed.
+                view.error ? (
+                  <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+                ) : (
+                  <NoAgents onAdd={() => void store.addAgent()} />
+                )
+              ) : agentState === "broken" ? (
+                <BrokenAgent
+                  message={view.error ?? ""}
+                  onRemove={remove}
+                  onReveal={() => void store.reveal()}
+                  onRetry={() => void store.retry()}
+                />
+              ) : agentState === "no_agent" ? (
+                <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
+              ) : settling ? (
+                <div className="flex-1 min-h-0" aria-busy="true" />
+              ) : !c || (c.items.length === 0 && waiting.length === 0) ? (
+                <NewConversation>{composer}</NewConversation>
+              ) : (
+                // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
+                // run streams, so this gap *is* where the newest line lands. At 16 the line you are
+                // reading sat on the composer's edge, half under the fade.
+                <Transcript
+                  key={c.subscription}
+                  items={c.items}
+                  waiting={waiting}
+                  busy={busy}
+                  status={c.state?.status}
+                  started={c.started}
+                  bottomGap={composerHeight + 64}
+                  resume={store.scrollOf(c.agentId, c.session)}
+                  onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
+                />
+              )}
+              {reading && (
+                <>
+                  {/* The edges past the floating bars are veiled, not painted over: text passing there
+                      stays faintly visible, dimmed and softened the way the header itself shows it, so
+                      it reads as moving on rather than cut off. The veil clears toward the page by the
+                      bar's inner edge; a solid edge stopped the text at a line (#58, #62). */}
+                  <div className="veil pointer-events-none absolute inset-x-0 top-0 z-[5] h-12 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+                  {/* Floating, not stacked: the transcript runs the full height of the pane and passes
+                      beneath this, which is what keeps the bottom of the window from reading as a seam. */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-4">
+                    <div className="veil absolute inset-x-0 bottom-0 h-28 [mask-image:linear-gradient(to_top,black_50%,transparent)]" />
+                    <div ref={composerBox} className="column pointer-events-auto">
+                      {composer}
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </main>
+      </div>
+    </AvatarStyleContext.Provider>
   );
 }

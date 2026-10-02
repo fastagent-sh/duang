@@ -28,8 +28,8 @@ function harness() {
   const opens: string[] = [];
   const api: DuangApi = {
     listAgents: async () => [
-      { id: "a", name: "A", dir: "/a" },
-      { id: "b", name: "B", dir: "/b" },
+      { id: "a", name: "A", dir: "/a", colour: 0 },
+      { id: "b", name: "B", dir: "/b", colour: 1 },
     ],
     addAgent: async () => undefined,
     openAgent: async () => ready,
@@ -44,8 +44,10 @@ function harness() {
     listModels: async () => ({ specs: ["provider/model"] }),
     refreshModels: async () => ({ specs: ["provider/model"] }),
     providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
-    getSettings: async () => ({ network: { mode: "automatic" }, route: { source: "system" } }),
+    getSettings: async () => ({ network: { mode: "automatic" }, avatar: "gaze", route: { source: "system" } }),
     setNetwork: async () => ({ source: "system" }),
+    getAvatar: async () => "gaze",
+    setAvatar: async () => {},
     revealSettings: async () => {},
     testNetwork: async () => ({ status: 200, ms: 1, route: { source: "system" } }),
     onOpenSettings: () => () => {},
@@ -453,6 +455,36 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
   assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
+  store.dispose();
+});
+
+test("the roster is first drawn in the avatar style already chosen, not the default and then that", async () => {
+  const { api, store } = harness();
+  const style = deferred<"moods">();
+  api.getAvatar = () => style.promise;
+  const drawn: string[] = [];
+  const stop = store.subscribe(() => {
+    const view = store.getSnapshot();
+    if (view.agents.length) drawn.push(view.avatar);
+  });
+  const loading = store.load();
+  await new Promise((resolve) => setImmediate(resolve));
+  style.resolve("moods");
+  await loading;
+  stop();
+  assert.ok(drawn.length > 0, "the roster was drawn");
+  assert.ok(drawn.every((avatar) => avatar === "moods"), `every drawing of the roster wore the chosen style: ${[...new Set(drawn)]}`);
+  store.dispose();
+});
+
+test("an unreadable settings file leaves the default style and does not stop the roster", async () => {
+  const { api, store } = harness();
+  api.getAvatar = async () => {
+    throw new Error("settings.json: Unexpected token");
+  };
+  await store.load();
+  assert.equal(store.getSnapshot().avatar, "gaze");
+  assert.equal(store.getSnapshot().agents.length, 2, "the agents still load");
   store.dispose();
 });
 
@@ -1188,7 +1220,7 @@ test("settings are read fresh each time, and only the newest change and check la
   const freshCheck = deferred<Checked>();
   const checks = [staleCheck.promise, freshCheck.promise];
   api.testNetwork = () => checks.shift()!;
-  api.getSettings = async () => ({ network: { mode: "automatic" }, route: { source: "system" } });
+  api.getSettings = async () => ({ network: { mode: "automatic" }, avatar: "gaze", route: { source: "system" } });
   assert.deepEqual((await store.loadSettings())?.network, { mode: "automatic" });
   assert.equal(store.getSnapshot().settingsError, undefined);
   assert.deepEqual(store.getSnapshot().connection, { checking: true });

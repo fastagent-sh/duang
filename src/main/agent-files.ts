@@ -8,7 +8,20 @@ export interface AgentRow {
   dir: string;
   /** duang's model override for this agent. The directory stays the source of truth; we never edit it. */
   model?: string;
+  /**
+   * Which colour its avatar wears: the lowest number no other agent had when it was assigned, kept for
+   * the agent's life (a rename does not recolour it, and a removed agent's number is reused). The
+   * renderer maps it onto its palette, so the registry does not need to know how big that is.
+   */
+  colour: number;
 }
+
+const lowestFree = (rows: AgentRow[]): number => {
+  const used = new Set(rows.map((row) => row.colour));
+  let colour = 0;
+  while (used.has(colour)) colour++;
+  return colour;
+};
 
 /** The registry is not a cache: a read error must never turn into an empty file on the next write. */
 export class AgentRegistry {
@@ -46,7 +59,8 @@ export class AgentRegistry {
           typeof row.id !== "string" ||
           typeof row.name !== "string" ||
           typeof row.dir !== "string" ||
-          (row.model !== undefined && typeof row.model !== "string"),
+          (row.model !== undefined && typeof row.model !== "string") ||
+          !(Number.isInteger(row.colour) && row.colour >= 0),
       ) ||
       new Set(rows.map((row) => row.id)).size !== rows.length
     ) {
@@ -79,7 +93,7 @@ export class AgentRegistry {
     return this.change((rows) => {
       const existing = rows.find((row) => row.dir === canonical);
       if (existing) return existing;
-      const row = { id: randomUUID(), name: basename(canonical), dir: canonical };
+      const row = { id: randomUUID(), name: basename(canonical), dir: canonical, colour: lowestFree(rows) };
       rows.push(row);
       return row;
     });

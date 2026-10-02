@@ -128,8 +128,8 @@ persists drafts and selection in localStorage (a drafts value it cannot read is 
 `duang.drafts.unreadable` and reported, never overwritten); live output and attention marks are presentation
 state, not a second durable transcript. Remote contacts and credentials are future work: never
 store access tokens alongside contact metadata; use OS-backed secure storage for secrets. Model
-credentials live in duang's own `userData/auth.json`, written through FastAgent's credential store. Planned app preferences
-(the network mode) live in `userData/settings.json`, validated on read; an unreadable file is an
+credentials live in duang's own `userData/auth.json`, written through FastAgent's credential store. App preferences
+(the network mode and the avatar style) live in `userData/settings.json`, validated on read; an unreadable file is an
 error, not a first run.
 
 `ponytail:` one JSON file with atomic writes; move to SQLite when a list of agents stops fitting in
@@ -192,7 +192,7 @@ work may already have happened. These are data-integrity constraints, not an ent
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
 | Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a remote deployment. |
 | Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a preset or deployment. |
-| App preferences (planned) | `userData/settings.json` | Network mode only; never credentials. |
+| App preferences | `userData/settings.json` | Network mode and avatar style; never credentials. |
 | Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |
 | Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |
 
