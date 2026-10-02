@@ -5,6 +5,7 @@
  * The words beside the avatar say all of this too; the face is the third signal, never the only one.
  */
 import type { AgentState } from "./store.ts";
+import type { Activity } from "./transcript.ts";
 
 export type Face =
   | "idle"
@@ -28,8 +29,8 @@ export function faceOf({
   open,
 }: {
   state: AgentState;
-  /** The word the run status line shows for its running conversation (`phase`), when one runs. */
-  doing?: string;
+  /** The kind of work its running conversation is in (`phase`), when one runs. */
+  doing?: Activity;
   /** Outcomes that landed while nobody was looking. */
   outcomes: readonly ("done" | "failed")[];
   /** It is the agent on screen. */
@@ -38,8 +39,7 @@ export function faceOf({
   if (state === "missing_model") return "asleep";
   if (state === "no_agent") return "unborn";
   if (state === "broken") return "broken";
-  if (doing !== undefined)
-    return doing === "answering" ? "answering" : ["thinking", "starting", "compacting"].includes(doing) ? "thinking" : "tool";
+  if (doing) return doing;
   if (outcomes.includes("failed")) return "failed";
   if (outcomes.length) return "done";
   return open ? "open" : "idle";

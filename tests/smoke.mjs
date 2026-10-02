@@ -103,6 +103,8 @@ if (!process.versions.electron) {
     let gate;
     let anthropicRequests = 0;
     let usageRequests = 0;
+    /** When set, the connection check gets no answer, as through a proxy nobody listens on. */
+    let refuseCheck = false;
     const deepseekKeys = [];
     globalThis.fetch = async (url, options = {}) => {
       const target = String(url instanceof Request ? url.url : url);
@@ -110,7 +112,13 @@ if (!process.versions.electron) {
       if (target === "https://platform.claude.com/v1/oauth/token") {
         throw new Error("Synthetic OAuth refresh rejected");
       }
-      if (target === "https://api.anthropic.com" && options.method === "HEAD") return new Response(null, { status: 204 });
+      if (target === "https://api.anthropic.com" && options.method === "HEAD") {
+        if (refuseCheck)
+          throw new TypeError("fetch failed", {
+            cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:9"), { code: "ECONNREFUSED" }),
+          });
+        return new Response(null, { status: 204 });
+      }
       if (target === "https://api.anthropic.com/api/oauth/usage") {
         // The plan windows the header shows, read with the same login the conversation runs on.
         assert.equal(headers.get("authorization"), `Bearer ${stored.anthropic.access}`);
@@ -1142,8 +1150,17 @@ if (!process.versions.electron) {
       await choose("SOCKS5");
       await choose("HTTP");
       await fill("Port", "9");
+      refuseCheck = true;
       await click("Use this proxy");
       await until("document.querySelector('[data-source=manual] .font-mono')?.textContent === 'http://127.0.0.1:9'", "Manual applies");
+      // Nothing answers there: the row says so with the cause's code, which main sends as its own field,
+      // and the whole sentence is the hover.
+      await until("/unreachable \\(ECONNREFUSED\\)/.test(document.querySelector('[data-source=manual]').textContent)", "an unanswered check is unreachable, with its code");
+      assert.match(
+        await evaluate("document.querySelector('[data-source=manual] .text-danger').title"),
+        /^api\.anthropic\.com via http:\/\/127\.0\.0\.1:9: ECONNREFUSED: connect ECONNREFUSED/,
+      );
+      refuseCheck = false;
       assert.deepEqual(JSON.parse(await readFile(settingsFile, "utf8")).network, { mode: "manual", url: "http://127.0.0.1:9" });
       // A scheme's default port is saved and read back, not dropped to an empty field.
       await fill("Port", "80");

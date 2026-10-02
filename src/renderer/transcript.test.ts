@@ -348,19 +348,20 @@ test("the live status says what the run is doing now", () => {
   const answering: Item = { kind: "assistant", text: "x", open: true, at: 0 };
   const thinking: Item = { kind: "thinking", text: "first\nnow the tests", open: true, started: 0, at: 0 };
   const build = tool("bash", { command: "npm test" }, { status: "running", id: "t1" });
-  assert.deepEqual(phase([], undefined), { word: "starting" });
-  assert.deepEqual(phase([], "compacting"), { word: "compacting" });
-  assert.deepEqual(phase([], "running"), { word: "thinking", detail: undefined });
+  assert.deepEqual(phase([], undefined), { word: "starting", activity: "thinking" });
+  assert.deepEqual(phase([], "compacting"), { word: "compacting", activity: "thinking" });
+  assert.deepEqual(phase([], "running"), { word: "thinking", detail: undefined, activity: "thinking" });
   // Thinking says the line it is on.
-  assert.deepEqual(phase([thinking], "running"), { word: "thinking", detail: "now the tests" });
-  assert.deepEqual(phase([answering], "running"), { word: "answering" });
-  assert.deepEqual(phase([build], "running"), { word: "running", detail: "npm test" });
+  assert.deepEqual(phase([thinking], "running"), { word: "thinking", detail: "now the tests", activity: "thinking" });
+  assert.deepEqual(phase([answering], "running"), { word: "answering", activity: "answering" });
+  assert.deepEqual(phase([build], "running"), { word: "running", detail: "npm test", activity: "tool" });
   assert.deepEqual(phase([tool("read", { path: "/a/b/c.ts" }, { status: "running", id: "r" })], "running"), {
     word: "reading",
     detail: "\u2026/b/c.ts",
+    activity: "tool",
   });
-  assert.equal(
-    phase([tool("read", {}, { status: "running" }), tool("bash", {}, { status: "running" })], "running").word,
-    "running 2 tools",
-  );
+  assert.deepEqual(phase([tool("read", {}, { status: "running" }), tool("bash", {}, { status: "running" })], "running"), {
+    word: "running 2 tools",
+    activity: "tool",
+  });
 });

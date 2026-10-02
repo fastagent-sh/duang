@@ -12,7 +12,20 @@ import type {
   Route,
   SessionFrame,
 } from "../preload/index.ts";
-import { apply, claim, fromEntries, known, opensRun, phase, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
+import {
+  apply,
+  claim,
+  fromEntries,
+  known,
+  opensRun,
+  phase,
+  previewOf,
+  queueView,
+  resumeRunning,
+  type Activity,
+  type Item,
+  type UserItem,
+} from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
 /**
@@ -22,7 +35,7 @@ export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
  * `start` is that page, for a new conversation or an agent with no model yet.
  */
 export type Pane = "unreadable-registry" | "no-agents" | "broken" | "no-agent" | "settling" | "start" | "transcript";
-export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
+export type Connection = { checking: true } | { status: number; ms: number } | { error: string; code?: string };
 type Shown<T extends LoginStep["type"]> = Omit<Extract<LoginStep, { type: T }>, "type">;
 /**
  * One sign-in as its provider's row shows it: the provider and way chosen, what the flow asks now, the latest
@@ -202,8 +215,8 @@ export interface View {
   blocked?: string;
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
-  /** Per agent with a turn in flight, what it is doing, in the run status line's own word (`phase`). */
-  doing: Record<string, string>;
+  /** Per agent with a turn in flight, the kind of work it is in (`phase`): its avatar's face follows it. */
+  doing: Record<string, Activity>;
   /** Conversations holding unsent text, per agent, so a draft never becomes unreachable. */
   unsent: Record<string, string[]>;
   /**
@@ -322,15 +335,21 @@ export function createStore(api: DuangApi) {
   let lastAgent = stored?.agentId;
   let navigation = 0;
   /**
-   * One request number per agent for its conversation list, taken by every read that writes it:
-   * opening the agent and re-reading the list. A slow answer must not overwrite a newer one.
+   * One request number per agent: taking one makes the answers to every earlier one stale, so a slow
+   * answer never overwrites a newer one. Returns whether this request is still the newest.
    */
-  const listRequests = new Map<string, number>();
-  const listTicket = (id: string) => {
-    const request = (listRequests.get(id) ?? 0) + 1;
-    listRequests.set(id, request);
-    return () => listRequests.get(id) === request;
+  const tickets = () => {
+    const latest = new Map<string, number>();
+    return (id: string) => {
+      const request = (latest.get(id) ?? 0) + 1;
+      latest.set(id, request);
+      return () => latest.get(id) === request;
+    };
   };
+  /** Taken by every read that writes an agent's conversation list: opening the agent and re-reading it. */
+  const listTicket = tickets();
+  /** Taken by every read of the history an agent's row quotes. */
+  const previewTicket = tickets();
   let modelsRequest = 0;
   // A slow check for a route that has since changed must not land on the new one, nor an earlier
   // network choice's answer after a later one's.
@@ -342,7 +361,6 @@ export function createStore(api: DuangApi) {
    * when the conversation moved on or the row now speaks for another one.
    */
   const previews = new Map<string, Preview & { updatedAt?: number }>();
-  const previewRequests = new Map<string, number>();
   let commandsFor: string | undefined;
   const key = (agentId: string, session: string) => `${agentId}/${session}`;
   /**
@@ -374,7 +392,7 @@ export function createStore(api: DuangApi) {
     const running = [...conversations.values()].filter(busy);
     view.busy = !!view.conversation && busy(view.conversation);
     view.running = group(running.map((c) => [c.agentId, c.session]));
-    view.doing = Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).word]));
+    view.doing = Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).activity]));
     // A conversation the runtime has never heard of exists only while it is on screen. Without a row
     // of its own, walking away from unsent text is the same as discarding it. The open conversation
     // holds its own draft, so read both here: this is the single view of what is unsent.
@@ -456,8 +474,7 @@ export function createStore(api: DuangApi) {
     const updatedAt = view.sessions[id]?.find((s) => s.session === session)?.updatedAt;
     const known = previews.get(id);
     if (known?.session === session && known.updatedAt === updatedAt && !known.error) return;
-    const request = (previewRequests.get(id) ?? 0) + 1;
-    previewRequests.set(id, request);
+    const current = previewTicket(id);
     let preview: Preview;
     try {
       const history = await api.readSession(id, session);
@@ -467,7 +484,7 @@ export function createStore(api: DuangApi) {
     }
     // Only the newest read lands. A conversation opened meanwhile, or a row that moved on to another,
     // needs nothing here: `publish` quotes the live one first and drops a quote that is not selected.
-    if (previewRequests.get(id) !== request) return;
+    if (!current()) return;
     previews.set(id, { ...preview, updatedAt });
     publish();
   }

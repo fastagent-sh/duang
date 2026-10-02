@@ -114,3 +114,14 @@ export function commandProxyEnv(proxy: string | undefined): Record<string, strin
   env.NO_PROXY = env.no_proxy = proxy && "localhost,127.0.0.1,::1";
   return env;
 }
+
+/**
+ * A request that got no answer, as the connection check reports it. `fetch failed` alone says nothing; the
+ * cause and the route are what a person can act on, and the cause's code (`ECONNREFUSED`) is its own field
+ * so the page can show it without reading the sentence.
+ */
+export function unreachable(host: string, proxy: string | undefined, error: unknown): { error: string; code?: string } {
+  const cause = (error as Error & { cause?: Error & { code?: string } }).cause;
+  const why = cause ? `${cause.code ? `${cause.code}: ` : ""}${cause.message}` : (error as Error).message;
+  return { error: `${host} ${proxy ? `via ${proxy}` : "directly"}: ${why}`, ...(cause?.code ? { code: cause.code } : {}) };
+}

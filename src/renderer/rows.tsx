@@ -7,6 +7,7 @@ import { Avatar } from "./avatar.tsx";
 import { faceOf } from "./face.ts";
 import { Badge, Button, Pill, type Tone } from "./ui.tsx";
 import type { AgentState, Preview } from "./store.ts";
+import type { Activity } from "./transcript.ts";
 
 const tones: Record<AgentState, Tone> = {
   ready: "accent",
@@ -101,8 +102,8 @@ export function Sidebar({
   states: Record<string, AgentState>;
   /** Running conversations per agent: the count is what makes `2 working` possible. */
   running: Record<string, string[]>;
-  /** What each working agent is doing, in the run status line's word: its avatar's face follows it. */
-  doing: Record<string, string>;
+  /** The kind of work each working agent is in: its avatar's face follows it. */
+  doing: Record<string, Activity>;
   /** Outcomes nobody has looked at yet, per agent. The reason to come back to this window. */
   unseen: Record<string, Record<string, "done" | "failed">>;
   /** What each row quotes: the newest output of the conversation it speaks for (`Preview`). */

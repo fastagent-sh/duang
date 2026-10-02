@@ -187,26 +187,34 @@ export function summarize(items: Work["items"]): string {
 /** The line a thinking block is on: its last one, which is what it is thinking now. */
 export const thinkingLine = (text: string): string => text.trim().split("\n").at(-1) ?? "";
 
+/** What kind of work a live run is in, for what follows it without reading its words (the avatar's face). */
+export type Activity = "thinking" | "tool" | "answering";
+
 /**
  * What a live run is doing right now, in words, from what the transcript already holds: the tool that
  * is running and its argument, the line the model is thinking, or the answer being written. Before the
- * runtime reports the run, it is still starting.
+ * runtime reports the run, it is still starting, which is thinking, as compacting is.
  */
-export function phase(items: Item[], status: SessionState["status"] | undefined): { word: string; detail?: string } {
-  if (status === "compacting") return { word: "compacting" };
-  if (status !== "running") return { word: "starting" };
+export function phase(
+  items: Item[],
+  status: SessionState["status"] | undefined,
+): { word: string; detail?: string; activity: Activity } {
+  if (status === "compacting") return { word: "compacting", activity: "thinking" };
+  if (status !== "running") return { word: "starting", activity: "thinking" };
   const running = items.filter((item): item is Tool => item.kind === "tool" && item.status === "running");
-  if (running.length > 1) return { word: `running ${running.length} tools` };
+  if (running.length > 1) return { word: `running ${running.length} tools`, activity: "tool" };
   const tool = running[0];
   if (tool) {
     const kind = WORK.find((candidate) => candidate.tools.includes(tool.name));
     const arg = firstArg(tool.args);
-    return kind ? { word: kind.doing, detail: arg } : { word: "running", detail: `${tool.name} ${arg}`.trim() };
+    return kind
+      ? { word: kind.doing, detail: arg, activity: "tool" }
+      : { word: "running", detail: `${tool.name} ${arg}`.trim(), activity: "tool" };
   }
   const last = items.at(-1);
-  if (last?.kind === "assistant" && last.open) return { word: "answering" };
+  if (last?.kind === "assistant" && last.open) return { word: "answering", activity: "answering" };
   const thought = last?.kind === "thinking" && last.open ? thinkingLine(last.text) : undefined;
-  return { word: "thinking", detail: thought };
+  return { word: "thinking", detail: thought, activity: "thinking" };
 }
 
 /**
@@ -403,7 +411,7 @@ function stopThinking(items: Item[], at: number): Item[] {
  * `SessionEvent` is narrowed by its `type`, so a field the contract renames fails to compile rather
  * than reading as `undefined` at run time. Types outside the union reach `default` untouched.
  */
-export type ReadEvent = KnownSessionEvent | ServingErrorEvent;
+type ReadEvent = KnownSessionEvent | ServingErrorEvent;
 export const known = (event: SessionEvent) => event as ReadEvent;
 
 /** One live event applied to the list. Returns a new list; unknown event types change nothing. */
