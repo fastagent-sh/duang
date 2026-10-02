@@ -10,7 +10,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretDown, CaretRight, Check, Copy, DotsThree, Globe, Key, MagnifyingGlass, X } from "@phosphor-icons/react";
 import type { DuangApi, ProviderRow } from "../preload/index.ts";
-import { keyStep, type SignIn, type Store, type View } from "./store.ts";
+import { keyStep, type SignIn } from "./settings-store.ts";
+import type { Store, View } from "./store.ts";
 import { PlanUsage } from "./header.tsx";
 import { Group, row } from "./settings.tsx";
 import { Badge, Button } from "./ui.tsx";
