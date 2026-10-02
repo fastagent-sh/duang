@@ -186,13 +186,15 @@ export function Sidebar({
           const filled = selected && !settingsOpen;
           const status = `status-${agent.id}`;
           const rename = () => setRenaming(agent.id);
+          // The same face while it is being renamed: the work it is doing has not stopped.
+          const face = faceOf({ state, doing: busy > 0 ? doing[agent.id] : undefined, outcomes: waiting, open: filled });
           return (
             // `roster-row` draws the hairline above each row but the first, and drops it beside a
             // filled row (index.css): a line running into a rounded fill reads as a cut.
             <div key={agent.id} className="roster-row" data-filled={filled || undefined}>
               {renaming === agent.id ? (
                 <div className="flex items-center gap-3 px-2 py-2">
-                  <Avatar id={agent.id} name={agent.name} colour={agent.colour} size={48} />
+                  <Avatar id={agent.id} name={agent.name} colour={agent.colour} size={48} face={face} />
                   <RenameField
                     label="Agent name"
                     value={agent.name}
@@ -239,7 +241,7 @@ export function Sidebar({
                     name={agent.name}
                     colour={agent.colour}
                     size={48}
-                    face={faceOf({ state, doing: busy > 0 ? doing[agent.id] : undefined, outcomes: waiting, open: filled })}
+                    face={face}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
