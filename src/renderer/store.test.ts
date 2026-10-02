@@ -107,6 +107,100 @@ function harness() {
   return { api, store, emit, end, step, closed, opens };
 }
 
+/** Every pane the store showed, in order, without repeats. */
+function panes(store: ReturnType<typeof harness>["store"]) {
+  const seen: string[] = [];
+  const stop = store.subscribe(() => {
+    const pane = store.getSnapshot().pane;
+    if (seen.at(-1) !== pane) seen.push(pane);
+  });
+  return { seen, stop };
+}
+
+test("an agent's existing conversation opens straight into it, never by way of the new-conversation page", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => listed("s1");
+  const history = deferred<ReturnType<typeof empty>>();
+  api.openSession = () => history.promise as never;
+  const { seen, stop } = panes(store);
+  const loading = store.load();
+  await new Promise((resolve) => setImmediate(resolve));
+  history.resolve({
+    ...empty(),
+    entries: { entries: [{ id: "a1", timestamp: 1, kind: "assistant", data: { text: "done" } }] } as never,
+  });
+  await loading;
+  stop();
+  assert.deepEqual(seen, ["no-agents", "settling", "transcript"], "the agent list, then the agent opening, then its conversation");
+  store.dispose();
+});
+
+test("a new conversation is the start page, and the model being changed is said as that, not as opening", async () => {
+  const { api, store } = harness();
+  await store.load();
+  assert.equal(store.getSnapshot().pane, "start", "an agent with no conversations starts a new one");
+  const change = deferred<SessionResult>();
+  api.setModel = () => change.promise;
+  const picking = store.pickModel("provider/other");
+  assert.equal(store.getSnapshot().blocked, "changing the model…");
+  assert.equal(store.getSnapshot().pane, "start", "the conversation stays on screen");
+  change.resolve({ ok: true } as SessionResult);
+  await picking;
+  assert.equal(store.getSnapshot().changingModel, undefined);
+  assert.equal(store.getSnapshot().blocked, undefined);
+  store.dispose();
+});
+
+test("a model change still running when the person goes to another agent does not hold that agent", async () => {
+  const { api, store } = harness();
+  await store.load();
+  const change = deferred<SessionResult>();
+  api.setModel = () => change.promise;
+  const picking = store.pickModel("provider/other");
+  await store.selectAgent("b");
+  assert.equal(store.getSnapshot().blocked, undefined, "b can be used while a's model is set up");
+  change.resolve({ ok: true } as SessionResult);
+  await picking;
+  await store.selectAgent("a");
+  assert.equal(store.getSnapshot().blocked, undefined, "and a is not left changing for good");
+  store.dispose();
+});
+
+test("an unreadable agent list is its own pane; a failure with no agents is an alert, not that pane", async () => {
+  const { api, store } = harness();
+  api.listAgents = async () => {
+    throw new Error("agents.json: Unexpected token");
+  };
+  await store.load();
+  assert.equal(store.getSnapshot().pane, "unreadable-registry");
+  assert.equal(store.getSnapshot().alert, "agents.json: Unexpected token");
+
+  api.listAgents = async () => [];
+  await store.load();
+  assert.equal(store.getSnapshot().pane, "no-agents");
+  api.addAgent = async () => {
+    throw new Error("ENOENT: no such file or directory, realpath '/gone'");
+  };
+  await store.addAgent();
+  assert.equal(store.getSnapshot().pane, "no-agents", "adding failed; the list itself was read fine");
+  assert.match(store.getSnapshot().alert ?? "", /realpath/);
+  store.dispose();
+});
+
+test("a setup problem is its own pane, and its prose is not repeated above it", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "boom" });
+  await store.load();
+  assert.equal(store.getSnapshot().pane, "broken");
+  assert.equal(store.getSnapshot().error, "boom", "the panel says it");
+  assert.equal(store.getSnapshot().alert, undefined);
+  api.openAgent = async () => ({ ok: false, code: "no_agent", message: "run fastagent init" });
+  await store.selectAgent("b");
+  assert.equal(store.getSnapshot().pane, "no-agent");
+  assert.equal(store.getSnapshot().alert, undefined);
+  store.dispose();
+});
+
 test("first model selection unlocks a new conversation; configured models come from the runtime", async () => {
   const { api, store } = harness();
   api.openAgent = async () => ({ ok: false, code: "missing_model", message: "missing model" });

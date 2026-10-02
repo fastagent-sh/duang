@@ -21,6 +21,8 @@ export default function App() {
   const agent = agents.find((row) => row.id === agentId);
   const agentState = agentId ? states[agentId] : undefined;
   const busy = view.busy;
+  // Navigation waits while the agent opens or its model is being set up, as the picker does.
+  const held = view.loading || (!!agentId && view.changingModel === agentId);
   // Where the content area is: the conversation, or duang's own settings. Presentation only, so it
   // is not remembered across launches. Settings reached from the model picker carries that with it:
   // its "Connect a provider" lands on the providers to add, and a connection made from there
@@ -62,7 +64,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
-      if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !view.loading) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "n" && agentState === "ready" && !held) {
         event.preventDefault();
         setSettings(false);
         newConversation();
@@ -80,7 +82,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newConversation, store, agentState, busy, view.loading, settings]);
+  }, [newConversation, store, agentState, busy, held, settings]);
 
   // The composer floats over the transcript, so the transcript has to know how tall it is: it grows
   // with the draft, and messages must end above it rather than behind it. The ref is stable, or
@@ -110,27 +112,12 @@ export default function App() {
       onProviders={() => setSettings({ fromPicker: true })}
     />
   );
-  // States whose own panel already explains the setup problem and offers the fix. Repeating the
-  // runtime's prose above them contradicts it: a plain project is told to run `fastagent init`
-  // while duang is offering to scaffold it.
-  const owned = agentState === "broken" || agentState === "missing_model" || agentState === "no_agent";
-  const error = c?.error ?? (owned ? undefined : view.error);
-
   const usage = c?.state?.usage;
   const pending = c?.state?.pending;
   const waiting = c ? queueView(c.waiting, pending?.steering ?? []) : [];
-  // What is about to be shown is still being read: a conversation the runtime has a record of, or an
-  // agent that has some, whose history has not arrived. The new-conversation page is a different screen,
-  // and showing it for the moment between would be a flash of the wrong one.
-  const settling =
-    !!agentId &&
-    agentState === "ready" &&
-    (c
-      ? c.loading && !!sessions[agentId]?.some((s) => s.session === c.session)
-      : view.loading && (sessions[agentId]?.length ?? 0) > 0);
+  const { pane, alert } = view;
   // A transcript fills the pane, and the header and composer float over it.
-  const reading =
-    !!agentId && agentState === "ready" && (settling || (!!c && (c.items.length > 0 || waiting.length > 0)));
+  const reading = pane === "settling" || pane === "transcript";
   // The plan that pays for this conversation: its own model's provider, which may differ from the
   // agent default.
   const provider = (c?.state?.model ?? view.model)?.split("/")[0];
@@ -218,7 +205,7 @@ export default function App() {
                   rows={sessionRows}
                   session={c?.session}
                   error={view.sessionsError[agent.id]}
-                  disabled={view.loading}
+                  disabled={held}
                   onToggle={setListOpen}
                   onOpen={(session) => void store.open(session)}
                   onNew={newConversation}
@@ -229,9 +216,9 @@ export default function App() {
                   onMenu={duang.menu}
                 />
               )}
-              {error ? (
+              {alert ? (
                 <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
-                  {error}{" "}
+                  {alert}{" "}
                   <button className="underline" onClick={() => void store.retry()}>
                     Retry
                   </button>
@@ -248,26 +235,24 @@ export default function App() {
                   </div>
                 )
               )}
-              {!agentId ? (
+              {pane === "unreadable-registry" ? (
                 // An unreadable registry is not an empty one: offering "add your first agent" would deny the
                 // failure and hand over an action that cannot succeed until the file is fixed.
-                view.error ? (
-                  <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
-                ) : (
-                  <NoAgents onAdd={() => void store.addAgent()} />
-                )
-              ) : agentState === "broken" ? (
+                <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+              ) : pane === "no-agents" ? (
+                <NoAgents onAdd={() => void store.addAgent()} />
+              ) : pane === "broken" ? (
                 <BrokenAgent
                   message={view.error ?? ""}
                   onRemove={remove}
                   onReveal={() => void store.reveal()}
                   onRetry={() => void store.retry()}
                 />
-              ) : agentState === "no_agent" ? (
+              ) : pane === "no-agent" ? (
                 <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
-              ) : settling ? (
+              ) : pane === "settling" ? (
                 <div className="flex-1 min-h-0" aria-busy="true" />
-              ) : !c || (c.items.length === 0 && waiting.length === 0) ? (
+              ) : pane === "start" || !c /* never both "transcript" and no conversation */ ? (
                 <NewConversation>{composer}</NewConversation>
               ) : (
                 // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a

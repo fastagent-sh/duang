@@ -33,7 +33,8 @@ only the local registry row, not the directory or history. Changing the model or
 is refused while one of its conversations is running, including a turn still opening the runtime.
 A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
 moves to the new runtime in main, so the transcript stays as it is (the same rows, the same scroll position)
-and only the chip and the effort track are read again.
+and only the chip and the effort track are read again. While the new model is set up, the composer says
+"changing the model…", not that a conversation is opening.
 The picker lists the models the open agent can run: pi's built-ins, the agent's own
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to providers with a
 configured credential: in the credential file, in an environment variable, or as a key written in
@@ -120,10 +121,12 @@ to the latest turn. A conversation is opened at its latest turn, or, when it was
 left, through Settings or another agent and back (for the window's life, not across launches; a card that was
 expanded comes back folded, so the place is the same distance from the top, not the same line). The place is held
 while the layout settles and until the person scrolls. While the history of a conversation the runtime already
-has is being read (and while an agent that has conversations opens), the pane is empty with the composer in
+has is being read (and while an agent opens, until it is known to have none), the pane is empty with the composer in
 place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment
 before the real one arrives. A view that was at the latest turn stays there while its
-content grows by itself, and choosing the conversation that is already open rebuilds nothing. A closed or failed subscription reports that it is no longer receiving updates
+content grows by itself, and choosing the conversation that is already open rebuilds nothing. A failure with
+no conversation to note it in (adding an agent when there are none) is said above the pane; only a registry
+that cannot be read shows the unreadable-registry page. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.
 
 Closing the window does not stop main-process work. Quitting with active local work warns that it

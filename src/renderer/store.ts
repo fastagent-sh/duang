@@ -15,6 +15,13 @@ import type {
 import { apply, claim, fromEntries, known, opensRun, phase, previewOf, queueView, resumeRunning, type Item, type UserItem } from "./transcript.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
+/**
+ * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
+ * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
+ * of the wrong screen.
+ * `start` is that page, for a new conversation or an agent with no model yet.
+ */
+export type Pane = "unreadable-registry" | "no-agents" | "broken" | "no-agent" | "settling" | "start" | "transcript";
 export type Connection = { checking: true } | { status: number; ms: number } | { error: string };
 type Shown<T extends LoginStep["type"]> = Omit<Extract<LoginStep, { type: T }>, "type">;
 /**
@@ -151,8 +158,14 @@ export interface View {
   /** Why an agent has no list, per agent. An empty list and a failed one are not the same. */
   sessionsError: Record<string, string>;
   model?: string;
+  /** The agent list, or the agent selected, is being opened. */
   loading: boolean;
+  /** The agent whose model the picker is setting up; its conversation stays on screen meanwhile. */
+  changingModel?: string;
+  /** About the open agent, or a failure with no conversation to note it in. */
   error?: string;
+  /** Why duang's own agent list could not be read. Not an empty list: the pane says so. */
+  registryError?: string;
   /** The model picker's contents: undefined while loading, so the picker can say so. */
   models?: Models;
   modelsError?: string;
@@ -178,6 +191,10 @@ export interface View {
   conversation?: Conversation;
   /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
   busy: boolean;
+  /** What the main pane shows, derived once from everything above (`paneOf`). */
+  pane: Pane;
+  /** The failure said above the pane, with its Retry; none when the pane itself explains it. */
+  alert?: string;
   /**
    * Why the composer cannot send, in the words the person should read, or undefined when it can.
    * One rule, derived once: the placeholder shows it and `send` treats reaching it as a bug.
@@ -221,11 +238,41 @@ const message = (error: unknown): string =>
     "",
   );
 
+/**
+ * The pane, the alert above it and why the composer cannot send are one decision about the same facts,
+ * made here and nowhere else: the screens read the answer.
+ */
+function paneOf(view: View): Pane {
+  const { agentId, conversation: c } = view;
+  if (!agentId) return view.registryError ? "unreadable-registry" : "no-agents";
+  const state = view.states[agentId];
+  if (state === "broken") return "broken";
+  if (state === "no_agent") return "no-agent";
+  // Not known yet: the agent is still opening (at launch, or the first time it is chosen), and may well
+  // have conversations to show.
+  if (state === undefined) return "settling";
+  if (state !== "ready") return "start";
+  const sessions = view.sessions[agentId] ?? [];
+  // A ready agent with no conversation open is about to open one: its newest, if it has any.
+  if (c ? c.loading && sessions.some((s) => s.session === c.session) : sessions.length > 0) return "settling";
+  const shown = c && (c.items.length > 0 || queueView(c.waiting, c.state?.pending.steering ?? []).length > 0);
+  return shown ? "transcript" : "start";
+}
+function alertOf(view: View): string | undefined {
+  const c = view.conversation;
+  if (c?.error) return c.error;
+  if (!view.agentId) return view.registryError ?? view.error;
+  // A setup problem's own panel explains it and offers the fix. The runtime's prose above it would
+  // contradict that: a plain project is told to run `fastagent init` while duang offers to scaffold it.
+  const state = view.states[view.agentId];
+  return state === "broken" || state === "missing_model" || state === "no_agent" ? undefined : view.error;
+}
 /** In the order the person should hear it: the nearest reason first, the agent's setup after. */
 function blockedBy(view: View): string | undefined {
   const c = view.conversation;
   const state = view.agentId ? view.states[view.agentId] : undefined;
   if (view.loading || c?.loading) return "opening conversation…";
+  if (view.agentId && view.changingModel === view.agentId) return "changing the model…";
   if (c?.error || c?.ended) return "reconnect before sending";
   if (state === "broken") return "this agent is broken";
   if (state === "no_agent") return "create an agent here first";
@@ -243,6 +290,7 @@ export function createStore(api: DuangApi) {
     sessionsError: {},
     loading: false,
     busy: false,
+    pane: "no-agents",
     commands: [],
     avatar: "gaze",
     running: {},
@@ -344,6 +392,8 @@ export function createStore(api: DuangApi) {
       persisted = serialized;
       writeStored(DRAFTS_KEY, serialized);
     }
+    view.pane = paneOf(view);
+    view.alert = alertOf(view);
     view.blocked = blockedBy(view);
     for (const listener of listeners) listener();
   };
@@ -700,7 +750,7 @@ export function createStore(api: DuangApi) {
 
   async function load() {
     listen();
-    publish({ loading: true, error: undefined });
+    publish({ loading: true, error: undefined, registryError: undefined });
     // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
     // the default style and then redrawn. Its one failure is an unreadable settings file, which leaves the
     // default: main reports it when it starts, and the Settings page when it is opened.
@@ -719,7 +769,7 @@ export function createStore(api: DuangApi) {
       for (const row of agents) if (row !== start) void listSessions(row.id);
       if (start) await selectAgent(start.id);
     } catch (error) {
-      publish({ loading: false, error: message(error) });
+      publish({ loading: false, registryError: message(error) });
     }
   }
 
@@ -991,27 +1041,30 @@ export function createStore(api: DuangApi) {
       const c = view.conversation;
       if (!id) return;
       const request = navigation;
-      publish({ loading: true });
+      // Cleared however the change ends, including after the person went to another agent.
+      const settle = () => {
+        if (view.changingModel === id) publish({ changingModel: undefined });
+      };
+      publish({ changingModel: id });
       try {
         const result = await api.setModel(id, model, c?.session);
         if (!result.ok) {
-          publish({ loading: false });
+          settle();
           // The model did not change, so nothing ran: this is a refusal, not a failure.
           return refusal(result.error.message, c);
         }
         publish({ agents: await api.listAgents() });
+        settle();
         if (request !== navigation) return;
-        publish({ loading: false, model, error: undefined, states: { ...view.states, [id]: "ready" } });
+        publish({ model, error: undefined, states: { ...view.states, [id]: "ready" } });
         // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
         // The runtime announced the change before that subscription listened again, so the model and
         // levels are read, not waited for.
         if (c) await readSettings(c);
         else await selectAgent(id);
       } catch (error) {
-        if (request === navigation) {
-          publish({ loading: false });
-          note(error, c);
-        }
+        settle();
+        if (request === navigation) note(error, c);
       }
     },
     /**
