@@ -20,21 +20,15 @@ export type { Route } from "../main/proxy.ts";
 export type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
 import type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/providers.ts";
 import type { Route } from "../main/proxy.ts";
+import type { Frame } from "../main/follow.ts";
 import type { ProviderUsage } from "../main/usage.ts";
 
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
   | { ok: false; code: "missing_model" | "no_agent" | "failed"; message: string };
 
-/**
- * One channel, two kinds of news: what the runtime said, and the fact that main ended this
- * subscription. The second is duang's own lifecycle, not a session event, so it travels as itself
- * rather than as a synthetic failure.
- */
-export type SessionFrame = { agentId: string; session: string; subscription: string } & (
-  | { event: SessionEvent; ended?: never }
-  | { event?: never; ended: { reason: string; expected: boolean } }
-);
+/** One channel for every subscription of this window: each frame says which one it belongs to. */
+export type SessionFrame = Frame<SessionEvent>;
 
 const api = {
   listAgents: (): Promise<AgentRow[]> => ipcRenderer.invoke("agents:list"),

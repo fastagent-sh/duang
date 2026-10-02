@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent, type WebContents } from "electron";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -23,7 +23,7 @@ import { forgetUsage, providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
-import { follow } from "./follow.ts";
+import { subscriptions, type Listener } from "./follow.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
@@ -111,7 +111,7 @@ function createWindow(): BrowserWindow {
   // Closing or reloading the window (⌘R, a renderer crash) leaves nobody to answer its sign-in, so it
   // ends, which also closes the provider's callback server; the webContents id survives a reload.
   const release = () => {
-    stopWindowStreams(senderId);
+    sessions.closeWindow(senderId);
     if (signIn?.senderId === senderId) signIn.flow.cancel();
   };
   win.webContents.on("destroyed", release);
@@ -139,40 +139,16 @@ function requireSession(session: string): void {
 /** The one sign-in in progress, and the window it belongs to. */
 let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
 
-type Stream = {
-  senderId: number;
-  agentId: string;
-  close: () => void;
-  end: (reason: string, expected: boolean) => void;
-  /** Listens to the session again on the agent's current runtime, after the runtime was replaced. */
-  rebind: () => Promise<void>;
-};
-// The renderer retains background subscriptions only while their turns are running.
-const streams = new Map<string, Stream>();
-function stopStream(key: string): void {
-  const stream = streams.get(key);
-  streams.delete(key);
-  stream?.close();
-}
-function stopWindowStreams(senderId: number): void {
-  for (const [key, stream] of streams) if (stream.senderId === senderId) stopStream(key);
-}
-/**
- * A model change replaces the agent's runtime, and a subscription is to a conversation, not to a runtime:
- * each of the agent's subscriptions listens again on the new one under the same id, and the window sees
- * nothing. One that cannot ends with the reason, like any other that stops (`follow` reports it).
- */
-async function rebindAgentStreams(agentId: string): Promise<void> {
-  await Promise.all([...streams.values()].filter((stream) => stream.agentId === agentId).map((stream) => stream.rebind()));
-}
-/** Cutting an agent's subscriptions is invisible to the renderer unless each one says why it ended. */
-function stopAgentStreams(agentId: string, reason: string): void {
-  for (const [key, stream] of streams)
-    if (stream.agentId === agentId) {
-      stream.end(reason, true);
-      stopStream(key);
-    }
-}
+const sessions = subscriptions(
+  async (agentId: string, session: string) => (await openAgent(await requireAgent(agentId))).control.sessions.get(session),
+);
+/** A window as its subscriptions post to it: a window that has gone hears nothing. */
+const listener = (sender: WebContents): Listener<SessionEvent> => ({
+  id: sender.id,
+  post: (frame: SessionFrame) => {
+    if (!sender.isDestroyed()) sender.send("session:event", frame);
+  },
+});
 
 function register(): void {
   ipcMain.handle("agents:list", () => listAgents());
@@ -201,7 +177,7 @@ function register(): void {
     if (!(await modelsFor(row.dir)).specs.includes(model))
       return refuse("model_unavailable", `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
-    if (result.ok) await rebindAgentStreams(id);
+    if (result.ok) await sessions.rebindAgent(id);
     return result;
   });
   ipcMain.handle("session:state", async (_e, id: string, session: string) => {
@@ -218,7 +194,7 @@ function register(): void {
   });
   ipcMain.handle("agent:remove", async (_e, id: string) => {
     const result = await removeAgent(id);
-    if (result.ok) stopAgentStreams(id, "The agent was removed");
+    if (result.ok) sessions.endAgent(id, "The agent was removed");
     return result;
   });
   ipcMain.handle("agent:rename", async (_e, id: string, name: string) => {
@@ -338,7 +314,7 @@ function register(): void {
     // A refused delete must leave the live subscription intact.
     return control.sessions.get(session).delete();
   });
-  ipcMain.handle("session:close", (e, subscription: string) => stopStream(`${e.sender.id}/${subscription}`));
+  ipcMain.handle("session:close", (e, subscription: string) => sessions.close(e.sender.id, subscription));
   // History without a subscription: what a roster row quotes from a conversation nobody has open.
   ipcMain.handle("session:entries", async (_e, id: string, session: string) => {
     requireSession(session);
@@ -346,40 +322,8 @@ function register(): void {
   });
   ipcMain.handle("session:open", async (e, id: string, session: string, subscription: string) => {
     requireSession(session);
-    const key = `${e.sender.id}/${subscription}`;
-    stopStream(key);
-    const post = (frame: Omit<SessionFrame, "agentId" | "session" | "subscription">) => {
-      if (!e.sender.isDestroyed() && streams.get(key) === slot) {
-        e.sender.send("session:event", { agentId: id, session, subscription, ...frame });
-      }
-    };
-    const following = follow(
-      async () => {
-        const bound = (await openAgent(await requireAgent(id))).control.sessions.get(session);
-        if (streams.get(key) !== slot) throw new Error("Conversation open was superseded");
-        return bound;
-      },
-      (event: SessionEvent) => post({ event }),
-      (reason, expected) => {
-        post({ ended: { reason, expected } });
-        if (streams.get(key) === slot) streams.delete(key);
-      },
-    );
-    const slot: Stream = {
-      senderId: e.sender.id,
-      agentId: id,
-      close: following.close,
-      end: (reason, expected) => post({ ended: { reason, expected } }),
-      rebind: following.rebind,
-    };
-    streams.set(key, slot);
-    try {
-      const bound = await following.start();
-      return { entries: await bound.entries(), state: await bound.state() };
-    } catch (error) {
-      if (streams.get(key) === slot) stopStream(key);
-      throw error;
-    }
+    const bound = await sessions.open(listener(e.sender), id, session, subscription);
+    return { entries: await bound.entries(), state: await bound.state() };
   });
   ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
     requireSession(session);
