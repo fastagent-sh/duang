@@ -21,15 +21,14 @@ import { authPath, modelsFor, refreshModels } from "./credentials.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
 import { forgetUsage, providerUsage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
-import { avatar, DEFAULTS, network, readSettings, writeSettings } from "./settings.ts";
+import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { follow } from "./follow.ts";
 import { send } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
 
-const settingsFile = () => join(app.getPath("userData"), "settings.json");
-let settingsChange: Promise<unknown> = Promise.resolve();
+const settings = new SettingsFile(join(app.getPath("userData"), "settings.json"));
 
 /**
  * Settings asked for with no window open. A new window's listener registers after React's first
@@ -231,40 +230,20 @@ function register(): void {
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
-  // Read on every open of the page: a file fixed by hand shows up without a restart, and a broken one
-  // is reported there rather than shown as the defaults.
-  ipcMain.handle("settings:get", async () => {
-    const { network, avatar } = await readSettings(settingsFile());
-    return { network, avatar, route: await describeRoute() };
-  });
-  // The roster's one setting, read from the file alone: it must not wait on the proxy route.
-  ipcMain.handle("settings:avatar", async () => (await readSettings(settingsFile())).avatar);
-  ipcMain.handle("settings:setAvatar", (_e, value: unknown) => {
-    // In the same queue as the network: both rewrite the one file, and neither may lose the other's change.
-    const run = settingsChange.then(async () => {
-      const next = avatar(value);
-      const settings = await readSettings(settingsFile());
-      await writeSettings(settingsFile(), { ...settings, avatar: next });
-    });
-    settingsChange = run.catch(() => {});
-    return run;
-  });
+  // Read on every open of the page, and at start for the roster: a file fixed by hand shows up without a
+  // restart, and a broken one is reported rather than shown as the defaults. The route is its own call:
+  // it waits on Chromium's answer (a PAC script can be slow), which the roster must not.
+  ipcMain.handle("settings:get", () => settings.read());
+  ipcMain.handle("network:route", () => describeRoute());
+  ipcMain.handle("settings:setAvatar", (_e, value: unknown) => settings.change({ avatar: avatar(value) }));
   ipcMain.handle("settings:setNetwork", (_e, value: unknown) => {
-    // One change at a time: two quick choices must end with the file, Chromium's configuration and
-    // the answer all saying the second one, not whichever await finished last.
-    const run = settingsChange.then(async () => {
-      const next = network(value);
-      // A file that cannot be read is not overwritten from here: it may hold what the person meant.
-      const settings = await readSettings(settingsFile());
-      await writeSettings(settingsFile(), { ...settings, network: next });
+    const next = network(value);
+    return settings.change({ network: next }, async () => {
       await applyNetwork(next);
       return describeRoute();
     });
-    // The caller gets the failure; the next change still runs.
-    settingsChange = run.catch(() => {});
-    return run;
   });
-  ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settingsFile()));
+  ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settings.path));
   ipcMain.handle("app:settingsPending", () => {
     const pending = settingsPending;
     settingsPending = false;
@@ -422,9 +401,9 @@ function register(): void {
 void app
   .whenReady()
   .then(async () => {
-    let settings = DEFAULTS;
+    let saved = DEFAULTS;
     try {
-      settings = await readSettings(settingsFile());
+      saved = await settings.read();
     } catch (error) {
       // The network still needs a route, and guessing someone's manual proxy is worse than the
       // system's. Said out loud, and again on the Settings page until the file is fixed.
@@ -433,7 +412,7 @@ void app
         `${(error as Error).message}\n\nThe network follows the system proxy until the file is fixed or removed.`,
       );
     }
-    await applyNetwork(settings.network);
+    await applyNetwork(saved.network);
     setApplicationMenu();
     register();
     createWindow();

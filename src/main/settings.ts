@@ -3,9 +3,8 @@
  * bounds: a manual proxy someone typed must not silently turn into "automatic", so a file that
  * cannot be read or parsed is an error, and only a missing file is a first run.
  */
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { writeJsonAtomic } from "./json-file.ts";
 
 export type Network = { mode: "automatic" } | { mode: "manual"; url: string } | { mode: "off" };
 /** How agents' avatars are drawn (the renderer's `avatar.tsx`); the first is the default. */
@@ -48,7 +47,7 @@ export function avatar(value: unknown): AvatarStyle {
   throw new Error(`Unknown avatar style: ${JSON.stringify(value)}`);
 }
 
-export async function readSettings(file: string): Promise<Settings> {
+async function readSettings(file: string): Promise<Settings> {
   let text: string;
   try {
     text = await readFile(file, "utf8");
@@ -69,14 +68,31 @@ export async function readSettings(file: string): Promise<Settings> {
   }
 }
 
-/** Whole file or none of it, the same way the agent registry is written. */
-export async function writeSettings(file: string, settings: Settings): Promise<void> {
-  await mkdir(dirname(file), { recursive: true });
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, JSON.stringify(settings, null, 2), { flag: "wx", mode: 0o600 });
-    await rename(temporary, file);
-  } finally {
-    await rm(temporary, { force: true });
+/** The settings file, and the one queue every change to it goes through. */
+export class SettingsFile {
+  private pending: Promise<unknown> = Promise.resolve();
+  readonly path: string;
+  constructor(path: string) {
+    this.path = path;
+  }
+
+  read(): Promise<Settings> {
+    return readSettings(this.path);
+  }
+
+  /**
+   * One change at a time, read, merged and written whole: the network and the avatar rewrite the same file,
+   * and neither may lose the other's change. A file that cannot be read is not overwritten, since it may
+   * hold what the person meant. `then` runs in the same turn of the queue, so what it applies is what was
+   * written: two quick network choices end with the file, Chromium and the answer all on the second.
+   */
+  change<T>(patch: Partial<Settings>, then?: () => Promise<T>): Promise<T | undefined> {
+    const run = this.pending.then(async () => {
+      await writeJsonAtomic(this.path, { ...(await this.read()), ...patch });
+      return then?.();
+    });
+    // The caller gets the failure; the next change still runs.
+    this.pending = run.catch(() => {});
+    return run;
   }
 }

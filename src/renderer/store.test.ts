@@ -44,9 +44,9 @@ function harness() {
     listModels: async () => ({ specs: ["provider/model"] }),
     refreshModels: async () => ({ specs: ["provider/model"] }),
     providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
-    getSettings: async () => ({ network: { mode: "automatic" }, avatar: "gaze", route: { source: "system" } }),
+    getSettings: async () => ({ network: { mode: "automatic" }, avatar: "gaze" }),
+    getRoute: async () => ({ source: "system" }),
     setNetwork: async () => ({ source: "system" }),
-    getAvatar: async () => "gaze",
     setAvatar: async () => {},
     revealSettings: async () => {},
     testNetwork: async () => ({ status: 200, ms: 1, route: { source: "system" } }),
@@ -461,7 +461,7 @@ test("a refused model change or removal is shown, and changes nothing", async ()
 test("the roster is first drawn in the avatar style already chosen, not the default and then that", async () => {
   const { api, store } = harness();
   const style = deferred<"moods">();
-  api.getAvatar = () => style.promise;
+  api.getSettings = async () => ({ network: { mode: "automatic" }, avatar: await style.promise });
   const drawn: string[] = [];
   const stop = store.subscribe(() => {
     const view = store.getSnapshot();
@@ -479,7 +479,7 @@ test("the roster is first drawn in the avatar style already chosen, not the defa
 
 test("an unreadable settings file leaves the default style and does not stop the roster", async () => {
   const { api, store } = harness();
-  api.getAvatar = async () => {
+  api.getSettings = async () => {
     throw new Error("settings.json: Unexpected token");
   };
   await store.load();
@@ -1220,7 +1220,7 @@ test("settings are read fresh each time, and only the newest change and check la
   const freshCheck = deferred<Checked>();
   const checks = [staleCheck.promise, freshCheck.promise];
   api.testNetwork = () => checks.shift()!;
-  api.getSettings = async () => ({ network: { mode: "automatic" }, avatar: "gaze", route: { source: "system" } });
+  api.getSettings = async () => ({ network: { mode: "automatic" }, avatar: "gaze" });
   assert.deepEqual((await store.loadSettings())?.network, { mode: "automatic" });
   assert.equal(store.getSnapshot().settingsError, undefined);
   assert.deepEqual(store.getSnapshot().connection, { checking: true });
