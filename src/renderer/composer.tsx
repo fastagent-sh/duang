@@ -302,7 +302,8 @@ export function Composer({
       : undefined;
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";
-  const modelDisabled = view.loading || !!c?.loading || state === "broken" || state === "no_agent";
+  const modelDisabled =
+    view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent";
   /** Why the model cannot be changed right now, or false when it can. */
   const modelReason =
     (!agentId && "Select an agent first") ||
