@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
 import type { DuangApi, LoginOutcome, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
-import { createStore, keyStep } from "./store.ts";
+import { keyStep } from "./settings-store.ts";
+import { createStore } from "./store.ts";
 import { queueView } from "./transcript.ts";
 
 function deferred<T>() {
