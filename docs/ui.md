@@ -2,8 +2,7 @@
 
 The visual system shipped with the local Week 1 client, not a specification for every future
 surface. [design.md](design.md) owns the new product paths and [interaction.md](interaction.md)
-owns behavior; when they differ from a future-screen sketch here, follow those documents. The
-[Chinese translation](ui.zh.md) is an archived Week 1 snapshot, not a maintained roadmap.
+owns behavior; when they differ from a future-screen sketch here, follow those documents.
 
 ## 0. What the product actually asks of the interface
 
