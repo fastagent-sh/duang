@@ -107,7 +107,11 @@ history; the client does not save a second transcript. A conversation can be ren
 with destructive deletion confirmed. The current local view keeps unsent text with its conversation
 across navigation and application restart. A send rejected before admission remains a draft; a
 failed run may already have performed tool work. Stop does not roll back completed work or promise
-to cancel a non-cancellable tool.
+to cancel a non-cancellable tool. Stop pressed while a send is still on its way to the runtime keeps it
+from starting a run, and the message returns to the draft without a note; Stop pressed as a run ends
+says nothing, since the run's own ending is already in the transcript. FastAgent itself accepts an abort
+that arrives in the first moments of a run without stopping its first model request
+([fastagent#691](https://github.com/fastagent-sh/fastagent/issues/691)), so that request still runs to its end.
 
 The composer is one row: an attach button, the field with the model chip inside its right end, and
 one round button that is the next action: voice while the draft is empty (whitespace is empty),
