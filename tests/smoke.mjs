@@ -662,8 +662,9 @@ if (!process.versions.electron) {
       // fuller would take the slot, and its label would change with it: the plan's 7d is at 18% here, above the
       // context's 10%, and must still not be what the slot says. The plan waits in the hover table.
       await until("/context[\\s\\S]*10%/.test(document.querySelector('header').innerText)", "the header shows the conversation's context");
-      const header = await evaluate("document.querySelector('header').innerText");
-      assert.ok(!header.includes("7d") && !header.includes("5h"), "the plan's windows wait for a hover");
+      // The table is hidden by opacity (so a keyboard can reach a link in it), which innerText does not see.
+      const table = "getComputedStyle(document.querySelector('header [aria-label=Usage] .popover').parentElement).opacity";
+      assert.equal(await evaluate(table), "0", "the plan's windows wait for a hover");
       assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%[\s\S]*7d[\s\S]*18%/, "the hover table lists every window");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
 
