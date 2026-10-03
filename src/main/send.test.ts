@@ -105,3 +105,39 @@ test("a conversation recorded on a retired provider is refused, not run there", 
   assert.deepEqual(calls, []);
   assert.equal(!result.ok && result.error.code, "model_retired");
 });
+
+test("quitting stops every send in flight and waits for each run to settle, but not past its limit", async () => {
+  const held = sends();
+  assert.equal(held.busy(), false);
+  // Two conversations with runs going; each settles when it is aborted.
+  const settle = new Map<string, () => void>();
+  const run = (key: string) =>
+    held.hold(key, () => new Promise<SessionResult>((resolve) => settle.set(key, () => resolve(refusal("aborted")))));
+  const a = run("agent/a");
+  const b = run("agent/b");
+  assert.equal(held.busy(), true);
+  const aborted: string[] = [];
+  const settled = await held.stopAll(async (key) => {
+    aborted.push(key);
+    setTimeout(() => settle.get(key)!(), 5);
+    return ok;
+  }, 1000);
+  assert.equal(settled, true, "both runs settled before the limit");
+  assert.deepEqual(aborted.sort(), ["agent/a", "agent/b"]);
+  await Promise.all([a, b]);
+  assert.equal(held.busy(), false);
+
+  // A run that does not settle (a tool that cannot be cancelled), and one whose abort fails: neither keeps
+  // quitting waiting past the limit.
+  void run("agent/stuck");
+  const broken = run("agent/broken");
+  const started = Date.now();
+  const late = await held.stopAll(async (key) => {
+    if (key === "agent/broken") throw new Error("the agent was removed");
+    return ok;
+  }, 50);
+  assert.equal(late, false);
+  assert.ok(Date.now() - started < 1000);
+  settle.get("agent/broken")!();
+  await broken;
+});

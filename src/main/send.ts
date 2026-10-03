@@ -47,28 +47,51 @@ export async function send(agent: Agent, session: Session, text: string, stopped
  * Stop is recorded here and the send gives up instead of starting a run nobody wants.
  */
 export function sends() {
-  const held = new Map<string, Set<{ stopped: boolean }>>();
+  type Ticket = { stopped: boolean; finished: Promise<unknown> };
+  const held = new Map<string, Set<Ticket>>();
+  const stop = async (key: string, abort: () => Promise<SessionResult>): Promise<SessionResult> => {
+    const tickets = held.get(key);
+    for (const ticket of tickets ?? []) ticket.stopped = true;
+    const result = await abort();
+    return !result.ok && result.error.code === NO_ACTIVE_RUN_CODE && tickets?.size ? { ok: true } : result;
+  };
   return {
-    async hold<T>(key: string, run: (stopped: () => boolean) => Promise<T>): Promise<T> {
-      const ticket = { stopped: false };
+    hold<T>(key: string, run: (stopped: () => boolean) => Promise<T>): Promise<T> {
+      const ticket: Ticket = { stopped: false, finished: Promise.resolve() };
       const tickets = held.get(key) ?? new Set();
       held.set(key, tickets.add(ticket));
-      try {
-        return await run(() => ticket.stopped);
-      } finally {
+      const finished = run(() => ticket.stopped).finally(() => {
         tickets.delete(ticket);
         if (tickets.size === 0 && held.get(key) === tickets) held.delete(key);
+      });
+      ticket.finished = finished.catch(() => {});
+      return finished;
+    },
+    /** Whether any send is in main's hands: a turn that quitting would cut. */
+    busy: () => held.size > 0,
+    /**
+     * Quitting: every conversation with a send in flight is stopped as Stop would, and this waits for those
+     * sends to return, which is when each run has settled and written how it ended, or until `within` ms pass
+     * (a tool that cannot be cancelled may hold its run). Says whether all of them returned in time.
+     */
+    async stopAll(abort: (key: string) => Promise<SessionResult>, within: number): Promise<boolean> {
+      const finished = [...held.values()].flatMap((tickets) => [...tickets].map((ticket) => ticket.finished));
+      // One conversation that cannot be stopped must not keep the app from quitting; it is said, not hidden.
+      const stops = await Promise.allSettled([...held.keys()].map(async (key) => [key, await stop(key, () => abort(key))] as const));
+      for (const stopped of stops) {
+        if (stopped.status === "rejected") console.error("duang: a run could not be stopped before quitting:", stopped.reason);
+        else if (!stopped.value[1].ok) console.error(`duang: ${stopped.value[0]} could not be stopped before quitting:`, stopped.value[1].error.message);
       }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), within)));
+      const done = await Promise.race([Promise.all(finished).then(() => true), timeout]);
+      clearTimeout(timer);
+      return done;
     },
     /**
      * Stop for one conversation: every send of `key` still held is marked first, then the run is aborted. No
      * run yet, with a send on its way to start one, is a stop that worked: that send now gives up.
      */
-    async stop(key: string, abort: () => Promise<SessionResult>): Promise<SessionResult> {
-      const tickets = held.get(key);
-      for (const ticket of tickets ?? []) ticket.stopped = true;
-      const result = await abort();
-      return !result.ok && result.error.code === NO_ACTIVE_RUN_CODE && tickets?.size ? { ok: true } : result;
-    },
+    stop,
   };
 }
