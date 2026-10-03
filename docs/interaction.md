@@ -51,8 +51,10 @@ conversation's settings), the picker says that instead, and a model with one lev
 setting. The level is set on the
 open conversation only, and is refused while it runs; the arrow keys move along the track
 and write nothing, and Enter, Space or a click choose. A list of more than 60 models says how many it left out. The picker shows no credential path and
-links to no provider page; with nothing connected its one offer is **Connect a provider**, which
-returns to the picker after connecting. Configuration is not a provider probe.
+links to no provider page; with no model to list its one offer is **Connect a provider**, which
+returns to the picker after connecting. It says no model is available rather than that nothing is
+connected: a ChatGPT sign-in whose account model list could not be read when it signed in lists none
+until it is reconnected, and Settings shows it connected. Configuration is not a provider probe.
 The list is what pi's bundled catalog knows, so a model released since the installed pi is missing until
 the catalog is refreshed. The refresh button at the end of the search row asks for that, only when pressed:
 pi.dev is asked for the providers the agent's credentials authenticate, over the same proxy route as a model
@@ -189,7 +191,7 @@ sign-in and API keys for pi's built-in providers, disconnecting, and the picker'
 ([#83](https://github.com/fastagent-sh/duang/issues/83)).
 
 **Model picker.** The list is already the open agent's, custom endpoints included (#59). With
-nothing connected it says so and offers **Connect a provider**; otherwise it ends with **Manage
+no model to list it says so (naming a ChatGPT sign-in to reconnect as one cause) and offers **Connect a provider**; otherwise it ends with **Manage
 providers…**. Both open Settings. Returning from a successful connection reopens the picker without
 choosing a model for the person.
 
