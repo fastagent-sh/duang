@@ -42,7 +42,11 @@ export type Item = At &
    * a quiet line or as a failure — stopping a run is not an error, and colouring it like one was
    * the transcript telling the person they broke something.
    */
-  | { kind: "note"; tone: "info" | "warning" | "error"; text: string });
+  /**
+   * `resend`: this note is the failure of a run that had taken a message, the one Retry sends again, and
+   * whether that run had started a tool (sending it again may repeat that work).
+   */
+  | { kind: "note"; tone: "info" | "warning" | "error"; text: string; resend?: { text: string; toolsRan: boolean } });
 
 /**
  * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of

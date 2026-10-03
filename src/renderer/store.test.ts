@@ -1678,3 +1678,110 @@ test("Stop before the run starts returns the message to the draft quietly; Stop 
   assert.deepEqual(c.items, [], "neither Stop is reported as a failure");
   store.dispose();
 });
+
+test("a turn that failed after taking its message can be sent again; a failure before it, or a stop, cannot", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const texts: string[] = [];
+  let answer = deferred<SessionResult>();
+  api.send = (_id, _session, text) => {
+    texts.push(text);
+    return answer.promise;
+  };
+  const failedRun = { ok: false as const, error: { code: "run_failed", message: "Connection error.", retryable: false } };
+
+  store.setDraft("summarise it");
+  let sending = store.send();
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u1", text: "summarise it" });
+  assert.equal(store.getSnapshot().resend, undefined, "not while it runs");
+  emit(c, "run_settled", { status: "failed", error: { message: "Connection error.", retryable: false } });
+  answer.resolve(failedRun);
+  await sending;
+  assert.deepEqual(store.getSnapshot().resend, { text: "summarise it", toolsRan: false });
+
+  store.setDraft("half-typed");
+  answer = deferred<SessionResult>();
+  sending = store.resend();
+  assert.equal(store.getSnapshot().resend, undefined, "one retry at a time");
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u2", text: "summarise it" });
+  emit(c, "run_settled", { status: "completed" });
+  answer.resolve({ ok: true });
+  await sending;
+  assert.deepEqual(texts, ["summarise it", "summarise it"]);
+  assert.equal(c.draft, "half-typed", "the draft is not Retry's");
+  assert.deepEqual(
+    c.items.map((item) => item.kind),
+    ["user", "note", "user"],
+    "the failure stays where it happened, and the message is sent as a new turn",
+  );
+  assert.equal(store.getSnapshot().resend, undefined, "a turn that completed has nothing to retry");
+
+  // Refused before the run took the message (no credential): the text went back to the draft instead.
+  store.setDraft("no key");
+  answer = deferred<SessionResult>();
+  sending = store.send();
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "failed", error: { message: "No API key found", retryable: false } });
+  answer.resolve({ ok: false, error: { code: "run_failed", message: "No API key found", retryable: false } });
+  await sending;
+  assert.equal(store.getSnapshot().resend, undefined);
+  assert.equal(c.draft, "no key");
+
+  // A run the person stopped is not offered again.
+  store.setDraft("");
+  answer = deferred<SessionResult>();
+  store.setDraft("stop me");
+  sending = store.send();
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u3", text: "stop me" });
+  emit(c, "run_settled", { status: "aborted" });
+  answer.resolve({ ok: false, error: { code: "aborted", message: "aborted", retryable: false } });
+  await sending;
+  assert.equal(store.getSnapshot().resend, undefined);
+  store.dispose();
+});
+
+test("Retry sends the message a steered run was answering, and knows the tools its opening message started", async () => {
+  const { store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u1", text: "fix the build" });
+  emit(c, "tool_started", { id: "t1", name: "bash", args: {} });
+  emit(c, "tool_finished", { id: "t1", isError: false, content: "ok" });
+  emit(c, "user_message", { entryId: "u2", text: "and push it" });
+  emit(c, "run_settled", { status: "failed", error: { message: "Connection error.", retryable: false } });
+  assert.deepEqual(store.getSnapshot().resend, { text: "and push it", toolsRan: true });
+  store.dispose();
+});
+
+test("a run this window joined midway is not offered again: where it began, and whether it took a message, are unknown", async () => {
+  for (const history of [
+    // Reopened after the run used a tool and was steered.
+    [
+      { id: "u1", timestamp: 1, kind: "user", data: { text: "fix the build" } },
+      { id: "a1", parentId: "u1", timestamp: 2, kind: "assistant", data: { text: "", toolCalls: [{ id: "t1", name: "bash" }] } },
+      { id: "r1", parentId: "a1", timestamp: 3, kind: "tool", data: { toolCallId: "t1", toolName: "bash", text: "ok" } },
+      { id: "u2", parentId: "r1", timestamp: 4, kind: "user", data: { text: "and push it" } },
+    ],
+    // Reopened before the run took its message: the last user entry is the previous, finished turn's.
+    [
+      { id: "u1", timestamp: 1, kind: "user", data: { text: "delete the old branch" } },
+      { id: "a1", parentId: "u1", timestamp: 2, kind: "assistant", data: { text: "done" } },
+    ],
+  ]) {
+    const { api, store, emit } = harness();
+    api.openAgent = async () => listed("s1");
+    api.openSession = async () =>
+      ({ state: { status: "running", pending: { steering: [], followUp: [] } }, entries: { entries: history } }) as never;
+    await store.load();
+    const c = store.getSnapshot().conversation!;
+    emit(c, "user_message", { entryId: "u9", text: "a steer it took while joined" });
+    emit(c, "run_settled", { status: "failed", error: { message: "No API key found", retryable: false } });
+    assert.equal(store.getSnapshot().resend, undefined);
+    store.dispose();
+  }
+});

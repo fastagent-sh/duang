@@ -99,6 +99,8 @@ if (!process.versions.electron) {
 
     let requests = 0;
     let hold = false;
+    /** When set, the model's request is refused, as a revoked key would be. */
+    let reject = false;
     /** When set, the model's answer waits for this: a run that finishes while you are elsewhere. */
     let gate;
     let anthropicRequests = 0;
@@ -158,6 +160,7 @@ if (!process.versions.electron) {
       }
       assert.match(target, /^https:\/\/api\.openai\.com\/v1\/responses$/, "unexpected outbound request");
       assert.equal(headers.get("authorization"), "Bearer smoke-key");
+      if (reject) return Response.json({ error: { message: "Synthetic key revoked" } }, { status: 401 });
       requests++;
       if (hold) {
         return new Promise((_resolve, reject) => {
@@ -446,6 +449,23 @@ if (!process.versions.electron) {
       await click("Read hello.txt and answer.");
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "durable history reopens");
       assert.equal((await evaluate("document.querySelector('main').innerText")).split("Smoke answer").length - 1, 1);
+
+      // A turn that fails after taking its message is offered again, as a new turn, through the real runtime.
+      reject = true;
+      await message("Fail once, then answer.");
+      await until("document.querySelector('main').innerText.includes('Synthetic key revoked')", "the failure is in the transcript");
+      await until("!!document.querySelector('main button[title^=\"Send this message again\"]')", "Retry is offered under it");
+      reject = false;
+      await click("Retry");
+      await until(
+        "document.querySelector('main').innerText.split('Smoke answer').length - 1 === 2 && !document.querySelector('main button[title^=\"Send this message again\"]')",
+        "Retry runs the message again and is gone once it answers",
+      );
+      assert.equal(
+        (await evaluate("document.querySelector('main').innerText")).split("Fail once, then answer.").length - 1,
+        2,
+        "the failed turn and its retry both stay in the transcript",
+      );
 
       hold = true;
       await message("Hold this turn so I can stop it.");

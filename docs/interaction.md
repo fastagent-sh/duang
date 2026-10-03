@@ -112,6 +112,16 @@ from starting a run, and the message returns to the draft without a note; Stop p
 says nothing, since the run's own ending is already in the transcript. FastAgent itself accepts an abort
 that arrives in the first moments of a run without stopping its first model request
 ([fastagent#691](https://github.com/fastagent-sh/fastagent/issues/691)), so that request still runs to its end.
+A conversation that ends on a failed turn (a run that took the message and
+then failed) offers Retry under the failure while nothing runs: it sends that message again as a new turn,
+leaving the failure and whatever the failed run did in the transcript. A run that was steered is retried with
+its last message, the one it was answering; the earlier ones already entered the conversation. When the
+failed run had already used tools (a steered run's included), Retry first asks, because the agent may repeat
+that work. Nothing is retried without that click, and a stopped run is not offered again. Neither is a run this
+window joined midway (opened or reconnected while it ran): where it began, and whether it had taken a message,
+are not in what this window heard. Retry is offered only for a failure this window saw: FastAgent's history does
+not yet record that a turn failed ([fastagent#690](https://github.com/fastagent-sh/fastagent/issues/690)), so a
+conversation that failed in the background, or is reopened, shows no failure and no Retry.
 
 The composer is one row: an attach button, the field with the model chip inside its right end, and
 one round button that is the next action: voice while the draft is empty (whitespace is empty),

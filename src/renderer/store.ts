@@ -111,6 +111,11 @@ interface Conversation {
   runHasUser: boolean;
   /** When this window saw the current run start; unknown for a run that was already going when it opened. */
   started?: number;
+  /**
+   * The current run as this window heard it from its `run_started`: the last message that entered it and
+   * whether it started a tool. Absent for a run joined midway, whose history does not say where it began.
+   */
+  run?: { message?: string; toolsRan: boolean };
 }
 /**
  * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
@@ -161,6 +166,12 @@ export interface View extends SettingsView {
    * One rule, derived once: the placeholder shows it and `send` treats reaching it as a bug.
    */
   blocked?: string;
+  /**
+   * The open conversation ends on a turn that failed, and its message can be sent again now (`resend`). Only
+   * a run this window heard from its start: the history FastAgent 0.23 reports does not say a turn failed
+   * (fastagent#690). Not the same as `retry`, which reopens a conversation whose view broke.
+   */
+  resend?: { text: string; toolsRan: boolean };
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
   /** Per agent with a turn in flight, the kind of work it is in (`phase`): its avatar's face follows it. */
@@ -345,6 +356,10 @@ export function createStore(api: DuangApi) {
     view.pane = paneOf(view);
     view.alert = alertOf(view);
     view.blocked = blockedBy(view);
+    const open = view.conversation;
+    // Anything after the failure (a newer turn, a stop) leaves nothing to send again.
+    const last = open?.items.at(-1);
+    view.resend = !view.busy && !view.blocked && last?.kind === "note" ? last.resend : undefined;
     for (const listener of listeners) listener();
   };
   /**
@@ -478,6 +493,46 @@ export function createStore(api: DuangApi) {
     }
   }
 
+  /** One message into the conversation, from the draft or from Retry. A refused one returns to the draft. */
+  async function submit(c: Conversation, text: string) {
+    // Where it goes is the runtime's report, not this guess: it waits below the output until
+    // `user_message` places it, whether it opens a run or joins one.
+    const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
+    c.waiting = [...c.waiting, echo];
+    const waiting = () => c.waiting.includes(echo);
+    /** Nothing entered from it, so the text is still the person's to send again. */
+    const restoreRejected = () => {
+      c.waiting = c.waiting.filter((item) => item !== echo);
+      c.draft = c.draft ? `${text}\n${c.draft}` : text;
+    };
+    c.sends++;
+    publish();
+    try {
+      const result = await api.send(c.agentId, c.session, text);
+      if (!result.ok) {
+        // Once it entered, the failure is the run's, and the run's note already says it.
+        if (!waiting()) return;
+        if (
+          result.error.code !== "aborted" &&
+          !c.items.some((item) => item.kind === "note" && item.text.includes(result.error.message))
+        )
+          refusal(result.error.message, c);
+        restoreRejected();
+      } else if (waiting()) {
+        c.returned.add(echo);
+        // A run that already ended while the call returned has nothing left to place it with. A
+        // stream that ended cannot say whether it entered: Retry re-reads the history instead.
+        if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c);
+      }
+    } catch (error) {
+      note(error, c);
+      if (waiting()) restoreRejected();
+    } finally {
+      c.sends--;
+      publish();
+    }
+  }
+
   async function selectAgent(id: string, session?: string) {
     const request = ++navigation;
     const listCurrent = listTicket(id);
@@ -557,13 +612,16 @@ export function createStore(api: DuangApi) {
   function fold(c: Conversation, event: SessionEvent) {
     const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
     const e = known(event);
+    const run = c.run;
     if (e.type === "run_started") {
       c.runHasUser = false;
       c.started = e.timestamp;
+      c.run = { toolsRan: false };
       c.state = { ...state, status: "running", activeRunId: e.runId };
     } else if (e.type === "run_settled") {
       dropQueued(c, state.pending.steering);
       c.started = undefined;
+      c.run = undefined;
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
       if (c.state.availableThinkingLevels === undefined) void readSettings(c);
       // A run that ends while you are reading something else is the thing you came back for. A run
@@ -573,12 +631,19 @@ export function createStore(api: DuangApi) {
       void listSessions(c.agentId);
     } else if (e.type === "user_message") {
       enter(c, e.data.entryId, e.data.text, e.timestamp);
+    } else if (e.type === "tool_started") {
+      if (c.run) c.run.toolsRan = true;
     } else if (e.type === "queue_changed") {
       c.state = { ...state, pending: e.data };
     } else if (e.type === "state_changed") {
       c.state = { ...state, ...e.data };
     }
     c.items = apply(c.items, event);
+    // A run heard from its start that failed after taking a message offers that message again. One that
+    // failed before (no credential, say) already returned the text to the draft.
+    const failure = c.items.at(-1);
+    if (e.type === "run_settled" && e.data.status === "failed" && run?.message !== undefined && failure?.kind === "note")
+      c.items = [...c.items.slice(0, -1), { ...failure, resend: { text: run.message, toolsRan: run.toolsRan } }];
     if (event.type === "run_settled") ranNothing(c);
   }
   /**
@@ -595,6 +660,8 @@ export function createStore(api: DuangApi) {
     }
     if (!known) c.items = [...c.items, { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
     c.runHasUser = true;
+    // The message the run is answering now; a steer replaces the opening one. What was typed, if it was ours.
+    if (c.run) c.run.message = own?.text ?? text;
   }
   /**
    * What the runtime still lists as queued when its run ends never entered the conversation and is
@@ -943,42 +1010,17 @@ export function createStore(api: DuangApi) {
       // choice the person can revisit. Dropping the message in silence is how that stays hidden.
       if (view.blocked) throw new Error(`Cannot send while ${view.blocked}`);
       c.draft = "";
-      // Where it goes is the runtime's report, not this guess: it waits below the output until
-      // `user_message` places it, whether it opens a run or joins one.
-      const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
-      c.waiting = [...c.waiting, echo];
-      const waiting = () => c.waiting.includes(echo);
-      /** Nothing entered from it, so the text is still the person's to send again. */
-      const restoreRejected = () => {
-        c.waiting = c.waiting.filter((item) => item !== echo);
-        c.draft = c.draft ? `${text}\n${c.draft}` : text;
-      };
-      c.sends++;
-      publish();
-      try {
-        const result = await api.send(c.agentId, c.session, text);
-        if (!result.ok) {
-          // Once it entered, the failure is the run's, and the run's note already says it.
-          if (!waiting()) return;
-          if (
-            result.error.code !== "aborted" &&
-            !c.items.some((item) => item.kind === "note" && item.text.includes(result.error.message))
-          )
-            refusal(result.error.message, c);
-          restoreRejected();
-        } else if (waiting()) {
-          c.returned.add(echo);
-          // A run that already ended while the call returned has nothing left to place it with. A
-          // stream that ended cannot say whether it entered: Retry re-reads the history instead.
-          if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c);
-        }
-      } catch (error) {
-        note(error, c);
-        if (waiting()) restoreRejected();
-      } finally {
-        c.sends--;
-        publish();
-      }
+      await submit(c, text);
+    },
+    /**
+     * Sends the failed turn's message again, as a new turn: the failure stays in the transcript, and so does
+     * whatever the failed run already did. Offered only while `view.resend` is.
+     */
+    async resend() {
+      const c = view.conversation;
+      const again = view.resend;
+      if (!c || !again) return;
+      await submit(c, again.text);
     },
     async abort() {
       const c = view.conversation;
