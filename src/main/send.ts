@@ -73,17 +73,22 @@ export function sends() {
      * Quitting: every conversation with a send in flight is stopped as Stop would, and this waits for those
      * sends to return, which is when each run has settled and written how it ended, or until `within` ms pass
      * (a tool that cannot be cancelled may hold its run). Says whether all of them returned in time.
+     *
+     * The limit starts before the aborts and does not wait for them: pi's abort itself waits for its run to
+     * go idle, so an abort can take as long as the run it stops.
      */
     async stopAll(abort: (key: string) => Promise<SessionResult>, within: number): Promise<boolean> {
-      const finished = [...held.values()].flatMap((tickets) => [...tickets].map((ticket) => ticket.finished));
-      // One conversation that cannot be stopped must not keep the app from quitting; it is said, not hidden.
-      const stops = await Promise.allSettled([...held.keys()].map(async (key) => [key, await stop(key, () => abort(key))] as const));
-      for (const stopped of stops) {
-        if (stopped.status === "rejected") console.error("duang: a run could not be stopped before quitting:", stopped.reason);
-        else if (!stopped.value[1].ok) console.error(`duang: ${stopped.value[0]} could not be stopped before quitting:`, stopped.value[1].error.message);
-      }
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), within)));
+      const finished = [...held.values()].flatMap((tickets) => [...tickets].map((ticket) => ticket.finished));
+      // A conversation that cannot be stopped must not keep the app from quitting; it is said, not hidden.
+      for (const key of held.keys())
+        stop(key, () => abort(key)).then(
+          (result) => {
+            if (!result.ok) console.error(`duang: ${key} could not be stopped before quitting:`, result.error.message);
+          },
+          (error: unknown) => console.error(`duang: ${key} could not be stopped before quitting:`, error),
+        );
       const done = await Promise.race([Promise.all(finished).then(() => true), timeout]);
       clearTimeout(timer);
       return done;

@@ -132,9 +132,10 @@ test("quitting stops every send in flight and waits for each run to settle, but 
   void run("agent/stuck");
   const broken = run("agent/broken");
   const started = Date.now();
-  const late = await held.stopAll(async (key) => {
-    if (key === "agent/broken") throw new Error("the agent was removed");
-    return ok;
+  // pi's abort waits for the run to go idle, so the stuck run's abort never returns either.
+  const late = await held.stopAll((key) => {
+    if (key === "agent/broken") return Promise.reject(new Error("the agent was removed"));
+    return new Promise<SessionResult>(() => {});
   }, 50);
   assert.equal(late, false);
   assert.ok(Date.now() - started < 1000);
