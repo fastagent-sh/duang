@@ -2,7 +2,8 @@
  * A subscription's rate-limit windows (Claude 5h/7d), read from the endpoint Claude's own clients use.
  * It is not documented, so a changed shape is an error with the provider's words, never an empty result.
  * Sign in with ChatGPT has none to read: chatgpt.com's usage route refuses its token (401
- * `rejected_by_access_enforcement`), and api.openai.com's answers carry no rate-limit headers.
+ * `rejected_by_access_enforcement`), and api.openai.com's answers carry no rate-limit headers. OpenAI's
+ * guidance for such an app is to link to the plan's own usage page, so that login answers with `page`.
  *
  * The token comes from FastAgent's `getAuth`, which refreshes an expired OAuth login under the
  * credential file's lock — the same path a run takes — so duang is never a second writer. The token
@@ -24,7 +25,23 @@ export interface UsageWindow {
 export interface ProviderUsage {
   provider: string;
   windows?: UsageWindow[];
+  /** The plan's usage is only on its provider's page (`openUsagePage`), named by whose plan it is. */
+  page?: string;
   fetchedAt: number;
+}
+
+/**
+ * Plans whose usage only their provider's page shows, by provider id. Main owns the address: the window
+ * asks for a provider's page and never hands main a URL to open.
+ */
+const PAGES: Record<string, { plan: string; url: string }> = {
+  // Sign in with ChatGPT (OpenAI's guidance: https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions).
+  openai: { plan: "ChatGPT", url: "https://chatgpt.com/settings/usage" },
+};
+export function usagePage(provider: string): string {
+  const page = PAGES[provider];
+  if (!page) throw new Error(`${provider} has no usage page`);
+  return page.url;
 }
 
 const HOUR = 3600;
@@ -81,10 +98,11 @@ const endpoints: Record<string, (token: string) => Promise<UsageWindow[]>> = {
 async function read(provider: string, authPath: string): Promise<ProviderUsage> {
   const fetchedAt = Date.now();
   const endpoint = endpoints[provider];
-  if (!endpoint) return { provider, fetchedAt };
+  if (!endpoint && !PAGES[provider]) return { provider, fetchedAt };
   const models = createPiModels({ authPath });
-  // Only a subscription login has windows; an API key's limits are per request, not per plan.
+  // Only a subscription login has a plan; an API key's limits are per request, not per plan.
   if ((await models.checkAuth(provider))?.type !== "oauth") return { provider, fetchedAt };
+  if (!endpoint) return { provider, page: PAGES[provider]!.plan, fetchedAt };
   const token = (await models.getAuth(provider))?.auth.apiKey;
   if (!token) throw new Error(`${provider} has no usable login`);
   return { provider, windows: await endpoint(token), fetchedAt };

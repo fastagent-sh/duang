@@ -51,9 +51,23 @@ export type Item = At &
    */
   /**
    * `resend`: this note is the failure of a run that had taken a message, the one Retry sends again, and
-   * whether that run had started a tool (sending it again may repeat that work).
+   * whether that run had started a tool (sending it again may repeat that work). `limit`: the failure is a
+   * plan's usage limit, and the provider whose usage page says more.
    */
-  | { kind: "note"; tone: "info" | "warning" | "error"; text: string; resend?: { text: string; toolsRan: boolean } });
+  | {
+      kind: "note";
+      tone: "info" | "warning" | "error";
+      text: string;
+      resend?: { text: string; toolsRan: boolean };
+      limit?: string;
+    });
+
+/**
+ * The provider whose plan limit a failure reports, read from the provider's own error code (OpenAI's
+ * documented `subscription_sharing_usage_limit_exceeded`, which pi passes on in the run's error).
+ */
+const limitOf = (message: string | undefined) =>
+  message?.includes("subscription_sharing_usage_limit_exceeded") ? { limit: "openai" } : {};
 
 /**
  * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of
@@ -311,6 +325,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
           text: `run failed${message ? `: ${message}` : ""}`,
           at,
           ...(turn?.kind === "user" ? { resend: { text: turn.text, toolsRan } } : {}),
+          ...limitOf(message),
         });
       }
       // An answer that called no tool ends its work: a later failure cannot repeat what came before it.
@@ -543,6 +558,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
           // `aborted`, and never `failed` — that word blames the run for their decision.
           text: `run ${stopped ? "stopped" : e.data.status}${error?.message ? `: ${error.message}` : ""}`,
+          ...limitOf(error?.message),
         },
       ];
     }

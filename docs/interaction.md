@@ -95,8 +95,9 @@ The conversation header's right edge is how full the conversation's context is (
 only that: it is about this conversation and moves as it goes. It is always there: a new conversation
 has no context to report until its first answer, and says `–`. On hover or focus a table adds, for a Claude subscription login of the conversation's own provider, each of
 the plan's windows: its share used, its reset time, and for windows of a day or more the pace against
-the clock (`▼` under, `▲` over), then the context as `45% of 1.0M`. An API key has no plan windows, so
-the table is the context alone. Opening a conversation, changing its provider and a run starting or ending ask again; main
+the clock (`▼` under, `▲` over), then the context as `45% of 1.0M`. Sign in with ChatGPT has no windows duang can read: the table says
+`ChatGPT plan · View usage`, which opens chatgpt.com's usage page in the browser, as does the provider's
+row in Settings. An API key has no plan windows, so the table is the context alone. Opening a conversation, changing its provider and a run starting or ending ask again; main
 answers from a three-minute cache, since Anthropic's route answers 429 when polled. A failed read
 shows no plan windows, never a stale percentage: the numbers are a glance, and a failure there is
 not something to act on. The context is FastAgent's, once it reports it
@@ -116,7 +117,7 @@ text it streamed above it), `run stopped` under a stopped one, `retrying 1/3: <r
 `retried: <reason>` read back for an attempt the run retried by itself, and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
-as a new turn, leaving the failure and whatever the failed run did in the transcript. A run that was steered is
+as a new turn, leaving the failure and whatever the failed run did in the transcript. A failure that is a ChatGPT plan's usage limit (`subscription_sharing_usage_limit_exceeded`) also offers View usage, which opens that page. A run that was steered is
 retried with its last message, the one it was answering; the earlier ones already entered the conversation.
 When the failed run had used tools no answer concluded (a steered run's included), Retry first asks, because
 the agent may repeat that work. Nothing is retried without that click, and a stopped run is not offered again.

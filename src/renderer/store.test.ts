@@ -45,6 +45,7 @@ function harness() {
     listModels: async () => ({ specs: ["provider/model"] }),
     refreshModels: async () => ({ specs: ["provider/model"] }),
     providerUsage: async (provider) => ({ provider, fetchedAt: 0 }),
+    openUsagePage: async () => {},
     getSettings: async () => ({ network: { mode: "automatic" }, avatar: "gaze" }),
     getRoute: async () => ({ source: "system" }),
     setNetwork: async () => ({ source: "system" }),

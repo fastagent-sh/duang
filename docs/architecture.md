@@ -43,7 +43,8 @@ listens again on the new one under the same subscription id, and the renderer do
 token from FastAgent's public `createPiModels({ authPath }).getAuth(provider)` (which refreshes an
 expired login under the credential file's lock, as a run would) and calls the provider's own usage
 route. The route is not documented; an unexpected shape is an error, not zero. Sign in with ChatGPT has
-no usage route that accepts its token (chatgpt.com answers 401), so it shows no plan windows. The renderer
+no usage route that accepts its token (chatgpt.com answers 401), so main answers `page` instead, and opens
+chatgpt.com's usage page itself when asked: the renderer names a provider, never a URL to open. The renderer
 receives window percentages and reset times only.
 
 **duang's own credential file.** The picker, every assembly and plan usage receive the same

@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 const dir = await mkdtemp(join(tmpdir(), "duang-usage-"));
 const auth = join(dir, "auth.json");
-const { MIN_GAP_MS, forgetUsage, parseAnthropic, providerUsage } = await import("./usage.ts");
+const { MIN_GAP_MS, forgetUsage, parseAnthropic, providerUsage, usagePage } = await import("./usage.ts");
 
 const HOUR = 3600;
 
@@ -79,4 +79,23 @@ test("a subscription is read with its own token; an API key has no windows; a re
   forgetUsage("anthropic", auth);
   assert.equal((await providerUsage("anthropic", auth, t2 + 3)).windows?.length, 1);
   assert.equal(calls.at(-1)?.authorization, "Bearer sk-ant-oat01-new");
+});
+
+test("a ChatGPT sign-in's usage is its own page, which only main can name; an OpenAI key has no plan", async () => {
+  let asked = 0;
+  globalThis.fetch = async () => {
+    asked++;
+    return new Response("unexpected", { status: 500 });
+  };
+  const file = join(dir, "chatgpt.json");
+  await writeFile(file, JSON.stringify({ openai: { type: "oauth", access: "a", refresh: "r", expires: Date.now() + 3_600_000 } }));
+  const signedIn = await providerUsage("openai", file, 1);
+  assert.equal(signedIn.page, "ChatGPT");
+  assert.equal(signedIn.windows, undefined);
+  await writeFile(file, JSON.stringify({ openai: { type: "api_key", key: "sk-test" } }));
+  forgetUsage("openai", file);
+  assert.equal((await providerUsage("openai", file, 2)).page, undefined, "an API key is not a plan");
+  assert.equal(asked, 0, "nothing is read over the network for either");
+  assert.equal(usagePage("openai"), "https://chatgpt.com/settings/usage");
+  assert.throws(() => usagePage("anthropic"), /no usage page/);
 });

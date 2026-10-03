@@ -198,6 +198,7 @@ export default function App() {
                       : undefined
                   }
                   onReveal={() => void store.reveal()}
+                  onUsagePage={(provider) => void store.openUsagePage(provider)}
                 />
               )}
               {agent && agentState === "ready" && (
@@ -268,6 +269,7 @@ export default function App() {
                   bottomGap={composerHeight + 64}
                   resume={store.scrollOf(c.agentId, c.session)}
                   onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
+                  onUsage={(provider) => void store.openUsagePage(provider)}
                   onRetry={
                     view.resend
                       ? () => {

@@ -210,7 +210,7 @@ Accepted limitations, each recorded in its issue:
   which also carries the latest answer's tokens and cost; duang does not display those. A Claude
   subscription's plan windows are shown, read from an endpoint Anthropic does not document, so they
   can stop working without notice. Sign in with ChatGPT has no usage route duang can read, so it
-  shows none.
+  links to ChatGPT's usage page instead.
 - **One unexplained incident**: a run whose output was produced and stored never rendered live,
   once, and has not reproduced. Recorded with its evidence in
   [#10](https://github.com/fastagent-sh/duang/issues/10) rather than patched blind.
