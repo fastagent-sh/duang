@@ -733,6 +733,11 @@ if (!process.versions.electron) {
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "reload initial agent");
+      // A renderer that crashes leaves no blank window: main reloads it, and it reopens what it showed.
+      const reloaded = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      win.webContents.forcefullyCrashRenderer();
+      await reloaded;
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "a crashed window is reloaded onto its conversation");
       await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
       await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
       assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), otherModel);
