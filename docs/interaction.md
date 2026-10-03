@@ -46,7 +46,9 @@ track of the thinking levels the runtime lists for the conversation's model. A n
 before its first message (what its first turn would run on), so effort can be set before sending; setting
 it, or the model, makes the runtime keep the conversation, which the list shows as *New conversation*
 until its first message. An agent with no model yet has no levels, so the picker says effort can be set
-once a model is chosen, and a model with one level says it has no effort setting. The level is set on the
+once a model is chosen; when the runtime reports no levels for another reason (it could not read the
+conversation's settings), the picker says that instead, and a model with one level says it has no effort
+setting. The level is set on the
 open conversation only, and is refused while it runs; the arrow keys move along the track
 and write nothing, and Enter, Space or a click choose. A list of more than 60 models says how many it left out. The picker shows no credential path and
 links to no provider page; with nothing connected its one offer is **Connect a provider**, which

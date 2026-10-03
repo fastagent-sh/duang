@@ -687,6 +687,24 @@ if (!process.versions.electron) {
         "the plan's windows are one hover away in a conversation with no context yet",
       );
       assert.match(await evaluate("document.querySelector('header').innerText"), /context\s*–/, "and the context says it is not known yet");
+      // Effort set before the first message: the runtime keeps the conversation, and the list keeps it once it
+      // is left, as a new conversation rather than its id.
+      const newRows = "[...document.querySelectorAll('#conversations button')].filter((b) => b.textContent.includes('New conversation')).length";
+      await showConversations();
+      const rowsBefore = await evaluate(newRows);
+      await evaluate("document.getElementById('conversations').hidePopover()");
+      await evaluate(`${chip}.click()`);
+      await until("document.querySelector('dialog [role=radio][aria-label=\"High\"]')", "a new conversation offers effort before its first message");
+      await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').click()`);
+      await until(`${chip}.textContent.includes('High')`, "and takes it");
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("document.querySelector('dialog') === null", "the picker closes");
+      await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
+      await until("document.body.innerText.includes('What should we work on?')", "another new conversation");
+      await showConversations();
+      await until(`${newRows} === ${rowsBefore} + 1`, "the conversation left after setting its effort is still listed, as New conversation");
+      await evaluate("document.getElementById('conversations').hidePopover()");
       // Back to the conversation the rest of this run goes on in.
       await showConversations();
       await evaluate(`[...document.querySelectorAll('#conversations button')].find((b) => b.textContent.includes('Use the configured model')).click()`);

@@ -81,14 +81,19 @@ function ModelPicker({
   store,
   current,
   thinking,
+  needsModel,
   onClose,
   onProviders,
 }: {
   view: View;
   store: Store;
   current?: string;
-  /** Absent while the conversation has no model: the runtime lists levels for the model it will run on. */
+  /**
+   * The levels the runtime lists for the model the conversation runs on. Absent when it has none to list:
+   * the agent has no model yet (`needsModel`), or the runtime could not read the conversation's settings.
+   */
   thinking?: { level: string; levels: string[] };
+  needsModel: boolean;
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
@@ -248,7 +253,9 @@ function ModelPicker({
           </div>
           <div className="border-t border-stroke">
             {!thinking ? (
-              <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once a model is chosen.</p>
+              <p className="px-4 py-3 text-[12px] text-muted">
+                {needsModel ? "Effort can be set once a model is chosen." : "The runtime reported no effort levels for this conversation."}
+              </p>
             ) : thinking.levels.length > 1 ? (
               <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => void store.setThinking(level)} />
             ) : (
@@ -514,6 +521,7 @@ export function Composer({
                 store={store}
                 current={model}
                 thinking={thinking}
+                needsModel={needsModel}
                 onClose={() => setPicking(false)}
                 onProviders={() => {
                   setPicking(false);

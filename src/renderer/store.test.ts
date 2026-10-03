@@ -674,6 +674,8 @@ test("a model change leaves the open conversation as it is and reads its model a
     thinkingLevel: "low",
     availableThinkingLevels: ["low", "high"],
   });
+  // The agent's runtime now answers with the new default, as main's does after the change.
+  api.openAgent = async () => ({ ...ready, model: "provider/other" });
   await store.pickModel("provider/other");
   assert.equal(store.getSnapshot().conversation, c, "the same conversation, not a reopened one");
   assert.equal(c.items, items, "its transcript is not reloaded, so nothing flickers and the scroll stays");
@@ -718,8 +720,17 @@ test("a conversation not begun yet offers the levels the runtime reports for its
   await store.load();
   assert.deepEqual(store.getSnapshot().conversation?.state?.availableThinkingLevels, ["off", "medium", "high"]);
   assert.equal(store.getSnapshot().pane, "start", "still the new-conversation page");
+  // The runtime now keeps a record of it, with no message yet.
+  const c = store.getSnapshot().conversation!;
+  api.openAgent = async () =>
+    ({ ok: true, model: "provider/model", sessions: [{ session: c.session, createdAt: 1, updatedAt: 1, messageCount: 0 }] }) as never;
   await store.setThinking("high");
   assert.deepEqual(set, ["high"], "set before the first message, on the conversation itself");
+  await store.newConversation();
+  assert.ok(
+    store.getSnapshot().sessions["a"]?.some((s) => s.session === c.session),
+    "the list was read again, so the conversation stays listed once it is left",
+  );
   store.dispose();
 });
 

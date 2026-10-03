@@ -595,8 +595,8 @@ export function createStore(api: DuangApi) {
       const { model, thinkingLevel, availableThinkingLevels } = await api.readState(c.agentId, c.session);
       // The read outlived the conversation (closed, or replaced by a reopen): it says nothing about this one.
       if (conversations.get(key(c.agentId, c.session)) !== c || !c.state) return;
-      // The runtime leaves all three out when it has no record to resolve them from; what the events already
-      // said about the model is not erased by that silence.
+      // The runtime leaves all three out when it cannot resolve them (no session boundary, or an entry chain
+      // it cannot read); what the events already said about the model is not erased by that silence.
       c.state = {
         ...c.state,
         ...(model !== undefined && { model }),
@@ -607,6 +607,14 @@ export function createStore(api: DuangApi) {
     } catch (error) {
       note(error, c);
     }
+  }
+  /**
+   * Setting a model or effort on a conversation not begun yet makes the runtime keep a record of it. The list
+   * is read again then, so the conversation stays reachable once the person leaves it, rather than vanishing
+   * until some later read brings it back.
+   */
+  async function keepListed(c: Conversation) {
+    if (!view.sessions[c.agentId]?.some((s) => s.session === c.session)) await listSessions(c.agentId);
   }
   function fold(c: Conversation, event: SessionEvent) {
     const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
@@ -904,8 +912,10 @@ export function createStore(api: DuangApi) {
         // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
         // The runtime announced the change before that subscription listened again, so the model and
         // levels are read, not waited for.
-        if (c) await readSettings(c);
-        else await selectAgent(id);
+        if (c) {
+          await readSettings(c);
+          await keepListed(c);
+        } else await selectAgent(id);
       } catch (error) {
         settle();
         if (request === navigation) note(error, c);
@@ -922,6 +932,7 @@ export function createStore(api: DuangApi) {
       try {
         const result = await api.setThinking(id, c.session, level);
         if (!result.ok) refusal(result.error.message, c);
+        else await keepListed(c);
       } catch (error) {
         note(error, c);
       }

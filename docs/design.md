@@ -141,7 +141,7 @@ variables, as a terminal user would export it; per-host PAC rules and the system
 reach them.
 
 Reasoning effort is not a setting: it sits with the model in the composer's picker and applies to that
-conversation, once the conversation has begun (a default per agent needs FastAgent to accept one). Per-agent material (tool secrets, inherited machine skills) belongs to the agent
+conversation, a new one before its first message included (a default per agent needs FastAgent to accept one). Per-agent material (tool secrets, inherited machine skills) belongs to the agent
 detail view above. Appearance follows the system; shortcuts, notifications, a global default model
 and accounts are not settings until a shipped feature needs them.
 
