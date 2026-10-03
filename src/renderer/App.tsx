@@ -3,7 +3,9 @@ import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
 import { queueView } from "./transcript.ts";
-import { BrokenAgent, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
+import { BrokenAgent, MissingFolder, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
+import { Problem } from "./problem.tsx";
+import { ArrowClockwise } from "@phosphor-icons/react";
 import { ConversationList, Sidebar } from "./rows.tsx";
 import { ConversationHeader } from "./header.tsx";
 import { Transcript } from "./transcript-view.tsx";
@@ -221,38 +223,58 @@ export default function App() {
                   onMenu={duang.menu}
                 />
               )}
-              {view.failure && (
-                // An action outside any conversation failed: said here, not in the transcript that happens to be open.
-                <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
-                  {view.failure}{" "}
-                  <button className="underline" onClick={store.dismissFailure}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
-              {alert ? (
-                <div role="alert" className={`${view.failure ? "" : "mt-14 "}px-6 py-2 text-danger whitespace-pre-wrap break-words`}>
-                  {alert}{" "}
-                  <button className="underline" onClick={() => void store.retry()}>
-                    Retry
-                  </button>
-                </div>
-              ) : (
-                // An ended subscription is not a failure: the conversation is intact, this view stopped
-                // listening. Say it in the calm voice and offer the one action that fixes it.
-                c?.ended && (
-                  <div role="status" className={`${view.failure ? "" : "mt-14 "}px-6 py-2 text-muted whitespace-pre-wrap break-words`}>
-                    {c.ended}{" "}
-                    <button className="underline" onClick={() => void store.retry()}>
-                      Reconnect
-                    </button>
+              {/* Problems about this view or about an action outside any conversation float under the header,
+                  over the pane, so nothing below moves when one comes or goes (docs/ui.md §9b). */}
+              {(view.failure || alert || c?.ended) && (
+                <div className="pointer-events-none absolute inset-x-0 top-20 z-[7] px-6">
+                  <div className="column space-y-2">
+                    {view.failure && (
+                      <Problem
+                        layout="strip"
+                        tone="error"
+                        title={view.failure.title}
+                        reason={view.failure.reason}
+                        onDismiss={store.dismissFailure}
+                      />
+                    )}
+                    {alert ? (
+                      <Problem
+                        layout="strip"
+                        tone="error"
+                        title={alert.title}
+                        advice={alert.advice}
+                        reason={alert.reason}
+                        actions={
+                          <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
+                            Reconnect
+                          </Button>
+                        }
+                      />
+                    ) : (
+                      // An ended subscription is not a failure: the conversation is intact, this view stopped
+                      // listening. Said in the calm voice, with the one action that fixes it.
+                      c?.ended && (
+                        <Problem
+                          layout="strip"
+                          tone="info"
+                          title="This conversation stopped updating"
+                          advice="Nothing was lost. Reconnect to follow it again."
+                          reason={c.ended}
+                          actions={
+                            <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
+                              Reconnect
+                            </Button>
+                          }
+                        />
+                      )
+                    )}
                   </div>
-                )
+                </div>
               )}
               {pane === "unreadable-registry" ? (
                 // An unreadable registry is not an empty one: offering "add your first agent" would deny the
                 // failure and hand over an action that cannot succeed until the file is fixed.
-                <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+                <UnreadableRegistry reason={view.registryError} onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
               ) : pane === "no-agents" ? (
                 <NoAgents onAdd={() => void store.addAgent()} />
               ) : pane === "broken" ? (
@@ -262,6 +284,8 @@ export default function App() {
                   onReveal={() => void store.reveal()}
                   onRetry={() => void store.retry()}
                 />
+              ) : pane === "missing-dir" ? (
+                <MissingFolder dir={agent?.dir ?? ""} onRemove={remove} onRetry={() => void store.retry()} />
               ) : pane === "no-agent" ? (
                 <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
               ) : pane === "settling" ? (
@@ -275,15 +299,20 @@ export default function App() {
                 <Boundary
                   reset={c.subscription}
                   fallback={(error) => (
-                    // The sidebar and the composer stay: the person can go to another conversation, or try again.
-                    <div role="alert" className="mt-16 flex-1 space-y-2 px-6 text-[13px]">
-                      <p>This conversation could not be drawn.</p>
-                      <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-danger">{error.message}</pre>
-                      {/* Read again from the runtime's history: a view that went wrong while streaming is rebuilt. */}
-                      <Button kind="secondary" size={28} onClick={() => void store.retry()}>
-                        Try again
-                      </Button>
-                    </div>
+                    // The sidebar and the composer stay: the person can go to another conversation, or try again,
+                    // which reads it again from history, so a view that went wrong while streaming is rebuilt.
+                    <Problem
+                      layout="page"
+                      tone="error"
+                      title="This conversation could not be displayed"
+                      advice="Something in it could not be drawn. Its history is safe: try again to read it afresh, or open another conversation."
+                      reason={error.message}
+                      actions={
+                        <Button kind="primary" size={32} icon={<ArrowClockwise size={14} />} onClick={() => void store.retry()}>
+                          Try again
+                        </Button>
+                      }
+                    />
                   )}
                 >
                   <Transcript
@@ -298,7 +327,7 @@ export default function App() {
                     resume={store.scrollOf(c.agentId, c.session)}
                     onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
                     onUsage={(provider) => void store.openUsagePage(provider)}
-                    onConnect={() => setSettings({ fromPicker: true })}
+                    onSettings={(where) => setSettings(where === "providers" ? { fromPicker: true } : {})}
                     onRetry={
                       view.resend
                         ? () => {

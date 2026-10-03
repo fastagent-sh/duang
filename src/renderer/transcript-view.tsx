@@ -1,6 +1,7 @@
 /** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
+  Plug,
   ArrowClockwise,
   ArrowDown,
   ArrowSquareOut,
@@ -41,6 +42,8 @@ import {
 import type { SessionState } from "@fastagent-sh/fastagent/session";
 import { clock } from "./sessions.ts";
 import { Badge, Button, type Tone } from "./ui.tsx";
+import { Problem } from "./problem.tsx";
+import type { Fix } from "./problems.ts";
 
 /**
  * The live end of a run: what it is doing now, in words, and how long the run has taken. It stays for
@@ -139,7 +142,7 @@ export function Transcript({
   onRest,
   onRetry,
   onUsage,
-  onConnect,
+  onSettings,
 }: {
   items: Item[];
   /**
@@ -165,12 +168,36 @@ export function Transcript({
   onRetry?: () => void;
   /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
   onUsage: (provider: string) => void;
-  /** Opens Settings on the providers, under a send refused because the conversation's model cannot run. */
-  onConnect: () => void;
+  /** Opens Settings where a problem's way on is: the model providers, or the network. */
+  onSettings: (where: Fix) => void;
 }) {
+  // The ways on belong to the latest problem only, and only while nothing runs: an earlier one is history.
   const last = items.at(-1);
-  const limit = !busy && last?.kind === "note" ? last.limit : undefined;
-  const connect = !busy && last?.kind === "note" && last.connect;
+  const problem = !busy && last?.kind === "note" && last.title ? last : undefined;
+  const actions = problem && (
+    <>
+      {problem.fix === "providers" && (
+        <Button kind="secondary" size={28} onClick={() => onSettings("providers")} icon={<Plug size={12} />}>
+          Model providers
+        </Button>
+      )}
+      {problem.fix === "network" && (
+        <Button kind="secondary" size={28} onClick={() => onSettings("network")} icon={<Globe size={12} />}>
+          Network settings
+        </Button>
+      )}
+      {problem.limit && (
+        <Button kind="secondary" size={28} onClick={() => onUsage(problem.limit!)} title="Open the plan's usage page in the browser" icon={<ArrowSquareOut size={12} />}>
+          View usage
+        </Button>
+      )}
+      {onRetry && (
+        <Button kind="secondary" size={28} onClick={onRetry} title="Send this message again as a new turn" icon={<ArrowClockwise size={12} />}>
+          Retry
+        </Button>
+      )}
+    </>
+  );
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(resume === undefined);
   /**
@@ -316,7 +343,11 @@ export function Transcript({
             // `enter` runs once, when the element is created — a streaming answer re-renders into
             // the same node, so the rise does not restart on every token.
             <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
-              {line.kind === "work" ? <WorkBlock work={line} /> : <Message item={line} ends={ends(all[index + 1], busy)} />}
+              {line.kind === "work" ? (
+                <WorkBlock work={line} />
+              ) : (
+                <Message item={line} ends={ends(all[index + 1], busy)} actions={line === problem ? actions : undefined} />
+              )}
             </div>
           ),
         )}
@@ -327,25 +358,6 @@ export function Transcript({
           </div>
         )}
         {queue(false)}
-        {(onRetry || limit || connect) && (
-          <div className="mt-2 flex justify-center gap-2">
-            {onRetry && (
-              <Button kind="secondary" size={28} onClick={onRetry} title="Send this message again as a new turn" icon={<ArrowClockwise size={12} />}>
-                Retry
-              </Button>
-            )}
-            {connect && (
-              <Button kind="secondary" size={28} onClick={onConnect} title="Open Settings on the model providers">
-                Connect a provider
-              </Button>
-            )}
-            {limit && (
-              <Button kind="secondary" size={28} onClick={() => onUsage(limit)} title="Open the plan's usage page in the browser" icon={<ArrowSquareOut size={12} />}>
-                View usage
-              </Button>
-            )}
-          </div>
-        )}
       </div>
     </div>
     </div>
@@ -373,8 +385,11 @@ export function Message({
   item,
   waiting,
   ends = true,
+  actions,
 }: {
   item: Item;
+  /** The ways on, for the latest problem in the conversation. */
+  actions?: ReactNode;
   waiting?: "queued" | "sending";
   /** False for words the run goes on to work after: a time and a copy button between steps are noise. */
   ends?: boolean;
@@ -443,21 +458,14 @@ export function Message({
       );
     }
     case "note":
-      // A fact about the session, not something anyone said: centred, quiet, and only red when it
-      // is genuinely a failure. A refusal names itself, because "refused" and "failed" are not the
-      // same answer — nothing ran, so the text is still the person's to edit (§9).
+      // A problem the person may act on is a card where it happened (§9b); a fact about the session (a
+      // stop, a retry, a command that ran) is one centred quiet line, in the app's own face.
+      if (item.title)
+        return <Problem tone={item.tone} title={item.title} advice={item.advice} reason={item.reason} actions={actions} />;
       return (
-        <div className="flex items-center justify-center gap-1.5 text-[11px]">
-          {item.tone === "warning" ? (
-            <Badge tone="warning" icon={<WarningCircle size={12} />}>
-              refused
-            </Badge>
-          ) : (
-            <span className={item.tone === "error" ? "text-danger" : "text-muted"}>
-              {item.tone === "error" ? <WarningCircle size={12} /> : <Info size={12} />}
-            </span>
-          )}
-          <span className={`font-mono ${item.tone === "error" ? "text-danger" : "text-muted"}`}>{item.text}</span>
+        <div className="flex items-center justify-center gap-1.5 text-[12px] text-muted">
+          <Info size={12} className="shrink-0" />
+          <span className="min-w-0 break-words">{item.text}</span>
         </div>
       );
     case "tool":

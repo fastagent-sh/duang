@@ -20,6 +20,7 @@ import {
   type UserItem,
 } from "./transcript.ts";
 import { message } from "./message.ts";
+import type { Fix } from "./problems.ts";
 /** main's code for a send refused because the conversation's model cannot run here (`send.ts`). */
 const MODEL_UNAVAILABLE_CODE = "model_unavailable";
 /**
@@ -29,14 +30,28 @@ const MODEL_UNAVAILABLE_CODE = "model_unavailable";
 const PERSON_SIDE = new Set(["queue_changed", "user_message", "state_changed"]);
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
-export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
+export type AgentState = "ready" | "missing_model" | "no_agent" | "missing_dir" | "broken";
 /**
  * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
  * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
  * of the wrong screen.
  * `start` is that page, for a new conversation or an agent with no model yet.
  */
-export type Pane = "unreadable-registry" | "no-agents" | "broken" | "no-agent" | "settling" | "start" | "transcript";
+/** A problem said over the pane: what it means, what to do, and the original words. */
+export interface Trouble {
+  title: string;
+  advice?: string;
+  reason: string;
+}
+export type Pane =
+  | "unreadable-registry"
+  | "no-agents"
+  | "broken"
+  | "no-agent"
+  | "missing-dir"
+  | "settling"
+  | "start"
+  | "transcript";
 /**
  * Where the window was last left. Navigation, not conversation data: the transcript belongs to the
  * runtime, and losing this only costs one click. So it is stored as best effort and never repaired
@@ -106,7 +121,8 @@ interface Conversation {
   state?: SessionState;
   draft: string;
   loading: boolean;
-  error?: string;
+  /** This view could not open the conversation, or lost its subscription: said over it, with Reconnect. */
+  error?: Trouble;
   /** Main ended this subscription on purpose. Nothing broke; this view just stopped listening. */
   ended?: string;
   sends: number;
@@ -162,7 +178,7 @@ export interface View extends SettingsView {
    * An action that belongs to no conversation failed (renaming, adding, revealing or removing an agent):
    * said above the pane until dismissed, never written into whichever conversation is open.
    */
-  failure?: string;
+  failure?: { title: string; reason: string };
   /** Why duang's own agent list could not be read. Not an empty list: the pane says so. */
   registryError?: string;
   /** The model picker's contents: undefined while loading, so the picker can say so. */
@@ -178,8 +194,8 @@ export interface View extends SettingsView {
   busy: boolean;
   /** What the main pane shows, derived once from everything above (`paneOf`). */
   pane: Pane;
-  /** The failure said above the pane, with its Retry; none when the pane itself explains it. */
-  alert?: string;
+  /** The failure said over the pane, with its Retry; none when the pane itself explains it. */
+  alert?: Trouble;
   /**
    * Why the composer cannot send, in the words the person should read, or undefined when it can.
    * One rule, derived once: the placeholder shows it and `send` treats reaching it as a bug.
@@ -228,6 +244,7 @@ function paneOf(view: View): Pane {
   const state = view.states[agentId];
   if (state === "broken") return "broken";
   if (state === "no_agent") return "no-agent";
+  if (state === "missing_dir") return "missing-dir";
   // Not known yet: the agent is still opening (at launch, or the first time it is chosen), and may well
   // have conversations to show.
   if (state === undefined) return "settling";
@@ -238,14 +255,16 @@ function paneOf(view: View): Pane {
   const shown = c && (c.items.length > 0 || queueView(c.waiting, c.state?.pending.steering ?? []).length > 0);
   return shown ? "transcript" : "start";
 }
-function alertOf(view: View): string | undefined {
+function alertOf(view: View): Trouble | undefined {
   const c = view.conversation;
   if (c?.error) return c.error;
-  if (!view.agentId) return view.registryError ?? view.error;
+  // No agent: an unreadable list is its own page, which says why.
+  if (!view.agentId || !view.error) return undefined;
   // A setup problem's own panel explains it and offers the fix. The runtime's prose above it would
   // contradict that: a plain project is told to run `fastagent init` while duang offers to scaffold it.
   const state = view.states[view.agentId];
-  return state === "broken" || state === "missing_model" || state === "no_agent" ? undefined : view.error;
+  if (state === "broken" || state === "missing_model" || state === "no_agent" || state === "missing_dir") return undefined;
+  return { title: "This agent could not be opened", advice: "Try again; its folder and conversations are untouched.", reason: view.error };
 }
 /** In the order the person should hear it: the nearest reason first, the agent's setup after. */
 function blockedBy(view: View): string | undefined {
@@ -256,6 +275,7 @@ function blockedBy(view: View): string | undefined {
   if (c?.error || c?.ended) return "reconnect before sending";
   if (state === "broken") return "this agent is broken";
   if (state === "no_agent") return "create an agent here first";
+  if (state === "missing_dir") return "this agent's folder is missing";
   if (state === "missing_model") return "pick a model to start";
   if (!c) return "no conversation";
   return state === "ready" ? undefined : "this agent is not ready";
@@ -383,35 +403,36 @@ export function createStore(api: DuangApi) {
     for (const listener of listeners) listener();
   };
   /**
-   * A fact about the session, in the transcript it belongs to. `refused` is its own tone because a
-   * refused request never ran (§9): the text is still the person's to edit, while a failure has
-   * already had effects.
+   * A problem in a conversation, in the transcript it belongs to: what it means for the person (`title`,
+   * `advice`) in front of main's or the runtime's own words, kept verbatim. `warning` is a refusal: it
+   * never ran (§9), so the text is still the person's to edit, while a failure has already had effects.
    */
-  const note = (error: unknown, c = view.conversation, tone: "warning" | "error" = "error") => {
-    const text = message(error);
-    if (c) {
-      // main's sentence goes in verbatim; the tone is what says this was refused rather than failed,
-      // and the transcript draws the word (§9).
-      c.items = [...c.items, { kind: "note", tone, text, at: Date.now() }];
-      publish();
-    } else publish({ error: text });
+  const note = (
+    c: Conversation | undefined,
+    problem: { error: unknown; title: string; tone?: "warning" | "error"; advice?: string; fix?: Fix },
+  ) => {
+    const reason = message(problem.error);
+    if (!c) return fail(problem.title, problem.error);
+    const { error: _error, tone = "error", ...said } = problem;
+    c.items = [...c.items, { kind: "note", tone, text: reason, reason, ...said, at: Date.now() }];
+    publish();
   };
-  const refusal = (reason: string, c = view.conversation) => note(reason, c, "warning");
-  const fail = (error: unknown) => publish({ failure: message(error) });
+  /** A failed action that belongs to no conversation, said above the pane by what it was. */
+  const fail = (title: string, error: unknown) => publish({ failure: { title, reason: message(error) } });
   /**
    * About one conversation that may not be the open one (renaming or deleting it from the list): in its
    * transcript when this window holds it, else on its agent's row, where the sidebar says why a list is not
    * what you expected.
    */
-  const reportOn = (agentId: string, session: string, error: unknown, tone: "warning" | "error") => {
+  const reportOn = (agentId: string, session: string, title: string, error: unknown, tone: "warning" | "error") => {
     const held = conversations.get(key(agentId, session));
-    if (held) note(error, held, tone);
+    if (held) note(held, { error, title, tone });
     else publish({ sessionsError: { ...view.sessionsError, [agentId]: message(error) } });
   };
   const close = (c: Conversation) => {
     drafts.set(key(c.agentId, c.session), c.draft);
     if (conversations.get(key(c.agentId, c.session)) === c) conversations.delete(key(c.agentId, c.session));
-    void api.closeSession(c.subscription).catch(fail);
+    void api.closeSession(c.subscription).catch((error) => fail("A conversation was not released", error));
   };
   const leave = () => publish({ conversation: undefined });
   const { onStep, ...settings } = createSettings(api, () => view, publish);
@@ -526,7 +547,11 @@ export function createStore(api: DuangApi) {
     } catch (error) {
       if (conversations.get(key(agentId, session)) !== c) return;
       c.loading = false;
-      c.error = message(error);
+      c.error = {
+        title: "This conversation could not be opened",
+        advice: "Its history is untouched. Try again, or choose another conversation.",
+        reason: message(error),
+      };
       publish();
     }
   }
@@ -558,11 +583,19 @@ export function createStore(api: DuangApi) {
           result.error.code !== "aborted" &&
           !c.items.slice(before).some((item) => item.kind === "note" && item.text.includes(result.error.message))
         ) {
-          refusal(result.error.message, c);
-          // Connecting a provider is the way on; the message waits in the draft.
-          const said = c.items.at(-1);
-          if (result.error.code === MODEL_UNAVAILABLE_CODE && said?.kind === "note")
-            c.items = [...c.items.slice(0, -1), { ...said, connect: true }];
+          note(
+            c,
+            // Connecting a provider is the way on for a model that cannot run; either way the message waits in the draft.
+            result.error.code === MODEL_UNAVAILABLE_CODE
+              ? {
+                  error: result.error.message,
+                  tone: "warning",
+                  title: "This conversation's model cannot run",
+                  advice: "Connect its provider, or choose another model. Your message is back in the composer.",
+                  fix: "providers",
+                }
+              : { error: result.error.message, tone: "warning", title: "Not sent", advice: "Your message is back in the composer." },
+          );
         }
         restoreRejected();
       } else if (waiting()) {
@@ -572,7 +605,7 @@ export function createStore(api: DuangApi) {
         if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c);
       }
     } catch (error) {
-      note(error, c);
+      note(c, { error, title: "The message could not be sent" });
       if (waiting()) restoreRejected();
     } finally {
       c.sends--;
@@ -655,7 +688,7 @@ export function createStore(api: DuangApi) {
       };
       publish();
     } catch (error) {
-      note(error, c);
+      note(c, { error, title: "This conversation's settings could not be read" });
     }
   }
   /**
@@ -759,7 +792,12 @@ export function createStore(api: DuangApi) {
         item.kind === "tool" && item.status === "running" && item.ended === undefined ? { ...item, ended: now } : item,
       );
       if (frame.ended.expected) c.ended = frame.ended.reason;
-      else c.error = frame.ended.reason;
+      else
+        c.error = {
+          title: "The live connection to this conversation was lost",
+          advice: "A run in it goes on in duang. Reconnect to see where it is now.",
+          reason: frame.ended.reason,
+        };
       publish();
       return;
     }
@@ -843,7 +881,7 @@ export function createStore(api: DuangApi) {
         await api.renameAgent(id, name);
         publish({ agents: await api.listAgents() });
       } catch (error) {
-        fail(error);
+        fail("The agent was not renamed", error);
       }
     },
     open,
@@ -905,7 +943,7 @@ export function createStore(api: DuangApi) {
       try {
         await api.openUsagePage(provider);
       } catch (error) {
-        fail(error);
+        fail("The usage page did not open", error);
       }
     },
     /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
@@ -939,7 +977,7 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         await selectAgent(row.id);
       } catch (error) {
-        fail(error);
+        fail("The agent was not added", error);
       }
     },
     async pickModel(model: string) {
@@ -957,7 +995,7 @@ export function createStore(api: DuangApi) {
         if (!result.ok) {
           settle();
           // The model did not change, so nothing ran: this is a refusal, not a failure.
-          return refusal(result.error.message, c);
+          return note(c, { error: result.error.message, tone: "warning", title: "The model was not changed" });
         }
         publish({ agents: await api.listAgents() });
         settle();
@@ -972,7 +1010,7 @@ export function createStore(api: DuangApi) {
         } else await selectAgent(id);
       } catch (error) {
         settle();
-        if (request === navigation) note(error, c);
+        if (request === navigation) note(c, { error, title: "The model was not changed" });
       }
     },
     /**
@@ -985,10 +1023,10 @@ export function createStore(api: DuangApi) {
       if (!id || !c) return;
       try {
         const result = await api.setThinking(id, c.session, level);
-        if (!result.ok) refusal(result.error.message, c);
+        if (!result.ok) note(c, { error: result.error.message, tone: "warning", title: "The effort was not changed" });
         else await keepListed(c);
       } catch (error) {
-        note(error, c);
+        note(c, { error, title: "The effort was not changed" });
       }
     },
     async scaffold() {
@@ -999,7 +1037,7 @@ export function createStore(api: DuangApi) {
         await api.scaffoldAgent(id);
         if (request === navigation) await selectAgent(id);
       } catch (error) {
-        if (request === navigation) fail(error);
+        if (request === navigation) fail("The agent could not be created here", error);
       }
     },
     async reveal(agentId = view.agentId) {
@@ -1007,7 +1045,7 @@ export function createStore(api: DuangApi) {
         // No agent to name means the list itself is what failed; show that file instead.
         await (agentId ? api.revealAgent(agentId) : api.revealRegistry());
       } catch (error) {
-        fail(error);
+        fail("It could not be shown in Finder", error);
       }
     },
     async removeAgent() {
@@ -1015,7 +1053,7 @@ export function createStore(api: DuangApi) {
       if (!id) return;
       try {
         const result = await api.removeAgent(id);
-        if (!result.ok) return fail(result.error.message);
+        if (!result.ok) return fail("The agent was not removed", result.error.message);
         for (const c of conversations.values()) if (c.agentId === id) close(c);
         for (const draftKey of [...drafts.keys()]) if (draftKey.startsWith(`${id}/`)) drafts.delete(draftKey);
         for (const scrollKey of [...scrolls.keys()]) if (scrollKey.startsWith(`${id}/`)) scrolls.delete(scrollKey);
@@ -1026,7 +1064,7 @@ export function createStore(api: DuangApi) {
         publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: rest });
         if (view.agents[0]) await selectAgent(view.agents[0].id);
       } catch (error) {
-        fail(error);
+        fail("The agent was not removed", error);
       }
     },
     /**
@@ -1036,12 +1074,12 @@ export function createStore(api: DuangApi) {
     async renameSession(id: string, session: string, name: string) {
       try {
         const result = await api.renameSession(id, session, name);
-        if (!result.ok) return reportOn(id, session, result.error.message, "warning");
+        if (!result.ok) return reportOn(id, session, "The conversation was not renamed", result.error.message, "warning");
         // The name is FastAgent's now; re-read rather than patch, through the same ordered path
         // expanding uses, so a failed read is reported instead of leaving the old label in place.
         await listSessions(id);
       } catch (error) {
-        reportOn(id, session, error, "warning");
+        reportOn(id, session, "The conversation was not renamed", error, "warning");
       }
     },
     /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */
@@ -1049,7 +1087,7 @@ export function createStore(api: DuangApi) {
       try {
         const result = await api.deleteSession(id, session);
         // Refused: nothing was deleted, and the conversation it is about says so.
-        if (!result.ok) return reportOn(id, session, result.error.message, "warning");
+        if (!result.ok) return reportOn(id, session, "The conversation was not deleted", result.error.message, "warning");
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
@@ -1062,7 +1100,7 @@ export function createStore(api: DuangApi) {
         if (view.conversation?.session === session) await open(crypto.randomUUID());
         await listSessions(id);
       } catch (error) {
-        reportOn(id, session, error, "error");
+        reportOn(id, session, "The conversation was not deleted", error, "error");
       }
     },
     async send() {
@@ -1092,9 +1130,10 @@ export function createStore(api: DuangApi) {
         const result = await api.abort(c.agentId, c.session);
         // Nothing left running: the run ended as Stop was pressed, and its own ending is already in the
         // transcript. Main answers a Stop for a send that has not started a run yet with `ok`.
-        if (!result.ok && result.error.code !== NO_ACTIVE_RUN_CODE) note(result.error.message, c);
+        if (!result.ok && result.error.code !== NO_ACTIVE_RUN_CODE)
+          note(c, { error: result.error.message, title: "The run could not be stopped" });
       } catch (error) {
-        note(error, c);
+        note(c, { error, title: "The run could not be stopped" });
       }
     },
     async retry() {

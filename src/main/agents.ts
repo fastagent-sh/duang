@@ -1,5 +1,6 @@
 /** Local runtime lifetime and the registry are agent-scoped, not tied to the visible conversation. */
 import { app } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
@@ -36,6 +37,8 @@ const changing = new Map<string, Promise<void>>();
 
 export class MissingModelError extends Error {}
 export class NoAgentError extends Error {}
+/** The registered directory is not there (moved, deleted, a drive not mounted): nothing to scaffold into. */
+export class MissingDirError extends Error {}
 
 async function build(row: AgentRow): Promise<Opened> {
   const opened = await assemble(row);
@@ -45,6 +48,9 @@ async function build(row: AgentRow): Promise<Opened> {
 }
 
 async function assemble(row: AgentRow): Promise<Opened> {
+  // FastAgent says "is not a fastagent agent" for a directory that is not there too, and that one must not
+  // be offered a scaffold: there is no folder to put it in.
+  if (!existsSync(row.dir)) throw new MissingDirError(`${row.dir} does not exist`);
   try {
     const assembly = await createPiAgentFromDir(row.dir, {
       sessionControl: true,

@@ -25,7 +25,7 @@ import type { ProviderUsage } from "../main/usage.ts";
 
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
-  | { ok: false; code: "missing_model" | "no_agent" | "failed"; message: string };
+  | { ok: false; code: "missing_model" | "no_agent" | "missing_dir" | "failed"; message: string };
 
 /** One channel for every subscription of this window: each frame says which one it belongs to. */
 export type SessionFrame = Frame<SessionEvent>;

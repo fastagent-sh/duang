@@ -871,8 +871,12 @@ if (!process.versions.electron) {
       // Removal is offered by the panel that explains the problem, not by the sidebar row, so look
       // for the button rather than for the word anywhere on screen.
       await until(
-        "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove')",
+        "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove from duang')",
         "a directory that no longer exists stays removable from the panel that explains it",
+      );
+      assert.ok(
+        await evaluate("document.querySelector('main').innerText.includes(\"This agent's folder is not there\") && ![...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Create agent here')"),
+        "a folder that is not there is said so, and is not offered a scaffold",
       );
       // An agent's name is duang's label, so even a broken agent can be renamed; the directory is not.
       await evaluate(`document.querySelector('button[aria-label="Gone"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
@@ -886,8 +890,8 @@ if (!process.versions.electron) {
       await until("document.querySelector('button[aria-label=\"Gone for good\"]') !== null", "the roster shows the new name");
       assert.equal(
         await evaluate(`document.querySelector('button[aria-label="Gone for good"] .avatar').dataset.face`),
-        "unborn",
-        "a directory with no agent yet has an outline, not a face",
+        "broken",
+        "an agent whose folder is not there cannot run, and wears the face that says so",
       );
       assert.equal(
         JSON.parse(await readFile(join(data, "agents.json"), "utf8")).find((row) => row.id === "gone").name,

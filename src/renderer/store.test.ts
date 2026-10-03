@@ -177,7 +177,8 @@ test("an unreadable agent list is its own pane; a failure adding an agent is sai
   };
   await store.load();
   assert.equal(store.getSnapshot().pane, "unreadable-registry");
-  assert.equal(store.getSnapshot().alert, "agents.json: Unexpected token");
+  assert.equal(store.getSnapshot().registryError, "agents.json: Unexpected token");
+  assert.equal(store.getSnapshot().alert, undefined, "the page says it; nothing over it repeats it");
 
   api.listAgents = async () => [];
   await store.load();
@@ -187,7 +188,8 @@ test("an unreadable agent list is its own pane; a failure adding an agent is sai
   };
   await store.addAgent();
   assert.equal(store.getSnapshot().pane, "no-agents", "adding failed; the list itself was read fine");
-  assert.match(store.getSnapshot().failure ?? "", /realpath/);
+  assert.equal(store.getSnapshot().failure?.title, "The agent was not added");
+  assert.match(store.getSnapshot().failure?.reason ?? "", /realpath/);
   store.dismissFailure();
   assert.equal(store.getSnapshot().failure, undefined);
   store.dispose();
@@ -415,7 +417,8 @@ test("a failure is shown as the sentence main wrote, wherever it lands", async (
     throw wrapped;
   };
   await store.open("gone");
-  assert.equal(store.getSnapshot().conversation?.error, "no such session");
+  assert.equal(store.getSnapshot().conversation?.error?.reason, "no such session");
+  assert.equal(store.getSnapshot().alert?.title, "This conversation could not be opened");
   api.openSession = async () => empty();
   api.send = async () => {
     throw wrapped;
@@ -424,7 +427,9 @@ test("a failure is shown as the sentence main wrote, wherever it lands", async (
   store.setDraft("hi");
   await store.send();
   const notes = store.getSnapshot().conversation?.items.filter((item) => item.kind === "note");
-  assert.equal(notes?.at(-1)?.text, "no such session", "the banner and the transcript say the same thing");
+  const last = notes?.at(-1);
+  assert.equal(last?.kind === "note" && last.reason, "no such session", "the strip and the transcript keep main's words");
+  assert.equal(last?.kind === "note" && last.title, "The message could not be sent");
   store.dispose();
 });
 
@@ -506,7 +511,8 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   assert.equal(store.getSnapshot().blocked, "reconnect before sending");
   await assert.rejects(() => store.send(), /reconnect before sending/, "a blocked send is a bug, not a no-op");
   assert.equal(current.draft, "keep me");
-  assert.equal(current.error, "stream disconnected");
+  assert.equal(current.error?.reason, "stream disconnected");
+  assert.equal(current.error?.title, "The live connection to this conversation was lost");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.draft, "keep me");
   assert.equal(store.getSnapshot().conversation?.error, undefined);
@@ -555,7 +561,11 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
   assert.equal(notes.length, 1, "the model refusal is the conversation's own, verbatim");
-  assert.equal(store.getSnapshot().failure, "An agent conversation is running", "the agent's removal is not the conversation's");
+  assert.deepEqual(
+    store.getSnapshot().failure,
+    { title: "The agent was not removed", reason: "An agent conversation is running" },
+    "the agent's removal is not the conversation's",
+  );
   store.dispose();
 });
 
@@ -1842,7 +1852,7 @@ test("an agent's row does not call a conversation cut short while its run is sti
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(
       store.getSnapshot().previews["b"]?.text,
-      status === "running" ? "You: fix the build" : "run cut short: no answer was recorded",
+      status === "running" ? "You: fix the build" : "This run was cut short",
       status,
     );
     store.dispose();
@@ -1927,7 +1937,7 @@ test("a failure about another conversation is said there, and a refusal said bef
   }
   const refusals = c.items.filter((item) => item.kind === "note" && item.text === "anthropic/x cannot run");
   assert.equal(refusals.length, 2);
-  assert.ok(refusals.every((item) => item.kind === "note" && item.connect), "with the way on: connecting a provider");
+  assert.ok(refusals.every((item) => item.kind === "note" && item.fix === "providers"), "with the way on: the model providers");
   assert.equal(c.draft, "second", "and the refused message is back in the draft");
   store.dispose();
 });

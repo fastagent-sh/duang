@@ -572,8 +572,9 @@ Everything else follows from those two:
   it ran, so a reopened call shows none. The clock stops when this view stops hearing the run.
 - **Thinking** collapses to one muted line (`thinking · 3s`, trailed by the line it is on) and
   expands into a quoted block.
-- **System events are one centred muted line**: model changed, run stopped, a send refused. They are
-  facts about the session, not things anyone said.
+- **System events are one centred muted line**: model changed, run stopped, a retry, a command that
+  ran. They are facts about the session, not things anyone said. A problem the person may have to act
+  on (a run that failed or was cut short, a send refused) is a card instead (§9b).
 - **A message is placed where the runtime says it entered.** Sent, it waits below the live output,
   dimmed and labelled `sending`, or `queued` while the runtime lists it in `pending.steering`; one
   that opens a run (nothing running, or the running one has no message yet, judged when it is sent)
@@ -691,9 +692,43 @@ The tier-1 states reach the sidebar as words too: an agent that is `broken`, `ne
 `no agent yet` says so on its row. A coloured dot on its own was colour doing the work, readable
 only through a tooltip.
 
-In the transcript, a refusal is drawn with the word `refused` beside main's own sentence, which goes
-in verbatim. The tone carries the distinction the words make: nothing ran, so the message is still
-the person's to edit.
+In the transcript, a refusal is a card in the warning tone, with a prohibition mark rather than the
+failure's, and says the message is back in the composer: nothing ran, so it is still the person's to
+edit. main's own sentence is kept verbatim behind it (§9b).
+
+## 9b. Problems
+
+Something went wrong is said for the person, not for the program that noticed it. Every problem has
+the same parts, in this order:
+
+1. **What it means**, as a title in the person's words: "The provider did not accept the sign-in", not
+   `OpenAI API error (401)`. A run's failure gets its title from the reason's own markers (an HTTP
+   status, a network error code), conservatively; a reason nothing recognises gets "The run stopped
+   with an error", never a guess (`problems.ts`).
+2. **What to do**, one sentence, when there is something besides the buttons.
+3. **The way on**, as buttons, the likeliest fix first: Model providers, Network settings, View usage,
+   Retry, Reconnect. A problem with nothing to do says so by having none.
+4. **The original words**, verbatim, because they are what a report needs (AGENTS.md). Where nothing
+   else explains the problem, a short one-line reason is the explanation and reads in place, in the
+   app's face. Otherwise it folds to its first line, quietly, and opens into a mono well with a copy
+   button. On a page it is the well itself.
+
+Colour follows §9 and is never the only signal: danger for something that failed, warning for
+something refused, muted for a fact. Each has its own mark (a warning circle, a prohibition sign, an
+info circle) beside the words.
+
+Size follows scope, at three placements of one component (`problem.tsx`):
+
+| Placement | For | Shape |
+|---|---|---|
+| **card** | a run or a send, in the transcript where it happened | `surface`, hairline, 14 radius, in the reading column. Only the latest one carries buttons: an earlier one is history |
+| **strip** | this view lost its conversation, or an action outside any conversation failed (renaming, adding or removing an agent) | the popover surface, floating under the header over the transcript, which never moves for it; Dismiss when it is only news |
+| **page** | there is nothing else to show: an agent that cannot load, a folder that is not there, an agent list that cannot be read, a view that could not be drawn | centred in the pane: a 40px tile with the mark, a 15px title, the sentence, the well, the buttons |
+
+Setup pages (no agents yet, a folder with no agent yet) wear the page's shape with an accent mark, so a
+first step and a problem look like the same app. A roster row says a problem in one short word and
+keeps the original on hover; its quote of a conversation that ended in a problem is that problem's
+title, not the provider's JSON.
 
 ## 10. Motion
 

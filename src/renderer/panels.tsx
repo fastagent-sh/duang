@@ -1,56 +1,57 @@
-/** What the content area shows when there is no conversation to read: setup states and a fresh start. */
-import { FolderOpen, X } from "@phosphor-icons/react";
+/**
+ * What the content area shows when there is no conversation to read: setup states, problems that stop an
+ * agent from opening, and a fresh start. Each says what it means for the person and offers the way on
+ * (docs/ui.md §9b).
+ */
+import { ArrowClockwise, FolderOpen, FolderSimplePlus, Plus, X } from "@phosphor-icons/react";
 import { Button } from "./ui.tsx";
-
-/** Whatever replaces the transcript sits in the transcript's box, so the composer never moves. */
-function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5">{children}</div>;
-}
+import { Page, Problem } from "./problem.tsx";
+import { home } from "./paths.ts";
 
 export function NoAgents({ onAdd }: { onAdd: () => void }) {
   return (
-    <Panel>
-      <div className="max-w-sm mx-auto mt-20 text-center space-y-4">
-        <p className="text-muted leading-relaxed">
-          duang runs the agents you already have — and later puts them online.
-        </p>
-        <Button kind="primary" onClick={onAdd}>
+    <Page
+      tone="accent"
+      icon={<Plus size={18} />}
+      title="Add your first agent"
+      advice="duang runs the agents you already have. Choose an agent's folder, or a project to make one in."
+      actions={
+        <Button kind="primary" size={32} onClick={onAdd}>
           Add an agent directory
         </Button>
-        <p className="text-muted text-[11px]">
-          No agent yet? Run <span className="font-mono">fastagent init</span> in a project.
-        </p>
-      </div>
-    </Panel>
+      }
+    />
   );
 }
 
 /**
- * duang cannot read its own agent list. It must not repair the file: the broken one may be the only
- * record of which directories are agents. So the recovery is the person's — open it, fix or move it,
- * retry — and the app's job is to make both actions reachable.
+ * duang cannot read its agent list. It must not repair the file: the broken one may be the only record of
+ * which directories are agents. So the recovery is the person's (open it, fix or move it, retry), and the
+ * app's job is to make both actions reachable, with the reason it could not read it.
  */
-export function UnreadableRegistry({ onReveal, onRetry }: { onReveal: () => void; onRetry: () => void }) {
+export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: string; onReveal: () => void; onRetry: () => void }) {
   return (
-    <Panel>
-      <div className="max-w-sm mx-auto mt-20 text-center space-y-4">
-        <p className="text-muted leading-relaxed">
-          duang could not read its agent list, so it is not showing one. Your agent directories and their
-          conversations are untouched, and the file is left exactly as it is.
-        </p>
-        <div className="flex gap-2 justify-center">
-          <Button icon={<FolderOpen size={14} />} onClick={onReveal}>
+    <Problem
+      layout="page"
+      tone="error"
+      title="duang cannot read its list of agents"
+      advice="Your agents and their conversations are untouched, and the file is left exactly as it is. Fix or move it, then retry."
+      reason={reason}
+      actions={
+        <>
+          <Button kind="primary" size={32} icon={<FolderOpen size={14} />} onClick={onReveal}>
             Reveal agents.json
           </Button>
-          <Button kind="ghost" onClick={onRetry}>
+          <Button size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
-        </div>
-      </div>
-    </Panel>
+        </>
+      }
+    />
   );
 }
 
+/** The agent's definition does not load: its own error says where, and the folder is where to fix it. */
 export function BrokenAgent({
   message,
   onRemove,
@@ -63,53 +64,94 @@ export function BrokenAgent({
   onRetry: () => void;
 }) {
   return (
-    <Panel>
-      <div className="max-w-2xl space-y-3">
-        <div className="rounded-card border border-danger/40 bg-danger/5 p-3 text-danger whitespace-pre-wrap leading-relaxed">
-          {message}
-        </div>
-        <div className="flex gap-2">
-          <Button kind="danger" icon={<X size={14} />} onClick={onRemove}>
-            Remove agent
-          </Button>
-          <Button icon={<FolderOpen size={14} />} onClick={onReveal}>
-            Reveal in Finder
-          </Button>
-          <Button kind="ghost" onClick={onRetry}>
+    <Problem
+      layout="page"
+      tone="error"
+      title="This agent could not be loaded"
+      advice="Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
+      reason={message}
+      actions={
+        <>
+          <Button kind="primary" size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
-        </div>
-      </div>
-    </Panel>
+          <Button size={32} icon={<FolderOpen size={14} />} onClick={onReveal}>
+            Reveal in Finder
+          </Button>
+          <Button kind="danger" size={32} icon={<X size={14} />} onClick={onRemove}>
+            Remove from duang
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
+/**
+ * The folder the agent was added from is not there: moved, deleted, or on a drive that is not mounted.
+ * Retry covers the drive coming back; a moved folder is added again from where it is now.
+ */
+export function MissingFolder({ dir, onRemove, onRetry }: { dir: string; onRemove: () => void; onRetry: () => void }) {
+  return (
+    <Problem
+      layout="page"
+      tone="error"
+      title="This agent's folder is not there"
+      advice={
+        <>
+          duang last found it at <span className="font-mono text-[12.5px]">{home(dir)}</span>. If it is on a drive,
+          connect it and retry. If it was moved, remove this agent and add the folder from where it is now; its
+          conversations travel with the folder.
+        </>
+      }
+      actions={
+        <>
+          <Button kind="primary" size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
+            Retry
+          </Button>
+          <Button kind="danger" size={32} icon={<X size={14} />} onClick={onRemove}>
+            Remove from duang
+          </Button>
+        </>
+      }
+    />
   );
 }
 
 /** A plain project: it can hold an agent, it just does not yet. Say exactly what gets written. */
 export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate: () => void; onRemove: () => void }) {
   return (
-    <Panel>
-      <div className="max-w-xl space-y-4">
-        <p className="text-muted leading-relaxed">
-          This folder has no agent yet. duang can create one here — the project stays the agent&apos;s workspace, so it
-          works on these files and reads their <span className="font-mono">AGENTS.md</span>.
-        </p>
-        <pre className="rounded-card bg-surface ring-1 ring-stroke p-3 text-[11px] font-mono text-muted">
-          {`${dir}/fastagent/\n  fastagent.config.ts\n  .gitignore`}
-        </pre>
-        <p className="text-muted text-[11px]">
-          Two files, nothing else. For the full scaffold (persona, skills, example tool) run{" "}
-          <span className="font-mono">fastagent init</span> instead.
-        </p>
-        <div className="flex gap-2">
-          <Button kind="primary" onClick={onCreate}>
+    <Page
+      tone="accent"
+      icon={<FolderSimplePlus size={18} />}
+      title="This folder has no agent yet"
+      advice={
+        <>
+          duang can create one here. The project stays the agent&apos;s workspace, so it works on these files and reads
+          their <span className="font-mono text-[12.5px]">AGENTS.md</span>.
+        </>
+      }
+      actions={
+        <>
+          <Button kind="primary" size={32} onClick={onCreate}>
             Create agent here
           </Button>
-          <Button kind="danger" icon={<X size={14} />} onClick={onRemove}>
+          <Button kind="danger" size={32} icon={<X size={14} />} onClick={onRemove}>
             Remove
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-2 text-left">
+        <pre className="rounded-card bg-surface-2 p-3 font-mono text-[12.5px] text-muted">
+          {`${home(dir)}/fastagent/\n  fastagent.config.ts\n  .gitignore`}
+        </pre>
+        <p className="text-[12px] text-muted">
+          Two files, nothing else. For the full scaffold (persona, skills, an example tool) run{" "}
+          <span className="font-mono text-[12.5px]">fastagent init</span> instead.
+        </p>
       </div>
-    </Panel>
+    </Page>
   );
 }
 

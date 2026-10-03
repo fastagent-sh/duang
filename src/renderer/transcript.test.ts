@@ -158,7 +158,9 @@ test("a duration reads as pi writes it", () => {
 test("only a failed run leaves a note", () => {
   assert.equal(apply([], event("run_settled", { status: "completed" })).length, 0);
   const failed = apply([], event("run_settled", { status: "failed", error: { message: "boom" } }));
-  assert.deepEqual(failed, [{ kind: "note", tone: "error", text: "run failed: boom", at: 0 }]);
+  assert.deepEqual(failed, [
+    { kind: "note", tone: "error", text: "run failed: boom", title: "The run stopped with an error", reason: "boom", at: 0 },
+  ]);
 });
 
 test("tool output comes out of its envelope, and an unknown shape keeps its JSON", () => {
@@ -273,7 +275,7 @@ test("retry and serving failures preserve the runtime's original message; a retr
     { kind: "note", tone: "info", text: "retrying 1/3: 429 quota", at: 0 },
   ]);
   assert.deepEqual(apply([], event("serving_error", { message: "disk is full" })), [
-    { kind: "note", tone: "error", text: "disk is full", at: 0 },
+    { kind: "note", tone: "error", text: "disk is full", title: "The agent's runtime reported a problem", reason: "disk is full", at: 0 },
   ]);
 });
 
@@ -473,7 +475,13 @@ test("a ChatGPT plan's usage limit names the provider whose page says more, live
 test("a turn cut partway with nothing recorded says so and offers its message again; a finished or running one does not", () => {
   const entry = (id: string, kind: string, data: object) => ({ id, timestamp: Number(id), kind, data }) as SessionEntry;
   const last = (items: Item[]) => items.at(-1) as Extract<Item, { kind: "note" }>;
-  const cut = { kind: "note", tone: "error", text: "run cut short: no answer was recorded" };
+  const cut = {
+    kind: "note",
+    tone: "error",
+    text: "run cut short: no answer was recorded",
+    title: "This run was cut short",
+    advice: "duang or the computer stopped before an answer was recorded. What it did up to here is kept.",
+  };
   const user = entry("1", "user", { text: "fix the build" });
   const call = entry("2", "assistant", { text: "", toolCalls: [{ id: "t1", name: "bash" }] });
   const result = entry("3", "tool", { toolCallId: "t1", toolName: "bash", text: "ok" });

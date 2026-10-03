@@ -7,6 +7,7 @@ import type {
   SessionEvent,
   SessionState,
 } from "@fastagent-sh/fastagent/session";
+import { explainRunFailure, type Fix } from "./problems.ts";
 
 /**
  * When it happened. Required on every item, because both the day separators and the time under a
@@ -45,31 +46,40 @@ export type Item = At &
       ended?: number;
     }
   /**
-   * A fact about the session rather than something anyone said. `tone` decides whether it reads as
-   * a quiet line or as a failure — stopping a run is not an error, and colouring it like one was
-   * the transcript telling the person they broke something.
-   */
-  /**
-   * `resend`: this note is the failure of a run that had taken a message, the one Retry sends again, and
-   * whether that run had started a tool (sending it again may repeat that work). `limit`: the failure is a
-   * plan's usage limit, and the provider whose usage page says more. `connect`: a send refused because the
-   * conversation's model cannot run with the connected providers; connecting one is the way on.
+   * A fact about the session rather than something anyone said. One with a `title` is a problem the
+   * person may have to act on, drawn as a card: what it means (`title`, `advice`), the original
+   * `reason` verbatim, and the way on. One without is a quiet line (`text`): stopping a run or a
+   * retry is not an error, and colouring it like one was the transcript telling the person they broke
+   * something. `text` is the one-line form a roster row quotes.
+   *
+   * `resend`: the failure of a run that had taken a message, the one Retry sends again, and whether that
+   * run had started a tool (sending it again may repeat that work). `limit`: a plan's usage limit, and
+   * the provider whose usage page says more. `fix`: where in duang the way on is.
    */
   | {
       kind: "note";
       tone: "info" | "warning" | "error";
       text: string;
+      title?: string;
+      advice?: string;
+      reason?: string;
+      fix?: Fix;
       resend?: { text: string; toolsRan: boolean };
       limit?: string;
-      connect?: true;
     });
 
-/**
- * The provider whose plan limit a failure reports, read from the provider's own error code (OpenAI's
- * documented `subscription_sharing_usage_limit_exceeded`, which pi passes on in the run's error).
- */
-const limitOf = (message: string | undefined) =>
-  message?.includes("subscription_sharing_usage_limit_exceeded") ? { limit: "openai" } : {};
+/** A run's failure, as the card says it: what it means, the reason verbatim, and a plan limit's page. */
+function failed(reason: string) {
+  // OpenAI's documented code for a ChatGPT plan's limit, which pi passes on in the run's error.
+  if (reason.includes("subscription_sharing_usage_limit_exceeded"))
+    return {
+      title: "Your ChatGPT plan has reached its limit",
+      advice: "Its usage page says when it resets. The limit is shared with every app that uses the plan.",
+      reason,
+      limit: "openai",
+    };
+  return { ...explainRunFailure(reason), reason };
+}
 
 /**
  * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of
@@ -339,7 +349,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
           text: `run failed${message ? `: ${message}` : ""}`,
           at,
           ...(turn?.kind === "user" ? { resend: { text: turn.text, toolsRan } } : {}),
-          ...limitOf(message),
+          ...failed(message),
         });
       }
       // An answer that called no tool ends its work: a later failure cannot repeat what came before it. One
@@ -370,6 +380,8 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
         kind: "note",
         tone: "error",
         text: "run cut short: no answer was recorded",
+        title: "This run was cut short",
+        advice: "duang or the computer stopped before an answer was recorded. What it did up to here is kept.",
         at: items.at(-1)!.at,
         resend: { text: turn.text, toolsRan: items.slice(unconcluded).some((item) => item.kind === "tool") },
       });
@@ -471,8 +483,11 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
     const text =
       item.kind === "user"
         ? `You: ${item.text}`
-        : item.kind === "assistant" || item.kind === "note"
+        : item.kind === "assistant"
           ? item.text
+          : item.kind === "note"
+            ? // A problem is quoted by what it means, not by the provider's raw words.
+              item.title ?? item.text
           : item.kind === "tool"
             ? `${item.name} ${firstArg(item.args)}`
             : item.kind === "thinking" && item.open
@@ -586,7 +601,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
           // `aborted`, and never `failed` — that word blames the run for their decision.
           text: `run ${stopped ? "stopped" : e.data.status}${error?.message ? `: ${error.message}` : ""}`,
-          ...limitOf(error?.message),
+          ...(stopped ? {} : failed(error?.message ?? "")),
         },
       ];
     }
@@ -603,7 +618,17 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
         },
       ];
     case "serving_error":
-      return [...items, { kind: "note", tone: "error", text: e.data.message, at: event.timestamp }];
+      return [
+        ...items,
+        {
+          kind: "note",
+          tone: "error",
+          text: e.data.message,
+          title: "The agent's runtime reported a problem",
+          reason: e.data.message,
+          at: event.timestamp,
+        },
+      ];
     default:
       return items;
   }

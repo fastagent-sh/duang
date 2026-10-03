@@ -6,6 +6,7 @@ import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
 import { home } from "./paths.ts";
 import { tokens } from "./usage.ts";
+import { Problem } from "./problem.tsx";
 import type { Models } from "../preload/index.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
@@ -163,12 +164,17 @@ function ModelPicker({
       className="popover fixed m-0 top-auto right-auto w-[300px] flex-col overflow-hidden p-0 text-text open:flex backdrop:bg-transparent"
     >
       {error ? (
-        <div role="alert" className="space-y-2 p-4 text-danger">
-          <p>{error}</p>
-          <Button kind="ghost" size={28} onClick={onRetry}>
-            Retry
-          </Button>
-        </div>
+        <Problem
+          tone="error"
+          layout="strip"
+          title="This agent's models could not be listed"
+          reason={error}
+          actions={
+            <Button kind="secondary" size={28} onClick={onRetry}>
+              Retry
+            </Button>
+          }
+        />
       ) : models?.length === 0 ? (
         <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
           {/* Empty is not always "nothing connected": a ChatGPT sign-in whose model list could not be read at
@@ -321,7 +327,7 @@ export function Composer({
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";
   const modelDisabled =
-    view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent";
+    view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir";
   /** Why the model cannot be changed right now, or false when it can. */
   const modelReason =
     (!agentId && "Select an agent first") ||
