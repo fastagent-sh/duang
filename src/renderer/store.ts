@@ -22,6 +22,11 @@ import {
 import { message } from "./message.ts";
 /** main's code for a send refused because the conversation's model cannot run here (`send.ts`). */
 const MODEL_UNAVAILABLE_CODE = "model_unavailable";
+/**
+ * Events that report what the person did (a message queued or entered, a setting changed), not output from
+ * the run: they do not end the model's silence.
+ */
+const PERSON_SIDE = new Set(["queue_changed", "user_message", "state_changed"]);
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
@@ -533,7 +538,8 @@ export function createStore(api: DuangApi) {
     const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
     // Notes from before this send are not this send's: a refusal said for an earlier message is said again.
     const before = c.items.length;
-    c.heard = Date.now();
+    // A new run's silence counts from its message; a steer is the person, not the model, and leaves it be.
+    if (echo.opens) c.heard = Date.now();
     c.waiting = [...c.waiting, echo];
     const waiting = () => c.waiting.includes(echo);
     /** Nothing entered from it, so the text is still the person's to send again. */
@@ -757,7 +763,7 @@ export function createStore(api: DuangApi) {
       publish();
       return;
     }
-    c.heard = Date.now();
+    if (!PERSON_SIDE.has(frame.event.type)) c.heard = Date.now();
     if (c.loading) c.events.push(frame.event);
     else fold(c, frame.event);
     publish();
