@@ -1,29 +1,45 @@
 import { ABORTED_CODE, SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type Session, type SessionResult } from "@fastagent-sh/fastagent/session";
-import { retired } from "./providers.ts";
 
 const stoppedBeforeStart: SessionResult = {
   ok: false,
   error: { code: ABORTED_CODE, message: "Stopped before the run started", retryable: true },
 };
 
+/** Why a conversation's model cannot start a run here, in the person's words and with the way on. */
+export const MODEL_UNAVAILABLE_CODE = "model_unavailable";
+const unavailable = (model: string): SessionResult => ({
+  ok: false,
+  error: {
+    code: MODEL_UNAVAILABLE_CODE,
+    message: `${model} cannot run: its provider is not connected, or the model is not offered to it. Connect the provider, or choose another model for this conversation.`,
+    retryable: true,
+  },
+});
+
 /**
  * The runtime, not a stale UI snapshot, decides whether this message starts or steers a turn. `stopped` is
  * asked right before each call that hands the message to the runtime: a Stop that came first means none is made.
+ *
+ * `offered` is whether the picker would offer a model to this agent (its credentials authenticate it, and it
+ * is not on a retired route). A run starts only on such a model, so a conversation whose provider was
+ * disconnected, or recorded on a route duang no longer runs, is refused before anything is recorded, in
+ * duang's words, rather than failing inside the engine with its CLI's advice.
  */
-export async function send(agent: Agent, session: Session, text: string, stopped = () => false): Promise<SessionResult> {
+export async function send(
+  agent: Agent,
+  session: Session,
+  text: string,
+  stopped: () => boolean,
+  offered: (model: string) => Promise<boolean>,
+): Promise<SessionResult> {
   const state = await session.state();
-  // A conversation recorded on a provider duang no longer runs does not go on there quietly.
-  if (state.model && retired(state.model))
-    return {
-      ok: false,
-      error: { code: "model_retired", message: `${state.model} is no longer offered: pick another model for this conversation`, retryable: false },
-    };
   if (state.status === "running") {
     if (stopped()) return stoppedBeforeStart;
     const result = await session.steer({ text });
     if (result.ok || result.error.code !== NO_ACTIVE_RUN_CODE) return result;
   }
+  if (state.model && !(await offered(state.model))) return unavailable(state.model);
   if (stopped()) return stoppedBeforeStart;
   let first = true;
   for await (const event of agent.invoke({ session: session.id }, { text })) {

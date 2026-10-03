@@ -20,6 +20,8 @@ import {
   type UserItem,
 } from "./transcript.ts";
 import { message } from "./message.ts";
+/** main's code for a send refused because the conversation's model cannot run here (`send.ts`). */
+const MODEL_UNAVAILABLE_CODE = "model_unavailable";
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "broken";
@@ -149,6 +151,11 @@ export interface View extends SettingsView {
   changingModel?: string;
   /** About the open agent, or a failure with no conversation to note it in. */
   error?: string;
+  /**
+   * An action that belongs to no conversation failed (renaming, adding, revealing or removing an agent):
+   * said above the pane until dismissed, never written into whichever conversation is open.
+   */
+  failure?: string;
   /** Why duang's own agent list could not be read. Not an empty list: the pane says so. */
   registryError?: string;
   /** The model picker's contents: undefined while loading, so the picker can say so. */
@@ -383,10 +390,21 @@ export function createStore(api: DuangApi) {
     } else publish({ error: text });
   };
   const refusal = (reason: string, c = view.conversation) => note(reason, c, "warning");
+  const fail = (error: unknown) => publish({ failure: message(error) });
+  /**
+   * About one conversation that may not be the open one (renaming or deleting it from the list): in its
+   * transcript when this window holds it, else on its agent's row, where the sidebar says why a list is not
+   * what you expected.
+   */
+  const reportOn = (agentId: string, session: string, error: unknown, tone: "warning" | "error") => {
+    const held = conversations.get(key(agentId, session));
+    if (held) note(error, held, tone);
+    else publish({ sessionsError: { ...view.sessionsError, [agentId]: message(error) } });
+  };
   const close = (c: Conversation) => {
     drafts.set(key(c.agentId, c.session), c.draft);
     if (conversations.get(key(c.agentId, c.session)) === c) conversations.delete(key(c.agentId, c.session));
-    void api.closeSession(c.subscription).catch((error) => note(error));
+    void api.closeSession(c.subscription).catch(fail);
   };
   const leave = () => publish({ conversation: undefined });
   const { onStep, ...settings } = createSettings(api, () => view, publish);
@@ -510,6 +528,8 @@ export function createStore(api: DuangApi) {
     // Where it goes is the runtime's report, not this guess: it waits below the output until
     // `user_message` places it, whether it opens a run or joins one.
     const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
+    // Notes from before this send are not this send's: a refusal said for an earlier message is said again.
+    const before = c.items.length;
     c.waiting = [...c.waiting, echo];
     const waiting = () => c.waiting.includes(echo);
     /** Nothing entered from it, so the text is still the person's to send again. */
@@ -526,9 +546,14 @@ export function createStore(api: DuangApi) {
         if (!waiting()) return;
         if (
           result.error.code !== "aborted" &&
-          !c.items.some((item) => item.kind === "note" && item.text.includes(result.error.message))
-        )
+          !c.items.slice(before).some((item) => item.kind === "note" && item.text.includes(result.error.message))
+        ) {
           refusal(result.error.message, c);
+          // Connecting a provider is the way on; the message waits in the draft.
+          const said = c.items.at(-1);
+          if (result.error.code === MODEL_UNAVAILABLE_CODE && said?.kind === "note")
+            c.items = [...c.items.slice(0, -1), { ...said, connect: true }];
+        }
         restoreRejected();
       } else if (waiting()) {
         c.returned.add(echo);
@@ -807,7 +832,7 @@ export function createStore(api: DuangApi) {
         await api.renameAgent(id, name);
         publish({ agents: await api.listAgents() });
       } catch (error) {
-        note(error);
+        fail(error);
       }
     },
     open,
@@ -863,12 +888,13 @@ export function createStore(api: DuangApi) {
         publish({ usage: { ...view.usage, [provider]: { error: message(error) } } });
       }
     },
+    dismissFailure: () => publish({ failure: undefined }),
     /** A plan whose usage only its provider's page shows: main opens that page in the browser. */
     async openUsagePage(provider: string) {
       try {
         await api.openUsagePage(provider);
       } catch (error) {
-        note(error);
+        fail(error);
       }
     },
     /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
@@ -902,7 +928,7 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         await selectAgent(row.id);
       } catch (error) {
-        note(error);
+        fail(error);
       }
     },
     async pickModel(model: string) {
@@ -962,7 +988,7 @@ export function createStore(api: DuangApi) {
         await api.scaffoldAgent(id);
         if (request === navigation) await selectAgent(id);
       } catch (error) {
-        if (request === navigation) note(error);
+        if (request === navigation) fail(error);
       }
     },
     async reveal(agentId = view.agentId) {
@@ -970,7 +996,7 @@ export function createStore(api: DuangApi) {
         // No agent to name means the list itself is what failed; show that file instead.
         await (agentId ? api.revealAgent(agentId) : api.revealRegistry());
       } catch (error) {
-        note(error);
+        fail(error);
       }
     },
     async removeAgent() {
@@ -978,7 +1004,7 @@ export function createStore(api: DuangApi) {
       if (!id) return;
       try {
         const result = await api.removeAgent(id);
-        if (!result.ok) return note(result.error.message);
+        if (!result.ok) return fail(result.error.message);
         for (const c of conversations.values()) if (c.agentId === id) close(c);
         for (const draftKey of [...drafts.keys()]) if (draftKey.startsWith(`${id}/`)) drafts.delete(draftKey);
         for (const scrollKey of [...scrolls.keys()]) if (scrollKey.startsWith(`${id}/`)) scrolls.delete(scrollKey);
@@ -989,7 +1015,7 @@ export function createStore(api: DuangApi) {
         publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: rest });
         if (view.agents[0]) await selectAgent(view.agents[0].id);
       } catch (error) {
-        note(error);
+        fail(error);
       }
     },
     /**
@@ -997,31 +1023,22 @@ export function createStore(api: DuangApi) {
      * rather than patched locally: the summary that matters is the one the runtime reports.
      */
     async renameSession(id: string, session: string, name: string) {
-      const open = conversations.get(key(id, session));
-      /**
-       * A conversation nobody has opened has no transcript to put this in, and the window-wide
-       * banner would offer a Retry for something else entirely. Its agent's row is where the
-       * sidebar already says why a list is not what you expected.
-       */
-      const report = (text: string) => {
-        if (open) note(text, open, "warning");
-        else publish({ sessionsError: { ...view.sessionsError, [id]: text } });
-      };
       try {
         const result = await api.renameSession(id, session, name);
-        if (!result.ok) return report(result.error.message);
+        if (!result.ok) return reportOn(id, session, result.error.message, "warning");
         // The name is FastAgent's now; re-read rather than patch, through the same ordered path
         // expanding uses, so a failed read is reported instead of leaving the old label in place.
         await listSessions(id);
       } catch (error) {
-        report(message(error));
+        reportOn(id, session, error, "warning");
       }
     },
     /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */
     async deleteSession(id: string, session: string) {
       try {
         const result = await api.deleteSession(id, session);
-        if (!result.ok) throw new Error(result.error.message);
+        // Refused: nothing was deleted, and the conversation it is about says so.
+        if (!result.ok) return reportOn(id, session, result.error.message, "warning");
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
@@ -1034,7 +1051,7 @@ export function createStore(api: DuangApi) {
         if (view.conversation?.session === session) await open(crypto.randomUUID());
         await listSessions(id);
       } catch (error) {
-        note(error);
+        reportOn(id, session, error, "error");
       }
     },
     async send() {

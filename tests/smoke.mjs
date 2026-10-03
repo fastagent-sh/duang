@@ -774,7 +774,8 @@ if (!process.versions.electron) {
       await writeFile(selectedAuth, JSON.stringify({ openai: stored.openai }));
       const missing = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Missing provider check')`);
       assert.equal(missing.ok, false);
-      assert.match(missing.error.message, /^No API key found for anthropic\./, "pi's own words, naming the provider");
+      assert.equal(missing.error.code, "model_unavailable", "refused before the run, in duang's words rather than pi's CLI advice");
+      assert.match(missing.error.message, /^anthropic\/claude-sonnet-4-5 cannot run: .*Connect the provider/);
       assert.equal(anthropicRequests, 2);
       assert.ok(!(await evaluate("window.duang.listModels('configured')")).some(({ spec }) => spec.startsWith("anthropic/")));
       const expired = { ...stored, anthropic: { ...stored.anthropic, expires: 0 } };

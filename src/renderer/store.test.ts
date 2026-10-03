@@ -170,7 +170,7 @@ test("a model change still running when the person goes to another agent does no
   store.dispose();
 });
 
-test("an unreadable agent list is its own pane; a failure with no agents is an alert, not that pane", async () => {
+test("an unreadable agent list is its own pane; a failure adding an agent is said above the pane, not that pane", async () => {
   const { api, store } = harness();
   api.listAgents = async () => {
     throw new Error("agents.json: Unexpected token");
@@ -187,7 +187,9 @@ test("an unreadable agent list is its own pane; a failure with no agents is an a
   };
   await store.addAgent();
   assert.equal(store.getSnapshot().pane, "no-agents", "adding failed; the list itself was read fine");
-  assert.match(store.getSnapshot().alert ?? "", /realpath/);
+  assert.match(store.getSnapshot().failure ?? "", /realpath/);
+  store.dismissFailure();
+  assert.equal(store.getSnapshot().failure, undefined);
   store.dispose();
 });
 
@@ -552,7 +554,8 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   await store.removeAgent();
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
-  assert.equal(notes.length, 2, "both refusals reached the conversation the person was looking at, verbatim");
+  assert.equal(notes.length, 1, "the model refusal is the conversation's own, verbatim");
+  assert.equal(store.getSnapshot().failure, "An agent conversation is running", "the agent's removal is not the conversation's");
   store.dispose();
 });
 
@@ -1901,5 +1904,30 @@ test("a fresh start opens the agent on a new conversation, not the one it was le
   assert.notEqual(c.session, "s1");
   assert.ok(!opens.includes("s1"), "the conversation it crashed on is not opened");
   assert.equal(store.getSnapshot().pane, "start");
+  store.dispose();
+});
+
+test("a failure about another conversation is said there, and a refusal said before is said again", async () => {
+  const { api, store } = harness();
+  api.openAgent = async (id) => (id === "b" ? listed("b1") : ready);
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  // Deleting a conversation of an agent that is not open: its row says why, not the open transcript.
+  api.deleteSession = async () => ({ ok: false, error: { code: "busy", message: "b1 is running", retryable: true } });
+  await store.deleteSession("b", "b1");
+  assert.equal(store.getSnapshot().sessionsError["b"], "b1 is running");
+  assert.equal(c.items.length, 0, "the open transcript is not where it goes");
+
+  // The same refusal twice is said twice: each send says how it ended.
+  const unavailable = { ok: false as const, error: { code: "model_unavailable", message: "anthropic/x cannot run", retryable: true } };
+  api.send = async () => unavailable;
+  for (const text of ["first", "second"]) {
+    store.setDraft(text);
+    await store.send();
+  }
+  const refusals = c.items.filter((item) => item.kind === "note" && item.text === "anthropic/x cannot run");
+  assert.equal(refusals.length, 2);
+  assert.ok(refusals.every((item) => item.kind === "note" && item.connect), "with the way on: connecting a provider");
+  assert.equal(c.draft, "second", "and the refused message is back in the draft");
   store.dispose();
 });

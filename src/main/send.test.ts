@@ -30,7 +30,7 @@ test("send routes idle, live and both admission races without silently dropping 
         else yield { type: "completed" };
       },
     } as Agent;
-    const result = await send(agent, bound, "/commit verbatim");
+    const result = await send(agent, bound, "/commit verbatim", () => false, async () => true);
     const order =
       scenario === "busy"
         ? ["invoke", "steer"]
@@ -74,7 +74,7 @@ test("a Stop before a send reaches the runtime keeps it from starting a run; one
   const opening = new Promise<void>((resolve) => (opened = resolve));
   const early = held.hold("a/s", async (stopped) => {
     await opening;
-    return send(agent, bound, "hello", stopped);
+    return send(agent, bound, "hello", stopped, async () => true);
   });
   assert.equal((await held.stop("b/s", noRun)).ok, false, "another conversation's send is not this one's");
   assert.equal((await held.stop("a/s", noRun)).ok, true);
@@ -84,7 +84,7 @@ test("a Stop before a send reaches the runtime keeps it from starting a run; one
   assert.equal(!result.ok && result.error.code, "aborted");
 
   // Once the message is the runtime's, stopping is the run's abort, and its answer is the run's.
-  const late = await held.hold("a/s", (stopped) => send(agent, bound, "again", stopped));
+  const late = await held.hold("a/s", (stopped) => send(agent, bound, "again", stopped, async () => true));
   assert.deepEqual(calls, ["invoke"]);
   assert.equal(late.ok, true);
   const failed = refusal("run_command_failed");
@@ -92,18 +92,31 @@ test("a Stop before a send reaches the runtime keeps it from starting a run; one
   assert.equal((await held.stop("a/s", noRun)).ok, false, "a finished send is released");
 });
 
-test("a conversation recorded on a retired provider is refused, not run there", async () => {
+test("a run starts only on a model the picker would offer; a steer joins the run already going", async () => {
   const calls: string[] = [];
-  const bound = { id: "s", state: async () => ({ status: "idle", model: "openai-codex/gpt-5.5" }) } as unknown as Session;
+  let status = "idle";
+  const bound = {
+    id: "s",
+    state: async () => ({ status, model: "anthropic/claude-sonnet-4-5" }),
+    steer: async () => {
+      calls.push("steer");
+      return ok;
+    },
+  } as unknown as Session;
   const agent = {
     async *invoke() {
       calls.push("invoke");
       yield { type: "completed" };
     },
   } as unknown as Agent;
-  const result = await send(agent, bound, "hello");
+  // Its provider was disconnected (or it is on a retired route): refused before anything is recorded.
+  const refused = await send(agent, bound, "hello", () => false, async () => false);
   assert.deepEqual(calls, []);
-  assert.equal(!result.ok && result.error.code, "model_retired");
+  assert.equal(!refused.ok && refused.error.code, "model_unavailable");
+  assert.match(!refused.ok ? refused.error.message : "", /^anthropic\/claude-sonnet-4-5 cannot run: .*Connect the provider/);
+  status = "running";
+  assert.equal((await send(agent, bound, "and this", () => false, async () => false)).ok, true);
+  assert.deepEqual(calls, ["steer"]);
 });
 
 test("quitting stops every send in flight and waits for each run to settle, but not past its limit", async () => {

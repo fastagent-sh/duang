@@ -52,7 +52,8 @@ export type Item = At &
   /**
    * `resend`: this note is the failure of a run that had taken a message, the one Retry sends again, and
    * whether that run had started a tool (sending it again may repeat that work). `limit`: the failure is a
-   * plan's usage limit, and the provider whose usage page says more.
+   * plan's usage limit, and the provider whose usage page says more. `connect`: a send refused because the
+   * conversation's model cannot run with the connected providers; connecting one is the way on.
    */
   | {
       kind: "note";
@@ -60,6 +61,7 @@ export type Item = At &
       text: string;
       resend?: { text: string; toolsRan: boolean };
       limit?: string;
+      connect?: true;
     });
 
 /**

@@ -121,6 +121,7 @@ export function Transcript({
   onRest,
   onRetry,
   onUsage,
+  onConnect,
 }: {
   items: Item[];
   /**
@@ -144,9 +145,12 @@ export function Transcript({
   onRetry?: () => void;
   /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
   onUsage: (provider: string) => void;
+  /** Opens Settings on the providers, under a send refused because the conversation's model cannot run. */
+  onConnect: () => void;
 }) {
   const last = items.at(-1);
   const limit = !busy && last?.kind === "note" ? last.limit : undefined;
+  const connect = !busy && last?.kind === "note" && last.connect;
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(resume === undefined);
   /**
@@ -303,11 +307,16 @@ export function Transcript({
           </div>
         )}
         {queue(false)}
-        {(onRetry || limit) && (
+        {(onRetry || limit || connect) && (
           <div className="mt-2 flex justify-center gap-2">
             {onRetry && (
               <Button kind="secondary" size={28} onClick={onRetry} title="Send this message again as a new turn" icon={<ArrowClockwise size={12} />}>
                 Retry
+              </Button>
+            )}
+            {connect && (
+              <Button kind="secondary" size={28} onClick={onConnect} title="Open Settings on the model providers">
+                Connect a provider
               </Button>
             )}
             {limit && (
