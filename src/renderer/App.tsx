@@ -293,6 +293,7 @@ export default function App() {
                     busy={busy}
                     status={c.state?.status}
                     started={c.started}
+                    heard={c.heard}
                     bottomGap={composerHeight + 64}
                     resume={store.scrollOf(c.agentId, c.session)}
                     onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}

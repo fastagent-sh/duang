@@ -118,6 +118,8 @@ interface Conversation {
   runHasUser: boolean;
   /** When this window saw the current run start; unknown for a run that was already going when it opened. */
   started?: number;
+  /** When this window last heard anything of the conversation's run (or sent into it): how long it has been quiet. */
+  heard?: number;
   /**
    * The current run as this window heard it from its `run_started`: the last message that entered it and
    * whether it started a tool. Absent for a run joined midway, whose history does not say where it began.
@@ -507,8 +509,9 @@ export function createStore(api: DuangApi) {
       if (conversations.get(key(agentId, session)) !== c) return;
       c.items = fromEntries(result.entries.entries, result.entries.leafEntryId, result.state.status === "running");
       c.state = result.state;
-      // Opened mid-run, the run's opening message is already in the history just read.
+      // Opened mid-run, the run's opening message is already in the history just read; its silence counts from now.
       c.runHasUser = result.state.status === "running";
+      if (c.runHasUser) c.heard = Date.now();
       c.loading = false;
       // New sends are disabled until backfill finishes. An already-running local turn retains its
       // subscription and view across navigation, so its deltas are never reconstructed from history.
@@ -530,6 +533,7 @@ export function createStore(api: DuangApi) {
     const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
     // Notes from before this send are not this send's: a refusal said for an earlier message is said again.
     const before = c.items.length;
+    c.heard = Date.now();
     c.waiting = [...c.waiting, echo];
     const waiting = () => c.waiting.includes(echo);
     /** Nothing entered from it, so the text is still the person's to send again. */
@@ -753,6 +757,7 @@ export function createStore(api: DuangApi) {
       publish();
       return;
     }
+    c.heard = Date.now();
     if (c.loading) c.events.push(frame.event);
     else fold(c, frame.event);
     publish();

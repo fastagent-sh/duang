@@ -268,9 +268,9 @@ test("history follows the active leaf instead of flattening sibling branches", (
   assert.throws(() => fromEntries([{ ...entries[0]!, parentId: "root" }], "root"), /Invalid session entry chain/);
 });
 
-test("retry and serving failures preserve the runtime's original message", () => {
+test("retry and serving failures preserve the runtime's original message; a retry is not itself a failure", () => {
   assert.deepEqual(apply([], event("retry_scheduled", { attempt: 1, maxAttempts: 3, error: "429 quota" })), [
-    { kind: "note", tone: "error", text: "retrying 1/3: 429 quota", at: 0 },
+    { kind: "note", tone: "info", text: "retrying 1/3: 429 quota", at: 0 },
   ]);
   assert.deepEqual(apply([], event("serving_error", { message: "disk is full" })), [
     { kind: "note", tone: "error", text: "disk is full", at: 0 },
@@ -499,4 +499,23 @@ test("a turn cut before a compaction is still cut, and its failure is not rewrit
   const last = fromEntries(failed, undefined, false).at(-1) as Extract<Item, { kind: "note" }>;
   assert.equal(last.text, "run failed: context overflow");
   assert.deepEqual(last.resend, { text: "summarise it", toolsRan: false });
+});
+
+test("a call reopened from history keeps its arguments: its path, and the count of distinct files", () => {
+  const items = fromEntries([
+    { id: "1", timestamp: 1, kind: "user", data: { text: "read it" } },
+    {
+      id: "2",
+      parentId: "1",
+      timestamp: 2,
+      kind: "assistant",
+      data: { text: "", toolCalls: [{ id: "a", name: "read", args: { path: "/repo/src/app.ts" } }, { id: "b", name: "read", args: { path: "/repo/src/app.ts" } }] },
+    },
+    { id: "3", parentId: "2", timestamp: 3, kind: "tool", data: { toolCallId: "a", toolName: "read", text: "x" } },
+    { id: "4", parentId: "3", timestamp: 4, kind: "tool", data: { toolCallId: "b", toolName: "read", text: "x" } },
+    { id: "5", parentId: "4", timestamp: 5, kind: "assistant", data: { text: "done" } },
+  ]);
+  const tools = items.filter((item): item is Extract<Item, { kind: "tool" }> => item.kind === "tool");
+  assert.deepEqual(tools.map((tool) => tool.args), [{ path: "/repo/src/app.ts" }, { path: "/repo/src/app.ts" }]);
+  assert.equal(summarize(tools), "read 1 file", "the same file read twice is one file, reopened as live");
 });
