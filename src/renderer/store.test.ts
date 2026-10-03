@@ -1860,6 +1860,39 @@ test("a conversation compacting is not running: a turn cut before the compaction
   store.dispose();
 });
 
+test("a fresh start stays chosen across a reload or restart, until another conversation is opened", async () => {
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    value: { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => void values.set(k, v) },
+    configurable: true,
+  });
+  try {
+    // `s1` is the newest conversation, the one that crashed the window.
+    const first = harness();
+    first.api.openAgent = async () => listed("s1");
+    await first.store.load({ fresh: true });
+    const started = first.store.getSnapshot().conversation!.session;
+    first.store.dispose();
+
+    const reloaded = harness();
+    reloaded.api.openAgent = async () => listed("s1");
+    await reloaded.store.load();
+    assert.equal(reloaded.store.getSnapshot().conversation?.session, started, "not the newest, which crashed it");
+    assert.ok(!reloaded.opens.includes("s1"));
+    // Choosing the old one is the person's call, and from then on it is the one returned to.
+    await reloaded.store.open("s1");
+    reloaded.store.dispose();
+
+    const later = harness();
+    later.api.openAgent = async () => listed("s1");
+    await later.store.load();
+    assert.equal(later.store.getSnapshot().conversation?.session, "s1");
+    later.store.dispose();
+  } finally {
+    Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
+
 test("a fresh start opens the agent on a new conversation, not the one it was left on", async () => {
   const { api, store, opens } = harness();
   api.openAgent = async () => listed("s1");

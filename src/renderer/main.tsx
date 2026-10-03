@@ -25,10 +25,26 @@ createRoot(document.getElementById("root")!).render(
         <div role="alert" className="m-auto max-w-lg space-y-3 p-8 text-[13px]">
           <p className="font-semibold">duang could not draw this window.</p>
           <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-danger">{error.message}</pre>
-          <p className="text-muted">Runs keep going in the background. Reloading draws the window again.</p>
-          <Button kind="primary" size={32} onClick={() => window.location.reload()}>
-            Reload
-          </Button>
+          <p className="text-muted">
+            Runs keep going in the background. Reloading draws the window again; if the conversation it shows is
+            what fails, open a new one instead (that conversation stays in the list).
+          </p>
+          <div className="flex gap-2">
+            <Button kind="primary" size={32} onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+            <Button
+              kind="secondary"
+              size={32}
+              onClick={() => {
+                // The same fresh start main asks for after repeated crashes (App reads `#fresh` once).
+                window.location.hash = "fresh";
+                window.location.reload();
+              }}
+            >
+              Open on a New Conversation
+            </Button>
+          </div>
         </div>
       )}
     >

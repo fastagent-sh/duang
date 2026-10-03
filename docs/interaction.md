@@ -167,9 +167,10 @@ not sent`) and stays in the draft. A window whose renderer crashes or is killed 
 reloaded and reopens what it showed; runs in progress keep going in main. After a third crash within a
 minute (counted for the app, not per window) it is not reloaded onto the same conversation in a loop: a
 dialog says so, and **Open on a New Conversation** opens the window on a new conversation of that agent, the
-one it was showing still in the list (or **Close Window**). A conversation that cannot be drawn shows the
+one it was showing still in the list (or **Close Window**); that choice holds across a reload or restart until
+another conversation is opened. A conversation that cannot be drawn shows the
 error in its place, with Try again, which reads it again from history, while the sidebar and composer stay usable;
-an error anywhere else in the window shows it with Reload. Local channels
+an error anywhere else in the window shows it with Reload and Open on a New Conversation. Local channels
 and routines are not started by duang. The current client has no online contacts or share UI.
 
 ## Planned: daily local use and definition inspection (stage 1)
