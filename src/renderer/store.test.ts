@@ -1859,3 +1859,14 @@ test("a conversation compacting is not running: a turn cut before the compaction
   assert.equal(last?.kind === "note" && last.text, "run cut short: no answer was recorded");
   store.dispose();
 });
+
+test("a fresh start opens the agent on a new conversation, not the one it was left on", async () => {
+  const { api, store, opens } = harness();
+  api.openAgent = async () => listed("s1");
+  await store.load({ fresh: true });
+  const c = store.getSnapshot().conversation!;
+  assert.notEqual(c.session, "s1");
+  assert.ok(!opens.includes("s1"), "the conversation it crashed on is not opened");
+  assert.equal(store.getSnapshot().pane, "start");
+  store.dispose();
+});

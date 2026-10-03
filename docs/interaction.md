@@ -165,8 +165,10 @@ that has not settled by then (a tool that cannot be cancelled) is cut when the a
 again while it waits quits at once, and a message sent while it waits is refused (`duang is quitting: the message was
 not sent`) and stays in the draft. A window whose renderer crashes or is killed is
 reloaded and reopens what it showed; runs in progress keep going in main. After a third crash within a
-minute it is not reloaded in a loop: a dialog says so, with Reload and Close Window. A conversation that
-cannot be drawn shows the error in its place, with Try again, while the sidebar and composer stay usable;
+minute (counted for the app, not per window) it is not reloaded onto the same conversation in a loop: a
+dialog says so, and **Open on a New Conversation** opens the window on a new conversation of that agent, the
+one it was showing still in the list (or **Close Window**). A conversation that cannot be drawn shows the
+error in its place, with Try again, which reads it again from history, while the sidebar and composer stay usable;
 an error anywhere else in the window shows it with Reload. Local channels
 and routines are not started by duang. The current client has no online contacts or share UI.
 

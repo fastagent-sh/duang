@@ -46,7 +46,10 @@ export default function App() {
   const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
-    void store.load();
+    // Main opens the page with `#fresh` after repeated crashes; read once, so ⌘R later reopens as usual.
+    const fresh = window.location.hash === "#fresh";
+    if (fresh) history.replaceState(null, "", window.location.pathname + window.location.search);
+    void store.load({ fresh });
     return store.dispose;
   }, [store]);
   // The App menu's Settings… (⌘,) opens the page; asking again while it is open keeps it there.
@@ -262,12 +265,13 @@ export default function App() {
                 // reading sat on the composer's edge, half under the fade.
                 <Boundary
                   reset={c.subscription}
-                  fallback={(error, retry) => (
+                  fallback={(error) => (
                     // The sidebar and the composer stay: the person can go to another conversation, or try again.
                     <div role="alert" className="mt-16 flex-1 space-y-2 px-6 text-[13px]">
                       <p>This conversation could not be drawn.</p>
                       <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-danger">{error.message}</pre>
-                      <Button kind="secondary" size={28} onClick={retry}>
+                      {/* Read again from the runtime's history: a view that went wrong while streaming is rebuilt. */}
+                      <Button kind="secondary" size={28} onClick={() => void store.retry()}>
                         Try again
                       </Button>
                     </div>

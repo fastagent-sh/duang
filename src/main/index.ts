@@ -116,22 +116,33 @@ function createWindow(): BrowserWindow {
   win.webContents.on("destroyed", release);
   win.webContents.on("did-start-loading", release);
   reloadWhenGone(win);
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+  load(win);
   return win;
+}
+
+/**
+ * The window's page. `fresh` opens it on a new conversation instead of the one it was left on (the
+ * renderer reads `#fresh` once and drops it), for a window that crashed drawing that conversation.
+ */
+function load(win: BrowserWindow, fresh = false): void {
+  if (process.env.ELECTRON_RENDERER_URL)
+    void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}${fresh ? "#fresh" : ""}`);
+  else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"), fresh ? { hash: "fresh" } : {});
 }
 
 /** Crashes inside this span count toward the same loop: past `CRASH_LIMIT` of them, reloading is asked first. */
 const CRASH_SPAN_MS = 60_000;
 const CRASH_LIMIT = 2;
+/** For the app, not one window: a window closed and opened again from the Dock starts no new count. */
+const crashes: number[] = [];
 
 /**
  * A renderer that crashes, or is killed, leaves the window blank with nothing to press. Its runs live here
- * and keep going, so the window is reloaded, which reopens what it showed. One that keeps crashing (it
- * draws something that crashes it again) is not reloaded in a loop: the person is asked, with the reason.
+ * and keep going, so the window is reloaded, which reopens what it showed. One that keeps crashing likely
+ * draws something that crashes it again, and reloading would open that again: the person is asked, with
+ * the reason, and the way on opens the window on a new conversation instead of the one it was showing.
  */
 function reloadWhenGone(win: BrowserWindow): void {
-  const crashes: number[] = [];
   win.webContents.on("render-process-gone", (_event, details) => {
     if (details.reason === "clean-exit") return;
     console.error(`duang: the window's renderer ended (${details.reason}, exit code ${details.exitCode})`);
@@ -143,14 +154,14 @@ function reloadWhenGone(win: BrowserWindow): void {
       .showMessageBox(win, {
         type: "error",
         message: "duang's window keeps crashing.",
-        detail: `It ended ${crashes.length} times in the last minute (${details.reason}). Runs in progress keep going. Reload, or close the window and open it again from the Dock.`,
-        buttons: ["Reload", "Close Window"],
+        detail: `It ended ${crashes.length} times in the last minute (${details.reason}). The conversation it was showing may be what crashes it, so it opens on a new conversation; that one stays in the list. Runs in progress keep going.`,
+        buttons: ["Open on a New Conversation", "Close Window"],
         defaultId: 0,
         cancelId: 1,
       })
       .then(({ response }) => {
         if (win.isDestroyed()) return;
-        if (response === 0) win.webContents.reload();
+        if (response === 0) load(win, true);
         else win.destroy();
       });
   });

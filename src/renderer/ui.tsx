@@ -148,7 +148,7 @@ export function Badge({
  * `reset` changes when the place it guards changes (another conversation), which clears the error.
  */
 export class Boundary extends Component<
-  { reset?: unknown; children: ReactNode; fallback: (error: Error, retry: () => void) => ReactNode },
+  { reset?: unknown; children: ReactNode; fallback: (error: Error) => ReactNode },
   { error?: Error; reset?: unknown }
 > {
   state: { error?: Error; reset?: unknown } = {};
@@ -163,6 +163,6 @@ export class Boundary extends Component<
   }
   render() {
     const { error } = this.state;
-    return error ? this.props.fallback(error, () => this.setState({ error: undefined })) : this.props.children;
+    return error ? this.props.fallback(error) : this.props.children;
   }
 }

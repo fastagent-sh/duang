@@ -732,7 +732,8 @@ export function createStore(api: DuangApi) {
     stopSteps ??= api.onLoginStep(onStep);
   };
 
-  async function load() {
+  /** `fresh`: start on a new conversation of the agent, not the one it was left on (main asks after crashes). */
+  async function load({ fresh = false }: { fresh?: boolean } = {}) {
     listen();
     publish({ loading: true, error: undefined, registryError: undefined });
     // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
@@ -751,7 +752,7 @@ export function createStore(api: DuangApi) {
       // Every row shows its latest conversation, so every agent's list is read; that boots each
       // runtime, the same as opening it would.
       for (const row of agents) if (row !== start) void listSessions(row.id);
-      if (start) await selectAgent(start.id);
+      if (start) await selectAgent(start.id, fresh ? crypto.randomUUID() : undefined);
     } catch (error) {
       publish({ loading: false, registryError: message(error) });
     }
