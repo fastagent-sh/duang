@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { SessionEntry } from "@fastagent-sh/fastagent/session";
 import {
   apply,
   claim,
@@ -15,7 +16,6 @@ import {
   previewOf,
   opensRun,
   queueView,
-  resumeRunning,
   toolText,
   type Item,
   type UserItem,
@@ -96,13 +96,17 @@ test("a live tool keeps when it ran; one read from history has no time", () => {
 });
 
 test("only the active run's unanswered calls resume as running", () => {
-  const items = fromEntries([
-    { id: "1", timestamp: 0, kind: "user", data: { text: "earlier" } },
-    { id: "2", parentId: "1", timestamp: 1, kind: "assistant", data: { toolCalls: [{ id: "old", name: "bash" }] } },
-    { id: "3", parentId: "2", timestamp: 2, kind: "user", data: { text: "now" } },
-    { id: "4", parentId: "3", timestamp: 3, kind: "assistant", data: { toolCalls: [{ id: "new", name: "bash" }] } },
-  ]);
-  const status = (id: string) => (resumeRunning(items).find((item) => item.kind === "tool" && item.id === id) as { status: string }).status;
+  const items = fromEntries(
+    [
+      { id: "1", timestamp: 0, kind: "user", data: { text: "earlier" } },
+      { id: "2", parentId: "1", timestamp: 1, kind: "assistant", data: { toolCalls: [{ id: "old", name: "bash" }] } },
+      { id: "3", parentId: "2", timestamp: 2, kind: "user", data: { text: "now" } },
+      { id: "4", parentId: "3", timestamp: 3, kind: "assistant", data: { toolCalls: [{ id: "new", name: "bash" }] } },
+    ],
+    undefined,
+    true,
+  );
+  const status = (id: string) => (items.find((item) => item.kind === "tool" && item.id === id) as { status: string }).status;
   assert.equal(status("old"), "interrupted", "an earlier run's unanswered call stays stopped");
   assert.equal(status("new"), "running");
 });
@@ -364,4 +368,87 @@ test("the live status says what the run is doing now", () => {
     word: "running 2 tools",
     activity: "tool",
   });
+});
+
+test("history says how an answer ended, as a watcher saw it live, and offers a failed run's message again", () => {
+  const entry = (id: string, kind: string, data: object) => ({ id, timestamp: Number(id), kind, data }) as SessionEntry;
+  const failed = (id: string, message: string) => entry(id, "assistant", { text: "", outcome: { status: "failed", error: { message } } });
+  const notes = (items: Item[]) => items.flatMap((item) => (item.kind === "note" ? [[item.tone, item.text]] : []));
+
+  // pi retried twice, then gave up: only the last failure is the run's, and it is offered again.
+  const gaveUp = fromEntries([
+    entry("1", "user", { text: "summarise it" }),
+    failed("2", "Connection error."),
+    failed("3", "Connection error."),
+    failed("4", "Connection error."),
+  ]);
+  assert.deepEqual(notes(gaveUp), [
+    ["info", "retried: Connection error."],
+    ["info", "retried: Connection error."],
+    ["error", "run failed: Connection error."],
+  ]);
+  assert.deepEqual((gaveUp.at(-1) as { resend?: unknown }).resend, { text: "summarise it", toolsRan: false });
+
+  // Still running: the last failure is a retry waiting out its delay, not the run's ending.
+  assert.deepEqual(
+    notes(fromEntries([entry("1", "user", { text: "summarise it" }), failed("2", "overloaded")], undefined, true)),
+    [["info", "retried: overloaded"]],
+  );
+
+  // A partial answer the stream dropped, a stop, and an answer cut off at the output limit.
+  const ended = fromEntries([
+    entry("1", "user", { text: "a" }),
+    entry("2", "assistant", { text: "partial answer", outcome: { status: "failed", error: { message: "socket hang up" } } }),
+    entry("3", "user", { text: "b" }),
+    entry("4", "assistant", { text: "", outcome: { status: "aborted", error: { message: "Request aborted" } } }),
+    entry("5", "user", { text: "c" }),
+    entry("6", "assistant", { text: "a long answ", outcome: { status: "truncated" } }),
+  ]);
+  assert.deepEqual(notes(ended), [
+    ["error", "run failed: socket hang up"],
+    ["info", "run stopped"],
+    ["info", "answer cut off at the model's output limit"],
+  ]);
+  assert.equal(ended.find((item) => item.kind === "assistant")?.kind, "assistant", "the partial text stays, with its failure under it");
+
+  // Work no answer concluded counts, a steer's included; work an earlier answer concluded does not.
+  const tool = (id: string, call: string) => [
+    entry(id, "assistant", { text: "", toolCalls: [{ id: call, name: "bash" }] }),
+    entry(`${id}1`, "tool", { toolCallId: call, toolName: "bash", text: "ok" }),
+  ];
+  const resend = (entries: SessionEntry[]) => (fromEntries(entries).at(-1) as { resend?: unknown }).resend;
+  assert.deepEqual(
+    resend([entry("1", "user", { text: "fix the build" }), ...tool("2", "t1"), entry("3", "user", { text: "and push it" }), failed("4", "x")]),
+    { text: "and push it", toolsRan: true },
+  );
+  assert.deepEqual(
+    resend([
+      entry("1", "user", { text: "fix the build" }),
+      ...tool("2", "t1"),
+      entry("3", "assistant", { text: "fixed" }),
+      entry("4", "user", { text: "thanks" }),
+      failed("5", "x"),
+    ]),
+    { text: "thanks", toolsRan: false },
+  );
+  assert.deepEqual(
+    resend([
+      entry("1", "user", { text: "one" }),
+      ...tool("2", "t1"),
+      failed("3", "x"),
+      entry("4", "user", { text: "two" }),
+      failed("5", "y"),
+    ]),
+    { text: "two", toolsRan: false },
+    "an earlier run's failure ended its work too",
+  );
+});
+
+test("an answer cut off at the output limit says so live", () => {
+  let items: Item[] = [];
+  items = apply(items, { type: "message_delta", timestamp: 1, runId: "r", data: { channel: "text", delta: "a long answ" } });
+  items = apply(items, { type: "message_finished", timestamp: 2, runId: "r", data: { outcome: { status: "truncated" } } });
+  assert.deepEqual(items.at(-1), { kind: "note", tone: "info", text: "answer cut off at the model's output limit", at: 2 });
+  const failed = apply([], { type: "message_finished", timestamp: 2, runId: "r", data: { outcome: { status: "failed", error: { message: "x" } } } });
+  assert.deepEqual(failed, [], "a failure is said by the run's ending, not twice");
 });

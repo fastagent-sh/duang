@@ -109,19 +109,20 @@ across navigation and application restart. A send rejected before admission rema
 failed run may already have performed tool work. Stop does not roll back completed work or promise
 to cancel a non-cancellable tool. Stop pressed while a send is still on its way to the runtime keeps it
 from starting a run, and the message returns to the draft without a note; Stop pressed as a run ends
-says nothing, since the run's own ending is already in the transcript. FastAgent itself accepts an abort
-that arrives in the first moments of a run without stopping its first model request
-([fastagent#691](https://github.com/fastagent-sh/fastagent/issues/691)), so that request still runs to its end.
-A conversation that ends on a failed turn (a run that took the message and
-then failed) offers Retry under the failure while nothing runs: it sends that message again as a new turn,
-leaving the failure and whatever the failed run did in the transcript. A run that was steered is retried with
-its last message, the one it was answering; the earlier ones already entered the conversation. When the
-failed run had already used tools (a steered run's included), Retry first asks, because the agent may repeat
-that work. Nothing is retried without that click, and a stopped run is not offered again. Neither is a run this
-window joined midway (opened or reconnected while it ran): where it began, and whether it had taken a message,
-are not in what this window heard. Retry is offered only for a failure this window saw: FastAgent's history does
-not yet record that a turn failed ([fastagent#690](https://github.com/fastagent-sh/fastagent/issues/690)), so a
-conversation that failed in the background, or is reopened, shows no failure and no Retry.
+says nothing, since the run's own ending is already in the transcript.
+An answer that did not end normally says so in the transcript, live and when the conversation is read back
+from history, including runs no window watched: `run failed: <reason>` under a failed answer (with any partial
+text it streamed above it), `run stopped` under a stopped one, `retrying 1/3: <reason>` while watched and
+`retried: <reason>` read back for an attempt the run retried by itself, and `answer cut off at the model's output limit` for one that reached the limit (the run
+goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
+the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
+as a new turn, leaving the failure and whatever the failed run did in the transcript. A run that was steered is
+retried with its last message, the one it was answering; the earlier ones already entered the conversation.
+When the failed run had used tools no answer concluded (a steered run's included), Retry first asks, because
+the agent may repeat that work. Nothing is retried without that click, and a stopped run is not offered again.
+Read back from history, the message is the one the runtime recorded, so a slash command is resent expanded. A
+run this window joined midway (opened or reconnected while it ran) is not offered Retry when it fails while
+watched, since where it began is not in what this window heard; reopened, its history says.
 
 The composer is one row: an attach button, the field with the model chip inside its right end, and
 one round button that is the next action: voice while the draft is empty (whitespace is empty),

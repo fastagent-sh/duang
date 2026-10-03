@@ -1,5 +1,12 @@
 /** Fold session entries and live events into what the transcript shows. Pure, so it is testable. */
-import type { KnownSessionEvent, ServingErrorEvent, SessionEntry, SessionEvent, SessionState } from "@fastagent-sh/fastagent/session";
+import type {
+  AnswerOutcome,
+  KnownSessionEvent,
+  ServingErrorEvent,
+  SessionEntry,
+  SessionEvent,
+  SessionState,
+} from "@fastagent-sh/fastagent/session";
 
 /**
  * When it happened. Required on every item, because both the day separators and the time under a
@@ -228,8 +235,17 @@ export function phase(
  * `toolCalls` (id and name only — arguments are not kept), and the result is its own `tool` entry
  * pointing back with `toolCallId`. Rendering them as one row is this function's whole job; anything
  * engine-specific is skipped, as the contract allows.
+ *
+ * An answer that did not end normally says how (`outcome`), and gets the note a watcher saw live: a
+ * failed or stopped answer that ended its run is `run failed: …` or `run stopped`, and a failed one
+ * offers its run's message again (`resend`). A failed answer the run went on from (pi's own retry) is
+ * only a retry, and in a conversation still `running` the last failure is a retry still waiting.
+ *
+ * `running`: a run is going now. A call with no result is interrupted in a finished conversation, but
+ * the calls after the last user message are the active run's, still executing. They get no `started`:
+ * when they began is not in the history, so they show no clock.
  */
-export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item[] {
+export function fromEntries(entries: SessionEntry[], leafEntryId?: string, running = false): Item[] {
   if (leafEntryId) {
     const byId = new Map(entries.map((entry) => [entry.id, entry]));
     const path: SessionEntry[] = [];
@@ -245,6 +261,14 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
     entries = path.reverse();
   }
   const items: Item[] = [];
+  /** A failed answer whose run has not been seen to go on: its note, and the error it gives. */
+  let failure: { index: number; message: string } | undefined;
+  /** Where the work no answer has concluded yet begins: what a retry could repeat. */
+  let unconcluded = 0;
+  const retried = () => {
+    if (failure) items[failure.index] = { kind: "note", tone: "info", text: `retried: ${failure.message}`, at: items[failure.index]!.at };
+    failure = undefined;
+  };
   for (const entry of entries) {
     const data = (entry.data ?? {}) as {
       text?: string;
@@ -252,11 +276,16 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
       toolCallId?: string;
       toolName?: string;
       isError?: boolean;
+      outcome?: AnswerOutcome;
     };
     const at = entry.timestamp;
     if (entry.kind === "user") {
+      // The failure ended its run; what follows is the next one.
+      if (failure) unconcluded = failure.index + 1;
+      failure = undefined;
       items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
     } else if (entry.kind === "assistant") {
+      retried();
       if (data.text) items.push({ kind: "assistant", text: data.text, open: false, at });
       for (const call of data.toolCalls ?? []) {
         items.push({
@@ -268,6 +297,24 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
           at,
         });
       }
+      const outcome = data.outcome;
+      if (outcome?.status === "truncated") items.push({ kind: "note", tone: "info", text: TRUNCATED, at });
+      else if (outcome?.status === "aborted") items.push({ kind: "note", tone: "info", text: "run stopped", at });
+      else if (outcome?.status === "failed") {
+        const message = outcome.error?.message ?? "";
+        const turn = items.findLast((item) => item.kind === "user");
+        const toolsRan = items.slice(unconcluded).some((item) => item.kind === "tool");
+        failure = { index: items.length, message };
+        items.push({
+          kind: "note",
+          tone: "error",
+          text: `run failed${message ? `: ${message}` : ""}`,
+          at,
+          ...(turn?.kind === "user" ? { resend: { text: turn.text, toolsRan } } : {}),
+        });
+      }
+      // An answer that called no tool ends its work: a later failure cannot repeat what came before it.
+      if (!outcome && !data.toolCalls?.length) unconcluded = items.length;
     } else if (entry.kind === "tool") {
       const index = items.findLastIndex((item) => item.kind === "tool" && item.id === data.toolCallId);
       const result: Item = {
@@ -284,20 +331,17 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string): Item
       else items[index] = result;
     }
   }
-  return items;
-}
-
-/**
- * History read while a run is still going. A call with no result is interrupted in a finished
- * conversation, but in the running one the calls after the last user message are the active run's,
- * still executing. They get no `started`: when they began is not in the history, so they show no clock.
- */
-export function resumeRunning(items: Item[]): Item[] {
+  if (!running) return items;
+  // A failure the running run has not answered yet is a retry waiting out its delay.
+  retried();
   const turn = items.findLastIndex((item) => item.kind === "user");
   return items.map((item, index) =>
     index > turn && item.kind === "tool" && item.status === "interrupted" ? { ...item, status: "running" } : item,
   );
 }
+
+/** An answer that reached the model's output limit, from history or live: it is not all there. */
+const TRUNCATED = "answer cut off at the model's output limit";
 
 /**
  * What a tool printed, out of the envelope it arrived in. A result reaches us as MCP-shaped content
@@ -442,11 +486,15 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       // FastAgent wrote the entry. Only what is still open settles here — restamping an item that
       // already settled moves the time under an older answer, and stretches `thinking · Ns` to
       // the end of every later message.
-      return items.map((item) =>
+      const settled = items.map((item) =>
         (item.kind === "assistant" || item.kind === "thinking") && item.open
           ? { ...item, open: false, at: event.timestamp }
           : item,
       );
+      // A failed or stopped answer is said by the run's own ending (`run_settled`), or by the retry pi schedules.
+      return e.data.outcome?.status === "truncated"
+        ? [...settled, { kind: "note", tone: "info", text: TRUNCATED, at: event.timestamp }]
+        : settled;
     }
     case "tool_started":
       return [

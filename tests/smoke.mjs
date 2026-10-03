@@ -466,6 +466,12 @@ if (!process.versions.electron) {
         2,
         "the failed turn and its retry both stay in the transcript",
       );
+      // Read back from FastAgent's history, the failure is still there under its turn (fastagent#690).
+      await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
+      await until("document.body.innerText.includes('What should we work on')", "left the conversation that failed once");
+      await showConversations();
+      await click("Read hello.txt and answer.");
+      await until("document.querySelector('main').innerText.includes('Synthetic key revoked')", "a failure reopens from history");
 
       hold = true;
       await message("Hold this turn so I can stop it.");
@@ -707,7 +713,7 @@ if (!process.versions.electron) {
       await writeFile(selectedAuth, JSON.stringify({ "openai-codex": codex }));
       const missing = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Missing provider check')`);
       assert.equal(missing.ok, false);
-      assert.equal(missing.error.message, "Provider is not configured: anthropic");
+      assert.match(missing.error.message, /^No API key found for anthropic\./, "pi's own words, naming the provider");
       assert.equal(anthropicRequests, 2);
       assert.ok(!(await evaluate("window.duang.listModels('configured')")).specs.some((spec) => spec.startsWith("anthropic/")));
       const expired = { ...stored, anthropic: { ...stored.anthropic, expires: 0 } };

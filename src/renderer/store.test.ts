@@ -1785,3 +1785,37 @@ test("a run this window joined midway is not offered again: where it began, and 
     store.dispose();
   }
 });
+
+test("a run that failed while the person was elsewhere shows its failure, and Retry, when they come back", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const sent = deferred<SessionResult>();
+  api.send = () => sent.promise;
+  store.setDraft("hello");
+  const sending = store.send();
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u1", text: "hello" });
+  await store.selectAgent("b");
+  emit(c, "run_settled", { status: "failed", error: { message: "Connection error.", retryable: true } });
+  sent.resolve({ ok: false, error: { code: "run_failed", message: "Connection error.", retryable: true } });
+  await sending;
+  // FastAgent's history, which now says how the answer ended.
+  api.openSession = async () =>
+    ({
+      state: { status: "idle", pending: { steering: [], followUp: [] } },
+      entries: {
+        entries: [
+          { id: "u1", timestamp: 1, kind: "user", data: { text: "hello" } },
+          { id: "a1", parentId: "u1", timestamp: 2, kind: "assistant", data: { text: "", outcome: { status: "failed", error: { message: "Connection error." } } } },
+        ],
+      },
+    }) as never;
+  await store.selectAgent("a");
+  const back = store.getSnapshot().conversation!;
+  assert.notEqual(back, c, "read back from history, not the view that was let go");
+  const last = back.items.at(-1);
+  assert.equal(last?.kind === "note" && last.text, "run failed: Connection error.");
+  assert.deepEqual(store.getSnapshot().resend, { text: "hello", toolsRan: false });
+  store.dispose();
+});
