@@ -101,6 +101,8 @@ const api = {
   },
   /** A subscription's plan windows for this provider; no `windows` when its login is not a subscription. */
   providerUsage: (provider: string): Promise<ProviderUsage> => ipcRenderer.invoke("usage:get", provider),
+  /** Opens the provider's own usage page in the browser, for a plan whose usage answered `page`. */
+  openUsagePage: (provider: string): Promise<void> => ipcRenderer.invoke("usage:open", provider),
   /**
    * How many finished runs nobody has looked at. The dock is where "something happened while you
    * were away" belongs: the sidebar can only say it while duang is the window you are in.

@@ -3,6 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowClockwise,
   ArrowDown,
+  ArrowSquareOut,
   ArrowsOut,
   CaretDown,
   Check,
@@ -119,6 +120,7 @@ export function Transcript({
   resume,
   onRest,
   onRetry,
+  onUsage,
 }: {
   items: Item[];
   /**
@@ -140,7 +142,11 @@ export function Transcript({
   onRest: (top: number | undefined) => void;
   /** The conversation ends on a failed turn that can be sent again: the action sits under its failure. */
   onRetry?: () => void;
+  /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
+  onUsage: (provider: string) => void;
 }) {
+  const last = items.at(-1);
+  const limit = !busy && last?.kind === "note" ? last.limit : undefined;
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(resume === undefined);
   /**
@@ -297,11 +303,18 @@ export function Transcript({
           </div>
         )}
         {queue(false)}
-        {onRetry && (
-          <div className="mt-2 flex justify-center">
-            <Button kind="secondary" size={28} onClick={onRetry} title="Send this message again as a new turn" icon={<ArrowClockwise size={12} />}>
-              Retry
-            </Button>
+        {(onRetry || limit) && (
+          <div className="mt-2 flex justify-center gap-2">
+            {onRetry && (
+              <Button kind="secondary" size={28} onClick={onRetry} title="Send this message again as a new turn" icon={<ArrowClockwise size={12} />}>
+                Retry
+              </Button>
+            )}
+            {limit && (
+              <Button kind="secondary" size={28} onClick={() => onUsage(limit)} title="Open the plan's usage page in the browser" icon={<ArrowSquareOut size={12} />}>
+                View usage
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -452,3 +452,20 @@ test("an answer cut off at the output limit says so live", () => {
   const failed = apply([], { type: "message_finished", timestamp: 2, runId: "r", data: { outcome: { status: "failed", error: { message: "x" } } } });
   assert.deepEqual(failed, [], "a failure is said by the run's ending, not twice");
 });
+
+test("a ChatGPT plan's usage limit names the provider whose page says more, live and read back", () => {
+  const limitOfLast = (items: Item[]) => {
+    const last = items.at(-1);
+    return last?.kind === "note" ? last.limit : undefined;
+  };
+  const reason = "OpenAI API error (429): subscription_sharing_usage_limit_exceeded\nCheck your ChatGPT usage: https://chatgpt.com/settings/usage";
+  const live = apply([], { type: "run_settled", timestamp: 1, runId: "r", data: { status: "failed", error: { message: reason, retryable: false } } });
+  assert.equal(limitOfLast(live), "openai");
+  const read = fromEntries([
+    { id: "1", timestamp: 1, kind: "user", data: { text: "hi" } },
+    { id: "2", parentId: "1", timestamp: 2, kind: "assistant", data: { text: "", outcome: { status: "failed", error: { message: reason } } } },
+  ]);
+  assert.equal(limitOfLast(read), "openai");
+  const other = apply([], { type: "run_settled", timestamp: 1, runId: "r", data: { status: "failed", error: { message: "Connection error.", retryable: true } } });
+  assert.equal(limitOfLast(other), undefined);
+});

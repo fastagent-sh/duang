@@ -19,7 +19,7 @@ import {
 } from "./agents.ts";
 import { authPath, modelsFor, refreshModels } from "./credentials.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
-import { forgetUsage, providerUsage } from "./usage.ts";
+import { forgetUsage, providerUsage, usagePage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
@@ -282,6 +282,11 @@ function register(): void {
   ipcMain.handle("usage:get", (_e, provider: string) => {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
     return providerUsage(provider, authPath);
+  });
+  // A plan whose usage only its provider's page shows: main opens its own address for that provider.
+  ipcMain.handle("usage:open", (_e, provider: string) => {
+    if (typeof provider !== "string") throw new Error("Provider must be a string");
+    return shell.openExternal(usagePage(provider));
   });
   // The dock is where "something happened while you were away" belongs: the sidebar can only say it
   // while duang is the window you are looking at.

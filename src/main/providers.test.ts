@@ -19,9 +19,12 @@ test("providers list pi's own names and ways, what duang's file holds, and a var
     assert.equal(openai.name, "OpenAI");
     assert.equal(openai.stored, "api_key");
     assert.equal(openai.ambient, "OPENAI_API_KEY", "the stored key must not hide the variable that outlives a disconnect");
-    const codex = rows.find((row) => row.id === "openai-codex")!;
-    assert.equal(codex.name, "OpenAI Codex (legacy)", "a vendor pi splits stays two rows, under pi's own names");
-    assert.deepEqual(codex.ways.map((way) => [way.method, way.subscription]), [["oauth", true]]);
+    assert.deepEqual(
+      openai.ways.map((way) => [way.method, way.subscription]),
+      [["oauth", true], ["api_key", false]],
+      "Sign in with ChatGPT is OpenAI's own subscription way, beside its key",
+    );
+    assert.equal(rows.find((row) => row.id === "openai-codex"), undefined, "pi's retired ChatGPT route is not offered");
     const anthropic = rows.find((row) => row.id === "anthropic")!;
     assert.deepEqual(anthropic.ways.map((way) => way.method), ["oauth", "api_key"]);
     assert.equal(anthropic.stored, undefined);

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { app } from "electron";
 import { availableModelsFromDir, refreshModelCatalog } from "@fastagent-sh/fastagent/pi";
 import { inflight } from "./inflight.ts";
+import { retired } from "./providers.ts";
 
 export const authPath = join(app.getPath("userData"), "auth.json");
 
@@ -29,7 +30,8 @@ const credentials = {
  * Configuration, not a network health check: OAuth refresh and provider errors are left to execution.
  */
 export async function modelsFor(dir: string): Promise<Models> {
-  return { specs: (await availableModelsFromDir(dir, credentials)).map((model) => model.spec) };
+  const models = await availableModelsFromDir(dir, credentials);
+  return { specs: models.map((model) => model.spec).filter((spec) => !retired(spec)) };
 }
 
 /**

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
+import { retired } from "./providers.ts";
 import { AgentRegistry, type AgentRow } from "./agent-files.ts";
 
 export { createAgentIn, type AgentRow } from "./agent-files.ts";
@@ -40,6 +41,13 @@ export class MissingModelError extends Error {}
 export class NoAgentError extends Error {}
 
 async function build(row: AgentRow): Promise<Opened> {
+  const opened = await assemble(row);
+  // A default on a provider duang no longer runs is no default: the agent asks for a model, as one without any does.
+  if (retired(opened.modelSpec)) throw new MissingModelError(`${opened.modelSpec} is no longer offered: pick a model`);
+  return opened;
+}
+
+async function assemble(row: AgentRow): Promise<Opened> {
   try {
     const assembly = await createPiAgentFromDir(row.dir, {
       sessionControl: true,

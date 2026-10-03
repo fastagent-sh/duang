@@ -23,8 +23,17 @@ function Bar({ percent }: { percent: number }) {
  * rest in the tooltip. Nothing for an API key, and nothing for a failed read either: the numbers are
  * a glance, not a status to act on, and a failure never leaves old ones up (the store replaces them).
  */
-export function PlanUsage({ plan }: { plan?: { data?: ProviderUsage; error?: string } }) {
-  const windows = plan?.data?.windows;
+export function PlanUsage({
+  plan,
+  onPage,
+}: {
+  plan?: { data?: ProviderUsage; error?: string };
+  /** Opens the provider's usage page, for a plan whose usage only that page shows. */
+  onPage?: (provider: string) => void;
+}) {
+  const data = plan?.data;
+  if (data?.page && onPage) return <PageLink provider={data.provider} plan={data.page} onPage={onPage} />;
+  const windows = data?.windows;
   if (!windows?.length) return null;
   const detail = [
     ...windows.map((w) => {
@@ -51,17 +60,35 @@ export function PlanUsage({ plan }: { plan?: { data?: ProviderUsage; error?: str
   );
 }
 
+/** `ChatGPT plan · View usage`: a plan whose usage duang cannot read, with the way to its own page. */
+function PageLink({ provider, plan, onPage }: { provider: string; plan: string; onPage: (provider: string) => void }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
+      {plan} plan ·
+      <button
+        onClick={() => onPage(provider)}
+        title="Open the plan's usage page in the browser"
+        className="pointer-events-auto underline hover:text-text"
+      >
+        View usage
+      </button>
+    </span>
+  );
+}
+
 type Usage = {
   plan?: { data?: ProviderUsage; error?: string };
   context?: { used: number; window: number };
   now?: number;
+  /** Opens the provider's usage page, for a plan whose usage only that page shows. */
+  onPage?: (provider: string) => void;
 };
 
 /**
  * Every limit on this conversation in one table: each plan window's share, its reset and, for a day
  * or more, its pace against the clock (`▼` under, `▲` over), then the context and the plan's source.
  */
-export function UsageDetail({ plan, context, now = Date.now() }: Usage) {
+export function UsageDetail({ plan, context, now = Date.now(), onPage }: Usage) {
   const data = plan?.data;
   const windows = data?.windows ?? [];
   return (
@@ -96,6 +123,11 @@ export function UsageDetail({ plan, context, now = Date.now() }: Usage) {
           {data.provider} · updated {ago(data.fetchedAt)}
         </span>
       )}
+      {data?.page && onPage && (
+        <span className={`col-span-4 ${context ? "mt-0.5 border-t border-stroke pt-1.5" : ""}`}>
+          <PageLink provider={data.provider} plan={data.page} onPage={onPage} />
+        </span>
+      )}
     </div>
   );
 }
@@ -111,11 +143,12 @@ export function UsageDetail({ plan, context, now = Date.now() }: Usage) {
  * exists; a plan read that failed or an API key adds no windows, never a stale percentage, and with
  * nothing to list there is no table.
  */
-export function UsageMeter({ plan, context, now }: Usage) {
+export function UsageMeter({ plan, context, now, onPage }: Usage) {
   const percent = context ? (context.used / context.window) * 100 : undefined;
-  const hasTable = context !== undefined || (plan?.data?.windows ?? []).length > 0;
+  const hasTable = context !== undefined || (plan?.data?.windows ?? []).length > 0 || (!!plan?.data?.page && !!onPage);
   return (
-    // Focusable when there is a table, so it is reachable without a pointer; it is information, not a control.
+    // Focusable when there is a table, so it is reachable without a pointer. A click focuses it too, so the
+    // table opens for keyboard focus only (`:focus-visible` on it or inside it), never stays pinned by a click.
     <div
       tabIndex={hasTable ? 0 : undefined}
       aria-label="Usage"
@@ -127,8 +160,13 @@ export function UsageMeter({ plan, context, now }: Usage) {
         {percent === undefined ? "–" : `${percent.toFixed(0)}%`}
       </span>
       {hasTable && (
-        <div className="popover absolute top-full right-0 mt-3 hidden group-hover:block group-focus-visible:block">
-          <UsageDetail plan={plan} context={context} now={now} />
+        // Padding, not margin, bridges the gap to the trigger, so the pointer can reach the page link in it.
+        // Hidden by opacity rather than `display: none`: Tab from the meter blurs it before the link takes
+        // focus, and a link inside a `display: none` box cannot take it. Keyboard focus on the link keeps it shown.
+        <div className="pointer-events-none absolute top-full right-0 pt-3 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:opacity-100 group-has-[:focus-visible]:opacity-100">
+          <div className="popover">
+            <UsageDetail plan={plan} context={context} now={now} onPage={onPage} />
+          </div>
         </div>
       )}
     </div>
@@ -153,6 +191,7 @@ export function ConversationHeader({
   queued,
   list,
   onReveal,
+  onUsagePage,
 }: {
   id: string;
   agent: string;
@@ -168,6 +207,7 @@ export function ConversationHeader({
   /** The button that shows and hides this agent's conversations; absent while it has none to list. */
   list?: { open: boolean; unseen: number };
   onReveal: () => void;
+  onUsagePage: (provider: string) => void;
 }) {
   return (
     // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
@@ -200,7 +240,7 @@ export function ConversationHeader({
             )}
           </div>
           {working && <Badge tone="accent" pulse>working</Badge>}
-          <UsageMeter plan={plan} context={context} />
+          <UsageMeter plan={plan} context={context} onPage={onUsagePage} />
           {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
         </div>
         {list && (

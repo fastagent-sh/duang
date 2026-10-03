@@ -19,11 +19,11 @@ import { Badge, Button } from "./ui.tsx";
 type Way = ProviderRow["ways"][number];
 
 /** Offered first, in this order: the providers most people connect. The rest wait under "More". */
-const COMMON = ["anthropic", "openai-codex", "openai", "github-copilot", "google", "xai", "deepseek", "openrouter"];
+const COMMON = ["anthropic", "openai", "github-copilot", "google", "xai", "deepseek", "openrouter"];
 
 /**
- * A provider is marked by its own logo on a neutral tile: names alone blur together (OpenAI, OpenAI
- * Codex, OpenRouter). The logos are LobeHub's static SVGs, vendored with their license
+ * A provider is marked by its own logo on a neutral tile: names alone blur together (OpenAI, Azure
+ * OpenAI, OpenRouter). The logos are LobeHub's static SVGs, vendored with their license
  * (provider-logos/LICENSE) for the providers pi offers.
  */
 const svgs = import.meta.glob<string>("./provider-logos/*.svg", { eager: true, query: "?raw", import: "default" });
@@ -35,7 +35,7 @@ const LOGOS: Record<string, string> = {
   google: "gemini-color", "google-vertex": "vertexai-color", groq: "groq", huggingface: "huggingface-color",
   "kimi-coding": "kimi-color", meta: "meta-color", minimax: "minimax-color", "minimax-cn": "minimax-color",
   mistral: "mistral-color", moonshotai: "moonshot", "moonshotai-cn": "moonshot", nvidia: "nvidia-color",
-  openai: "openai", "openai-codex": "codex", opencode: "opencode", "opencode-go": "opencode",
+  openai: "openai", opencode: "opencode", "opencode-go": "opencode",
   openrouter: "openrouter", "qwen-token-plan": "qwen-color", "qwen-token-plan-cn": "qwen-color",
   "qwen-token-plan-individual": "qwen-color", together: "together-color", "vercel-ai-gateway": "vercel",
   xai: "xai", xiaomi: "xiaomimimo", "xiaomi-token-plan-ams": "xiaomimimo", "xiaomi-token-plan-cn": "xiaomimimo",
@@ -249,7 +249,7 @@ export function ProvidersSection({
                 header={{
                   trailing: (
                     <>
-                      {provider.stored === "oauth" && <PlanUsage plan={view.usage[provider.id]} />}
+                      {provider.stored === "oauth" && <PlanUsage plan={view.usage[provider.id]} onPage={(id) => void store.openUsagePage(id)} />}
                       {landed?.id === provider.id && (
                         <Badge tone={landed.unchecked ? "warning" : "success"} className="enter">
                           {landed.unchecked ? "saved · key not checked" : "connected"}

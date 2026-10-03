@@ -32,6 +32,15 @@ export interface ProviderRow {
   ambient?: string;
 }
 
+/**
+ * Providers pi keeps only for old logins, which duang does not offer: `openai-codex` is ChatGPT's
+ * subscription through chatgpt.com, which pi replaced with Sign in with ChatGPT on `openai` itself. Not
+ * listed to connect, its models are not offered, and nothing runs on them.
+ */
+const RETIRED = new Set(["openai-codex"]);
+/** Whether a provider, or a model spec's provider, is one duang no longer runs. */
+export const retired = (providerOrSpec: string) => RETIRED.has(providerOrSpec.split("/")[0]!);
+
 /** A corrupt or unreadable file is an error, never "nothing connected". */
 const loud = (message: string) => {
   throw new Error(message);
@@ -53,6 +62,7 @@ export async function listProviders(authPath: string, empty: string): Promise<Pr
   const ambient = createPiModels({ authPath: empty, warn: loud });
   const rows = new Map<string, ProviderRow>();
   for (const option of await loginOptions(authPath)) {
+    if (retired(option.provider)) continue;
     let row = rows.get(option.provider);
     if (!row) {
       const stored = held.get(option.provider);

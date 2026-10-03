@@ -838,6 +838,14 @@ export function createStore(api: DuangApi) {
         publish({ usage: { ...view.usage, [provider]: { error: message(error) } } });
       }
     },
+    /** A plan whose usage only its provider's page shows: main opens that page in the browser. */
+    async openUsagePage(provider: string) {
+      try {
+        await api.openUsagePage(provider);
+      } catch (error) {
+        note(error);
+      }
+    },
     /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
     async loadCommands() {
       const id = view.agentId;

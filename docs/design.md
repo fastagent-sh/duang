@@ -88,13 +88,17 @@ without opening a terminal. It serves the owner on a new machine and, above all,
 recipient, who brings their own credentials and need not install developer tools.
 
 *Connect a provider* starts with the provider (Anthropic, OpenAI, GitHub Copilot, …), then asks how
-to connect when there is more than one way: **Subscription** (OAuth: Claude Pro/Max, ChatGPT/Codex,
+to connect when there is more than one way: **Subscription** (OAuth: Claude Pro/Max, ChatGPT,
 Copilot and the other flows FastAgent supports, signed in in the system browser) or **API key**
 (verified once when saved, sent only to that provider's own endpoint). A provider with one way goes
 straight into it. The list is FastAgent's `loginOptions()`, grouped by provider id and named as
-pi names each provider; duang adds no names or groupings of its own, so a vendor that pi splits
-shows as two rows (`OpenAI` for API keys, `OpenAI Codex` for a ChatGPT subscription). Common
-providers come first and the list can be filtered, since pi offers about forty.
+pi names each provider; duang adds no names or groupings of its own (`OpenAI` offers both Sign in
+with ChatGPT and an API key). The one exception is a provider pi keeps only for old logins:
+`openai-codex`, ChatGPT through chatgpt.com, which pi replaced with Sign in with ChatGPT on `openai`.
+duang does not offer it to connect, lists none of its models, and nothing runs on it: an agent whose
+default is on it asks for a model, and a conversation recorded on it refuses a send until another model
+is chosen. A login for it already in duang's file is left there, unused. Common providers come first
+and the list can be filtered, since pi offers about forty.
 
 A *Connected* list shows each provider with every source that authenticates it, Reconnect and
 Disconnect. A provider-supplied environment variable (such as `ANTHROPIC_API_KEY`) is shown as a
@@ -105,7 +109,7 @@ source too, and cannot be removed from duang.
 `userData`: `~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
 `~/.config/duang/` on Linux). duang does not read the `fastagent` CLI's or pi's stores, and
 `FASTAGENT_AUTH_PATH` no longer points it elsewhere. Sharing a file, or copying a login between
-files, puts one OAuth grant in two places: some providers (Anthropic, OpenAI Codex) rotate the
+files, puts one OAuth grant in two places: some providers (Anthropic, OpenAI's ChatGPT sign-in) rotate the
 refresh token on every refresh, so one copy's refresh silently invalidates the other. So a login made in a terminal is made again in
 duang, as its own grant, and nothing duang connects, replaces or disconnects reaches the CLI. The
 file holds one credential per provider: an API key replaces a subscription login for the same

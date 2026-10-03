@@ -222,7 +222,7 @@ percentage is the signal.
 **The model chip and its picker follow Codex's, on duang's terms.** The chip, 13px on a faint tint so it reads as the
 button it is beside the field's own text, names the provider quietly
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
-`openai/` and `openai-codex/` offer the same ids and are paid for differently. It opens one popover
+`openai/` and `azure-openai-responses/` offer the same ids and are paid for differently. It opens one popover
 anchored to the chip's right edge: a search row (with a quiet refresh button at its end, and under it, once
 pressed, one line of what it found or why it failed), the models under their provider (ids only, in the
 system face rather than mono, at 13px), and the effort. Effort is a track with a stop per
@@ -871,7 +871,7 @@ MANUAL PROXY                               (only while Manual is chosen)
   roster. Escape or the close control returns to the conversation.
 - Providers are two inset cards in the Network group's style, each row led by the provider's logo
   on a neutral 32px tile (LobeHub's SVGs, vendored with their license; initials on the same tile
-  when there is none), because names alone blur together (OpenAI, OpenAI Codex, OpenRouter).
+  when there is none), because names alone blur together (OpenAI, Azure OpenAI, OpenRouter).
   *Model providers* lists what serves each one now, in the person's words (`Claude Pro/Max`,
   `API key`, `from GEMINI_API_KEY`); a subscription adds its plan windows, used and when each
   resets, only once read (the pace stays in the tooltip; a failed read shows nothing, as in the header).
