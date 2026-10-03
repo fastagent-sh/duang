@@ -309,8 +309,18 @@ if (!process.versions.electron) {
       await click("Create agent here");
       await until("document.querySelector('dialog[open]') !== null", "first model picker opens automatically");
       await until(
-        "document.querySelector('dialog').innerText.includes('Effort can be set once the conversation has begun')",
-        "a conversation that has not begun has no effort to set yet: the runtime lists levels per conversation",
+        "document.querySelector('dialog').innerText.includes('Effort can be set once a model is chosen')",
+        "an agent with no model has no levels to offer",
+      );
+      // Each model by the name it declares and its context window; the search matches the name too.
+      await evaluate(`(() => {
+        const input = document.querySelector('dialog input');
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'GPT-4o mini');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await until(
+        "document.querySelector('dialog button[data-model=\"openai/gpt-4o-mini\"]')?.innerText.replace(/\\s+/g, ' ').trim() === 'GPT-4o mini 128K'",
+        "a model row is its name and context window, found by its name",
       );
       await chooseModel("openai/gpt-4o-mini");
       await until("document.querySelector('dialog') === null", "first model picker closes");
@@ -596,13 +606,13 @@ if (!process.versions.electron) {
       await until("document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')", "configured model uses the same credential file");
 
       const models = await evaluate("window.duang.listModels('configured')");
-      assert.ok(models.specs.includes("anthropic/claude-sonnet-4-5"));
+      assert.ok(models.some((model) => model.spec === "anthropic/claude-sonnet-4-5"));
       // Another provider's default for the race and history checks below; pi's retired ChatGPT route is not offered.
       const otherModel = "openai/gpt-5.5";
-      assert.ok(models.specs.includes(otherModel));
-      assert.ok(!models.specs.some((spec) => spec.startsWith("openai-codex/")), "the retired route's models are not offered");
-      assert.ok(models.specs.includes("local/m1"), "the agent's own models.json endpoint is pickable");
-      assert.ok(!(await evaluate("window.duang.listModels('smoke')")).specs.includes("local/m1"), "another agent's endpoint is not");
+      assert.ok(models.some((model) => model.spec === otherModel));
+      assert.ok(!models.some(({ spec }) => spec.startsWith("openai-codex/")), "the retired route's models are not offered");
+      assert.ok(models.some((model) => model.spec === "local/m1"), "the agent's own models.json endpoint is pickable");
+      assert.ok(!(await evaluate("window.duang.listModels('smoke')")).some((model) => model.spec === "local/m1"), "another agent's endpoint is not");
       const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
       // Replacing the runtime is main's business: the open conversation is not reloaded, its scroll stays, and
       // it is not told anything broke. The answer below proves its subscription listens on the new runtime.
@@ -718,10 +728,10 @@ if (!process.versions.electron) {
       assert.equal(missing.ok, false);
       assert.match(missing.error.message, /^No API key found for anthropic\./, "pi's own words, naming the provider");
       assert.equal(anthropicRequests, 2);
-      assert.ok(!(await evaluate("window.duang.listModels('configured')")).specs.some((spec) => spec.startsWith("anthropic/")));
+      assert.ok(!(await evaluate("window.duang.listModels('configured')")).some(({ spec }) => spec.startsWith("anthropic/")));
       const expired = { ...stored, anthropic: { ...stored.anthropic, expires: 0 } };
       await writeFile(selectedAuth, JSON.stringify(expired));
-      assert.ok((await evaluate("window.duang.listModels('configured')")).specs.includes("anthropic/claude-sonnet-4-5"), "picker does not attempt OAuth refresh");
+      assert.ok((await evaluate("window.duang.listModels('configured')")).some((model) => model.spec === "anthropic/claude-sonnet-4-5"), "picker does not attempt OAuth refresh");
       const refreshFailure = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Expired token check')`);
       assert.equal(refreshFailure.ok, false);
       assert.match(refreshFailure.error.message, /Synthetic OAuth refresh rejected/);
@@ -729,7 +739,7 @@ if (!process.versions.electron) {
       await writeFile(selectedAuth, "{invalid");
       assert.match(await evaluate("window.duang.listModels('configured').then(() => '', error => error.message)"), /corrupt auth file/);
       await writeFile(selectedAuth, JSON.stringify(stored));
-      assert.ok((await evaluate("window.duang.listModels('configured')")).specs.includes("anthropic/claude-sonnet-4-5"));
+      assert.ok((await evaluate("window.duang.listModels('configured')")).some((model) => model.spec === "anthropic/claude-sonnet-4-5"));
       const recovered = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Retry with restored credentials')`);
       assert.equal(recovered.ok, true);
       assert.equal(anthropicRequests, 3);

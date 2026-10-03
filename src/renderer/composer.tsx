@@ -5,6 +5,8 @@ import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
 import { home } from "./paths.ts";
+import { tokens } from "./usage.ts";
+import type { Models } from "../preload/index.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
 const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
@@ -71,7 +73,8 @@ function Effort({ levels, level, onPick }: { levels: string[]; level: string; on
 
 /**
  * The model list and the conversation's effort, floating above the composer chip that opened them.
- * Models sit under their provider, the current one first; the search matches the whole `provider/id`.
+ * Models sit under their provider, the current one first, each by the name it declares (its id when it
+ * declares none) with its context window; the search matches the name and the whole `provider/id`.
  */
 function ModelPicker({
   view,
@@ -84,7 +87,7 @@ function ModelPicker({
   view: View;
   store: Store;
   current?: string;
-  /** Absent until the conversation has begun: the runtime lists levels for a conversation, not for an agent. */
+  /** Absent while the conversation has no model: the runtime lists levels for the model it will run on. */
   thinking?: { level: string; levels: string[] };
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
@@ -114,18 +117,18 @@ function ModelPicker({
     el.querySelector("input")?.focus();
     return () => el.close();
   }, []);
-  const specs = models?.specs ?? [];
-  const matching = specs
-    .filter((m) => m.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => Number(b === current) - Number(a === current));
+  const query = filter.toLowerCase();
+  const matching = (models ?? [])
+    .filter((m) => m.spec.toLowerCase().includes(query) || !!m.name?.toLowerCase().includes(query))
+    .sort((a, b) => Number(b.spec === current) - Number(a.spec === current));
   const shown = matching.slice(0, 60);
   // Cut off after grouping, a provider past the limit would not even show its heading: say so.
   const hidden = matching.length - shown.length;
   // Providers in the order they first appear, which puts the current model's first.
-  const groups = new Map<string, string[]>();
-  for (const spec of shown) {
-    const provider = spec.slice(0, spec.indexOf("/"));
-    groups.set(provider, [...(groups.get(provider) ?? []), spec]);
+  const groups = new Map<string, Models>();
+  for (const model of shown) {
+    const provider = model.spec.slice(0, model.spec.indexOf("/"));
+    groups.set(provider, [...(groups.get(provider) ?? []), model]);
   }
 
   return (
@@ -161,7 +164,7 @@ function ModelPicker({
             Retry
           </Button>
         </div>
-      ) : models?.specs.length === 0 ? (
+      ) : models?.length === 0 ? (
         <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
           <p>No provider is connected yet. Sign in with a subscription or paste an API key.</p>
           <Button kind="primary" size={28} onClick={onProviders}>
@@ -213,22 +216,25 @@ function ModelPicker({
             {[...groups].map(([provider, members]) => (
               <section key={provider} aria-label={provider}>
                 <h3 className="px-2.5 pt-2 pb-1 text-[12px] font-normal text-muted">{provider}</h3>
-                {members.map((model) => (
+                {members.map(({ spec, name, contextWindow }) => (
                   <button
-                    key={model}
-                    data-model={model}
+                    key={spec}
+                    data-model={spec}
+                    // The id is what the chip and the agent's config say; the name is how the model calls itself.
+                    title={spec}
                     onClick={() => {
                       dialog.current?.close();
                       onClose();
-                      void store.pickModel(model);
+                      void store.pickModel(spec);
                     }}
-                    aria-current={model === current ? "true" : undefined}
+                    aria-current={spec === current ? "true" : undefined}
                     className={`flex w-full items-center gap-2 rounded-card px-2.5 py-2 text-left text-[13px] hover:bg-hover ${
-                      model === current ? "bg-hover" : ""
+                      spec === current ? "bg-hover" : ""
                     }`}
                   >
-                    <span className="min-w-0 flex-1 truncate">{model.slice(model.indexOf("/") + 1)}</span>
-                    {model === current && <Check size={15} aria-hidden />}
+                    <span className="min-w-0 flex-1 truncate">{name ?? spec.slice(spec.indexOf("/") + 1)}</span>
+                    {contextWindow !== undefined && <span className="shrink-0 text-[12px] text-muted tabular-nums">{tokens(contextWindow)}</span>}
+                    {spec === current && <Check size={15} aria-hidden />}
                   </button>
                 ))}
               </section>
@@ -242,7 +248,7 @@ function ModelPicker({
           </div>
           <div className="border-t border-stroke">
             {!thinking ? (
-              <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once the conversation has begun.</p>
+              <p className="px-4 py-3 text-[12px] text-muted">Effort can be set once a model is chosen.</p>
             ) : thinking.levels.length > 1 ? (
               <Effort levels={thinking.levels} level={thinking.level} onPick={(level) => void store.setThinking(level)} />
             ) : (
@@ -295,7 +301,7 @@ export function Composer({
   // What the conversation will RUN with, else the agent's own default. Nothing else may answer
   // this: a chip that names a model the turn will not use is the failure worth avoiding.
   const model = c?.state?.model ?? view.model;
-  // The levels are the runtime's, per conversation and per model; before the conversation has begun there is none to offer.
+  // The levels are the runtime's, per conversation and per model, a conversation not begun yet included.
   const thinking =
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
       ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }

@@ -39,11 +39,15 @@ The picker lists the models the open agent can run: pi's built-ins, the agent's 
 `fastagent/models.json` and the machine's `~/.fastagent/models.json`, each kept to providers with a
 configured credential: in the credential file, in an environment variable, or as a key written in
 that `models.json`. Switching agents with the picker open reads the new agent's list. It
-searches the whole `provider/id`, groups the models under their provider with the selected one first,
-and ends with the conversation's effort: a track of the thinking levels the runtime lists for the
-conversation's model. A conversation has levels once it has a record, so a new conversation says so
-instead of offering a track, and a model with one level says it has no effort setting. The level is set
-on the open conversation only, and is refused while it runs; the arrow keys move along the track
+lists each model by the name it declares (its id when it declares none) with its context window
+(`GPT-5.5  272K`), the full `provider/id` on hover, searches both the name and the `provider/id`, groups
+the models under their provider with the selected one first, and ends with the conversation's effort: a
+track of the thinking levels the runtime lists for the conversation's model. A new conversation has them
+before its first message (what its first turn would run on), so effort can be set before sending; setting
+it, or the model, makes the runtime keep the conversation, which the list shows as *New conversation*
+until its first message. An agent with no model yet has no levels, so the picker says effort can be set
+once a model is chosen, and a model with one level says it has no effort setting. The level is set on the
+open conversation only, and is refused while it runs; the arrow keys move along the track
 and write nothing, and Enter, Space or a click choose. A list of more than 60 models says how many it left out. The picker shows no credential path and
 links to no provider page; with nothing connected its one offer is **Connect a provider**, which
 returns to the picker after connecting. Configuration is not a provider probe.

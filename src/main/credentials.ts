@@ -6,15 +6,17 @@
 import { join } from "node:path";
 import { app } from "electron";
 import { availableModelsFromDir, refreshModelCatalog } from "@fastagent-sh/fastagent/pi";
+import type { ModelDescriptor } from "@fastagent-sh/fastagent/session";
 import { inflight } from "./inflight.ts";
 import { retired } from "./providers.ts";
 
 export const authPath = join(app.getPath("userData"), "auth.json");
 
-/** What the picker shows: the specs this agent can run. */
-export interface Models {
-  specs: string[];
-}
+/**
+ * What the picker shows: the models this agent can run, as FastAgent describes them (`spec`, and the
+ * `name`, `thinkingLevels` and `contextWindow` the model declares).
+ */
+export type Models = ModelDescriptor[];
 
 /** The credential file every read here goes through. */
 const credentials = {
@@ -30,8 +32,7 @@ const credentials = {
  * Configuration, not a network health check: OAuth refresh and provider errors are left to execution.
  */
 export async function modelsFor(dir: string): Promise<Models> {
-  const models = await availableModelsFromDir(dir, credentials);
-  return { specs: models.map((model) => model.spec).filter((spec) => !retired(spec)) };
+  return (await availableModelsFromDir(dir, credentials)).filter((model) => !retired(model.spec));
 }
 
 /**

@@ -586,8 +586,9 @@ export function createStore(api: DuangApi) {
   }
 
   /**
-   * The model and thinking levels the runtime lists for a conversation exist once it has a record. One
-   * that began in this window opened before that, so it has none until a run settles and it is read again.
+   * The model and thinking levels the runtime lists for a conversation, read again after a model change
+   * replaced the runtime (its `state_changed` came before the subscription moved). A conversation with no
+   * record yet has them too: the runtime reports what its first turn would run on.
    */
   async function readSettings(c: Conversation) {
     try {
@@ -621,7 +622,6 @@ export function createStore(api: DuangApi) {
       c.started = undefined;
       c.run = undefined;
       c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
-      if (c.state.availableThinkingLevels === undefined) void readSettings(c);
       // A run that ends while you are reading something else is the thing you came back for. A run
       // you stopped yourself is not news.
       if (c !== view.conversation && e.data.status !== "aborted")
@@ -814,12 +814,12 @@ export function createStore(api: DuangApi) {
       // would be dropped (a failure then leaves a picker with no list and nothing to retry).
       if (!id || !view.models || view.modelsRefresh?.status === "running") return;
       const request = ++modelsRequest;
-      const before = new Set(view.models.specs);
+      const before = new Set(view.models.map((model) => model.spec));
       publish({ modelsRefresh: { status: "running" } });
       try {
         const models = await api.refreshModels(id);
         if (request !== modelsRequest || view.agentId !== id) return;
-        publish({ models, modelsRefresh: { status: "done", added: models.specs.filter((spec) => !before.has(spec)).length } });
+        publish({ models, modelsRefresh: { status: "done", added: models.filter((model) => !before.has(model.spec)).length } });
       } catch (error) {
         if (request === modelsRequest && view.agentId === id)
           publish({ modelsRefresh: { status: "failed", error: message(error) } });

@@ -73,3 +73,9 @@ test("a row says whether it is running or holding unsent text", () => {
     ],
   );
 });
+
+test("a record with no message yet, made by setting its model or effort first, is listed as a new conversation", () => {
+  const [row] = rows([{ session: "4f1c-uuid", createdAt: 1, updatedAt: 2, messageCount: 0 }]);
+  assert.equal(row?.label, "New conversation");
+  assert.equal(row?.fresh, undefined, "it is the runtime's, not one minted here");
+});

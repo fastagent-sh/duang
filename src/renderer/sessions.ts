@@ -59,7 +59,14 @@ export function rows(
   });
   const known = [...summaries]
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((s) => mark({ session: s.session, label: s.name ?? s.preview ?? s.session, updatedAt: s.updatedAt }));
+    // A record with no message yet (its model or effort was set before the first send) is a new conversation.
+    .map((s) =>
+      mark({
+        session: s.session,
+        label: s.name ?? s.preview ?? (s.messageCount === 0 ? "New conversation" : s.session),
+        updatedAt: s.updatedAt,
+      }),
+    );
   const local = [...new Set([...(selected ? [selected] : []), ...running, ...drafts])]
     .filter((session) => !known.some((row) => row.session === session))
     .map((session) =>
