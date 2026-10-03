@@ -424,8 +424,9 @@ export function createStore(api: DuangApi) {
     const current = previewTicket(id);
     let preview: Preview;
     try {
-      const history = await api.readSession(id, session);
-      preview = { session, ...previewOf(fromEntries(history.entries, history.leafEntryId)) };
+      // The state too: a run still going (after a reload, say) has not been cut short.
+      const [history, state] = await Promise.all([api.readSession(id, session), api.readState(id, session)]);
+      preview = { session, ...previewOf(fromEntries(history.entries, history.leafEntryId, state.status !== "idle")) };
     } catch (error) {
       preview = { session, error: message(error) };
     }
@@ -473,7 +474,7 @@ export function createStore(api: DuangApi) {
     try {
       const result = await api.openSession(agentId, session, c.subscription);
       if (conversations.get(key(agentId, session)) !== c) return;
-      c.items = fromEntries(result.entries.entries, result.entries.leafEntryId, result.state.status === "running");
+      c.items = fromEntries(result.entries.entries, result.entries.leafEntryId, result.state.status !== "idle");
       c.state = result.state;
       // Opened mid-run, the run's opening message is already in the history just read.
       c.runHasUser = result.state.status === "running";
