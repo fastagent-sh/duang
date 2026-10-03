@@ -15,7 +15,6 @@ import {
   phase,
   previewOf,
   queueView,
-  resumeRunning,
   type Activity,
   type Item,
   type UserItem,
@@ -167,9 +166,9 @@ export interface View extends SettingsView {
    */
   blocked?: string;
   /**
-   * The open conversation ends on a turn that failed, and its message can be sent again now (`resend`). Only
-   * a run this window heard from its start: the history FastAgent 0.23 reports does not say a turn failed
-   * (fastagent#690). Not the same as `retry`, which reopens a conversation whose view broke.
+   * The open conversation ends on a turn that failed, and its message can be sent again now (`resend`): the
+   * failure note says what, whether this window heard the run live or read it back from history. Not the same
+   * as `retry`, which reopens a conversation whose view broke.
    */
   resend?: { text: string; toolsRan: boolean };
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
@@ -474,8 +473,7 @@ export function createStore(api: DuangApi) {
     try {
       const result = await api.openSession(agentId, session, c.subscription);
       if (conversations.get(key(agentId, session)) !== c) return;
-      c.items = fromEntries(result.entries.entries, result.entries.leafEntryId);
-      if (result.state.status === "running") c.items = resumeRunning(c.items);
+      c.items = fromEntries(result.entries.entries, result.entries.leafEntryId, result.state.status === "running");
       c.state = result.state;
       // Opened mid-run, the run's opening message is already in the history just read.
       c.runHasUser = result.state.status === "running";
@@ -640,7 +638,8 @@ export function createStore(api: DuangApi) {
     }
     c.items = apply(c.items, event);
     // A run heard from its start that failed after taking a message offers that message again. One that
-    // failed before (no credential, say) already returned the text to the draft.
+    // failed before (no credential, say) already returned the text to the draft. A run joined midway does not
+    // know its start here; reopened, its history does.
     const failure = c.items.at(-1);
     if (e.type === "run_settled" && e.data.status === "failed" && run?.message !== undefined && failure?.kind === "note")
       c.items = [...c.items.slice(0, -1), { ...failure, resend: { text: run.message, toolsRan: run.toolsRan } }];

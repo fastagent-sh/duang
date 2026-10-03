@@ -20,7 +20,7 @@ test("providers list pi's own names and ways, what duang's file holds, and a var
     assert.equal(openai.stored, "api_key");
     assert.equal(openai.ambient, "OPENAI_API_KEY", "the stored key must not hide the variable that outlives a disconnect");
     const codex = rows.find((row) => row.id === "openai-codex")!;
-    assert.equal(codex.name, "OpenAI Codex", "a vendor pi splits stays two rows");
+    assert.equal(codex.name, "OpenAI Codex (legacy)", "a vendor pi splits stays two rows, under pi's own names");
     assert.deepEqual(codex.ways.map((way) => [way.method, way.subscription]), [["oauth", true]]);
     const anthropic = rows.find((row) => row.id === "anthropic")!;
     assert.deepEqual(anthropic.ways.map((way) => way.method), ["oauth", "api_key"]);

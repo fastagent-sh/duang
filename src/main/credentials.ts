@@ -29,7 +29,7 @@ const credentials = {
  * Configuration, not a network health check: OAuth refresh and provider errors are left to execution.
  */
 export async function modelsFor(dir: string): Promise<Models> {
-  return { specs: await availableModelsFromDir(dir, credentials) };
+  return { specs: (await availableModelsFromDir(dir, credentials)).map((model) => model.spec) };
 }
 
 /**
