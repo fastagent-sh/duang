@@ -152,7 +152,12 @@ that cannot be read shows the unreadable-registry page. A closed or failed subsc
 rather than silently leaving a run on screen forever.
 
 Closing the window does not stop main-process work. Quitting with active local work warns that it
-will interrupt the run; local work does not continue when the app and machine stop. Local channels
+will stop the run; local work does not continue when the app and machine stop. Quit anyway stops each
+running conversation as Stop does and waits up to five seconds for it to settle, so its history says it
+was stopped (`run stopped` when reopened) rather than ending on the message it was answering. A run
+that has not settled by then (a tool that cannot be cancelled) is cut when the app exits; quitting
+again while it waits quits at once, and a message sent while it waits is refused (`duang is quitting: the message was
+not sent`) and stays in the draft. Local channels
 and routines are not started by duang. The current client has no online contacts or share UI.
 
 ## Planned: daily local use and definition inspection (stage 1)

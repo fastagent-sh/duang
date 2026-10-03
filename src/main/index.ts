@@ -14,7 +14,6 @@ import {
   renameAgent,
   setAgentModel,
   withAgentRun,
-  workingAgents,
   type AgentRow,
 } from "./agents.ts";
 import { authPath, modelsFor, refreshModels } from "./credentials.ts";
@@ -388,15 +387,17 @@ app.on("window-all-closed", () => {
 
 /**
  * Closing a window leaves runs alone — they live here, not in the renderer. Quitting ends them, and
- * nothing resumes them afterwards, so it is the one moment worth interrupting.
+ * nothing resumes them afterwards, so it is the one moment worth interrupting. Quit anyway stops each
+ * run as Stop does and waits, briefly, for it to settle: a run cut by the process ending records no
+ * outcome at all, while a stopped one records that it was stopped.
  *
- * Not covered by an automated check: this is a native modal on the quit path, which the Electron
- * smoke test cannot answer without hanging. Verified by hand — quit during a run warns, Cancel keeps
- * the run going, Quit anyway exits; quitting while idle is unchanged.
+ * The native modal is not answered by the smoke test, which would hang on it; the stop-and-wait is
+ * `sends().stopAll`, tested on its own.
  */
+const QUIT_WAIT_MS = 5000;
 let quitting = false;
 app.on("before-quit", (event) => {
-  if (quitting || workingAgents().length === 0) return;
+  if (quitting || !inFlight.busy()) return;
   event.preventDefault();
   const quit = dialog.showMessageBoxSync({
     type: "warning",
@@ -405,10 +406,19 @@ app.on("before-quit", (event) => {
     cancelId: 1,
     message: "An agent is still working.",
     detail:
-      "Quitting interrupts the run, and nothing resumes it afterwards. Work its tools already finished is not undone.",
+      "Quitting stops the run, and nothing resumes it afterwards. Work its tools already finished is not undone.",
   });
-  if (quit === 0) {
-    quitting = true;
-    app.quit();
-  }
+  if (quit !== 0) return;
+  // Quitting again while this waits quits at once.
+  quitting = true;
+  void inFlight
+    .stopAll(async (key) => {
+      const slash = key.indexOf("/");
+      const row = await requireAgent(key.slice(0, slash));
+      return (await openAgent(row)).control.sessions.get(key.slice(slash + 1)).abort();
+    }, QUIT_WAIT_MS)
+    .then((settled) => {
+      if (!settled) console.error(`duang: a stopped run had not settled after ${QUIT_WAIT_MS} ms; quitting cuts it`);
+      app.quit();
+    });
 });

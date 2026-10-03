@@ -105,3 +105,54 @@ test("a conversation recorded on a retired provider is refused, not run there", 
   assert.deepEqual(calls, []);
   assert.equal(!result.ok && result.error.code, "model_retired");
 });
+
+test("quitting stops every send in flight and waits for each run to settle, but not past its limit", async () => {
+  const held = sends();
+  assert.equal(held.busy(), false);
+  // Two conversations with runs going; each settles when it is aborted.
+  const settle = new Map<string, () => void>();
+  const run = (key: string) =>
+    held.hold(key, () => new Promise<SessionResult>((resolve) => settle.set(key, () => resolve(refusal("aborted")))));
+  const a = run("agent/a");
+  const b = run("agent/b");
+  assert.equal(held.busy(), true);
+  const aborted: string[] = [];
+  const settled = await held.stopAll(async (key) => {
+    aborted.push(key);
+    setTimeout(() => settle.get(key)!(), 5);
+    return ok;
+  }, 1000);
+  assert.equal(settled, true, "both runs settled before the limit");
+  assert.deepEqual(aborted.sort(), ["agent/a", "agent/b"]);
+  await Promise.all([a, b]);
+  assert.equal(held.busy(), false);
+
+  // Once quitting began, a message sent while it waits is refused before it reaches the runtime.
+  let started = false;
+  const meanwhile = await held.hold("agent/c", async () => {
+    started = true;
+    return ok;
+  });
+  assert.equal(started, false);
+  assert.equal(!meanwhile.ok && meanwhile.error.code, "quitting");
+  assert.equal(held.busy(), false);
+
+  // A run that does not settle (a tool that cannot be cancelled), and one whose abort fails: neither keeps
+  // quitting waiting past the limit.
+  const stuckHeld = sends();
+  const stuckSettle = new Map<string, () => void>();
+  const stuckRun = (key: string) =>
+    stuckHeld.hold(key, () => new Promise<SessionResult>((resolve) => stuckSettle.set(key, () => resolve(refusal("aborted")))));
+  void stuckRun("agent/stuck");
+  const broken = stuckRun("agent/broken");
+  const began = Date.now();
+  // pi's abort waits for the run to go idle, so the stuck run's abort never returns either.
+  const late = await stuckHeld.stopAll((key) => {
+    if (key === "agent/broken") return Promise.reject(new Error("the agent was removed"));
+    return new Promise<SessionResult>(() => {});
+  }, 50);
+  assert.equal(late, false);
+  assert.ok(Date.now() - began < 1000);
+  stuckSettle.get("agent/broken")!();
+  await broken;
+});
