@@ -221,8 +221,17 @@ export default function App() {
                   onMenu={duang.menu}
                 />
               )}
-              {alert ? (
+              {view.failure && (
+                // An action outside any conversation failed: said here, not in the transcript that happens to be open.
                 <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
+                  {view.failure}{" "}
+                  <button className="underline" onClick={store.dismissFailure}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+              {alert ? (
+                <div role="alert" className={`${view.failure ? "" : "mt-14 "}px-6 py-2 text-danger whitespace-pre-wrap break-words`}>
                   {alert}{" "}
                   <button className="underline" onClick={() => void store.retry()}>
                     Retry
@@ -232,7 +241,7 @@ export default function App() {
                 // An ended subscription is not a failure: the conversation is intact, this view stopped
                 // listening. Say it in the calm voice and offer the one action that fixes it.
                 c?.ended && (
-                  <div role="status" className="mt-14 px-6 py-2 text-muted whitespace-pre-wrap break-words">
+                  <div role="status" className={`${view.failure ? "" : "mt-14 "}px-6 py-2 text-muted whitespace-pre-wrap break-words`}>
                     {c.ended}{" "}
                     <button className="underline" onClick={() => void store.retry()}>
                       Reconnect
@@ -288,6 +297,7 @@ export default function App() {
                     resume={store.scrollOf(c.agentId, c.session)}
                     onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
                     onUsage={(provider) => void store.openUsagePage(provider)}
+                    onConnect={() => setSettings({ fromPicker: true })}
                     onRetry={
                       view.resend
                         ? () => {

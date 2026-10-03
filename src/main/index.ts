@@ -386,11 +386,10 @@ function register(): void {
     return inFlight.hold(`${id}/${session}`, async (stopped) => {
       // The agent's commands spawn during this run; they get the route as it is now.
       await syncCommandProxy();
-      // One credential file serves every runtime, and the picker only offered what this agent can
-      // authenticate through it.
-      return withAgentRun(await requireAgent(id), ({ agent, control }) =>
-        send(agent, control.sessions.get(session), text, stopped),
-      );
+      // One credential file serves every runtime, and a run starts only on a model the picker would offer.
+      const row = await requireAgent(id);
+      const offered = async (model: string) => (await modelsFor(row.dir)).some((m) => m.spec === model);
+      return withAgentRun(row, ({ agent, control }) => send(agent, control.sessions.get(session), text, stopped, offered));
     });
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {

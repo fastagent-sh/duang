@@ -114,8 +114,11 @@ not something to act on. The context is FastAgent's, once it reports it
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
 history; the client does not save a second transcript. A conversation can be renamed and deleted,
 with destructive deletion confirmed. The current local view keeps unsent text with its conversation
-across navigation and application restart. A send rejected before admission remains a draft; a
-failed run may already have performed tool work. Stop does not roll back completed work or promise
+across navigation and application restart. A send rejected before admission remains a draft, and a refusal is said each time, even when an
+earlier message got the same one. A run starts only on a model the picker would offer to the agent: a
+conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send
+with `<model> cannot run: …` and **Connect a provider** under it, rather than failing inside the engine with
+its command-line advice. A failed run may already have performed tool work. Stop does not roll back completed work or promise
 to cancel a non-cancellable tool. Stop pressed while a send is still on its way to the runtime keeps it
 from starting a run, and the message returns to the draft without a note; Stop pressed as a run ends
 says nothing, since the run's own ending is already in the transcript.
@@ -154,9 +157,11 @@ while the layout settles and until the person scrolls. While the history of a co
 has is being read (and while an agent opens, until it is known to have none), the pane is empty with the composer in
 place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment
 before the real one arrives. A view that was at the latest turn stays there while its
-content grows by itself, and choosing the conversation that is already open rebuilds nothing. A failure with
-no conversation to note it in (adding an agent when there are none) is said above the pane; only a registry
-that cannot be read shows the unreadable-registry page. A closed or failed subscription reports that it is no longer receiving updates
+content grows by itself, and choosing the conversation that is already open rebuilds nothing. A failed action
+that belongs to no conversation (adding, renaming, revealing or removing an agent) is said above the pane
+with Dismiss, never written into whichever conversation is open; one about a conversation (renaming or
+deleting it from the list) is said in that conversation when the window holds it, else on its agent's row.
+Only a registry that cannot be read shows the unreadable-registry page. A closed or failed subscription reports that it is no longer receiving updates
 rather than silently leaving a run on screen forever.
 
 Closing the window does not stop main-process work. Quitting with active local work warns that it
