@@ -1,7 +1,8 @@
 /**
- * A subscription's rate-limit windows (Claude 5h/7d, ChatGPT primary/secondary), read from the
- * endpoints the providers' own clients use. Neither endpoint is documented, so a changed shape is an
- * error with the provider's words, never an empty result.
+ * A subscription's rate-limit windows (Claude 5h/7d), read from the endpoint Claude's own clients use.
+ * It is not documented, so a changed shape is an error with the provider's words, never an empty result.
+ * Sign in with ChatGPT has none to read: chatgpt.com's usage route refuses its token (401
+ * `rejected_by_access_enforcement`), and api.openai.com's answers carry no rate-limit headers.
  *
  * The token comes from FastAgent's `getAuth`, which refreshes an expired OAuth login under the
  * credential file's lock — the same path a run takes — so duang is never a second writer. The token
@@ -58,39 +59,6 @@ export function parseAnthropic(body: unknown): UsageWindow[] {
   return present;
 }
 
-export function parseChatGPT(body: unknown): UsageWindow[] {
-  type Window = { used_percent?: number; reset_at?: number | null; limit_window_seconds?: number };
-  type Limits = { primary_window?: Window | null; secondary_window?: Window | null };
-  const limits = need((body as { rate_limit?: Limits }).rate_limit, "rate_limit");
-  const window = (w: Window | null | undefined, fallback: number, name: string): UsageWindow | undefined => {
-    if (!w) return undefined;
-    const seconds = w.limit_window_seconds && w.limit_window_seconds > 0 ? w.limit_window_seconds : fallback;
-    return {
-      label: label(seconds),
-      percent: need(w.used_percent, `${name}.used_percent`),
-      ...(w.reset_at ? { resetsAt: w.reset_at * 1000 } : {}),
-      windowSeconds: seconds,
-    };
-  };
-  // A plan may have only one window (a weekly-only ChatGPT plan answers with just `primary_window`
-  // at 604800s), so the length comes from the response, and the fallbacks only name the usual ones.
-  const present = [
-    window(limits.primary_window, 5 * HOUR, "primary_window"),
-    window(limits.secondary_window, 7 * DAY, "secondary_window"),
-  ].filter((w): w is UsageWindow => !!w);
-  if (!present.length) throw new Error("usage response has neither primary_window nor secondary_window");
-  return present;
-}
-
-/** The ChatGPT account the token belongs to, which the usage route requires as a header. */
-function chatgptAccount(token: string): string {
-  const payload = token.split(".")[1];
-  const claims = payload ? JSON.parse(Buffer.from(payload, "base64url").toString()) : undefined;
-  const account = claims?.["https://api.openai.com/auth"]?.chatgpt_account_id as string | undefined;
-  if (!account) throw new Error("the ChatGPT login's token carries no ChatGPT account id");
-  return account;
-}
-
 async function get(url: string, headers: Record<string, string>): Promise<unknown> {
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) {
@@ -106,14 +74,6 @@ const endpoints: Record<string, (token: string) => Promise<UsageWindow[]>> = {
       await get("https://api.anthropic.com/api/oauth/usage", {
         authorization: `Bearer ${token}`,
         "anthropic-beta": "oauth-2025-04-20",
-      }),
-    ),
-  // Sign in with ChatGPT on `openai`. The route is the one ChatGPT's own Codex client reads.
-  openai: async (token) =>
-    parseChatGPT(
-      await get("https://chatgpt.com/backend-api/wham/usage", {
-        authorization: `Bearer ${token}`,
-        "chatgpt-account-id": chatgptAccount(token),
       }),
     ),
 };

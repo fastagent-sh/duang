@@ -95,10 +95,6 @@ if (!process.versions.electron) {
     assert.ok(chatgpt && anthropic, `needs OpenAI and Anthropic in ${authFile}, got ${models.specs.join(", ")}`);
     console.log(`Credential file: ${authFile}\nUsing: ${chatgpt} + ${anthropic}`);
 
-    // 0. A ChatGPT sign-in's plan windows, read with its token (an API key has none to read).
-    const plan = await call("providerUsage", "openai");
-    console.log(`OpenAI plan windows: ${JSON.stringify(plan.windows ?? "none: not a ChatGPT sign-in")}`);
-
     // 1. Agent default (OpenAI) runs with the credentials already on this machine.
     assert.deepEqual(await call("setModel", "live", chatgpt), { ok: true });
     const first = crypto.randomUUID();

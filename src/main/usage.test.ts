@@ -6,11 +6,11 @@ import { test } from "node:test";
 
 const dir = await mkdtemp(join(tmpdir(), "duang-usage-"));
 const auth = join(dir, "auth.json");
-const { MIN_GAP_MS, forgetUsage, parseAnthropic, parseChatGPT, providerUsage } = await import("./usage.ts");
+const { MIN_GAP_MS, forgetUsage, parseAnthropic, providerUsage } = await import("./usage.ts");
 
 const HOUR = 3600;
 
-test("both providers' shapes parse, and a missing field is an error rather than zero", () => {
+test("the plan's shape parses, and a missing field is an error rather than zero", () => {
   assert.deepEqual(
     parseAnthropic({
       five_hour: { utilization: 4, resets_at: "2026-09-24T06:29:00Z" },
@@ -21,13 +21,8 @@ test("both providers' shapes parse, and a missing field is an error rather than 
       { label: "7d", percent: 18, windowSeconds: 7 * 24 * HOUR },
     ],
   );
-  assert.deepEqual(
-    parseChatGPT({ rate_limit: { primary_window: { used_percent: 12, reset_at: 1_790_000_000, limit_window_seconds: 18_000 }, secondary_window: null } }),
-    [{ label: "5h", percent: 12, resetsAt: 1_790_000_000_000, windowSeconds: 18_000 }],
-  );
   assert.throws(() => parseAnthropic({ five_hour: { resets_at: null } }), /five_hour.utilization/);
   assert.throws(() => parseAnthropic({}), /neither five_hour nor seven_day/);
-  assert.throws(() => parseChatGPT({}), /rate_limit/);
 });
 
 test("a subscription is read with its own token; an API key has no windows; a refusal keeps the provider's words", async () => {

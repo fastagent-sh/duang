@@ -207,9 +207,10 @@ Accepted limitations, each recorded in its issue:
   replayed. Nothing presents partial history as a complete trace.
 - **Token counts and cost are not shown.** The header shows how full the context is, from the
   session's `state().usage` ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)),
-  which also carries the latest answer's tokens and cost; duang does not display those. A Claude or
-  ChatGPT subscription's plan windows are shown, read from endpoints those providers do not
-  document, so they can stop working without notice.
+  which also carries the latest answer's tokens and cost; duang does not display those. A Claude
+  subscription's plan windows are shown, read from an endpoint Anthropic does not document, so they
+  can stop working without notice. Sign in with ChatGPT has no usage route duang can read, so it
+  shows none.
 - **One unexplained incident**: a run whose output was produced and stored never rendered live,
   once, and has not reproduced. Recorded with its evidence in
   [#10](https://github.com/fastagent-sh/duang/issues/10) rather than patched blind.
