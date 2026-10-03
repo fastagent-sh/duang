@@ -268,6 +268,18 @@ export default function App() {
                   bottomGap={composerHeight + 64}
                   resume={store.scrollOf(c.agentId, c.session)}
                   onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
+                  onRetry={
+                    view.resend
+                      ? () => {
+                          // Sending it again may make the agent repeat what its tools already did.
+                          if (
+                            !view.resend?.toolsRan ||
+                            confirm("The failed run already used tools. Send the message again? The agent may repeat that work.")
+                          )
+                            void store.resend();
+                        }
+                      : undefined
+                  }
                 />
               )}
               {reading && (

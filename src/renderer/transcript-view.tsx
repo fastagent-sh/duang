@@ -1,6 +1,7 @@
 /** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  ArrowClockwise,
   ArrowDown,
   ArrowsOut,
   CaretDown,
@@ -117,6 +118,7 @@ export function Transcript({
   bottomGap,
   resume,
   onRest,
+  onRetry,
 }: {
   items: Item[];
   /**
@@ -136,6 +138,8 @@ export function Transcript({
   resume?: number;
   /** Where the view rests now: a position above the latest line, or undefined while it follows. */
   onRest: (top: number | undefined) => void;
+  /** The conversation ends on a failed turn that can be sent again: the action sits under its failure. */
+  onRetry?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(resume === undefined);
@@ -293,6 +297,13 @@ export function Transcript({
           </div>
         )}
         {queue(false)}
+        {onRetry && (
+          <div className="mt-2 flex justify-center">
+            <Button kind="secondary" size={28} onClick={onRetry} title="Send this message again as a new turn" icon={<ArrowClockwise size={12} />}>
+              Retry
+            </Button>
+          </div>
+        )}
       </div>
     </div>
     </div>
