@@ -185,10 +185,11 @@ the original diagnostic and a way to reach the file, never replaced with an empt
 agent never deletes its directory or conversations. Changing an agent's model or removing it is
 refused while any of its conversations is running.
 
-The picker and every conversation resolve credentials from one file. `test:live` passed against
-real Codex (pi's retired ChatGPT route) and Anthropic accounts, including a conversation whose provider differs from the agent
-default and a real OAuth refresh that rotated both tokens back into the same file. It now reads
-duang's own file (through a symlink, never a copy) and has not been re-run since that change, nor with Sign in with ChatGPT, which replaced that route. The smoke check
+The picker and every conversation resolve credentials from one file. `test:live` passed against a
+real Sign in with ChatGPT (made through duang's own sign-in) and a real Anthropic login, reading duang's
+own file through a symlink: `openai/gpt-5.5` answered as the agent default, and a conversation moved to
+Anthropic kept its own model and answered. An earlier run, on pi's retired Codex route, also saw a real
+OAuth refresh rotate both tokens back into the same file; the ChatGPT run did not need a refresh. The smoke check
 covers the same paths deterministically with isolated credentials and replaced provider HTTP.
 
 The fragmented Week 1 status display was subsequently redesigned

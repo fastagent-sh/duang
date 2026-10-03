@@ -147,7 +147,8 @@ export function UsageMeter({ plan, context, now, onPage }: Usage) {
   const percent = context ? (context.used / context.window) * 100 : undefined;
   const hasTable = context !== undefined || (plan?.data?.windows ?? []).length > 0 || (!!plan?.data?.page && !!onPage);
   return (
-    // Focusable when there is a table, so it is reachable without a pointer; it is information, not a control.
+    // Focusable when there is a table, so it is reachable without a pointer. A click focuses it too, so the
+    // table opens for keyboard focus only (`:focus-visible` on it or inside it), never stays pinned by a click.
     <div
       tabIndex={hasTable ? 0 : undefined}
       aria-label="Usage"
@@ -159,9 +160,10 @@ export function UsageMeter({ plan, context, now, onPage }: Usage) {
         {percent === undefined ? "–" : `${percent.toFixed(0)}%`}
       </span>
       {hasTable && (
-        // Padding, not margin, bridges the gap to the trigger, so the pointer can reach the page link in it;
-        // focus inside (the link) keeps it open for the keyboard.
-        <div className="absolute top-full right-0 hidden pt-3 group-hover:block group-focus-visible:block group-focus-within:block">
+        // Padding, not margin, bridges the gap to the trigger, so the pointer can reach the page link in it.
+        // Hidden by opacity rather than `display: none`: Tab from the meter blurs it before the link takes
+        // focus, and a link inside a `display: none` box cannot take it. Keyboard focus on the link keeps it shown.
+        <div className="pointer-events-none absolute top-full right-0 pt-3 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:opacity-100 group-has-[:focus-visible]:opacity-100">
           <div className="popover">
             <UsageDetail plan={plan} context={context} now={now} onPage={onPage} />
           </div>

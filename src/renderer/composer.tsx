@@ -488,7 +488,7 @@ export function Composer({
               className={`max-w-full bg-hover ${!model && needsModel ? "text-warning" : ""}`}
             >
               {model ? (
-                // The provider is quieter than the id but never dropped: `openai/` and `openai-codex/`
+                // The provider is quieter than the id but never dropped: `openai/` and `azure-openai-responses/`
                 // offer the same ids and are paid for differently.
                 <span className="min-w-0 truncate text-[13px]">
                   <span className="text-muted">{model.slice(0, model.indexOf("/") + 1)}</span>
