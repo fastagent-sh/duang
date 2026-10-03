@@ -124,7 +124,7 @@ from starting a run, and the message returns to the draft without a note; Stop p
 says nothing, since the run's own ending is already in the transcript.
 An answer that did not end normally says so in the transcript, live and when the conversation is read back
 from history, including runs no window watched: `run failed: <reason>` under a failed answer (with any partial
-text it streamed above it), `run stopped` under a stopped one, `retrying 1/3: <reason>` while watched and
+text it streamed above it), `run stopped` under a stopped one, `retrying 1/3: <reason>` while watched (a quiet line: the run goes on) and
 `retried: <reason>` read back for an attempt the run retried by itself, and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
@@ -149,7 +149,7 @@ The model chip moves under the text once the draft is more than one line. It sen
 the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it; the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow
-navigation, and the transcript is focusable. Scrolling up suspends tail-follow; a control returns
+navigation, and the transcript is focusable. While a run waits on the model and nothing has come from it for 30 seconds (a steer of the person's own does not count), its status line adds `no output for 45s`: a thinking model can be that quiet and be fine, so it is said plainly, and a running tool, which has its own clock, does not add it. A tool call reopened from history shows its arguments, as it did live. Scrolling up suspends tail-follow; a control returns
 to the latest turn. A conversation is opened at its latest turn, or, when it was left scrolled up, where it was
 left, through Settings or another agent and back (for the window's life, not across launches; a card that was
 expanded comes back folded, so the place is the same distance from the top, not the same line). The place is held

@@ -191,8 +191,8 @@ const WORK = [
  * the agent reads its own failures and carries on, so it asks nothing of the person, and the run's
  * outcome is what says whether the work as a whole failed. A call that never finished is (`, 1
  * stopped`): the agent never read a result and the run did not go on, and reopened from history
- * nothing else says the run was cut short. Files are counted once however often they were read; a
- * call reopened from history has no arguments, so there each call counts.
+ * nothing else says the run was cut short. Files are counted once however often they were read, live
+ * and reopened alike (history keeps each call's arguments); a call with no path counts once each.
  */
 export function summarize(items: Work["items"]): string {
   const tools = items.filter((item): item is Tool => item.kind === "tool");
@@ -248,8 +248,8 @@ export function phase(
  * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
  *
  * A tool call and its result arrive apart: the call is announced inside the assistant entry's
- * `toolCalls` (id and name only — arguments are not kept), and the result is its own `tool` entry
- * pointing back with `toolCallId`. Rendering them as one row is this function's whole job; anything
+ * `toolCalls` (id, name and the arguments `tool_started` carried live), and the result is its own `tool`
+ * entry pointing back with `toolCallId`. Rendering them as one row is this function's whole job; anything
  * engine-specific is skipped, as the contract allows.
  *
  * An answer that did not end normally says how (`outcome`), and gets the note a watcher saw live: a
@@ -299,7 +299,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   for (const entry of entries) {
     const data = (entry.data ?? {}) as {
       text?: string;
-      toolCalls?: { id?: string; name?: string }[];
+      toolCalls?: { id?: string; name?: string; args?: unknown }[];
       toolCallId?: string;
       toolName?: string;
       isError?: boolean;
@@ -320,7 +320,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
           kind: "tool",
           id: call.id ?? "",
           name: call.name ?? "tool",
-          args: undefined,
+          args: call.args,
           status: "interrupted",
           at,
         });
@@ -591,11 +591,13 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       ];
     }
     case "retry_scheduled":
+      // The run goes on: pi tries again by itself, so this is a quiet line, not a failure. If the retries give
+      // up, the run's own ending says so.
       return [
         ...items,
         {
           kind: "note",
-          tone: "error",
+          tone: "info",
           at: event.timestamp,
           text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${e.data.error}`,
         },

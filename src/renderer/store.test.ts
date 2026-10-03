@@ -1931,3 +1931,26 @@ test("a failure about another conversation is said there, and a refusal said bef
   assert.equal(c.draft, "second", "and the refused message is back in the draft");
   store.dispose();
 });
+
+test("the model's silence counts from its own output: a steer, or the person's message entering, does not reset it", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  api.send = async () => ({ ok: true });
+  store.setDraft("start");
+  const opening = store.send();
+  assert.ok(c.heard !== undefined, "a new run counts from its message");
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u1", text: "start" });
+  await opening;
+  const quietSince = c.heard!;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  store.setDraft("are you stuck?");
+  await store.send();
+  emit(c, "queue_changed", { steering: ["are you stuck?"], followUp: [] });
+  emit(c, "user_message", { entryId: "u2", text: "are you stuck?" });
+  assert.equal(c.heard, quietSince, "the person's own steer is not the model answering");
+  emit(c, "message_delta", { channel: "text", delta: "no" });
+  assert.ok(c.heard! > quietSince, "the model's output is");
+  store.dispose();
+});

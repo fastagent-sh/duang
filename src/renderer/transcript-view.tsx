@@ -54,28 +54,43 @@ export function RunStatus({
   items,
   status,
   started,
+  heard,
   shown,
 }: {
   items: Item[];
   status: SessionState["status"] | undefined;
   started?: number;
+  /** When this window last heard from the run: a model quiet for long is said, so it does not look stuck. */
+  heard?: number;
   shown?: boolean;
 }) {
-  const { word, detail: on } = phase(items, status);
+  const { word, detail: on, activity } = phase(items, status);
   const detail = shown ? undefined : on;
   const elapsed = useElapsed(started, undefined);
+  // A running tool may rightly be quiet for minutes, and has its own clock; only the model's silence is said.
+  const quiet = useElapsed(activity === "tool" ? undefined : heard, undefined, QUIET_MS);
   return (
     <div className="enter flex h-7 items-center gap-2 text-[12px]">
       <span className="bounce size-[7px] shrink-0 rounded-full bg-accent" aria-hidden />
       <span className="shimmer shrink-0">{word}</span>
       {detail && <span className={`min-w-0 truncate text-muted ${word === "thinking" ? "" : "font-mono"}`}>{detail}</span>}
       {elapsed && <span className="shrink-0 text-muted tabular-nums">· {elapsed}</span>}
+      {quiet && <span className="shrink-0 text-muted tabular-nums">· no output for {quiet}</span>}
     </div>
   );
 }
 
-/** How long a live tool has run, ticking each second while it runs; nothing for one read back from history. */
-function useElapsed(started: number | undefined, ended: number | undefined): string | undefined {
+/**
+ * How long without a word from the model before the status says so. A thinking model can be quiet this long
+ * and be fine, so it is said plainly, not as a failure; a provider that hangs is not cut off here either.
+ */
+const QUIET_MS = 30_000;
+
+/**
+ * How long a live tool has run, ticking each second while it runs; nothing for one read back from history.
+ * `after`: nothing until that much has passed.
+ */
+function useElapsed(started: number | undefined, ended: number | undefined, after = 0): string | undefined {
   const [now, setNow] = useState(Date.now());
   const live = started !== undefined && ended === undefined;
   useEffect(() => {
@@ -83,7 +98,9 @@ function useElapsed(started: number | undefined, ended: number | undefined): str
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [live]);
-  return started === undefined ? undefined : duration(Math.max(0, (ended ?? now) - started), live);
+  if (started === undefined) return undefined;
+  const ms = Math.max(0, (ended ?? now) - started);
+  return ms < after ? undefined : duration(ms, live);
 }
 
 /**
@@ -116,6 +133,7 @@ export function Transcript({
   busy,
   status,
   started,
+  heard,
   bottomGap,
   resume,
   onRest,
@@ -135,6 +153,8 @@ export function Transcript({
   /** What the runtime says the conversation is doing, and when this window saw its run start. */
   status: SessionState["status"] | undefined;
   started?: number;
+  /** When this window last heard from the run, for the status line's silence. */
+  heard?: number;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
   /** Where this conversation was left, read once when the view mounts; absent means the latest line. */
@@ -303,7 +323,7 @@ export function Transcript({
         {queue(true)}
         {busy && (
           <div className={gap(waiting.some(({ opens }) => opens) ? "user" : shown.at(-1)?.kind, "status")}>
-            <RunStatus items={items} status={status} started={started} shown={isLone(shown.at(-1))} />
+            <RunStatus items={items} status={status} started={started} heard={heard} shown={isLone(shown.at(-1))} />
           </div>
         )}
         {queue(false)}
