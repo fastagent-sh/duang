@@ -276,7 +276,7 @@ export default function App() {
                           // Sending it again may make the agent repeat what its tools already did.
                           if (
                             !view.resend?.toolsRan ||
-                            confirm("The failed run already used tools. Send the message again? The agent may repeat that work.")
+                            confirm("That run already used tools. Send the message again? The agent may repeat that work.")
                           )
                             void store.resend();
                         }

@@ -127,7 +127,13 @@ as a new turn, leaving the failure and whatever the failed run did in the transc
 retried with its last message, the one it was answering; the earlier ones already entered the conversation.
 When the failed run had used tools no answer concluded (a steered run's included), Retry first asks, because
 the agent may repeat that work. Nothing is retried without that click, and a stopped run is not offered again.
-Read back from history, the message is the one the runtime recorded, so a slash command is resent expanded. A
+Read back from history, the message is the one the runtime recorded, so a slash command is resent expanded. A conversation that is not running but whose history stops partway through a turn (on the message, on a
+tool's result, or on calls that never ran) was cut with nothing recorded, because duang or the machine
+stopped mid-run: it says `run cut short: no answer was recorded` and offers Retry the same way. An agent's row
+reads the conversation's state with its history, so a run still going (after a window reload) is not called cut;
+a compaction is not a run, so a turn cut before one still is. One run reads as cut and is not: one whose last
+tool batch ended it on purpose (a tool returning pi's `terminate`), since the history does not record that
+([fastagent#700](https://github.com/fastagent-sh/fastagent/issues/700)). No built-in tool does this. A
 run this window joined midway (opened or reconnected while it ran) is not offered Retry when it fails while
 watched, since where it began is not in what this window heard; reopened, its history says.
 

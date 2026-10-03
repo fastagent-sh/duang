@@ -1828,3 +1828,34 @@ test("a run that failed while the person was elsewhere shows its failure, and Re
   assert.deepEqual(store.getSnapshot().resend, { text: "hello", toolsRan: false });
   store.dispose();
 });
+
+test("an agent's row does not call a conversation cut short while its run is still going", async () => {
+  for (const status of ["running", "idle"] as const) {
+    const { api, store } = harness();
+    api.openAgent = async (id) => (id === "b" ? listed("b1") : ready);
+    api.readSession = async () => ({ entries: [{ id: "u1", timestamp: 1, kind: "user", data: { text: "fix the build" } }] });
+    api.readState = async () => ({ status, pending: { steering: [], followUp: [] } });
+    await store.load();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(
+      store.getSnapshot().previews["b"]?.text,
+      status === "running" ? "You: fix the build" : "run cut short: no answer was recorded",
+      status,
+    );
+    store.dispose();
+  }
+});
+
+test("a conversation compacting is not running: a turn cut before the compaction still says so", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => listed("s1");
+  api.openSession = async () =>
+    ({
+      state: { status: "compacting", pending: { steering: [], followUp: [] } },
+      entries: { entries: [{ id: "u1", timestamp: 1, kind: "user", data: { text: "fix the build" } }] },
+    }) as never;
+  await store.load();
+  const last = store.getSnapshot().conversation!.items.at(-1);
+  assert.equal(last?.kind === "note" && last.text, "run cut short: no answer was recorded");
+  store.dispose();
+});

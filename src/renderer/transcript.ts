@@ -255,9 +255,18 @@ export function phase(
  * offers its run's message again (`resend`). A failed answer the run went on from (pi's own retry) is
  * only a retry, and in a conversation still `running` the last failure is a retry still waiting.
  *
- * `running`: a run is going now. A call with no result is interrupted in a finished conversation, but
- * the calls after the last user message are the active run's, still executing. They get no `started`:
- * when they began is not in the history, so they show no clock.
+ * A conversation that is not running but stops partway through a turn (on the person's message, on a
+ * tool's result, or on calls that never ran) had its run cut with nothing recorded: duang or the machine
+ * stopped mid-run. It says so, and offers that turn's message again, like a failure.
+ *
+ * One exception reads the same and is not: a run whose last tool batch ended it on purpose (pi's
+ * `terminate`) stops on a tool's result too. Nothing in the history says so (fastagent#700), so it is
+ * called cut short as well.
+ *
+ * `running`: a run is going now. A compaction is not one: FastAgent admits it only at a boundary, so a turn
+ * cut before it is still cut. A call with no result is interrupted in a finished conversation, but the calls
+ * after the last user message are the active run's, still executing. They get no `started`: when they began
+ * is not in the history, so they show no clock.
  */
 export function fromEntries(entries: SessionEntry[], leafEntryId?: string, running = false): Item[] {
   if (leafEntryId) {
@@ -279,6 +288,8 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   let failure: { index: number; message: string } | undefined;
   /** Where the work no answer has concluded yet begins: what a retry could repeat. */
   let unconcluded = 0;
+  /** Where the turn stands after the last conversation entry: answered, or cut partway. */
+  let open = false;
   const retried = () => {
     if (failure) items[failure.index] = { kind: "note", tone: "info", text: `retried: ${failure.message}`, at: items[failure.index]!.at };
     failure = undefined;
@@ -297,6 +308,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       // The failure ended its run; what follows is the next one.
       if (failure) unconcluded = failure.index + 1;
       failure = undefined;
+      open = true;
       items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
     } else if (entry.kind === "assistant") {
       retried();
@@ -328,8 +340,10 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
           ...limitOf(message),
         });
       }
-      // An answer that called no tool ends its work: a later failure cannot repeat what came before it.
+      // An answer that called no tool ends its work: a later failure cannot repeat what came before it. One
+      // that did waits for its calls' results and the answer after them; one with an outcome said how it ended.
       if (!outcome && !data.toolCalls?.length) unconcluded = items.length;
+      open = !outcome && !!data.toolCalls?.length;
     } else if (entry.kind === "tool") {
       const index = items.findLastIndex((item) => item.kind === "tool" && item.id === data.toolCallId);
       const result: Item = {
@@ -344,9 +358,21 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       };
       if (index < 0) items.push(result);
       else items[index] = result;
+      open = true;
     }
   }
-  if (!running) return items;
+  if (!running) {
+    const turn = items.findLast((item) => item.kind === "user");
+    if (open && turn?.kind === "user")
+      items.push({
+        kind: "note",
+        tone: "error",
+        text: "run cut short: no answer was recorded",
+        at: items.at(-1)!.at,
+        resend: { text: turn.text, toolsRan: items.slice(unconcluded).some((item) => item.kind === "tool") },
+      });
+    return items;
+  }
   // A failure the running run has not answered yet is a retry waiting out its delay.
   retried();
   const turn = items.findLastIndex((item) => item.kind === "user");

@@ -469,3 +469,34 @@ test("a ChatGPT plan's usage limit names the provider whose page says more, live
   const other = apply([], { type: "run_settled", timestamp: 1, runId: "r", data: { status: "failed", error: { message: "Connection error.", retryable: true } } });
   assert.equal(limitOfLast(other), undefined);
 });
+
+test("a turn cut partway with nothing recorded says so and offers its message again; a finished or running one does not", () => {
+  const entry = (id: string, kind: string, data: object) => ({ id, timestamp: Number(id), kind, data }) as SessionEntry;
+  const last = (items: Item[]) => items.at(-1) as Extract<Item, { kind: "note" }>;
+  const cut = { kind: "note", tone: "error", text: "run cut short: no answer was recorded" };
+  const user = entry("1", "user", { text: "fix the build" });
+  const call = entry("2", "assistant", { text: "", toolCalls: [{ id: "t1", name: "bash" }] });
+  const result = entry("3", "tool", { toolCallId: "t1", toolName: "bash", text: "ok" });
+
+  // On the message itself: quit or crashed before any answer.
+  assert.deepEqual(last(fromEntries([user])), { ...cut, at: 1, resend: { text: "fix the build", toolsRan: false } });
+  // On a tool's result, or on calls that never ran: the work so far may be repeated.
+  assert.deepEqual(last(fromEntries([user, call, result])).resend, { text: "fix the build", toolsRan: true });
+  assert.equal(last(fromEntries([user, call])).text, cut.text);
+
+  // Answered, failed (its own note), stopped, or still running: nothing more is said.
+  const answered = fromEntries([user, call, result, entry("4", "assistant", { text: "fixed" })]);
+  assert.equal(answered.at(-1)?.kind, "assistant");
+  assert.equal(last(fromEntries([user, entry("2", "assistant", { text: "", outcome: { status: "aborted" } })])).text, "run stopped");
+  assert.equal(fromEntries([user, call, result], undefined, true).at(-1)?.kind, "tool");
+  assert.deepEqual(fromEntries([]), [], "a conversation with no message yet is not cut");
+});
+
+test("a turn cut before a compaction is still cut, and its failure is not rewritten as a retry", () => {
+  const entry = (id: string, kind: string, data: object) => ({ id, timestamp: Number(id), kind, data }) as SessionEntry;
+  const failed = [entry("1", "user", { text: "summarise it" }), entry("2", "assistant", { text: "", outcome: { status: "failed", error: { message: "context overflow" } } })];
+  // The store passes `running` only for a run; a compaction reads as not running.
+  const last = fromEntries(failed, undefined, false).at(-1) as Extract<Item, { kind: "note" }>;
+  assert.equal(last.text, "run failed: context overflow");
+  assert.deepEqual(last.resend, { text: "summarise it", toolsRan: false });
+});

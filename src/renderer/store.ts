@@ -166,8 +166,8 @@ export interface View extends SettingsView {
    */
   blocked?: string;
   /**
-   * The open conversation ends on a turn that failed, and its message can be sent again now (`resend`): the
-   * failure note says what, whether this window heard the run live or read it back from history. Not the same
+   * The open conversation ends on a turn that failed or was cut short, and its message can be sent again now
+   * (`resend`): that turn's note says what, whether this window heard the run live or read it back from history. Not the same
    * as `retry`, which reopens a conversation whose view broke.
    */
   resend?: { text: string; toolsRan: boolean };
@@ -424,8 +424,10 @@ export function createStore(api: DuangApi) {
     const current = previewTicket(id);
     let preview: Preview;
     try {
-      const history = await api.readSession(id, session);
-      preview = { session, ...previewOf(fromEntries(history.entries, history.leafEntryId)) };
+      // The state too: a run still going (after a reload, say) has not been cut short. A compaction is not a
+      // run (FastAgent admits one only at a boundary), so a turn cut before it is still cut.
+      const [history, state] = await Promise.all([api.readSession(id, session), api.readState(id, session)]);
+      preview = { session, ...previewOf(fromEntries(history.entries, history.leafEntryId, state.status === "running")) };
     } catch (error) {
       preview = { session, error: message(error) };
     }
