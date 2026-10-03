@@ -224,10 +224,10 @@ button it is beside the field's own text, names the provider quietly
 and the id plainly, with the effort after it (`openai/gpt-5 Minimal`); the provider stays because
 `openai/` and `azure-openai-responses/` offer the same ids and are paid for differently. It opens one popover
 anchored to the chip's right edge: a search row (with a quiet refresh button at its end, and under it, once
-pressed, one line of what it found or why it failed), the models under their provider (ids only, in the
-system face rather than mono, at 13px), and the effort. Effort is a track with a stop per
-level; the runtime's list is the stops, and it is per conversation, so a conversation that has not begun
-says so. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
+pressed, one line of what it found or why it failed), the models under their provider (each by its declared name,
+its context window quiet at the right end, in the system face rather than mono, at 13px; the id on hover),
+and the effort. Effort is a track with a stop per level; the runtime's list is the stops, and it is per
+conversation, a new one included, so only an agent with no model yet says it has none. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
 and comes back as `state_changed`. Choosing writes a durable entry into the conversation's record, so
 choosing is explicit: the stops are buttons in a `radiogroup`, the arrow keys move the focus along them,
 and Enter, Space or a click choose (a native radio group would choose at every stop the arrows cross).

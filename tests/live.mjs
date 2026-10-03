@@ -90,9 +90,9 @@ if (!process.versions.electron) {
     const before = await readFile(authFile, "utf8");
     // Not simply the first OpenAI spec: the picker also lists models a ChatGPT account may not run
     // (see the note in issue #5), and this check is about credentials, not entitlements.
-    const chatgpt = process.env.DUANG_LIVE_OPENAI ?? models.specs.find((spec) => spec === "openai/gpt-5.5");
-    const anthropic = models.specs.find((spec) => spec.startsWith("anthropic/claude-sonnet"));
-    assert.ok(chatgpt && anthropic, `needs OpenAI and Anthropic in ${authFile}, got ${models.specs.join(", ")}`);
+    const chatgpt = process.env.DUANG_LIVE_OPENAI ?? models.find(({ spec }) => spec === "openai/gpt-5.5")?.spec;
+    const anthropic = models.find(({ spec }) => spec.startsWith("anthropic/claude-sonnet"))?.spec;
+    assert.ok(chatgpt && anthropic, `needs OpenAI and Anthropic in ${authFile}, got ${models.map(({ spec }) => spec).join(", ")}`);
     console.log(`Credential file: ${authFile}\nUsing: ${chatgpt} + ${anthropic}`);
 
     // 1. Agent default (OpenAI) runs with the credentials already on this machine.

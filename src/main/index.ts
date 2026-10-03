@@ -177,7 +177,7 @@ function register(): void {
     if (session !== undefined) requireSession(session);
     const row = await requireAgent(id);
     // The picker offers this agent's runnable models, so a miss here means something changed underneath it.
-    if (!(await modelsFor(row.dir)).specs.includes(model))
+    if (!(await modelsFor(row.dir)).some((offered) => offered.spec === model))
       return refuse("model_unavailable", `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
     if (result.ok) await sessions.rebindAgent(id);
