@@ -259,9 +259,14 @@ export function phase(
  * tool's result, or on calls that never ran) had its run cut with nothing recorded: duang or the machine
  * stopped mid-run. It says so, and offers that turn's message again, like a failure.
  *
- * `running`: a run is going now (or a compaction). A call with no result is interrupted in a finished
- * conversation, but the calls after the last user message are the active run's, still executing. They get
- * no `started`: when they began is not in the history, so they show no clock.
+ * One exception reads the same and is not: a run whose last tool batch ended it on purpose (pi's
+ * `terminate`) stops on a tool's result too. Nothing in the history says so (fastagent#700), so it is
+ * called cut short as well.
+ *
+ * `running`: a run is going now. A compaction is not one: FastAgent admits it only at a boundary, so a turn
+ * cut before it is still cut. A call with no result is interrupted in a finished conversation, but the calls
+ * after the last user message are the active run's, still executing. They get no `started`: when they began
+ * is not in the history, so they show no clock.
  */
 export function fromEntries(entries: SessionEntry[], leafEntryId?: string, running = false): Item[] {
   if (leafEntryId) {

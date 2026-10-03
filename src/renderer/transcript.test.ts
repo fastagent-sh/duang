@@ -491,3 +491,12 @@ test("a turn cut partway with nothing recorded says so and offers its message ag
   assert.equal(fromEntries([user, call, result], undefined, true).at(-1)?.kind, "tool");
   assert.deepEqual(fromEntries([]), [], "a conversation with no message yet is not cut");
 });
+
+test("a turn cut before a compaction is still cut, and its failure is not rewritten as a retry", () => {
+  const entry = (id: string, kind: string, data: object) => ({ id, timestamp: Number(id), kind, data }) as SessionEntry;
+  const failed = [entry("1", "user", { text: "summarise it" }), entry("2", "assistant", { text: "", outcome: { status: "failed", error: { message: "context overflow" } } })];
+  // The store passes `running` only for a run; a compaction reads as not running.
+  const last = fromEntries(failed, undefined, false).at(-1) as Extract<Item, { kind: "note" }>;
+  assert.equal(last.text, "run failed: context overflow");
+  assert.deepEqual(last.resend, { text: "summarise it", toolsRan: false });
+});

@@ -1845,3 +1845,17 @@ test("an agent's row does not call a conversation cut short while its run is sti
     store.dispose();
   }
 });
+
+test("a conversation compacting is not running: a turn cut before the compaction still says so", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => listed("s1");
+  api.openSession = async () =>
+    ({
+      state: { status: "compacting", pending: { steering: [], followUp: [] } },
+      entries: { entries: [{ id: "u1", timestamp: 1, kind: "user", data: { text: "fix the build" } }] },
+    }) as never;
+  await store.load();
+  const last = store.getSnapshot().conversation!.items.at(-1);
+  assert.equal(last?.kind === "note" && last.text, "run cut short: no answer was recorded");
+  store.dispose();
+});
