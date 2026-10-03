@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 const dir = await mkdtemp(join(tmpdir(), "duang-usage-"));
 const auth = join(dir, "auth.json");
-const { MIN_GAP_MS, forgetUsage, parseAnthropic, parseCodex, providerUsage } = await import("./usage.ts");
+const { MIN_GAP_MS, forgetUsage, parseAnthropic, parseChatGPT, providerUsage } = await import("./usage.ts");
 
 const HOUR = 3600;
 
@@ -22,12 +22,12 @@ test("both providers' shapes parse, and a missing field is an error rather than 
     ],
   );
   assert.deepEqual(
-    parseCodex({ rate_limit: { primary_window: { used_percent: 12, reset_at: 1_790_000_000, limit_window_seconds: 18_000 }, secondary_window: null } }),
+    parseChatGPT({ rate_limit: { primary_window: { used_percent: 12, reset_at: 1_790_000_000, limit_window_seconds: 18_000 }, secondary_window: null } }),
     [{ label: "5h", percent: 12, resetsAt: 1_790_000_000_000, windowSeconds: 18_000 }],
   );
   assert.throws(() => parseAnthropic({ five_hour: { resets_at: null } }), /five_hour.utilization/);
   assert.throws(() => parseAnthropic({}), /neither five_hour nor seven_day/);
-  assert.throws(() => parseCodex({}), /rate_limit/);
+  assert.throws(() => parseChatGPT({}), /rate_limit/);
 });
 
 test("a subscription is read with its own token; an API key has no windows; a refusal keeps the provider's words", async () => {

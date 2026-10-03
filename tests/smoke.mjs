@@ -597,8 +597,10 @@ if (!process.versions.electron) {
 
       const models = await evaluate("window.duang.listModels('configured')");
       assert.ok(models.specs.includes("anthropic/claude-sonnet-4-5"));
-      const codexModel = models.specs.find((spec) => spec.startsWith("openai-codex/"));
-      assert.ok(codexModel);
+      // Another provider's default for the race and history checks below; pi's retired ChatGPT route is not offered.
+      const otherModel = "openai/gpt-5.5";
+      assert.ok(models.specs.includes(otherModel));
+      assert.ok(!models.specs.some((spec) => spec.startsWith("openai-codex/")), "the retired route's models are not offered");
       assert.ok(models.specs.includes("local/m1"), "the agent's own models.json endpoint is pickable");
       assert.ok(!(await evaluate("window.duang.listModels('smoke')")).specs.includes("local/m1"), "another agent's endpoint is not");
       const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
@@ -686,7 +688,7 @@ if (!process.versions.electron) {
       assert.deepEqual(await evaluate("window.duang.setModel('configured', 'local/m1')"), { ok: true }, "setModel accepts it");
       assert.equal((await evaluate("window.duang.setModel('configured', 'local/nope')")).error.code, "model_unavailable");
       const racing = await evaluate(`(async () => {
-        const change = window.duang.setModel('configured', ${JSON.stringify(codexModel)});
+        const change = window.duang.setModel('configured', ${JSON.stringify(otherModel)});
         const reads = [];
         for (let i = 0; i < 40; i++) {
           reads.push(window.duang.openAgent('configured'));
@@ -704,13 +706,13 @@ if (!process.versions.electron) {
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "reload initial agent");
       await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
       await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
-      assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), codexModel);
+      assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), otherModel);
       await message("Continue the historical Anthropic conversation.");
       await until("document.querySelector('main').innerText.split('Anthropic smoke answer').length === 3 && !document.querySelector('main .bounce')", "mixed-provider history resolves its own credential");
       assert.equal(anthropicRequests, 2);
 
       // A missing historical provider fails without silently switching models; fixing the file needs no restart.
-      await writeFile(selectedAuth, JSON.stringify({ "openai-codex": codex }));
+      await writeFile(selectedAuth, JSON.stringify({ openai: stored.openai }));
       const missing = await evaluate(`window.duang.send('configured', ${JSON.stringify(historical)}, 'Missing provider check')`);
       assert.equal(missing.ok, false);
       assert.match(missing.error.message, /^No API key found for anthropic\./, "pi's own words, naming the provider");
@@ -1329,7 +1331,11 @@ if (!process.versions.electron) {
       };
 
       await openSettings();
-      assert.ok(await evaluate("document.body.innerText.includes('OpenAI Codex')"), "listed by pi's names");
+      assert.ok(await evaluate("document.body.innerText.includes('Anthropic')"), "listed by pi's names");
+      assert.ok(
+        await evaluate("!document.body.innerText.includes('OpenAI Codex')"),
+        "pi's retired ChatGPT route is not listed, though duang's file still holds a login for it",
+      );
       assert.equal(await evaluate("!!document.querySelector('dialog')"), false, "Settings reached from the sidebar opens no dialog");
 
       // A reload leaves nobody to answer the sign-in main is running: it must end with the page, or
@@ -1440,6 +1446,15 @@ if (!process.versions.electron) {
       await click("Retry");
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
+      // An agent whose default is on pi's retired ChatGPT route asks for a model instead of running there.
+      await writeFile(
+        registry,
+        JSON.stringify([...JSON.parse(savedRegistry), { id: "legacy", name: "Legacy", dir: join(root, "configured"), model: "openai-codex/gpt-5.5", colour: 4 }]),
+      );
+      const legacy = await evaluate("window.duang.openAgent('legacy')");
+      assert.equal(legacy.code, "missing_model", legacy.message);
+      assert.match(legacy.message, /openai-codex\/gpt-5\.5 is no longer offered/);
+      await writeFile(registry, savedRegistry);
 
       // The header names the agent and, under it, where the agent lives: a long name stays inside the header
       // with the whole of it as a tooltip, and the folder is a button that opens it. The conversation's title

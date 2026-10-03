@@ -1,5 +1,6 @@
 import { ABORTED_CODE, SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type Session, type SessionResult } from "@fastagent-sh/fastagent/session";
+import { retired } from "./providers.ts";
 
 const stoppedBeforeStart: SessionResult = {
   ok: false,
@@ -11,7 +12,14 @@ const stoppedBeforeStart: SessionResult = {
  * asked right before each call that hands the message to the runtime: a Stop that came first means none is made.
  */
 export async function send(agent: Agent, session: Session, text: string, stopped = () => false): Promise<SessionResult> {
-  if ((await session.state()).status === "running") {
+  const state = await session.state();
+  // A conversation recorded on a provider duang no longer runs does not go on there quietly.
+  if (state.model && retired(state.model))
+    return {
+      ok: false,
+      error: { code: "model_retired", message: `${state.model} is no longer offered: pick another model for this conversation`, retryable: false },
+    };
+  if (state.status === "running") {
     if (stopped()) return stoppedBeforeStart;
     const result = await session.steer({ text });
     if (result.ok || result.error.code !== NO_ACTIVE_RUN_CODE) return result;

@@ -39,7 +39,7 @@ not lose streamed output. Reloading or destroying the window closes its subscrip
 subscription is to a conversation, not to a runtime: when a model change replaces the agent's runtime, main
 listens again on the new one under the same subscription id, and the renderer does not reopen anything.
 
-**Plan usage is read in main.** For an OAuth login of `anthropic` or `openai-codex`, main takes the
+**Plan usage is read in main.** For an OAuth login of `anthropic` or `openai` (Sign in with ChatGPT), main takes the
 token from FastAgent's public `createPiModels({ authPath }).getAuth(provider)` (which refreshes an
 expired login under the credential file's lock, as a run would) and calls the provider's own usage
 route. Neither route is documented; an unexpected shape is an error, not zero. The renderer

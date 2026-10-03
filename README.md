@@ -60,7 +60,7 @@ private: the owner connects to it in duang and its routines work after the deskt
 closed. Inviting someone to that running agent and exporting a preset are separate, optional paths.
 Cloud conversations live with the online runtime; local conversations never migrate on deploy.
 
-A remote model needs server-side credentials: a local Claude/Codex subscription login is not a
+A remote model needs server-side credentials: a local Claude/ChatGPT subscription login is not a
 cloud credential. Deployment must explicitly exclude local secrets, private sessions and
 machine-specific state, then set the required cloud secrets at the host. A published version is a
 snapshot of the agent definition; edits on the laptop do not silently change the live agent.
@@ -123,8 +123,8 @@ DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine
 npm run shots       # screenshots of the real window in both colour modes, into out/shots/
 ```
 
-`test:live` is the only check that proves authentication end to end: it makes unfaked Codex and
-Anthropic requests through the real IPC path, so it spends model credits and needs working logins.
+`test:live` is the only check that proves authentication end to end: it makes unfaked OpenAI (Sign in
+with ChatGPT) and Anthropic requests through the real IPC path, so it spends model credits and needs working logins.
 It skips itself without `DUANG_LIVE=1`, isolates the registry and agent directory, and prints no
 credential values.
 
@@ -186,9 +186,9 @@ agent never deletes its directory or conversations. Changing an agent's model or
 refused while any of its conversations is running.
 
 The picker and every conversation resolve credentials from one file. `test:live` passed against
-real Codex and Anthropic accounts, including a conversation whose provider differs from the agent
+real Codex (pi's retired ChatGPT route) and Anthropic accounts, including a conversation whose provider differs from the agent
 default and a real OAuth refresh that rotated both tokens back into the same file. It now reads
-duang's own file (through a symlink, never a copy) and has not been re-run since that change. The smoke check
+duang's own file (through a symlink, never a copy) and has not been re-run since that change, nor with Sign in with ChatGPT, which replaced that route. The smoke check
 covers the same paths deterministically with isolated credentials and replaced provider HTTP.
 
 The fragmented Week 1 status display was subsequently redesigned

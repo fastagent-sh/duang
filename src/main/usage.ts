@@ -58,7 +58,7 @@ export function parseAnthropic(body: unknown): UsageWindow[] {
   return present;
 }
 
-export function parseCodex(body: unknown): UsageWindow[] {
+export function parseChatGPT(body: unknown): UsageWindow[] {
   type Window = { used_percent?: number; reset_at?: number | null; limit_window_seconds?: number };
   type Limits = { primary_window?: Window | null; secondary_window?: Window | null };
   const limits = need((body as { rate_limit?: Limits }).rate_limit, "rate_limit");
@@ -83,11 +83,11 @@ export function parseCodex(body: unknown): UsageWindow[] {
 }
 
 /** The ChatGPT account the token belongs to, which the usage route requires as a header. */
-function codexAccount(token: string): string {
+function chatgptAccount(token: string): string {
   const payload = token.split(".")[1];
   const claims = payload ? JSON.parse(Buffer.from(payload, "base64url").toString()) : undefined;
   const account = claims?.["https://api.openai.com/auth"]?.chatgpt_account_id as string | undefined;
-  if (!account) throw new Error("the Codex login's token carries no ChatGPT account id");
+  if (!account) throw new Error("the ChatGPT login's token carries no ChatGPT account id");
   return account;
 }
 
@@ -108,11 +108,12 @@ const endpoints: Record<string, (token: string) => Promise<UsageWindow[]>> = {
         "anthropic-beta": "oauth-2025-04-20",
       }),
     ),
-  "openai-codex": async (token) =>
-    parseCodex(
+  // Sign in with ChatGPT on `openai`. The route is the one ChatGPT's own Codex client reads.
+  openai: async (token) =>
+    parseChatGPT(
       await get("https://chatgpt.com/backend-api/wham/usage", {
         authorization: `Bearer ${token}`,
-        "chatgpt-account-id": codexAccount(token),
+        "chatgpt-account-id": chatgptAccount(token),
       }),
     ),
 };

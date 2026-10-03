@@ -71,7 +71,7 @@ if (!process.versions.electron) {
     const real = join(app.getPath("appData"), "duang", "auth.json");
     assert.ok(
       existsSync(real),
-      `${real} does not exist. Connect Codex and Anthropic in duang (Settings → Model providers), or ` +
+      `${real} does not exist. Sign in with ChatGPT (OpenAI) and connect Anthropic in duang (Settings → Model providers), or ` +
         `sign in with the CLI pointed at it: FASTAGENT_AUTH_PATH="${real}" fastagent login`,
     );
     const authFile = join(data, "auth.json");
@@ -88,24 +88,28 @@ if (!process.versions.electron) {
 
     const models = await call("listModels", "live");
     const before = await readFile(authFile, "utf8");
-    // Not simply the first Codex spec: the picker also lists models a ChatGPT account may not run
+    // Not simply the first OpenAI spec: the picker also lists models a ChatGPT account may not run
     // (see the note in issue #5), and this check is about credentials, not entitlements.
-    const codex = process.env.DUANG_LIVE_CODEX ?? models.specs.find((spec) => spec === "openai-codex/gpt-5.5");
+    const chatgpt = process.env.DUANG_LIVE_OPENAI ?? models.specs.find((spec) => spec === "openai/gpt-5.5");
     const anthropic = models.specs.find((spec) => spec.startsWith("anthropic/claude-sonnet"));
-    assert.ok(codex && anthropic, `needs Codex and Anthropic in ${authFile}, got ${models.specs.join(", ")}`);
-    console.log(`Credential file: ${authFile}\nUsing: ${codex} + ${anthropic}`);
+    assert.ok(chatgpt && anthropic, `needs OpenAI and Anthropic in ${authFile}, got ${models.specs.join(", ")}`);
+    console.log(`Credential file: ${authFile}\nUsing: ${chatgpt} + ${anthropic}`);
 
-    // 1. Agent default (Codex) runs with the credentials already on this machine.
-    assert.deepEqual(await call("setModel", "live", codex), { ok: true });
+    // 0. A ChatGPT sign-in's plan windows, read with its token (an API key has none to read).
+    const plan = await call("providerUsage", "openai");
+    console.log(`OpenAI plan windows: ${JSON.stringify(plan.windows ?? "none: not a ChatGPT sign-in")}`);
+
+    // 1. Agent default (OpenAI) runs with the credentials already on this machine.
+    assert.deepEqual(await call("setModel", "live", chatgpt), { ok: true });
     const first = crypto.randomUUID();
-    const codexRun = await call("send", "live", first, ASK);
-    if (codexRun.ok) {
-      console.log(`Codex reply: ${JSON.stringify((await reply(first)).text)}`);
+    const chatgptRun = await call("send", "live", first, ASK);
+    if (chatgptRun.ok) {
+      console.log(`OpenAI reply: ${JSON.stringify((await reply(first)).text)}`);
     } else {
       // A quota or entitlement refusal still proves the token resolved and the account was
       // recognised. A credential fault must not pass as one, so name those explicitly.
-      assert.doesNotMatch(codexRun.error.message, /not configured|refresh|unauthor|invalid[_ ]api|401/i);
-      console.log(`Codex credentials accepted, provider refused the run: ${codexRun.error.message}`);
+      assert.doesNotMatch(chatgptRun.error.message, /not configured|refresh|unauthor|invalid[_ ]api|401/i);
+      console.log(`OpenAI credentials accepted, provider refused the run: ${chatgptRun.error.message}`);
     }
 
     // 2. A conversation moved to the other provider.
@@ -113,9 +117,9 @@ if (!process.versions.electron) {
     assert.deepEqual(await call("setModel", "live", anthropic, second), { ok: true });
     assert.deepEqual(await call("send", "live", second, ASK), { ok: true }, "Anthropic conversation send");
 
-    // 3. Issue #5's reported case: agent default is Codex again, history stays Anthropic and runs.
-    assert.deepEqual(await call("setModel", "live", codex), { ok: true });
-    assert.equal((await call("openAgent", "live")).model, codex, "agent default is Codex");
+    // 3. Issue #5's reported case: agent default is OpenAI again, history stays Anthropic and runs.
+    assert.deepEqual(await call("setModel", "live", chatgpt), { ok: true });
+    assert.equal((await call("openAgent", "live")).model, chatgpt, "agent default is OpenAI");
     assert.deepEqual(await call("send", "live", second, "Reply with exactly: STILL OK"), { ok: true }, "history send");
     const history = await reply(second);
     assert.equal(history.model, anthropic, "the historical conversation kept its own model");
@@ -126,7 +130,7 @@ if (!process.versions.electron) {
     const after = await readFile(authFile, "utf8");
     assert.deepEqual(Object.keys(JSON.parse(after)).sort(), Object.keys(JSON.parse(before)).sort());
     console.log(`Credential file ${after === before ? "unchanged" : "rewritten by OAuth refresh"}, providers intact.`);
-    console.log("Live check passed: real Codex default, real Anthropic history, one credential file.");
+    console.log("Live check passed: real OpenAI default, real Anthropic history, one credential file.");
   }
 
   const timeout = setTimeout(() => {

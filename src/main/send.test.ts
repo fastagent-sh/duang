@@ -91,3 +91,17 @@ test("a Stop before a send reaches the runtime keeps it from starting a run; one
   assert.equal(await held.stop("a/s", async () => failed), failed, "any other answer is passed on");
   assert.equal((await held.stop("a/s", noRun)).ok, false, "a finished send is released");
 });
+
+test("a conversation recorded on a retired provider is refused, not run there", async () => {
+  const calls: string[] = [];
+  const bound = { id: "s", state: async () => ({ status: "idle", model: "openai-codex/gpt-5.5" }) } as unknown as Session;
+  const agent = {
+    async *invoke() {
+      calls.push("invoke");
+      yield { type: "completed" };
+    },
+  } as unknown as Agent;
+  const result = await send(agent, bound, "hello");
+  assert.deepEqual(calls, []);
+  assert.equal(!result.ok && result.error.code, "model_retired");
+});
