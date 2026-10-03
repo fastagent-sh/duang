@@ -49,6 +49,8 @@ export async function send(agent: Agent, session: Session, text: string, stopped
 export function sends() {
   type Ticket = { stopped: boolean; finished: Promise<unknown> };
   const held = new Map<string, Set<Ticket>>();
+  /** Set by `stopAll`: the app is quitting, and a run started now would only be cut. */
+  let quitting = false;
   const stop = async (key: string, abort: () => Promise<SessionResult>): Promise<SessionResult> => {
     const tickets = held.get(key);
     for (const ticket of tickets ?? []) ticket.stopped = true;
@@ -56,7 +58,12 @@ export function sends() {
     return !result.ok && result.error.code === NO_ACTIVE_RUN_CODE && tickets?.size ? { ok: true } : result;
   };
   return {
-    hold<T>(key: string, run: (stopped: () => boolean) => Promise<T>): Promise<T> {
+    hold(key: string, run: (stopped: () => boolean) => Promise<SessionResult>): Promise<SessionResult> {
+      if (quitting)
+        return Promise.resolve({
+          ok: false,
+          error: { code: "quitting", message: "duang is quitting: the message was not sent", retryable: true },
+        });
       const ticket: Ticket = { stopped: false, finished: Promise.resolve() };
       const tickets = held.get(key) ?? new Set();
       held.set(key, tickets.add(ticket));
@@ -78,6 +85,8 @@ export function sends() {
      * go idle, so an abort can take as long as the run it stops.
      */
     async stopAll(abort: (key: string) => Promise<SessionResult>, within: number): Promise<boolean> {
+      // The window stays open while this waits: a message sent meanwhile is refused, not started and cut.
+      quitting = true;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), within)));
       const finished = [...held.values()].flatMap((tickets) => [...tickets].map((ticket) => ticket.finished));

@@ -127,18 +127,32 @@ test("quitting stops every send in flight and waits for each run to settle, but 
   await Promise.all([a, b]);
   assert.equal(held.busy(), false);
 
+  // Once quitting began, a message sent while it waits is refused before it reaches the runtime.
+  let started = false;
+  const meanwhile = await held.hold("agent/c", async () => {
+    started = true;
+    return ok;
+  });
+  assert.equal(started, false);
+  assert.equal(!meanwhile.ok && meanwhile.error.code, "quitting");
+  assert.equal(held.busy(), false);
+
   // A run that does not settle (a tool that cannot be cancelled), and one whose abort fails: neither keeps
   // quitting waiting past the limit.
-  void run("agent/stuck");
-  const broken = run("agent/broken");
-  const started = Date.now();
+  const stuckHeld = sends();
+  const stuckSettle = new Map<string, () => void>();
+  const stuckRun = (key: string) =>
+    stuckHeld.hold(key, () => new Promise<SessionResult>((resolve) => stuckSettle.set(key, () => resolve(refusal("aborted")))));
+  void stuckRun("agent/stuck");
+  const broken = stuckRun("agent/broken");
+  const began = Date.now();
   // pi's abort waits for the run to go idle, so the stuck run's abort never returns either.
-  const late = await held.stopAll((key) => {
+  const late = await stuckHeld.stopAll((key) => {
     if (key === "agent/broken") return Promise.reject(new Error("the agent was removed"));
     return new Promise<SessionResult>(() => {});
   }, 50);
   assert.equal(late, false);
-  assert.ok(Date.now() - started < 1000);
-  settle.get("agent/broken")!();
+  assert.ok(Date.now() - began < 1000);
+  stuckSettle.get("agent/broken")!();
   await broken;
 });
