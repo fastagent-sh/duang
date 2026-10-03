@@ -1342,6 +1342,7 @@ if (!process.versions.electron) {
         await writeFile(selectedAuth, "{}");
         await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
         await until("[...document.querySelectorAll('dialog button')].some((b) => b.textContent.trim() === 'Connect a provider')", "the empty picker offers Connect a provider");
+        assert.match(await evaluate("document.querySelector('dialog').innerText"), /No model is available/, "it says what it sees, not why");
         await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Connect a provider').click()`);
         await until(providersListed, "Connect a provider opens Settings");
       };

@@ -171,7 +171,12 @@ function ModelPicker({
         </div>
       ) : models?.length === 0 ? (
         <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
-          <p>No provider is connected yet. Sign in with a subscription or paste an API key.</p>
+          {/* Empty is not always "nothing connected": a ChatGPT sign-in whose model list could not be read at
+              sign-in lists no model either, while Settings shows it connected. */}
+          <p>
+            No model is available. Connect a provider with a subscription or an API key, or reconnect one that lists
+            no models (a ChatGPT sign-in whose model list could not be read).
+          </p>
           <Button kind="primary" size={28} onClick={onProviders}>
             Connect a provider
           </Button>
