@@ -11,6 +11,7 @@ import { Composer } from "./composer.tsx";
 import { Settings } from "./settings.tsx";
 import { AvatarStyleContext } from "./avatar.tsx";
 import { faceOf } from "./face.ts";
+import { Boundary, Button } from "./ui.tsx";
 
 const duang = (window as unknown as { duang: DuangApi }).duang;
 
@@ -45,7 +46,10 @@ export default function App() {
   const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
-    void store.load();
+    // Main opens the page with `#fresh` after repeated crashes; read once, so ⌘R later reopens as usual.
+    const fresh = window.location.hash === "#fresh";
+    if (fresh) history.replaceState(null, "", window.location.pathname + window.location.search);
+    void store.load({ fresh });
     return store.dispose;
   }, [store]);
   // The App menu's Settings… (⌘,) opens the page; asking again while it is open keeps it there.
@@ -259,30 +263,45 @@ export default function App() {
                 // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
                 // run streams, so this gap *is* where the newest line lands. At 16 the line you are
                 // reading sat on the composer's edge, half under the fade.
-                <Transcript
-                  key={c.subscription}
-                  items={c.items}
-                  waiting={waiting}
-                  busy={busy}
-                  status={c.state?.status}
-                  started={c.started}
-                  bottomGap={composerHeight + 64}
-                  resume={store.scrollOf(c.agentId, c.session)}
-                  onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
-                  onUsage={(provider) => void store.openUsagePage(provider)}
-                  onRetry={
-                    view.resend
-                      ? () => {
-                          // Sending it again may make the agent repeat what its tools already did.
-                          if (
-                            !view.resend?.toolsRan ||
-                            confirm("That run already used tools. Send the message again? The agent may repeat that work.")
-                          )
-                            void store.resend();
-                        }
-                      : undefined
-                  }
-                />
+                <Boundary
+                  reset={c.subscription}
+                  fallback={(error) => (
+                    // The sidebar and the composer stay: the person can go to another conversation, or try again.
+                    <div role="alert" className="mt-16 flex-1 space-y-2 px-6 text-[13px]">
+                      <p>This conversation could not be drawn.</p>
+                      <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-danger">{error.message}</pre>
+                      {/* Read again from the runtime's history: a view that went wrong while streaming is rebuilt. */}
+                      <Button kind="secondary" size={28} onClick={() => void store.retry()}>
+                        Try again
+                      </Button>
+                    </div>
+                  )}
+                >
+                  <Transcript
+                    key={c.subscription}
+                    items={c.items}
+                    waiting={waiting}
+                    busy={busy}
+                    status={c.state?.status}
+                    started={c.started}
+                    bottomGap={composerHeight + 64}
+                    resume={store.scrollOf(c.agentId, c.session)}
+                    onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
+                    onUsage={(provider) => void store.openUsagePage(provider)}
+                    onRetry={
+                      view.resend
+                        ? () => {
+                            // Sending it again may make the agent repeat what its tools already did.
+                            if (
+                              !view.resend?.toolsRan ||
+                              confirm("That run already used tools. Send the message again? The agent may repeat that work.")
+                            )
+                              void store.resend();
+                          }
+                        : undefined
+                    }
+                  />
+                </Boundary>
               )}
               {reading && (
                 <>

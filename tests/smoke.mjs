@@ -733,7 +733,37 @@ if (!process.versions.electron) {
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "reload initial agent");
+      // A renderer that crashes leaves no blank window: main reloads it, and it reopens what it showed. One
+      // that keeps crashing is not reloaded onto the same conversation in a loop: the third time in a minute it
+      // asks, and the way on opens a new conversation instead.
+      const asked = [];
+      const showMessageBox = electron.dialog.showMessageBox;
+      electron.dialog.showMessageBox = async (_window, options) => {
+        asked.push(options.message);
+        return { response: 0 };
+      };
+      try {
+        for (let crash = 1; crash <= 3; crash++) {
+          const reloaded = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+          win.webContents.forcefullyCrashRenderer();
+          await reloaded;
+          if (crash < 3) {
+            assert.deepEqual(asked, [], `crash ${crash} reloads without asking`);
+            await until("document.querySelector('main').innerText.includes('Smoke answer')", `crash ${crash}: reloaded onto its conversation`);
+          }
+        }
+        assert.deepEqual(asked, ["duang's window keeps crashing."], "the third crash asks instead of reloading");
+        await until("document.body.innerText.includes('What should we work on?')", "the way on is a new conversation");
+        assert.ok(!(await evaluate("document.querySelector('main').innerText.includes('Smoke answer')")), "not the one it crashed on");
+        assert.equal(await evaluate("window.location.hash"), "", "the fresh start is read once");
+      } finally {
+        electron.dialog.showMessageBox = showMessageBox;
+      }
+      // The historical conversation is one choice away, in the list: the fresh start did not remove it.
       await evaluate("document.querySelector('button[aria-label=\"Configured\"]').click()");
+      await until("!document.querySelector('textarea').disabled", "the Configured agent is open");
+      await showConversations();
+      await evaluate(`[...document.querySelectorAll('#conversations button')].find((b) => b.textContent.includes('Use the configured model')).click()`);
       await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
       assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), otherModel);
       await message("Continue the historical Anthropic conversation.");

@@ -7,7 +7,7 @@
  * written in `class`, so anything a call site might want to change — the text size, whether danger
  * is loud or quiet — is decided by a prop here instead.
  */
-import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { Component, type ButtonHTMLAttributes, type ErrorInfo, type ReactNode, type Ref } from "react";
 
 /**
  * Four kinds, three sizes, and no fourth option: 28 and 32 are rectangles; 40 is the round icon
@@ -140,4 +140,29 @@ export function Badge({
       {children}
     </span>
   );
+}
+
+/**
+ * What a drawing error leaves behind: the error in words, with the way out, instead of a blank window.
+ * React unmounts everything above a component that throws while rendering unless something catches it.
+ * `reset` changes when the place it guards changes (another conversation), which clears the error.
+ */
+export class Boundary extends Component<
+  { reset?: unknown; children: ReactNode; fallback: (error: Error) => ReactNode },
+  { error?: Error; reset?: unknown }
+> {
+  state: { error?: Error; reset?: unknown } = {};
+  static getDerivedStateFromError(error: unknown) {
+    return { error: error instanceof Error ? error : new Error(String(error)) };
+  }
+  static getDerivedStateFromProps(props: { reset?: unknown }, state: { error?: Error; reset?: unknown }) {
+    return props.reset === state.reset ? null : { error: undefined, reset: props.reset };
+  }
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error("duang: drawing failed", error, info.componentStack);
+  }
+  render() {
+    const { error } = this.state;
+    return error ? this.props.fallback(error) : this.props.children;
+  }
 }

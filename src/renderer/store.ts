@@ -42,6 +42,12 @@ const UNREADABLE_DRAFTS_KEY = "duang.drafts.unreadable";
 interface Selection {
   agentId?: string;
   perAgent: [string, string][];
+  /**
+   * The new conversation a fresh start (after repeated crashes) opened. Left as the selection, it is
+   * returned to like a conversation with a record, so a reload or restart does not fall back to the newest
+   * one, which is likely the conversation that crashed the window.
+   */
+  fresh?: string;
 }
 /**
  * Unsent text, kept until it is sent, cleared, or its conversation or agent goes away. Unlike the
@@ -280,6 +286,7 @@ export function createStore(api: DuangApi) {
    */
   const unseen = new Map<string, "done" | "failed">();
   let lastAgent = stored?.agentId;
+  let freshSession = stored?.fresh;
   let navigation = 0;
   /**
    * One request number per agent: taking one makes the answers to every earlier one stale, so a slow
@@ -449,7 +456,12 @@ export function createStore(api: DuangApi) {
     unseen.delete(key(agentId, session));
     lastOpened.set(agentId, session);
     lastAgent = agentId;
-    writeStored(SELECTION_KEY, JSON.stringify({ agentId, perAgent: [...lastOpened] } satisfies Selection));
+    // Kept only while it is still where some agent was left.
+    if (freshSession && ![...lastOpened.values()].includes(freshSession)) freshSession = undefined;
+    writeStored(
+      SELECTION_KEY,
+      JSON.stringify({ agentId, perAgent: [...lastOpened], ...(freshSession && { fresh: freshSession }) } satisfies Selection),
+    );
     // No `leave()` first: clearing the view to put another conversation in it renders the screen for "no
     // conversation" in between. Publishing the next one is what makes the previous one stop being current.
     const existing = conversations.get(key(agentId, session));
@@ -574,7 +586,8 @@ export function createStore(api: DuangApi) {
         previous &&
         (result.sessions.some((s) => s.session === previous) ||
           conversations.has(key(id, previous)) ||
-          drafts.get(key(id, previous))?.trim())
+          drafts.get(key(id, previous))?.trim() ||
+          previous === freshSession)
           ? previous
           : undefined;
       // `session` names the conversation the click was about. It is opened here, inside the same
@@ -732,7 +745,8 @@ export function createStore(api: DuangApi) {
     stopSteps ??= api.onLoginStep(onStep);
   };
 
-  async function load() {
+  /** `fresh`: start on a new conversation of the agent, not the one it was left on (main asks after crashes). */
+  async function load({ fresh = false }: { fresh?: boolean } = {}) {
     listen();
     publish({ loading: true, error: undefined, registryError: undefined });
     // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
@@ -751,7 +765,8 @@ export function createStore(api: DuangApi) {
       // Every row shows its latest conversation, so every agent's list is read; that boots each
       // runtime, the same as opening it would.
       for (const row of agents) if (row !== start) void listSessions(row.id);
-      if (start) await selectAgent(start.id);
+      if (fresh) freshSession = crypto.randomUUID();
+      if (start) await selectAgent(start.id, fresh ? freshSession : undefined);
     } catch (error) {
       publish({ loading: false, registryError: message(error) });
     }

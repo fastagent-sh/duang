@@ -163,7 +163,14 @@ running conversation as Stop does and waits up to five seconds for it to settle,
 was stopped (`run stopped` when reopened) rather than ending on the message it was answering. A run
 that has not settled by then (a tool that cannot be cancelled) is cut when the app exits; quitting
 again while it waits quits at once, and a message sent while it waits is refused (`duang is quitting: the message was
-not sent`) and stays in the draft. Local channels
+not sent`) and stays in the draft. A window whose renderer crashes or is killed is
+reloaded and reopens what it showed; runs in progress keep going in main. After a third crash within a
+minute (counted for the app, not per window) it is not reloaded onto the same conversation in a loop: a
+dialog says so, and **Open on a New Conversation** opens the window on a new conversation of that agent, the
+one it was showing still in the list (or **Close Window**); that choice holds across a reload or restart until
+another conversation is opened. A conversation that cannot be drawn shows the
+error in its place, with Try again, which reads it again from history, while the sidebar and composer stay usable;
+an error anywhere else in the window shows it with Reload and Open on a New Conversation. Local channels
 and routines are not started by duang. The current client has no online contacts or share UI.
 
 ## Planned: daily local use and definition inspection (stage 1)
