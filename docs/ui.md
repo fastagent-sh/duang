@@ -239,7 +239,9 @@ act on) and a Manage providers link (Settings is in the sidebar; the empty picke
 **Connect a provider**).
 
 **The header is two parts.** What you are looking at (avatar, agent name, folder,
-`working`, the context meter, `queued`) is one pill, and the one action on it, the
+`working`, the context meter, `queued`) is one pill. `working` is about the open conversation; while only
+others of the agent run, it reads `1 other working`, and a click opens that one (or, for several, the
+conversation list, which marks each), and the one action on it, the
 conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
 and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
 card in the middle of a page. The composer does not: it sits in the reading column, its attach and

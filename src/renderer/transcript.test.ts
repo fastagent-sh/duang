@@ -14,6 +14,7 @@ import {
   phase,
   summarize,
   previewOf,
+  thinkingLine,
   opensRun,
   queueView,
   toolText,
@@ -187,7 +188,7 @@ test("a preview quotes the newest output as plain text, and follows a streaming 
   let items: Item[] = [{ kind: "user", text: "Deploy it", at: 1 }];
   assert.deepEqual(previewOf(items), { text: "You: Deploy it", at: 1 });
   // Thinking still going is what the agent is doing now: the line it is on.
-  items = [...items, { kind: "thinking", text: "first\nnow the build", open: true, at: 2, started: 2 }];
+  items = [...items, { kind: "thinking", text: "first\nnow the build\n", open: true, at: 2, started: 2 }];
   assert.equal(previewOf(items)?.text, "thinking: now the build");
   // Settled, it is not output, and is passed over.
   assert.equal(previewOf([items[0]!, { ...(items[1] as never as object), open: false } as Item])?.text, "You: Deploy it");
@@ -372,9 +373,25 @@ test("a work block counts files once and names the kind of work", () => {
   assert.equal(summarize([tool("read", undefined), tool("read", undefined)] as never), "read 2 files");
 });
 
+test("a streaming thought is quoted by a line it finished, never one cut mid-word", () => {
+  // The last line is still being written: the one before it is what the model last said in full.
+  assert.equal(thinkingLine("The user wants me to:\n1. Find out why it fails\n- The tot", true), "1. Find out why it fails");
+  assert.equal(thinkingLine("The user wants me to:\n1. Find out why it fails\n", true), "1. Find out why it fails");
+  // No line finished yet: the words so far, without the one being written.
+  assert.equal(thinkingLine("Let me look at the tes", true), "Let me look at the");
+  assert.equal(thinkingLine("Let", true), "");
+  // Settled, the last line is complete and is the one shown.
+  assert.equal(thinkingLine("first\n- The total is right"), "- The total is right");
+  // The live status and the preview read it the same way.
+  const streaming: Item = { kind: "thinking", text: "first line\n- The tot", open: true, started: 0, at: 0 };
+  assert.equal(phase([streaming], "running").detail, "first line");
+  assert.equal(previewOf([streaming])?.text, "thinking: first line");
+  assert.equal(phase([{ ...streaming, text: "Let" } as Item], "running").detail, undefined, "nothing worth saying yet");
+});
+
 test("the live status says what the run is doing now", () => {
   const answering: Item = { kind: "assistant", text: "x", open: true, at: 0 };
-  const thinking: Item = { kind: "thinking", text: "first\nnow the tests", open: true, started: 0, at: 0 };
+  const thinking: Item = { kind: "thinking", text: "first\nnow the tests\n", open: true, started: 0, at: 0 };
   const build = tool("bash", { command: "npm test" }, { status: "running", id: "t1" });
   assert.deepEqual(phase([], undefined), { word: "starting", activity: "thinking" });
   assert.deepEqual(phase([], "compacting"), { word: "compacting", activity: "thinking" });

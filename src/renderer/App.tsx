@@ -204,7 +204,12 @@ export default function App() {
                     open: false,
                   })}
                   dir={agent.dir}
-                  working={!!view.running[agent.id]?.length}
+                  working={view.busy}
+                  others={(() => {
+                    const others = (view.running[agent.id] ?? []).filter((session) => session !== c?.session);
+                    if (!others.length) return undefined;
+                    return { count: others.length, open: others.length === 1 ? () => void store.open(others[0]!) : undefined };
+                  })()}
                   context={
                     usage?.contextTokens !== undefined && usage.contextWindow
                       ? { used: usage.contextTokens, window: usage.contextWindow }
