@@ -528,6 +528,11 @@ test("a turn cut partway with nothing recorded says so and offers its message ag
   // One that ended on purpose earlier, and a later turn cut, does not let the earlier batch excuse the later one.
   const later = [user, two, asked("t1", "3"), asked("t2", "4"), entry("5", "user", { text: "and again" }), entry("6", "assistant", { text: "", toolCalls: [{ id: "t3", name: "bash" }] }), plain("t3", "7")];
   assert.deepEqual(last(fromEntries(later)).resend, { text: "and again", toolsRan: true });
+  // The ended batch's work is done: a later turn that ran no tool is offered again without the warning.
+  const ended = [user, two, asked("t1", "3"), asked("t2", "4")];
+  assert.deepEqual(last(fromEntries([...ended, entry("5", "user", { text: "and again" })])).resend, { text: "and again", toolsRan: false });
+  const failedLater = [...ended, entry("5", "user", { text: "and again" }), entry("6", "assistant", { text: "", outcome: { status: "failed", error: { message: "x" } } })];
+  assert.deepEqual(last(fromEntries(failedLater)).resend, { text: "and again", toolsRan: false });
 });
 
 test("a turn cut before a compaction is still cut, and its failure is not rewritten as a retry", () => {
