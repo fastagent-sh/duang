@@ -56,7 +56,8 @@ const api = {
    */
   relocateAgent: (agentId: string): Promise<SessionResult | undefined> => ipcRenderer.invoke("agent:relocate", agentId),
   /** Opens a file of the agent's that a loading error names, in its default editor. */
-  openAgentFile: (agentId: string, file: string): Promise<void> => ipcRenderer.invoke("agent:openFile", agentId, file),
+  resetAgentConfig: (agentId: string, file: string): Promise<SessionResult & { kept?: string }> =>
+    ipcRenderer.invoke("agent:resetConfig", agentId, file),
   /** Give a plain project an agent directory. Returns where it was created. */
   scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
   /** The names this agent exposes — what the composer's `/` completion lists. */

@@ -42,7 +42,7 @@ function harness() {
     removeAgent: async () => ({ ok: true }) as SessionResult,
     scaffoldAgent: async () => "/a/fastagent",
     relocateAgent: async () => undefined,
-    openAgentFile: async () => {},
+    resetAgentConfig: async () => ({ ok: true }),
     listCommands: async () => [],
     revealAgent: async () => {},
     revealRegistry: async () => {},

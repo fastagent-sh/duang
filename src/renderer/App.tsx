@@ -5,7 +5,7 @@ import { rows } from "./sessions.ts";
 import { queueView } from "./transcript.ts";
 import { BrokenAgent, MissingFolder, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
 import { Problem } from "./problem.tsx";
-import { fileIn } from "./problems.ts";
+import { configIn } from "./problems.ts";
 import { ArrowClockwise } from "@phosphor-icons/react";
 import { ConversationList, Sidebar } from "./rows.tsx";
 import { ConversationHeader } from "./header.tsx";
@@ -292,8 +292,8 @@ export default function App() {
               ) : pane === "broken" ? (
                 <BrokenAgent
                   message={view.error ?? ""}
-                  file={agent && view.error ? fileIn(view.error, agent.dir) : undefined}
-                  onOpenFile={(file) => void store.openAgentFile(file)}
+                  config={agent && view.error ? configIn(view.error, agent.dir) : undefined}
+                  onFreshConfig={(config) => void store.resetConfig(config)}
                   onRemove={remove}
                   onReveal={() => void store.reveal()}
                   onRetry={() => void store.retry()}

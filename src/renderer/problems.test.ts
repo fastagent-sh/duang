@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explainRunFailure, fileIn } from "./problems.ts";
+import { configIn, explainRunFailure } from "./problems.ts";
 
 test("a run's failure is explained from its own markers, and an unknown one gets the plain title, not a guess", () => {
   const title = (reason: string) => explainRunFailure(reason).title;
@@ -27,10 +27,10 @@ test("a run's failure is explained from its own markers, and an unknown one gets
 
 test("a loading error's file is offered only inside the agent's folder, and only a kind people edit", () => {
   const dir = "/Users/me/research";
-  assert.equal(fileIn(`${dir}/fastagent/fastagent.config.ts: Expected ',', got '}'`, dir), `${dir}/fastagent/fastagent.config.ts`);
-  assert.equal(fileIn(`${dir}/fastagent/tools/fetch.ts:12:3: Unexpected token`, dir), `${dir}/fastagent/tools/fetch.ts`);
-  assert.equal(fileIn("/etc/hosts.json: bad", dir), undefined, "outside the agent's folder");
-  assert.equal(fileIn(`${dir}/fastagent/run.command: bad`, dir), undefined, "something the system would run");
-  assert.equal(fileIn(`${dir}-other/fastagent.config.ts: bad`, dir), undefined, "a sibling folder with the same prefix");
-  assert.equal(fileIn("missing model: set --model", dir), undefined);
+  assert.equal(configIn(`${dir}/fastagent/fastagent.config.ts: Expected ',', got '}'`, dir), `${dir}/fastagent/fastagent.config.ts`);
+  assert.equal(configIn(`${dir}/fastagent.config.ts:12:3: Unexpected token`, dir), `${dir}/fastagent.config.ts`);
+  assert.equal(configIn(`${dir}/fastagent/tools/fetch.ts:12:3: Unexpected token`, dir), undefined, "a tool is not the config");
+  assert.equal(configIn("/etc/fastagent.config.ts: bad", dir), undefined, "outside the agent's folder");
+  assert.equal(configIn(`${dir}-other/fastagent.config.ts: bad`, dir), undefined, "a sibling folder with the same prefix");
+  assert.equal(configIn("missing model: set --model", dir), undefined);
 });

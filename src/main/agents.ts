@@ -6,7 +6,7 @@ import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
 import { retired } from "./providers.ts";
-import { AgentRegistry, type AgentRow } from "./agent-files.ts";
+import { AgentRegistry, freshConfig, type AgentRow } from "./agent-files.ts";
 
 export { createAgentIn, type AgentRow } from "./agent-files.ts";
 /** Exported so a person whose registry cannot be parsed can be shown where it is. */
@@ -152,6 +152,17 @@ export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
     opened.delete(id);
     return { ok: true };
   });
+}
+
+/** Replaces a config that does not load with a fresh one, keeping the old one beside it; returns its name. */
+export async function resetAgentConfig(row: AgentRow, file: string): Promise<SessionResult & { kept?: string }> {
+  let kept: string | undefined;
+  const result = await change(row.id, async () => {
+    kept = await freshConfig(row.dir, file);
+    opened.delete(row.id);
+    return { ok: true };
+  });
+  return result.ok ? { ...result, kept } : result;
 }
 
 export function removeAgent(id: string): Promise<SessionResult> {

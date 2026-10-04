@@ -3,7 +3,7 @@
  * agent from opening, and a fresh start. Each says what it means for the person and offers the way on
  * (docs/ui.md §9b).
  */
-import { ArrowClockwise, FolderOpen, FolderSimplePlus, PencilSimple, Plus, X } from "@phosphor-icons/react";
+import { ArrowClockwise, FolderOpen, FolderSimplePlus, ArrowCounterClockwise, Plus, X } from "@phosphor-icons/react";
 import { Button } from "./ui.tsx";
 import { Page, Problem } from "./problem.tsx";
 import { home } from "./paths.ts";
@@ -54,16 +54,16 @@ export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: str
 /** The agent's definition does not load: its own error says where, and the folder is where to fix it. */
 export function BrokenAgent({
   message,
-  file,
-  onOpenFile,
+  config,
+  onFreshConfig,
   onRemove,
   onReveal,
   onRetry,
 }: {
   message: string;
-  /** The file in its folder the error names, when it names one: opening it is the way to fix it. */
-  file?: string;
-  onOpenFile: (file: string) => void;
+  /** The agent's config, when the error is in it: a fresh one is a way to start again. */
+  config?: string;
+  onFreshConfig: (config: string) => void;
   onRemove: () => void;
   onReveal: () => void;
   onRetry: () => void;
@@ -74,19 +74,19 @@ export function BrokenAgent({
       tone="error"
       title="This agent could not be loaded"
       advice={
-        file
-          ? "Something in its definition stops it from starting. Fix it in the file below, then retry; duang has changed nothing."
+        config
+          ? "Its fastagent.config.ts has an error. Start a fresh one and choose a model again (the old file is kept beside it, renamed), or fix it and retry."
           : "Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
       }
       reason={message}
       actions={
         <>
-          {file && (
-            <Button kind="primary" size={32} icon={<PencilSimple size={14} />} onClick={() => onOpenFile(file)}>
-              Open {file.split("/").at(-1)}
+          {config && (
+            <Button kind="primary" size={32} icon={<ArrowCounterClockwise size={14} />} onClick={() => onFreshConfig(config)}>
+              Start a fresh config
             </Button>
           )}
-          <Button kind={file ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
+          <Button kind={config ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
           <Button size={32} icon={<FolderOpen size={14} />} onClick={onReveal}>

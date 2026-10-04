@@ -1043,13 +1043,16 @@ export function createStore(api: DuangApi) {
         note(c, { error, title: "The effort was not changed" });
       }
     },
-    async openAgentFile(file: string) {
+    /** The agent's config does not load: a fresh one in its place, the old one kept beside it. */
+    async resetConfig(file: string) {
       const id = view.agentId;
       if (!id) return;
       try {
-        await api.openAgentFile(id, file);
+        const result = await api.resetAgentConfig(id, file);
+        if (!result.ok) return fail("The config was not replaced", result.error.message);
+        await selectAgent(id);
       } catch (error) {
-        fail("The file did not open", error);
+        fail("The config was not replaced", error);
       }
     },
     /** The agent's folder was moved: the person shows where it is, and the agent opens from there. */

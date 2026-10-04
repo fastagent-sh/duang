@@ -6,7 +6,6 @@
  * status in pi's `… API error (401)`, a network error code), so a reason it does not recognise gets the
  * plain title and no guess.
  */
-import { EDITABLE } from "../main/editable.ts";
 
 /**
  * Where in duang the way on is, when it is somewhere other than trying again: signing in to the provider
@@ -66,14 +65,11 @@ export function explainRunFailure(reason: string): Explained {
   return RULES.find(({ test }) => test.test(reason))?.explained ?? { title: "The run stopped with an error" };
 }
 
-
 /**
- * The file in the agent's folder that a loading error names first (`…/fastagent.config.ts: Expected ','`),
- * so the person can open it where the problem is. Only a path inside `dir`, of a kind people edit; main
- * checks both again before opening anything.
+ * The agent's config, when a loading error names it first (`…/fastagent.config.ts: Expected ','`): the
+ * one file duang offers to start afresh. Only inside `dir`; main checks again before touching it.
  */
-export function fileIn(reason: string, dir: string): string | undefined {
-  const match = reason.match(/^(\/[^\n]*?\.[a-z]+)(?::\d+(?::\d+)?)?[:\s]/m);
-  const file = match?.[1];
-  return file && file.startsWith(`${dir}/`) && EDITABLE.test(file) ? file : undefined;
+export function configIn(reason: string, dir: string): string | undefined {
+  const file = reason.match(/^(\/[^\n]*?\/fastagent\.config\.ts)(?::\d+(?::\d+)?)?[:\s]/m)?.[1];
+  return file?.startsWith(`${dir}/`) ? file : undefined;
 }

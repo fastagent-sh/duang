@@ -30,9 +30,11 @@ Adding an agent chooses a directory; a plain project can be scaffolded after con
 directory is no longer there (moved, deleted, a drive not mounted) says so, with Retry and Remove from duang,
 and is never offered a scaffold: its row says `folder not found`. **Locate folder…** asks where it is now
 and points the same agent there, keeping its name, colour and conversations (they are in the folder); a
-folder that is already another agent is refused. An agent whose definition does not load, with an error that
-names a file in its folder, offers to open that file in its default editor, never anything outside the folder
-or a kind the system would run. A
+folder that is already another agent is refused. An agent whose fastagent.config.ts does not load offers
+**Start a fresh config**: the file is renamed beside itself (`fastagent.config.ts.broken-20261003-144000`, so
+nothing loads it and nothing is lost), a new `export default {};` takes its place, and the agent opens asking
+for a model. Only the agent's own config, inside its folder; an error in any other file offers Retry and
+Reveal in Finder. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent

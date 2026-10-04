@@ -1,7 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent, type WebContents } from "electron";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { agentFile } from "./agent-files.ts";
 import {
   addAgent,
   createAgentIn,
@@ -13,6 +12,7 @@ import {
   refuse,
   registryFile,
   relocateAgent,
+  resetAgentConfig,
   removeAgent,
   renameAgent,
   setAgentModel,
@@ -233,12 +233,10 @@ function register(): void {
     if (picked.canceled || !picked.filePaths[0]) return undefined;
     return relocateAgent(row.id, picked.filePaths[0]);
   });
-  // A loading error names a file in the agent's folder: open it where the problem is. Only a file inside the
-  // agent's own folder, of a kind people edit (never something the system would run), that exists.
-  ipcMain.handle("agent:openFile", async (_e, id: string, file: string) => {
+  // The agent's config does not load: start a fresh one, keeping the old one beside it.
+  ipcMain.handle("agent:resetConfig", async (_e, id: string, file: string) => {
     if (typeof file !== "string") throw new Error("A file must be a path");
-    const failed = await shell.openPath(await agentFile((await requireAgent(id)).dir, file));
-    if (failed) throw new Error(failed);
+    return resetAgentConfig(await requireAgent(id), file);
   });
   ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {

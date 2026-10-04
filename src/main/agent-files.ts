@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { EDITABLE } from "./editable.ts";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { writeJsonAtomic } from "./json-file.ts";
 
@@ -135,14 +134,32 @@ export class AgentRegistry {
   }
 }
 
+/** FastAgent's one config filename, and what a new one says: nothing, so the agent asks for a model. */
+export const CONFIG_FILE = "fastagent.config.ts";
+const FRESH_CONFIG = "export default {};\n";
+
 /**
- * A file of the agent's that a loading error names, to open in an editor: its real path, when it is inside
- * the agent's folder (a symlink out of it does not count) and of a kind people edit. Anything else throws.
+ * Start a fresh config in place of one that does not load. Only the agent's own config, inside its folder (a
+ * symlink out of it does not count). The old one is kept beside it, renamed so nothing loads it
+ * (`fastagent.config.ts.broken-20261003-144000`); that name is returned.
  */
-export async function agentFile(dir: string, file: string): Promise<string> {
+export async function freshConfig(dir: string, file: string, now = new Date()): Promise<string> {
   const [root, real] = await Promise.all([realpath(dir), realpath(file)]);
-  if (!real.startsWith(`${root}${sep}`) || !EDITABLE.test(real)) throw new Error(`${file} is not a file of this agent's to open`);
-  return real;
+  if (!real.startsWith(`${root}${sep}`) || basename(real) !== CONFIG_FILE) throw new Error(`${file} is not this agent's ${CONFIG_FILE}`);
+  // In the person's own time: they read this name.
+  const two = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+  const kept = `${real}.broken-${stamp}`;
+  await rename(real, kept);
+  try {
+    await writeFile(real, FRESH_CONFIG, { flag: "wx" });
+  } catch (error) {
+    // Nothing fresh was written: the person's file goes back where it was. Not exercised by a test: nothing
+    // can make this write fail between the rename and it without also failing the rename.
+    await rename(kept, real);
+    throw error;
+  }
+  return kept;
 }
 
 /**
@@ -158,7 +175,7 @@ export async function createAgentIn(dir: string): Promise<string> {
   // No `recursive`: an existing directory fails here with EEXIST and is never touched below.
   await mkdir(agentDir);
   try {
-    await writeFile(join(agentDir, "fastagent.config.ts"), "export default {};\n", { flag: "wx" });
+    await writeFile(join(agentDir, CONFIG_FILE), FRESH_CONFIG, { flag: "wx" });
     await writeFile(join(agentDir, ".gitignore"), ".state/\n.secrets/\n.env\n", { flag: "wx" });
   } catch (error) {
     // This call created the directory, so a half-written one is ours to remove. Leaving it would

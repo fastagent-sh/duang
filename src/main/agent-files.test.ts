@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AgentRegistry, agentFile, createAgentIn } from "./agent-files.ts";
+import { AgentRegistry, createAgentIn, freshConfig } from "./agent-files.ts";
 
 test("registry serializes writes in one process, survives restart and deduplicates real paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
@@ -147,21 +147,27 @@ test("a moved folder is the same agent where it is now; a folder that is another
   }
 });
 
-test("only a file inside the agent's folder, of a kind people edit, is opened for a loading error", async () => {
+test("a fresh config replaces only the agent's own, and keeps the old one beside it", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-file-"));
   try {
     const dir = join(root, "agent");
     await mkdir(join(dir, "fastagent"), { recursive: true });
     const config = join(dir, "fastagent", "fastagent.config.ts");
-    await writeFile(config, "export default {};\n");
-    await writeFile(join(dir, "run.command"), "echo hi\n");
-    await writeFile(join(root, "outside.ts"), "");
-    await symlink(join(root, "outside.ts"), join(dir, "escape.ts"));
-    assert.equal(await agentFile(dir, config), await realpath(config));
-    await assert.rejects(agentFile(dir, join(dir, "run.command")), /not a file of this agent's/, "the system would run it");
-    await assert.rejects(agentFile(dir, join(root, "outside.ts")), /not a file of this agent's/);
-    await assert.rejects(agentFile(dir, join(dir, "escape.ts")), /not a file of this agent's/, "a link out of the folder");
-    await assert.rejects(agentFile(dir, join(dir, "nope.ts")), /ENOENT/);
+    await writeFile(config, "export default { model: ,};\n");
+    await writeFile(join(dir, "fastagent", "persona.ts"), "x");
+    await mkdir(join(root, "elsewhere"));
+    await writeFile(join(root, "elsewhere", "fastagent.config.ts"), "outside");
+    await symlink(join(root, "elsewhere"), join(dir, "linked"));
+
+    await assert.rejects(freshConfig(dir, join(dir, "fastagent", "persona.ts")), /is not this agent's fastagent.config.ts/);
+    await assert.rejects(freshConfig(dir, join(root, "elsewhere", "fastagent.config.ts")), /is not this agent's/);
+    await assert.rejects(freshConfig(dir, join(dir, "linked", "fastagent.config.ts")), /is not this agent's/, "a link out of the folder");
+    assert.equal(await readFile(join(root, "elsewhere", "fastagent.config.ts"), "utf8"), "outside");
+
+    const kept = await freshConfig(dir, config, new Date(2026, 9, 3, 14, 40, 0));
+    assert.equal(kept, join(await realpath(dir), "fastagent", "fastagent.config.ts.broken-20261003-144000"));
+    assert.equal(await readFile(kept, "utf8"), "export default { model: ,};\n", "the person's file is kept as it was");
+    assert.equal(await readFile(config, "utf8"), "export default {};\n");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

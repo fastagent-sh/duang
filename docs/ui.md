@@ -710,7 +710,7 @@ the same parts, in this order:
 2. **What to do**, one sentence, when there is something besides the buttons.
 3. **The way on**, as buttons that land where the fix is done, the likeliest first: *Sign in to OpenAI
    again* opens that provider's row ready to connect, *Use another model* opens the picker, *Locate
-   folder…* asks where a moved agent is, *Open fastagent.config.ts* opens the file its error names;
+   folder…* asks where a moved agent is, *Start a fresh config* replaces a fastagent.config.ts that does not load;
    then Network settings, View usage, Retry, Reconnect. A problem with nothing to do has none. A way on
    that is the whole fix happens in place: a send whose model cannot run opens the picker by itself, and a
    subscription the runtime let go reconnects once by itself.
