@@ -283,9 +283,8 @@ export function phase(
  * tool's result, or on calls that never ran) had its run cut with nothing recorded: duang or the machine
  * stopped mid-run. It says so, and offers that turn's message again, like a failure.
  *
- * One exception reads the same and is not: a run whose last tool batch ended it on purpose (pi's
- * `terminate`) stops on a tool's result too. Nothing in the history says so (fastagent#700), so it is
- * called cut short as well.
+ * A run its last tool batch ended on purpose (pi's `terminate`) stops on a tool's result too, and is not cut:
+ * every call answering that answer carries `terminate`, which is FastAgent's reading of it.
  *
  * `running`: a run is going now. A compaction is not one: FastAgent admits it only at a boundary, so a turn
  * cut before it is still cut. A call with no result is interrupted in a finished conversation, but the calls
@@ -314,6 +313,8 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   let unconcluded = 0;
   /** Where the turn stands after the last conversation entry: answered, or cut partway. */
   let open = false;
+  /** The calls of the latest answer, and whether each one's result asked to end the run. */
+  let batch = new Map<string, boolean>();
   /**
    * A failure the run did not go on from is its ending, which says how it ended: the line counting the
    * retries before it goes. Where the failure now is.
@@ -350,6 +351,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       toolName?: string;
       isError?: boolean;
       outcome?: AnswerOutcome;
+      terminate?: true;
     };
     const at = entry.timestamp;
     if (entry.kind === "user") {
@@ -392,6 +394,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       // that did waits for its calls' results and the answer after them; one with an outcome said how it ended.
       if (!outcome && !data.toolCalls?.length) unconcluded = items.length;
       open = !outcome && !!data.toolCalls?.length;
+      batch = new Map((data.toolCalls ?? []).map((call) => [call.id ?? "", false]));
     } else if (entry.kind === "tool") {
       const index = items.findLastIndex((item) => item.kind === "tool" && item.id === data.toolCallId);
       const result: Item = {
@@ -406,7 +409,11 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       };
       if (index < 0) items.push(result);
       else items[index] = result;
-      open = true;
+      if (data.terminate && batch.has(result.id)) batch.set(result.id, true);
+      // Every call of the answer asked to end the run: it ended here, on purpose, and its work is done.
+      const ended = batch.size > 0 && [...batch.values()].every(Boolean);
+      open = !ended;
+      if (ended) unconcluded = items.length;
     }
   }
   if (!running && failure) concluded(failure.index);

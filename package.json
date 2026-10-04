@@ -17,7 +17,7 @@
   "dependencies": {
     "@dicebear/core": "^10.7.0",
     "@dicebear/styles": "^10.6.0",
-    "@fastagent-sh/fastagent": "0.24.1",
+    "@fastagent-sh/fastagent": "0.24.2",
     "@phosphor-icons/react": "^2.1.10",
     "@shikijs/langs": "^4.4.3",
     "@shikijs/themes": "^4.4.3",

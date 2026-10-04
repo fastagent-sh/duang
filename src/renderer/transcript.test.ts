@@ -517,6 +517,22 @@ test("a turn cut partway with nothing recorded says so and offers its message ag
   assert.equal(last(fromEntries([user, entry("2", "assistant", { text: "", outcome: { status: "aborted" } })])).text, "run stopped");
   assert.equal(fromEntries([user, call, result], undefined, true).at(-1)?.kind, "tool");
   assert.deepEqual(fromEntries([]), [], "a conversation with no message yet is not cut");
+
+  // A run its tool batch ended on purpose stops on a result too, and is not cut: every call of the answer asked.
+  const two = entry("2", "assistant", { text: "", toolCalls: [{ id: "t1", name: "bash" }, { id: "t2", name: "done" }] });
+  const asked = (id: string, n: string) => entry(n, "tool", { toolCallId: id, toolName: "x", text: "ok", terminate: true });
+  const plain = (id: string, n: string) => entry(n, "tool", { toolCallId: id, toolName: "x", text: "ok" });
+  assert.equal(fromEntries([user, two, asked("t1", "3"), asked("t2", "4")]).at(-1)?.kind, "tool", "ended on purpose: nothing to retry");
+  assert.equal(last(fromEntries([user, two, plain("t1", "3"), asked("t2", "4")])).text, cut.text, "only some asked: the run went on, then was cut");
+  assert.equal(last(fromEntries([user, two, asked("t1", "3")])).text, cut.text, "a call still unanswered: cut");
+  // One that ended on purpose earlier, and a later turn cut, does not let the earlier batch excuse the later one.
+  const later = [user, two, asked("t1", "3"), asked("t2", "4"), entry("5", "user", { text: "and again" }), entry("6", "assistant", { text: "", toolCalls: [{ id: "t3", name: "bash" }] }), plain("t3", "7")];
+  assert.deepEqual(last(fromEntries(later)).resend, { text: "and again", toolsRan: true });
+  // The ended batch's work is done: a later turn that ran no tool is offered again without the warning.
+  const ended = [user, two, asked("t1", "3"), asked("t2", "4")];
+  assert.deepEqual(last(fromEntries([...ended, entry("5", "user", { text: "and again" })])).resend, { text: "and again", toolsRan: false });
+  const failedLater = [...ended, entry("5", "user", { text: "and again" }), entry("6", "assistant", { text: "", outcome: { status: "failed", error: { message: "x" } } })];
+  assert.deepEqual(last(fromEntries(failedLater)).resend, { text: "and again", toolsRan: false });
 });
 
 test("a turn cut before a compaction is still cut, and its failure is not rewritten as a retry", () => {
