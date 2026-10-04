@@ -54,8 +54,10 @@ The picker lists the models the open agent can run: pi's built-ins, the agent's 
 configured credential: in the credential file, in an environment variable, or as a key written in
 that `models.json`. Switching agents with the picker open reads the new agent's list. It
 lists each model by the name it declares (its id when it declares none) with its context window
-(`GPT-5.5  272K`). pi's catalog lists a model twice, its alias as "… (latest)" and its dated snapshot; that is
-one row, the alias, without "(latest)" (a snapshot a conversation runs on stays listed). It shows the full `provider/id` on hover, searches both the name and the `provider/id`, groups
+(`GPT-5.5  272K`). pi's catalog lists some models twice, the alias that follows the newest snapshot as
+"… (latest)" and that snapshot under its date; that is one row, the alias (a snapshot a conversation runs on
+stays listed, named with its date). "(latest)" is dropped from any name that stays unique in its provider
+without it, and kept where it is what tells two rows apart. It shows the full `provider/id` on hover, searches both the name and the `provider/id`, groups
 the models under their provider with the selected one first, and ends with the conversation's effort: a
 track of the thinking levels the runtime lists for the conversation's model. A new conversation has them
 before its first message (what its first turn would run on), so effort can be set before sending; setting
