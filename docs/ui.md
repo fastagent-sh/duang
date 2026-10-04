@@ -727,9 +727,9 @@ Size follows scope, at three placements of one component (`problem.tsx`):
 
 | Placement | For | Shape |
 |---|---|---|
-| **card** | a run or a send, in the transcript where it happened | `surface`, hairline, 14 radius, in the reading column. Only the latest one carries buttons: an earlier one is history |
-| **strip** | this view lost its conversation, or an action outside any conversation failed (renaming, adding or removing an agent) | the popover surface, floating under the header over the transcript, which never moves for it; Dismiss when it is only news |
-| **page** | there is nothing else to show: an agent that cannot load, a folder that is not there, an agent list that cannot be read, a view that could not be drawn | centred in the pane: a 40px tile with the mark, a 15px title, the sentence, the well, the buttons |
+| **card** | a run or a send, in the transcript where it happened | two lines at most, the width of what it says: the mark, the title in semibold with its sentence after it in muted, then the buttons with the original words folded beside them. No border: a faint wash of its tone (danger 8%, warning 10%) on an 8 radius. Only the latest one carries buttons: an earlier one is history |
+| **strip** | this view lost its conversation, or an action outside any conversation failed (renaming, adding or removing an agent) | the card's two lines on the popover surface, floating under the header over the transcript, which never moves for it; Dismiss when it is only news |
+| **page** | there is nothing else to show: an agent that cannot load, a folder that is not there, an agent list that cannot be read, a view that could not be drawn | centred in the pane: a 32px tile with the mark, a 15px title, the sentence, the well, the buttons |
 
 Setup pages (no agents yet, a folder with no agent yet) wear the page's shape with an accent mark, so a
 first step and a problem look like the same app. A roster row says a problem in one short word and

@@ -15,43 +15,40 @@ import { Button } from "./ui.tsx";
 export type ProblemTone = "error" | "warning" | "info";
 
 const ICON = {
-  error: <WarningCircle size={16} />,
-  warning: <Prohibit size={16} />,
-  info: <Info size={16} />,
+  error: <WarningCircle size={15} />,
+  warning: <Prohibit size={15} />,
+  info: <Info size={15} />,
 };
+const TINT = { error: "bg-danger/8", warning: "bg-warning/10", info: "bg-surface-2" };
 const COLOUR = { error: "text-danger", warning: "text-warning", info: "text-muted" };
 
 /** A reason short enough to read in place; anything longer folds behind "Details". */
 const SHORT = 140;
 
 /**
- * The original words, verbatim. Where nothing else explains the problem, a short one-line reason is the
- * explanation and reads in place. Otherwise it folds to its first line, quietly, and opens into a
- * selectable well with a way to copy it for a report.
+ * The original words, verbatim, out of the way: folded to their first line beside the buttons, opening into
+ * a selectable well (on a line of its own) with a way to copy them for a report. On a page, the well itself.
  */
-function Reason({ text, as = "inline" }: { text: string; as?: "inline" | "folded" | "well" }) {
-  const long = as !== "inline" || text.length > SHORT || text.includes("\n");
+function Reason({ text, as }: { text: string; as: "folded" | "well" }) {
   const [open, setOpen] = useState(as === "well");
   const [copied, setCopied] = useState<"yes" | string>();
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
-  if (!long) return <p className="select-text break-words text-[13px] text-muted">{text}</p>;
   return (
-    <div className="space-y-1.5">
-      {/* A page has room for the words themselves: no toggle, just the well. */}
-      {as !== "well" && (
+    <>
+      {as === "folded" && (
         <button
           onClick={() => setOpen(!open)}
           aria-expanded={open}
-          className="flex max-w-full items-center gap-1 text-left text-[12px] text-muted hover:text-text"
+          className="flex min-w-0 flex-1 basis-40 items-center gap-1 text-left text-[12px] text-muted hover:text-text"
         >
           <CaretRight size={11} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
           <span className="min-w-0 truncate">{open ? "Details" : text.split("\n")[0]}</span>
         </button>
       )}
       {open && (
-        <div className="relative rounded-card bg-surface-2">
-          <pre className="max-h-48 select-text overflow-auto whitespace-pre-wrap break-words p-3 pr-10 font-mono text-[12.5px] text-muted">
+        <div className="relative basis-full rounded-card bg-surface-2">
+          <pre className="max-h-48 select-text overflow-auto whitespace-pre-wrap break-words p-3 pr-10 text-left font-mono text-[12.5px] text-muted">
             {text}
           </pre>
           <Button
@@ -63,18 +60,21 @@ function Reason({ text, as = "inline" }: { text: string; as?: "inline" | "folded
             className="absolute top-1.5 right-1.5"
             onClick={() =>
               // A refused clipboard says so on the button rather than looking broken.
-              navigator.clipboard.writeText(text).then(
-                () => setCopied("yes"),
-                (error: unknown) => setCopied(error instanceof Error ? error.message : String(error)),
-              ).finally(() => {
-                window.clearTimeout(timer.current);
-                timer.current = window.setTimeout(() => setCopied(undefined), 2000);
-              })
+              navigator.clipboard
+                .writeText(text)
+                .then(
+                  () => setCopied("yes"),
+                  (error: unknown) => setCopied(error instanceof Error ? error.message : String(error)),
+                )
+                .finally(() => {
+                  window.clearTimeout(timer.current);
+                  timer.current = window.setTimeout(() => setCopied(undefined), 2000);
+                })
             }
           />
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -101,11 +101,11 @@ export function Page({
   return (
     // In the transcript's box, clear of the floating header, so the composer never moves.
     <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5">
-      <div role={tone === "error" || tone === "warning" ? "alert" : undefined} className="mx-auto mt-16 max-w-md space-y-4 text-center">
-        <span className={`mx-auto grid size-10 place-items-center rounded-card bg-surface-2 ${tone === "accent" ? "text-accent" : COLOUR[tone]}`}>
+      <div role={tone === "error" || tone === "warning" ? "alert" : undefined} className="mx-auto mt-10 max-w-md space-y-3 text-center">
+        <span className={`mx-auto grid size-8 place-items-center rounded-card bg-surface-2 ${tone === "accent" ? "text-accent" : COLOUR[tone]}`}>
           {icon}
         </span>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <h2 className="text-[15px] font-semibold">{title}</h2>
           {advice && <p className="text-[13px] leading-relaxed text-muted">{advice}</p>}
         </div>
@@ -137,35 +137,40 @@ export function Problem({
   onDismiss?: () => void;
   layout?: "card" | "strip" | "page";
 }) {
-  const icon = <span className={`shrink-0 ${COLOUR[tone]}`}>{ICON[tone]}</span>;
   if (layout === "page")
     return (
       <Page tone={tone} icon={ICON[tone]} title={title} advice={advice} actions={actions}>
-        {reason && (
-          <div className="text-left">
-            <Reason text={reason} as="well" />
-          </div>
-        )}
+        {reason && <Reason text={reason} as="well" />}
       </Page>
     );
+  // Short words that nothing else explains are the explanation, said beside the title; anything else folds.
+  const said = advice ?? (reason && reason.length <= SHORT && !reason.includes("\n") ? reason : undefined);
+  const folded = reason !== undefined && said !== reason;
   const body = (
-    <div role={tone === "info" ? "status" : "alert"} className="flex gap-2.5 px-3 py-2.5 text-left">
-      <span className="mt-0.5">{icon}</span>
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="text-[13px] font-semibold">{title}</p>
-        {advice && <p className="text-[13px] leading-relaxed text-muted">{advice}</p>}
-        {reason && <Reason text={reason} as={advice ? "folded" : "inline"} />}
-        {actions && <div className="flex flex-wrap gap-2 pt-1.5">{actions}</div>}
+    <div role={tone === "info" ? "status" : "alert"} className="flex items-start gap-2 text-left text-[13px] leading-snug">
+      <span className={`mt-px shrink-0 ${COLOUR[tone]}`}>{ICON[tone]}</span>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p>
+          <span className="font-semibold">{title}.</span>
+          {said && <span className="text-muted"> {said}</span>}
+        </p>
+        {(actions || folded) && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            {actions}
+            {folded && <Reason text={reason} as="folded" />}
+          </div>
+        )}
       </div>
       {onDismiss && (
-        <Button kind="ghost" size={28} aria-label="Dismiss" title="Dismiss" icon={<X size={13} />} onClick={onDismiss} className="-mt-1 -mr-1" />
+        <Button kind="ghost" size={28} aria-label="Dismiss" title="Dismiss" icon={<X size={13} />} onClick={onDismiss} className="-my-1 -mr-1.5" />
       )}
     </div>
   );
-  // A strip floats over the transcript, so it wears the popover's surface; a card is part of the record.
+  // A strip floats over the transcript, so it wears the popover's surface; a card is part of the record, a
+  // tinted note the width of what it says.
   return layout === "strip" ? (
-    <div className="popover pointer-events-auto !p-0">{body}</div>
+    <div className="popover pointer-events-auto !px-3 !py-2.5">{body}</div>
   ) : (
-    <div className="rounded-float bg-surface ring-1 ring-stroke">{body}</div>
+    <div className={`w-fit max-w-full rounded-card px-3 py-2 ${TINT[tone]}`}>{body}</div>
   );
 }

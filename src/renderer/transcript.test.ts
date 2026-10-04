@@ -278,6 +278,12 @@ test("retry and serving failures preserve the runtime's original message; a retr
   // One line that moves on with each attempt; the failure card, if it comes, keeps the provider's words.
   const second = apply(first, event("retry_scheduled", { attempt: 2, maxAttempts: 3, error: "Anthropic API error (429): rate_limit_error" }));
   assert.deepEqual(second.map((item) => item.kind === "note" && item.text), ["retrying 2/3: the provider is limiting requests"]);
+  const ended = apply(second, event("run_settled", { status: "failed", error: { message: "Anthropic API error (429): rate_limit_error", retryable: true } }));
+  assert.deepEqual(
+    ended.map((item) => item.kind === "note" && item.title),
+    ["The provider is limiting requests"],
+    "once the run ends, its ending says it, and the retry line goes",
+  );
   assert.deepEqual(apply([], event("serving_error", { message: "disk is full" })), [
     { kind: "note", tone: "error", text: "disk is full", title: "The agent's runtime reported a problem", reason: "disk is full", at: 0 },
   ]);
@@ -381,17 +387,15 @@ test("history says how an answer ended, as a watcher saw it live, and offers a f
   const failed = (id: string, message: string) => entry(id, "assistant", { text: "", outcome: { status: "failed", error: { message } } });
   const notes = (items: Item[]) => items.flatMap((item) => (item.kind === "note" ? [[item.tone, item.text]] : []));
 
-  // pi retried twice, then gave up: only the last failure is the run's, and it is offered again.
+  // pi retried twice, then gave up: only the last failure is the run's, it is offered again, and the line
+  // counting the retries goes with it.
   const gaveUp = fromEntries([
     entry("1", "user", { text: "summarise it" }),
     failed("2", "Connection error."),
     failed("3", "Connection error."),
     failed("4", "Connection error."),
   ]);
-  assert.deepEqual(notes(gaveUp), [
-    ["info", "retried 2 times: could not reach the provider"],
-    ["error", "run failed: Connection error."],
-  ]);
+  assert.deepEqual(notes(gaveUp), [["error", "run failed: Connection error."]], "the ending says it; the retries before it go");
   assert.deepEqual((gaveUp.at(-1) as { resend?: unknown }).resend, { text: "summarise it", toolsRan: false });
 
   // Still running: the last failure is a retry waiting out its delay, not the run's ending.

@@ -311,6 +311,16 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   let unconcluded = 0;
   /** Where the turn stands after the last conversation entry: answered, or cut partway. */
   let open = false;
+  /**
+   * A failure the run did not go on from is its ending, which says how it ended: the line counting the
+   * retries before it goes. Where the failure now is.
+   */
+  const concluded = (index: number) => {
+    const before = items[index - 1];
+    if (before?.kind !== "note" || !before.retry) return index;
+    items.splice(index - 1, 1);
+    return index - 1;
+  };
   const retried = () => {
     if (!failure) return;
     const { index, message } = failure;
@@ -340,7 +350,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
     const at = entry.timestamp;
     if (entry.kind === "user") {
       // The failure ended its run; what follows is the next one.
-      if (failure) unconcluded = failure.index + 1;
+      if (failure) unconcluded = concluded(failure.index) + 1;
       failure = undefined;
       open = true;
       items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
@@ -395,6 +405,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       open = true;
     }
   }
+  if (!running && failure) concluded(failure.index);
   if (!running) {
     const turn = items.findLast((item) => item.kind === "user");
     if (open && turn?.kind === "user")
@@ -608,6 +619,9 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           return { ...item, status: "interrupted", ended: event.timestamp };
         return item;
       });
+      // A run that ends after pi's retries no longer needs the line counting them: its ending says how it ended.
+      const lastLine = items.at(-1);
+      if (lastLine?.kind === "note" && lastLine.retry) items = items.slice(0, -1);
       if (e.data.status === "completed") return items;
       const stopped = e.data.status === "aborted";
       // An aborted run carries the abort machinery's own words ("This operation was aborted",

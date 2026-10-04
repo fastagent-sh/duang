@@ -167,9 +167,10 @@ function ModelPicker({
       className="popover fixed m-0 top-auto right-auto w-[300px] flex-col overflow-hidden p-0 text-text open:flex backdrop:bg-transparent"
     >
       {error ? (
+        // Inside the popover already: the tinted note, not a second floating surface.
+        <div className="p-2">
         <Problem
           tone="error"
-          layout="strip"
           title="This agent's models could not be listed"
           reason={error}
           actions={
@@ -178,6 +179,7 @@ function ModelPicker({
             </Button>
           }
         />
+        </div>
       ) : models?.length === 0 ? (
         <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
           {/* Empty is not always "nothing connected": a ChatGPT sign-in whose model list could not be read at

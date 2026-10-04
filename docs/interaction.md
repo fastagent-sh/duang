@@ -139,7 +139,7 @@ titled by what the reason means (*The provider did not accept the sign-in* with 
 *Could not reach the provider* with **Network settings** for a connection error; *The provider is limiting
 requests* or *had a problem* with **Use another model**, which opens the picker, for a 429 or a 5xx; *The run stopped with
 an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one, one quiet line that moves on with each of pi's own
-retries (`retrying 2/3: the provider had a problem`, the provider's words staying with the failure card) and,
+retries, gone once the run ends since its ending says how (`retrying 2/3: the provider had a problem`, the provider's words staying with the failure card) and,
 read back, one line for retries in a row (`retried 2 times: …`), and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
