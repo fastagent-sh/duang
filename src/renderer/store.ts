@@ -1031,7 +1031,9 @@ export function createStore(api: DuangApi) {
         if (c) {
           await readSettings(c);
           await keepListed(c);
-        } else await selectAgent(id);
+          // Chosen on the new-conversation page of an agent with no model yet: that page, whose composer now runs
+          // on it, not the agent's latest conversation, which keeps the model it was recorded with.
+        } else await selectAgent(id, crypto.randomUUID());
       } catch (error) {
         settle();
         if (request === navigation) note(c, { error, title: "The model was not changed" });

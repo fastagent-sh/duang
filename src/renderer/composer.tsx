@@ -8,6 +8,7 @@ import { home } from "./paths.ts";
 import { tokens } from "./usage.ts";
 import { Problem } from "./problem.tsx";
 import { unavailableNotice } from "./problems.ts";
+import { pickerModels } from "./catalog.ts";
 import type { Models } from "../preload/index.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
@@ -128,7 +129,7 @@ function ModelPicker({
     return () => el.close();
   }, []);
   const query = filter.toLowerCase();
-  const matching = (models ?? [])
+  const matching = pickerModels(models ?? [], current)
     .filter((m) => m.spec.toLowerCase().includes(query) || !!m.name?.toLowerCase().includes(query))
     .sort((a, b) => Number(b.spec === current) - Number(a.spec === current));
   const shown = matching.slice(0, 60);

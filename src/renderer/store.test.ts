@@ -228,6 +228,20 @@ test("first model selection unlocks a new conversation; configured models come f
   store.dispose();
 });
 
+test("a model chosen on the new-conversation page stays on it, not the agent's latest conversation", async () => {
+  const { api, store, opens } = harness();
+  api.openAgent = async () => ({ ok: false, code: "missing_model", message: "missing model" });
+  await store.load();
+  // The agent has a conversation already; the person was on a new one when they chose.
+  api.openAgent = async () => listed("older");
+  await store.pickModel("provider/model");
+  const c = store.getSnapshot().conversation!;
+  assert.notEqual(c.session, "older", "the page the model was chosen on, whose composer runs on it");
+  assert.ok(!opens.includes("older"));
+  assert.equal(store.getSnapshot().pane, "start");
+  store.dispose();
+});
+
 test("a store that React disposes and loads again still hears its conversations and sign-ins", async () => {
   // Fast Refresh runs the App effect's cleanup and setup again on the same store, on every edit in
   // development. The second setup must register for what main pushes again, or every run looks

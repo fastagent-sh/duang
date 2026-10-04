@@ -419,7 +419,7 @@ than a Latin one to read as emphasis.
 
 | Role | Size / line-height / weight |
 |---|---|
-| New conversation heading (centred over the field) | 22 / normal / 500 |
+| New conversation heading (centred in the empty page; the composer stays at the bottom) | 22 / normal / 500 |
 | Answer headings | 22 / 19 / 17 (h1–h3), 15 below / 1.4 / 600 |
 | Conversation prose, sent messages, composer | 15 / 1.7 / 400 |
 | Answer tables | 14 / 1.6 / 400, header 600 muted on a tinted band |
