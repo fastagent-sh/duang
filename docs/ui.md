@@ -465,7 +465,7 @@ component; what varies is a prop.
 
 **A disabled control says why.** The `disabled` prop takes the reason rather than a boolean, so a
 control cannot be greyed out silently: it dims to 40% and carries the reason. In light mode a
-disabled Send takes a neutral fill. "Stop the turn to change the model", "Voice input is not available yet". It is disabled with `aria-disabled`
+disabled Send takes a neutral fill. "Stop the turn to change the model or effort", "Voice input is not available yet". It is disabled with `aria-disabled`
 rather than the native attribute and stays focusable, because a natively disabled button cannot be
 reached by keyboard and a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is
 dropped by the component.
