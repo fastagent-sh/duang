@@ -207,6 +207,12 @@ export interface View extends SettingsView {
    * as `retry`, which reopens a conversation whose view broke.
    */
   resend?: { text: string; toolsRan: boolean };
+  /**
+   * A send was refused because the conversation's model cannot run here (its provider is not connected, or
+   * it is not offered). The composer opens the picker on it, saying why; `asked` makes each refusal a new
+   * request. Cleared once a model is chosen, or the person goes to another conversation.
+   */
+  unavailable?: { agentId: string; session: string; model: string; asked: number };
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
   /** Per agent with a turn in flight, the kind of work it is in (`phase`): its avatar's face follows it. */
@@ -512,7 +518,7 @@ export function createStore(api: DuangApi) {
     // conversation" in between. Publishing the next one is what makes the previous one stop being current.
     const existing = conversations.get(key(agentId, session));
     if (existing) {
-      publish({ conversation: existing, error: undefined });
+      publish({ conversation: existing, error: undefined, unavailable: undefined });
       return;
     }
     const c: Conversation = {
@@ -529,7 +535,7 @@ export function createStore(api: DuangApi) {
       runHasUser: false,
     };
     conversations.set(key(agentId, session), c);
-    publish({ conversation: c, error: undefined });
+    publish({ conversation: c, error: undefined, unavailable: undefined });
     try {
       const result = await api.openSession(agentId, session, c.subscription);
       if (conversations.get(key(agentId, session)) !== c) return;
@@ -579,24 +585,19 @@ export function createStore(api: DuangApi) {
       if (!result.ok) {
         // Once it entered, the failure is the run's, and the run's note already says it.
         if (!waiting()) return;
+        const model = c.state?.model ?? view.model;
+        if (result.error.code === MODEL_UNAVAILABLE_CODE && model) {
+          // The way on is choosing a model, so the picker opens on it and says why; nothing goes in the
+          // transcript, because nothing happened in the conversation.
+          restoreRejected();
+          publish({ unavailable: { agentId: c.agentId, session: c.session, model, asked: Date.now() } });
+          return;
+        }
         if (
           result.error.code !== "aborted" &&
           !c.items.slice(before).some((item) => item.kind === "note" && item.text.includes(result.error.message))
-        ) {
-          note(
-            c,
-            // Connecting a provider is the way on for a model that cannot run; either way the message waits in the draft.
-            result.error.code === MODEL_UNAVAILABLE_CODE
-              ? {
-                  error: result.error.message,
-                  tone: "warning",
-                  title: "This conversation's model cannot run",
-                  advice: "Connect its provider, or choose another model. Your message is back in the composer.",
-                  fix: "providers",
-                }
-              : { error: result.error.message, tone: "warning", title: "Not sent", advice: "Your message is back in the composer." },
-          );
-        }
+        )
+          note(c, { error: result.error.message, tone: "warning", title: "Not sent", advice: "Your message is back in the composer." });
         restoreRejected();
       } else if (waiting()) {
         c.returned.add(echo);
@@ -1000,7 +1001,7 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         settle();
         if (request !== navigation) return;
-        publish({ model, error: undefined, states: { ...view.states, [id]: "ready" } });
+        publish({ model, error: undefined, unavailable: undefined, states: { ...view.states, [id]: "ready" } });
         // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
         // The runtime announced the change before that subscription listened again, so the model and
         // levels are read, not waited for.

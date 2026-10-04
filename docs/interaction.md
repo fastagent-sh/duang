@@ -118,9 +118,12 @@ history; the client does not save a second transcript. A conversation can be ren
 with destructive deletion confirmed. The current local view keeps unsent text with its conversation
 across navigation and application restart. A send rejected before admission remains a draft, and a refusal is said each time, even when an
 earlier message got the same one. A run starts only on a model the picker would offer to the agent: a
-conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send
-with a card, *This conversation's model cannot run*, and **Model providers** on it, rather than failing inside
-the engine with its command-line advice. A failed run may already have performed tool work. Stop does not roll back completed work or promise
+conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send,
+and since choosing a model is the way on, the model picker opens by itself on it: a line at its top says
+*anthropic isn't connected* (or that the model is not available with the connection that is), "Choose another
+model to send your message", with **Connect anthropic** when the provider is not connected at all, which
+returns to the picker. The message stays in the composer, the chip is marked until a model is chosen, and
+nothing is written into the conversation, rather than failing inside the engine with its command-line advice. A failed run may already have performed tool work. Stop does not roll back completed work or promise
 to cancel a non-cancellable tool. Stop pressed while a send is still on its way to the runtime keeps it
 from starting a run, and the message returns to the draft without a note; Stop pressed as a run ends
 says nothing, since the run's own ending is already in the transcript.

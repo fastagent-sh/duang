@@ -692,7 +692,9 @@ The tier-1 states reach the sidebar as words too: an agent that is `broken`, `ne
 `no agent yet` says so on its row. A coloured dot on its own was colour doing the work, readable
 only through a tooltip.
 
-In the transcript, a refusal is a card in the warning tone, with a prohibition mark rather than the
+A send refused because the conversation's model cannot run is not a card: choosing a model is the way on,
+so the model picker opens on it with one line at its top saying why, in the warning tone, and the chip
+stays marked until a model is chosen. Any other refusal is a card in the warning tone, with a prohibition mark rather than the
 failure's, and says the message is back in the composer: nothing ran, so it is still the person's to
 edit. main's own sentence is kept verbatim behind it (§9b).
 

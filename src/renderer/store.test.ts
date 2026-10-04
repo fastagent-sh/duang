@@ -1929,15 +1929,15 @@ test("a failure about another conversation is said there, and a refusal said bef
   assert.equal(c.items.length, 0, "the open transcript is not where it goes");
 
   // The same refusal twice is said twice: each send says how it ended.
-  const unavailable = { ok: false as const, error: { code: "model_unavailable", message: "anthropic/x cannot run", retryable: true } };
-  api.send = async () => unavailable;
+  const busy = { ok: false as const, error: { code: "agent_changing", message: "Agent settings are changing; try again.", retryable: true } };
+  api.send = async () => busy;
   for (const text of ["first", "second"]) {
     store.setDraft(text);
     await store.send();
   }
-  const refusals = c.items.filter((item) => item.kind === "note" && item.text === "anthropic/x cannot run");
+  const refusals = c.items.filter((item) => item.kind === "note" && item.reason === busy.error.message);
   assert.equal(refusals.length, 2);
-  assert.ok(refusals.every((item) => item.kind === "note" && item.fix === "providers"), "with the way on: the model providers");
+  assert.ok(refusals.every((item) => item.kind === "note" && item.title === "Not sent"));
   assert.equal(c.draft, "second", "and the refused message is back in the draft");
   store.dispose();
 });
@@ -1962,5 +1962,27 @@ test("the model's silence counts from its own output: a steer, or the person's m
   assert.equal(c.heard, quietSince, "the person's own steer is not the model answering");
   emit(c, "message_delta", { channel: "text", delta: "no" });
   assert.ok(c.heard! > quietSince, "the model's output is");
+  store.dispose();
+});
+
+test("a send refused because the model cannot run opens the picker on it, and writes nothing in the conversation", async () => {
+  const { api, store } = harness();
+  api.openSession = async () => ({ ...empty(), state: { ...empty().state, model: "anthropic/claude-sonnet-4-5" } });
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  api.send = async () => ({
+    ok: false,
+    error: { code: "model_unavailable", message: "anthropic/claude-sonnet-4-5 cannot run: …", retryable: true },
+  });
+  store.setDraft("Summarise the latest notes");
+  await store.send();
+  const asked = store.getSnapshot().unavailable;
+  assert.equal(asked?.model, "anthropic/claude-sonnet-4-5");
+  assert.equal(asked?.session, c.session);
+  assert.equal(c.items.length, 0, "nothing happened in the conversation, so nothing is written there");
+  assert.equal(c.draft, "Summarise the latest notes", "the message waits for the model to be chosen");
+  // Choosing a model is the way on, and ends the request.
+  await store.pickModel("provider/model");
+  assert.equal(store.getSnapshot().unavailable, undefined);
   store.dispose();
 });
