@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { copyFile, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
 import { writeJsonAtomic } from "./json-file.ts";
 
@@ -138,28 +139,45 @@ export class AgentRegistry {
 export const CONFIG_FILE = "fastagent.config.ts";
 const FRESH_CONFIG = "export default {};\n";
 
+/** The registered folder is not there (moved, deleted, a drive not mounted): nothing to scaffold into. */
+export class MissingDirError extends Error {}
+
 /**
- * Start a fresh config in place of one that does not load. Only the agent's own config, inside its folder (a
- * symlink out of it does not count). The old one is kept beside it, renamed so nothing loads it
- * (`fastagent.config.ts.broken-20261003-144000`); that name is returned.
+ * Only a folder that is not there is missing. Any other reason it cannot be looked at (no permission, macOS
+ * privacy controls) is its own failure, said in its own words, and not a folder to go and locate.
  */
-export async function freshConfig(dir: string, file: string, now = new Date()): Promise<string> {
-  const [root, real] = await Promise.all([realpath(dir), realpath(file)]);
-  if (!real.startsWith(`${root}${sep}`) || basename(real) !== CONFIG_FILE) throw new Error(`${file} is not this agent's ${CONFIG_FILE}`);
+export async function requireFolder(dir: string): Promise<void> {
+  try {
+    await stat(dir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") throw new MissingDirError((error as Error).message);
+    throw error;
+  }
+}
+
+/**
+ * The config a load failed in, as FastAgent's loader names it: every failure of `loadConfig` (a syntax error,
+ * a file it imports, a bad key) starts with the config's own path. Undefined for any other failure.
+ */
+export function failingConfig(message: string): string | undefined {
+  return message.match(/^(\/[^\n]*\/fastagent\.config\.ts): /)?.[1];
+}
+
+/**
+ * Start a fresh config in place of one that does not load, given as FastAgent named it: only a config inside
+ * the agent's folder (a symlink out of it does not count). The old one is copied beside it first, to a name
+ * nothing loads (`fastagent.config.ts.broken-20261003-144000`), and never over an earlier copy.
+ */
+export async function freshConfig(dir: string, config: string, now = new Date()): Promise<void> {
+  const [root, real] = await Promise.all([realpath(dir), realpath(config)]);
+  if (!real.startsWith(`${root}${sep}`) || basename(real) !== CONFIG_FILE) throw new Error(`${config} is not this agent's ${CONFIG_FILE}`);
   // In the person's own time: they read this name.
   const two = (n: number) => String(n).padStart(2, "0");
   const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
-  const kept = `${real}.broken-${stamp}`;
-  await rename(real, kept);
-  try {
-    await writeFile(real, FRESH_CONFIG, { flag: "wx" });
-  } catch (error) {
-    // Nothing fresh was written: the person's file goes back where it was. Not exercised by a test: nothing
-    // can make this write fail between the rename and it without also failing the rename.
-    await rename(kept, real);
-    throw error;
-  }
-  return kept;
+  // EXCL: a second reset in the same second fails here rather than replacing the person's file with the fresh one.
+  await copyFile(real, `${real}.broken-${stamp}`, constants.COPYFILE_EXCL);
+  await writeFile(real, FRESH_CONFIG);
 }
 
 /**

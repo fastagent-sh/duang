@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { configIn, explainRunFailure } from "./problems.ts";
+import { explainRunFailure } from "./problems.ts";
 
 test("a run's failure is explained from its own markers, and an unknown one gets the plain title, not a guess", () => {
   const title = (reason: string) => explainRunFailure(reason).title;
@@ -23,14 +23,4 @@ test("a run's failure is explained from its own markers, and an unknown one gets
   });
   // A number that is not a status is not read as one.
   assert.equal(title("read 401 lines and then failed"), "The run stopped with an error");
-});
-
-test("a loading error's file is offered only inside the agent's folder, and only a kind people edit", () => {
-  const dir = "/Users/me/research";
-  assert.equal(configIn(`${dir}/fastagent/fastagent.config.ts: Expected ',', got '}'`, dir), `${dir}/fastagent/fastagent.config.ts`);
-  assert.equal(configIn(`${dir}/fastagent.config.ts:12:3: Unexpected token`, dir), `${dir}/fastagent.config.ts`);
-  assert.equal(configIn(`${dir}/fastagent/tools/fetch.ts:12:3: Unexpected token`, dir), undefined, "a tool is not the config");
-  assert.equal(configIn("/etc/fastagent.config.ts: bad", dir), undefined, "outside the agent's folder");
-  assert.equal(configIn(`${dir}-other/fastagent.config.ts: bad`, dir), undefined, "a sibling folder with the same prefix");
-  assert.equal(configIn("missing model: set --model", dir), undefined);
 });

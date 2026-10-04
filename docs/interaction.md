@@ -28,13 +28,16 @@ drafted work stays attached to its originating agent and conversation when navig
 
 Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. An agent whose
 directory is no longer there (moved, deleted, a drive not mounted) says so, with Retry and Remove from duang,
-and is never offered a scaffold: its row says `folder not found`. **Locate folder…** asks where it is now
+and is never offered a scaffold: its row says `folder not found`. A folder that cannot be looked at (no
+permission, macOS privacy controls) is not missing: it is a broken agent, in the system's own words.
+**Locate folder…** asks where it is now
 and points the same agent there, keeping its name, colour and conversations (they are in the folder); a
-folder that is already another agent is refused. An agent whose fastagent.config.ts does not load offers
-**Start a fresh config**: the file is renamed beside itself (`fastagent.config.ts.broken-20261003-144000`, so
-nothing loads it and nothing is lost), a new `export default {};` takes its place, and the agent opens asking
-for a model. Only the agent's own config, inside its folder; an error in any other file offers Retry and
-Reveal in Finder. A
+folder that is already another agent is refused. An agent whose config does not load (FastAgent names the
+config for a mistake in it, in a file it imports, or a package it needs) offers **Start a fresh config**: a
+copy of the old file is kept beside it (`fastagent.config.ts.broken-20261003-144000`, which nothing loads, and
+never written over an earlier copy), a new `export default {};` takes its place, and the agent opens asking
+for a model. Main replaces only the config FastAgent said failed, inside the agent's folder; the window does
+not name the file. Any other failure offers Retry and Reveal in Finder. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
@@ -179,8 +182,9 @@ that belongs to no conversation (adding, renaming, revealing or removing an agen
 floats under the header, titled by the action (*The agent was not renamed*), with Dismiss, never written into whichever conversation is open; one about a conversation (renaming or
 deleting it from the list) is said in that conversation when the window holds it, else on its agent's row.
 Only a registry that cannot be read shows the unreadable-registry page. A subscription the runtime lets go (a backlog that overflowed, a runtime replaced) is listened to again
-by itself once, which is FastAgent's contract for it; one that ends again within 30 seconds says so in the
-same strip, with Reconnect
+by itself once, which is FastAgent's contract for it, unless a send in it is still answering (a refused one
+puts its words back in the composer, which reopening would replace); one that ends again within 30 seconds,
+one duang ended (the agent was removed) and one that failed say so in the same strip, with Reconnect
 (*This conversation stopped updating*, or *The live connection to this conversation was lost*), rather than
 silently leaving a run on screen forever; the strip floats, so the transcript does not move for it.
 

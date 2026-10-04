@@ -7,7 +7,7 @@
  * Surfaces that need live state (the lists, the header, the composer) are captured by the shots of
  * the running app instead.
  */
-import { ArrowClockwise, ArrowUp, FolderOpen, Plug, Plus, Stop, Trash, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowUp, FolderOpen, Plug, Plus, Stop, Swap, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
 import { BrokenAgent, MissingFolder } from "./panels.tsx";
@@ -191,12 +191,12 @@ export default function Gallery() {
             <Problem
               tone="error"
               title="The provider did not accept the sign-in"
-              advice="The key or sign-in may have expired or been revoked. Reconnect the provider, then retry."
+              advice="The key or sign-in may have expired or been revoked. Sign in again, then retry."
               reason={'OpenAI API error (401): {"message":"Incorrect API key provided: sk-proj-****. You can find your API key at https://platform.openai.com/account/api-keys.","type":"invalid_request_error"}'}
               actions={
                 <>
                   <Button kind="secondary" size={28} icon={<Plug size={12} />}>
-                    Model providers
+                    Sign in to OpenAI again
                   </Button>
                   <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />}>
                     Retry
@@ -205,14 +205,19 @@ export default function Gallery() {
               }
             />
             <Problem
-              tone="warning"
-              title="This conversation's model cannot run"
-              advice="Connect its provider, or choose another model. Your message is back in the composer."
-              reason="anthropic/claude-sonnet-4-5 cannot run: its provider is not connected, or the model is not offered to it."
+              tone="error"
+              title="The provider had a problem"
+              advice="This is usually brief. Retry in a moment, or use another model."
+              reason={'OpenAI API error (529): {"message":"The server is overloaded. Please try again later.","type":"server_error"}'}
               actions={
-                <Button kind="secondary" size={28} icon={<Plug size={12} />}>
-                  Model providers
-                </Button>
+                <>
+                  <Button kind="secondary" size={28} icon={<Swap size={12} />}>
+                    Use another model
+                  </Button>
+                  <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />}>
+                    Retry
+                  </Button>
+                </>
               }
             />
             <Problem
@@ -221,7 +226,7 @@ export default function Gallery() {
               advice="duang or the computer stopped before an answer was recorded. What it did up to here is kept."
             />
             <Message item={{ kind: "note", tone: "info", text: "run stopped", at: FIXED }} />
-            <Message item={{ kind: "note", tone: "info", text: "retrying 1/3: Connection error.", at: FIXED }} />
+            <Message item={{ kind: "note", tone: "info", text: "retrying 1/3: could not reach the provider", at: FIXED }} />
           </div>
         </Section>
 
@@ -248,7 +253,7 @@ export default function Gallery() {
             <div className="flex rounded-float ring-1 ring-stroke">
               <BrokenAgent
                 message={"~/research/fastagent/fastagent.config.ts: Unexpected token '}' (12:3)\n  10 |   model: \"anthropic/claude-sonnet-4-5\",\n  11 |   tools: [\"read\", \"bash\"\n> 12 | }\n     |   ^"}
-                config="~/research/fastagent/fastagent.config.ts"
+                inConfig
                 onFreshConfig={() => {}}
                 onRemove={() => {}}
                 onReveal={() => {}}

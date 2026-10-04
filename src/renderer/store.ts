@@ -176,6 +176,8 @@ export interface View extends SettingsView {
   changingModel?: string;
   /** About the open agent, or a failure with no conversation to note it in. */
   error?: string;
+  /** The open agent failed to load in its config, which a fresh one would get past. */
+  errorInConfig?: true;
   /**
    * An action that belongs to no conversation failed (renaming, adding, revealing or removing an agent):
    * said above the pane until dismissed, never written into whichever conversation is open.
@@ -629,6 +631,7 @@ export function createStore(api: DuangApi) {
       agentId: id,
       model: undefined,
       error: undefined,
+      errorInConfig: undefined,
       loading: true,
       commands: [],
       commandsError: undefined,
@@ -638,7 +641,7 @@ export function createStore(api: DuangApi) {
       if (request !== navigation) return;
       if (!result.ok) {
         const state: AgentState = result.code === "failed" ? "broken" : result.code;
-        publish({ loading: false, states: { ...view.states, [id]: state }, error: result.message });
+        publish({ loading: false, states: { ...view.states, [id]: state }, error: result.message, errorInConfig: result.inConfig });
         return;
       }
       publish({
@@ -794,7 +797,7 @@ export function createStore(api: DuangApi) {
       c.items = c.items.map((item) =>
         item.kind === "tool" && item.status === "running" && item.ended === undefined ? { ...item, ended: now } : item,
       );
-      if (frame.ended.expected) c.ended = frame.ended.reason;
+      if (frame.ended.why !== "failed") c.ended = frame.ended.reason;
       else
         c.error = {
           title: "The live connection to this conversation was lost",
@@ -804,9 +807,15 @@ export function createStore(api: DuangApi) {
       publish();
       // FastAgent's contract for a subscriber it let go (a backlog that overflowed, a runtime replaced): listen
       // again and read the history. The open conversation does that once by itself; one that ends again soon
-      // after says so and waits for the person, rather than reconnecting in a loop.
+      // after says so and waits for the person, rather than reconnecting in a loop. Not while a send is still
+      // answering: a refused one puts its words back in this conversation's composer, which reopening replaces.
       const id = key(c.agentId, c.session);
-      if (view.conversation === c && Date.now() - (reconnected.get(id) ?? -Infinity) > RECONNECT_GAP_MS) {
+      if (
+        frame.ended.why === "let_go" &&
+        view.conversation === c &&
+        c.sends === 0 &&
+        Date.now() - (reconnected.get(id) ?? -Infinity) > RECONNECT_GAP_MS
+      ) {
         reconnected.set(id, Date.now());
         close(c);
         void open(c.session);
@@ -827,6 +836,7 @@ export function createStore(api: DuangApi) {
   let stopFrames: (() => void) | undefined;
   /** When each conversation last reconnected by itself, so a subscription that keeps ending is said, not looped. */
   const reconnected = new Map<string, number>();
+  let resetting = false;
   let stopSteps: (() => void) | undefined;
   const listen = () => {
     stopFrames ??= api.onSessionEvent(onFrame);
@@ -1044,15 +1054,19 @@ export function createStore(api: DuangApi) {
       }
     },
     /** The agent's config does not load: a fresh one in its place, the old one kept beside it. */
-    async resetConfig(file: string) {
+    async resetConfig() {
       const id = view.agentId;
-      if (!id) return;
+      // One at a time: the page stays up until the agent has reopened, and a second click is not a second reset.
+      if (!id || resetting) return;
+      resetting = true;
       try {
-        const result = await api.resetAgentConfig(id, file);
+        const result = await api.resetAgentConfig(id);
         if (!result.ok) return fail("The config was not replaced", result.error.message);
         await selectAgent(id);
       } catch (error) {
         fail("The config was not replaced", error);
+      } finally {
+        resetting = false;
       }
     },
     /** The agent's folder was moved: the person shows where it is, and the agent opens from there. */

@@ -64,12 +64,3 @@ const RULES: { test: RegExp; explained: Explained }[] = [
 export function explainRunFailure(reason: string): Explained {
   return RULES.find(({ test }) => test.test(reason))?.explained ?? { title: "The run stopped with an error" };
 }
-
-/**
- * The agent's config, when a loading error names it first (`…/fastagent.config.ts: Expected ','`): the
- * one file duang offers to start afresh. Only inside `dir`; main checks again before touching it.
- */
-export function configIn(reason: string, dir: string): string | undefined {
-  const file = reason.match(/^(\/[^\n]*?\/fastagent\.config\.ts)(?::\d+(?::\d+)?)?[:\s]/m)?.[1];
-  return file?.startsWith(`${dir}/`) ? file : undefined;
-}

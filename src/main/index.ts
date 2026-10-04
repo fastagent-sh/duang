@@ -13,6 +13,7 @@ import {
   registryFile,
   relocateAgent,
   resetAgentConfig,
+  configFailed,
   removeAgent,
   renameAgent,
   setAgentModel,
@@ -223,7 +224,8 @@ function register(): void {
             : error instanceof MissingDirError
               ? "missing_dir"
               : "failed";
-      return { ok: false, code, message: error instanceof Error ? error.message : String(error) };
+      const message = error instanceof Error ? error.message : String(error);
+      return code === "failed" && configFailed(agentId) ? { ok: false, code, message, inConfig: true } : { ok: false, code, message };
     }
   });
   // The folder was moved: the person shows where it is now.
@@ -233,11 +235,8 @@ function register(): void {
     if (picked.canceled || !picked.filePaths[0]) return undefined;
     return relocateAgent(row.id, picked.filePaths[0]);
   });
-  // The agent's config does not load: start a fresh one, keeping the old one beside it.
-  ipcMain.handle("agent:resetConfig", async (_e, id: string, file: string) => {
-    if (typeof file !== "string") throw new Error("A file must be a path");
-    return resetAgentConfig(await requireAgent(id), file);
-  });
+  // The agent's config does not load: start a fresh one, keeping a copy of the old one. Main knows which file.
+  ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await requireAgent(id)));
   ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
     if (typeof model !== "string") throw new Error("Model must be a string");

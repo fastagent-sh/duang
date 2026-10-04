@@ -44,12 +44,12 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function harness(opens: (() => Promise<ReturnType<typeof source>["bound"]>)[]) {
   const forwarded: string[] = [];
-  const ended: [string, boolean][] = [];
+  const ended: [string, string][] = [];
   let next = 0;
   const following = follow(
     () => opens[next++]!(),
     (event: string) => forwarded.push(event),
-    (reason, expected) => ended.push([reason, expected]),
+    (reason, why) => ended.push([reason, why]),
   );
   return { following, forwarded, ended, opened: () => next };
 }
@@ -80,7 +80,7 @@ test("a subscription that cannot move to the new runtime ends with the reason, o
   ]);
   await following.start();
   await assert.doesNotReject(() => following.rebind(), "the failure is reported to the window, not thrown at the model change");
-  assert.deepEqual(ended, [["Error: could not open the replacement", false]], "the original error, as a failure");
+  assert.deepEqual(ended, [["Error: could not open the replacement", "failed"]], "the original error, as a failure");
   assert.equal(a.state.returned, true, "and the stream it had is closed");
 });
 
@@ -137,14 +137,14 @@ test("a stream that finishes on its own is an expected end, one that throws is a
   await first.following.start();
   done.finish();
   await tick();
-  assert.deepEqual(first.ended, [["This conversation stopped receiving updates", true]]);
+  assert.deepEqual(first.ended, [["This conversation stopped receiving updates", "let_go"]]);
 
   const broken = source("broken");
   const second = harness([async () => broken.bound]);
   await second.following.start();
   broken.fail(new Error("socket reset"));
   await tick();
-  assert.deepEqual(second.ended, [["Error: socket reset", false]]);
+  assert.deepEqual(second.ended, [["Error: socket reset", "failed"]]);
 });
 
 /** The table, over conversations named `agent/session`, each a hand-driven source; windows record what they hear. */
@@ -219,7 +219,7 @@ test("removing an agent ends its subscriptions with the reason; a rebind moves o
   assert.equal(opened.get("a/s1")!.state.returned, false, "a is untouched");
 
   subs.endAgent("a", "The agent was removed");
-  assert.deepEqual(w.heard, [{ agentId: "a", session: "s1", subscription: "x", ended: { reason: "The agent was removed", expected: true } }]);
+  assert.deepEqual(w.heard, [{ agentId: "a", session: "s1", subscription: "x", ended: { reason: "The agent was removed", why: "ended" } }]);
   assert.equal(opened.get("a/s1")!.state.returned, true);
   opened.get("b/s2")!.push("b lives");
   await tick();
@@ -238,7 +238,7 @@ test("a conversation that cannot be opened leaves nothing in the table, and one 
   await live.open(w, "a", "s", "x");
   opened.get("a/s")!.finish();
   await tick();
-  assert.deepEqual(w.heard.map((f) => f.ended), [{ reason: "This conversation stopped receiving updates", expected: true }]);
+  assert.deepEqual(w.heard.map((f) => f.ended), [{ reason: "This conversation stopped receiving updates", why: "let_go" }]);
   const ended = opened.get("a/s")!;
   await live.rebindAgent("a");
   assert.equal(opened.get("a/s"), ended, "an ended subscription is not reopened by a later model change");

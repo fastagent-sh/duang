@@ -15,7 +15,7 @@ export function follow<E, B extends { events(): EventStream<E> }>(
   open: () => Promise<B>,
   forward: (event: E) => void,
   /** Said once, when the subscription stops without having been asked to: the renderer is told why. */
-  end: (reason: string, expected: boolean) => void,
+  end: (reason: string, why: "let_go" | "failed") => void,
 ) {
   // The latest listen is the subscription's. An earlier one that was replaced stops without saying it ended.
   let generation = 0;
@@ -41,15 +41,15 @@ export function follow<E, B extends { events(): EventStream<E> }>(
       // Both endings leave the renderer deaf: FastAgent closing its subscriber looks like a normal
       // `done`, and a silent one would keep the conversation running on screen forever. Only the
       // throw is a failure; a clean `done` is the runtime letting this subscriber go.
-      let ending = { reason: "This conversation stopped receiving updates", expected: true };
+      let ending: { reason: string; why: "let_go" | "failed" } = { reason: "This conversation stopped receiving updates", why: "let_go" };
       try {
         for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
           if (mine === generation) forward(next.value);
         }
       } catch (error) {
-        ending = { reason: String(error), expected: false };
+        ending = { reason: String(error), why: "failed" };
       }
-      if (mine === generation) end(ending.reason, ending.expected);
+      if (mine === generation) end(ending.reason, ending.why);
     })();
     await stream.ready;
     return bound;
@@ -86,7 +86,7 @@ export function follow<E, B extends { events(): EventStream<E> }>(
         await chain;
       } catch (error) {
         close();
-        end(String(error), false);
+        end(String(error), "failed");
       }
     },
     /** Stops listening. No ending is reported: the one who closes it knows. */
@@ -105,8 +105,14 @@ export function follow<E, B extends { events(): EventStream<E> }>(
  */
 export type Frame<E> = { agentId: string; session: string; subscription: string } & (
   | { event: E; ended?: never }
-  | { event?: never; ended: { reason: string; expected: boolean } }
+  | { event?: never; ended: { reason: string; why: Ending } }
 );
+/**
+ * Why a subscription stopped: the runtime let this subscriber go (a backlog that overflowed, a runtime
+ * replaced), which FastAgent's contract answers by listening again; duang ended it (the agent was removed);
+ * or listening failed.
+ */
+export type Ending = "let_go" | "ended" | "failed";
 /** A window, as its subscriptions see it. `post` drops a frame for a window that has gone. */
 export interface Listener<E> {
   id: number;
@@ -150,13 +156,13 @@ export function subscriptions<E, B extends { events(): EventStream<E> }>(
           return bound;
         },
         (event) => post({ event }),
-        (reason, expected) => {
-          post({ ended: { reason, expected } });
+        (reason, why) => {
+          post({ ended: { reason, why } });
           if (slots.get(key) === slot) slots.delete(key);
         },
       );
       // In the table before the runtime opens, which is what the check above compares against.
-      const slot: Slot = { window: window.id, agentId, following, end: (reason) => post({ ended: { reason, expected: true } }) };
+      const slot: Slot = { window: window.id, agentId, following, end: (reason) => post({ ended: { reason, why: "ended" } }) };
       slots.set(key, slot);
       try {
         return await following.start();

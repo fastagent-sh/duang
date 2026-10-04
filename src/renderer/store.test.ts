@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
+import type { Ending } from "../main/follow.ts";
 import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
 import { keyStep } from "./settings-store.ts";
 import { createStore } from "./store.ts";
@@ -105,9 +106,9 @@ function harness() {
   const end = (
     c: NonNullable<ReturnType<typeof store.getSnapshot>["conversation"]>,
     reason: string,
-    expected: boolean,
+    why: Ending,
   ) => {
-    listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, expected } });
+    listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, why } });
   };
   const step = (s: LoginStep) => stepListener(s);
   return { api, store, emit, end, step, closed, opens };
@@ -504,48 +505,41 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   emit(current, "run_started");
   emit(current, "tool_started", { id: "t", name: "bash" });
   assert.equal(store.getSnapshot().busy, true);
-  // The first end reconnects by itself: listening again and reading the history is FastAgent's contract
-  // for a subscriber it let go.
+  // A failed stream is said, and waits for the person; a dead subscription reports nothing further, so the
+  // run controls must not wait for `run_settled`.
   const opened = opens.length;
-  end(current, "stream disconnected", false);
+  end(current, "stream disconnected", "failed");
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(opens.length, opened + 1, "reconnected by itself");
-  const again = store.getSnapshot().conversation!;
-  assert.notEqual(again, current);
-  assert.equal(store.getSnapshot().alert, undefined, "and nothing is said about it");
-  emit(again, "run_started");
-  emit(again, "tool_started", { id: "t", name: "bash" });
-  // One that ends again soon after is said, and waits for the person. A dead subscription reports nothing
-  // further, so the run controls must not wait for `run_settled`.
-  end(again, "stream disconnected", false);
-  assert.equal(opens.length, opened + 1, "not reconnected in a loop");
+  assert.equal(opens.length, opened, "only a subscriber the runtime let go is listened to again by itself");
   assert.equal(store.getSnapshot().busy, false);
   const tool = store.getSnapshot().conversation!.items.find((item) => item.kind === "tool");
   assert.notEqual(tool?.kind === "tool" && tool.ended, undefined, "the tool's clock stops with the stream");
   store.setDraft("keep me");
   assert.equal(store.getSnapshot().blocked, "reconnect before sending");
   await assert.rejects(() => store.send(), /reconnect before sending/, "a blocked send is a bug, not a no-op");
-  assert.equal(again.draft, "keep me");
-  assert.equal(again.error?.reason, "stream disconnected");
-  assert.equal(again.error?.title, "The live connection to this conversation was lost");
+  assert.equal(current.draft, "keep me");
+  assert.equal(current.error?.reason, "stream disconnected");
+  assert.equal(current.error?.title, "The live connection to this conversation was lost");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.draft, "keep me");
   assert.equal(store.getSnapshot().conversation?.error, undefined);
   store.dispose();
 });
 
-test("an expected end of a subscription is reported without pretending the conversation failed", async () => {
-  const { store, emit, end } = harness();
+test("a subscriber the runtime let go listens again once by itself; any other end is said", async () => {
+  const { store, emit, end, opens } = harness();
   await store.load();
-  // The first end reconnects by itself; the one after it, soon after, is what the person is told.
-  end(store.getSnapshot().conversation!, "Its runtime let this subscriber go", true);
+  const opened = opens.length;
+  end(store.getSnapshot().conversation!, "Its runtime let this subscriber go", "let_go");
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(opens.length, opened + 1, "listened to again: FastAgent's contract for a subscriber it let go");
   const c = store.getSnapshot().conversation!;
-  assert.equal(c.ended, undefined, "the first end was answered by listening again");
+  assert.equal(c.ended, undefined, "and nothing is said about it");
   emit(c, "run_started");
-  end(c, "The agent was removed", true);
+  end(c, "Its runtime let this subscriber go", "let_go");
+  assert.equal(opens.length, opened + 1, "not reconnected in a loop");
   const current = store.getSnapshot().conversation!;
-  assert.equal(current.ended, "The agent was removed");
+  assert.equal(current.ended, "Its runtime let this subscriber go");
   assert.equal(current.error, undefined, "an intended end is not a failure");
   assert.ok(
     current.items.every((item) => item.kind !== "note"),
@@ -558,6 +552,45 @@ test("an expected end of a subscription is reported without pretending the conve
   assert.equal(current.draft, "blocked", "sending waits for the reconnect");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.ended, undefined);
+
+  // duang ending it (the agent was removed) is not answered by opening it again.
+  const before = opens.length;
+  end(store.getSnapshot().conversation!, "The agent was removed", "ended");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(opens.length, before, "a removed agent is not reopened");
+  assert.equal(store.getSnapshot().conversation?.ended, "The agent was removed");
+  store.dispose();
+
+  // Nor while a send is still answering: a refusal puts its words back in the composer that reopening replaces.
+  const second = harness();
+  await second.store.load();
+  const sent = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  second.api.send = () => sent.promise;
+  second.store.setDraft("my message");
+  const sending = second.store.send();
+  const waiting = second.opens.length;
+  second.end(second.store.getSnapshot().conversation!, "Its runtime let this subscriber go", "let_go");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(second.opens.length, waiting, "not reopened under a send");
+  sent.resolve({ ok: false, error: { code: "busy", message: "runtime refused", retryable: true } });
+  await sending;
+  assert.equal(second.store.getSnapshot().conversation?.draft, "my message", "the refused words are where the person sees them");
+  second.store.dispose();
+});
+
+test("a config that failed to load is offered afresh once, however often the button is pressed", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "/p/fastagent/fastagent.config.ts: Expression expected", inConfig: true });
+  await store.load();
+  assert.equal(store.getSnapshot().errorInConfig, true, "main says the failure is in the config");
+  const reset = deferred<SessionResult>();
+  let calls = 0;
+  api.resetAgentConfig = () => (calls++, reset.promise);
+  const first = store.resetConfig();
+  const second = store.resetConfig();
+  reset.resolve({ ok: true });
+  await Promise.all([first, second]);
+  assert.equal(calls, 1, "a double click is one reset");
   store.dispose();
 });
 
@@ -1298,7 +1331,7 @@ test("a send that returns after the stream ended does not claim its message ran 
   store.setDraft("hello");
   const sending = store.send();
   emit(c, "run_started");
-  end(c, "stream disconnected", false);
+  end(c, "stream disconnected", "failed");
   sent.resolve({ ok: true });
   await sending;
   assert.equal(

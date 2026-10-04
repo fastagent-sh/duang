@@ -54,16 +54,16 @@ export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: str
 /** The agent's definition does not load: its own error says where, and the folder is where to fix it. */
 export function BrokenAgent({
   message,
-  config,
+  inConfig,
   onFreshConfig,
   onRemove,
   onReveal,
   onRetry,
 }: {
   message: string;
-  /** The agent's config, when the error is in it: a fresh one is a way to start again. */
-  config?: string;
-  onFreshConfig: (config: string) => void;
+  /** The error is in its config or a file the config imports: a fresh config is a way to start again. */
+  inConfig?: boolean;
+  onFreshConfig: () => void;
   onRemove: () => void;
   onReveal: () => void;
   onRetry: () => void;
@@ -74,19 +74,19 @@ export function BrokenAgent({
       tone="error"
       title="This agent could not be loaded"
       advice={
-        config
-          ? "Its fastagent.config.ts has an error. Start a fresh one and choose a model again (the old file is kept beside it, renamed), or fix it and retry."
+        inConfig
+          ? "Its fastagent.config.ts, or a file it imports, does not load. Fix it and retry, or start a fresh config and choose a model again: duang keeps a copy of the old one beside it, as fastagent.config.ts.broken-<time>."
           : "Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
       }
       reason={message}
       actions={
         <>
-          {config && (
-            <Button kind="primary" size={32} icon={<ArrowCounterClockwise size={14} />} onClick={() => onFreshConfig(config)}>
+          {inConfig && (
+            <Button kind="primary" size={32} icon={<ArrowCounterClockwise size={14} />} onClick={onFreshConfig}>
               Start a fresh config
             </Button>
           )}
-          <Button kind={config ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
+          <Button kind={inConfig ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
           <Button size={32} icon={<FolderOpen size={14} />} onClick={onReveal}>

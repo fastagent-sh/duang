@@ -25,7 +25,13 @@ import type { ProviderUsage } from "../main/usage.ts";
 
 export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model: string }
-  | { ok: false; code: "missing_model" | "no_agent" | "missing_dir" | "failed"; message: string };
+  | {
+      ok: false;
+      code: "missing_model" | "no_agent" | "missing_dir" | "failed";
+      message: string;
+      /** The failure is in the agent's config, or a file it imports: a fresh config gets past it. */
+      inConfig?: true;
+    };
 
 /** One channel for every subscription of this window: each frame says which one it belongs to. */
 export type SessionFrame = Frame<SessionEvent>;
@@ -55,9 +61,8 @@ const api = {
    * conversations. Undefined when the person cancels; refused while it runs or if another agent is there.
    */
   relocateAgent: (agentId: string): Promise<SessionResult | undefined> => ipcRenderer.invoke("agent:relocate", agentId),
-  /** Opens a file of the agent's that a loading error names, in its default editor. */
-  resetAgentConfig: (agentId: string, file: string): Promise<SessionResult & { kept?: string }> =>
-    ipcRenderer.invoke("agent:resetConfig", agentId, file),
+  /** Replaces the config the agent failed to load in with a fresh one; a copy of the old one stays beside it. */
+  resetAgentConfig: (agentId: string): Promise<SessionResult> => ipcRenderer.invoke("agent:resetConfig", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
   scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
   /** The names this agent exposes — what the composer's `/` completion lists. */
