@@ -5,9 +5,9 @@ import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
 import { retired } from "./providers.ts";
-import { AgentRegistry, type AgentRow } from "./agent-files.ts";
+import { AgentRegistry, failingConfig, freshConfig, MissingDirError, requireFolder, type AgentRow } from "./agent-files.ts";
 
-export { createAgentIn, type AgentRow } from "./agent-files.ts";
+export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
 /** Exported so a person whose registry cannot be parsed can be shown where it is. */
 export const registryFile = join(app.getPath("userData"), "agents.json");
 const registry = new AgentRegistry(registryFile);
@@ -36,6 +36,11 @@ const changing = new Map<string, Promise<void>>();
 
 export class MissingModelError extends Error {}
 export class NoAgentError extends Error {}
+/**
+ * The config each agent last failed to load in, as FastAgent named it: the only file a fresh config may
+ * replace. Main keeps it rather than taking a path from the window.
+ */
+const failedConfigs = new Map<string, string>();
 
 async function build(row: AgentRow): Promise<Opened> {
   const opened = await assemble(row);
@@ -45,6 +50,12 @@ async function build(row: AgentRow): Promise<Opened> {
 }
 
 async function assemble(row: AgentRow): Promise<Opened> {
+  // FastAgent says "is not a fastagent agent" for a directory that is not there too, and that one must not
+  // be offered a scaffold: there is no folder to put it in.
+  // Forgotten before anything can fail: a failure that is not the config's (a folder it may not read) must
+  // not offer to replace the config.
+  failedConfigs.delete(row.id);
+  await requireFolder(row.dir);
   try {
     const assembly = await createPiAgentFromDir(row.dir, {
       sessionControl: true,
@@ -58,6 +69,8 @@ async function assemble(row: AgentRow): Promise<Opened> {
     // FastAgent currently exposes these setup conditions as prose, not error codes.
     if (/missing model/i.test(message)) throw new MissingModelError(message);
     if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
+    const config = failingConfig(message);
+    if (config) failedConfigs.set(row.id, config);
     throw error;
   }
 }
@@ -139,9 +152,35 @@ export function setAgentModel(row: AgentRow, model: string, session?: string): P
   });
 }
 
+/** Points the agent at the folder it was moved to; the next open builds its runtime from there. */
+export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
+  return change(id, async () => {
+    await registry.relocate(id, dir);
+    failedConfigs.delete(id);
+    opened.delete(id);
+    return { ok: true };
+  });
+}
+
+/** Whether the agent's last load failed in its config, which a fresh one would get past. */
+export const configFailed = (id: string) => failedConfigs.has(id);
+
+/** Replaces the config the agent last failed to load in with a fresh one, keeping a copy of the old one. */
+export function resetAgentConfig(row: AgentRow): Promise<SessionResult> {
+  return change(row.id, async () => {
+    const config = failedConfigs.get(row.id);
+    if (!config) return refuse("config_loads", "This agent's config is not what failed to load. Retry to see what did.");
+    await freshConfig(row.dir, config);
+    failedConfigs.delete(row.id);
+    opened.delete(row.id);
+    return { ok: true };
+  });
+}
+
 export function removeAgent(id: string): Promise<SessionResult> {
   return change(id, async () => {
     await registry.remove(id);
+    failedConfigs.delete(id);
     opened.delete(id);
     return { ok: true };
   });

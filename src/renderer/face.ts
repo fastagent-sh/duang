@@ -38,7 +38,7 @@ export function faceOf({
 }): Face {
   if (state === "missing_model") return "asleep";
   if (state === "no_agent") return "unborn";
-  if (state === "broken") return "broken";
+  if (state === "broken" || state === "missing_dir") return "broken";
   if (doing) return doing;
   if (outcomes.includes("failed")) return "failed";
   if (outcomes.length) return "done";

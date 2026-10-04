@@ -5,11 +5,15 @@ import {
   addAgent,
   createAgentIn,
   listAgents,
+  MissingDirError,
   MissingModelError,
   NoAgentError,
   openAgent,
   refuse,
   registryFile,
+  relocateAgent,
+  resetAgentConfig,
+  configFailed,
   removeAgent,
   renameAgent,
   setAgentModel,
@@ -213,10 +217,26 @@ function register(): void {
       return { ok: true, sessions: await control.sessions.list(), model: modelSpec };
     } catch (error) {
       const code =
-        error instanceof MissingModelError ? "missing_model" : error instanceof NoAgentError ? "no_agent" : "failed";
-      return { ok: false, code, message: error instanceof Error ? error.message : String(error) };
+        error instanceof MissingModelError
+          ? "missing_model"
+          : error instanceof NoAgentError
+            ? "no_agent"
+            : error instanceof MissingDirError
+              ? "missing_dir"
+              : "failed";
+      const message = error instanceof Error ? error.message : String(error);
+      return code === "failed" && configFailed(agentId) ? { ok: false, code, message, inConfig: true } : { ok: false, code, message };
     }
   });
+  // The folder was moved: the person shows where it is now.
+  ipcMain.handle("agent:relocate", async (_e, id: string) => {
+    const row = await requireAgent(id);
+    const picked = await dialog.showOpenDialog({ properties: ["openDirectory"], message: `Where is "${row.name}" now?` });
+    if (picked.canceled || !picked.filePaths[0]) return undefined;
+    return relocateAgent(row.id, picked.filePaths[0]);
+  });
+  // The agent's config does not load: start a fresh one, keeping a copy of the old one. Main knows which file.
+  ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await requireAgent(id)));
   ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
     if (typeof model !== "string") throw new Error("Model must be a string");

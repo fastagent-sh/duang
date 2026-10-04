@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AgentRegistry, createAgentIn } from "./agent-files.ts";
+import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
+import { AgentRegistry, createAgentIn, failingConfig, freshConfig, MissingDirError, requireFolder } from "./agent-files.ts";
 
 test("registry serializes writes in one process, survives restart and deduplicates real paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
@@ -124,4 +125,107 @@ test("a scaffold that cannot write its files leaves no directory behind", async 
   });
   await assert.rejects(createAgentIn(root), { code: "EACCES" });
   assert.deepEqual(await readdir(root), [], "a retry must not hit EEXIST on our own leftovers");
+});
+
+test("a moved folder is the same agent where it is now; a folder that is another agent is refused", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
+  try {
+    const registry = new AgentRegistry(join(root, "agents.json"));
+    const [before, after, other] = [join(root, "before"), join(root, "after"), join(root, "other")];
+    await Promise.all([mkdir(before), mkdir(after), mkdir(other)]);
+    const moved = await registry.add(before);
+    const second = await registry.add(other);
+    await registry.relocate(moved.id, after);
+    assert.deepEqual(
+      (await registry.list()).find((row) => row.id === moved.id),
+      { ...moved, dir: await realpath(after) },
+      "its id, name and colour are kept",
+    );
+    await assert.rejects(registry.relocate(moved.id, other), new RegExp(`already the agent "${second.name}"`));
+    await assert.rejects(registry.relocate(moved.id, join(root, "nowhere")), /ENOENT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a fresh config replaces only the agent's own, and keeps the old one beside it, never over a copy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-file-"));
+  try {
+    const dir = join(root, "agent");
+    await mkdir(join(dir, "fastagent"), { recursive: true });
+    const config = join(dir, "fastagent", "fastagent.config.ts");
+    await writeFile(config, "export default { model: ,};\n");
+    await writeFile(join(dir, "fastagent", "persona.ts"), "x");
+    await mkdir(join(root, "elsewhere"));
+    await writeFile(join(root, "elsewhere", "fastagent.config.ts"), "outside");
+    await symlink(join(root, "elsewhere"), join(dir, "linked"));
+
+    await assert.rejects(freshConfig(dir, join(dir, "fastagent", "persona.ts")), /is not this agent's fastagent.config.ts/);
+    await assert.rejects(freshConfig(dir, join(root, "elsewhere", "fastagent.config.ts")), /is not this agent's/);
+    await assert.rejects(freshConfig(dir, join(dir, "linked", "fastagent.config.ts")), /is not this agent's/, "a link out of the folder");
+    assert.equal(await readFile(join(root, "elsewhere", "fastagent.config.ts"), "utf8"), "outside");
+
+    const at = new Date(2026, 9, 3, 14, 40, 0);
+    await freshConfig(dir, config, at);
+    const kept = join(dir, "fastagent", "fastagent.config.ts.broken-20261003-144000");
+    assert.equal(await readFile(kept, "utf8"), "export default { model: ,};\n", "the person's file is kept as it was");
+    assert.equal(await readFile(config, "utf8"), "export default {};\n");
+    // A second reset in the same second (a double click) must not put the fresh file over the person's copy.
+    await assert.rejects(freshConfig(dir, config, at), /EEXIST/);
+    assert.equal(await readFile(kept, "utf8"), "export default { model: ,};\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a load that failed in the config is told apart by FastAgent's own words", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-config-"));
+  const failure = async (name: string, files: Record<string, string>) => {
+    const dir = join(root, name);
+    for (const [file, text] of Object.entries(files)) {
+      await mkdir(join(dir, "fastagent", file, ".."), { recursive: true });
+      await writeFile(join(dir, "fastagent", file), text);
+    }
+    const error = await createPiAgentFromDir(dir, { sessionControl: true }).then(
+      () => assert.fail(`${name} loaded`),
+      (error: Error) => error.message,
+    );
+    return { message: error, config: join(dir, "fastagent", "fastagent.config.ts") };
+  };
+  try {
+    // Each of these is gotten past by a fresh config, wherever the mistake is.
+    const cases: Record<string, Record<string, string>> = {
+      syntax: { "fastagent.config.ts": "export default {\n  model: ,\n};\n" },
+      key: { "fastagent.config.ts": "export default { modle: 'x' };\n" },
+      imported: { "fastagent.config.ts": "import t from './tools/t.ts';\nexport default { tools: [t] };\n", "tools/t.ts": "export default {;\n" },
+      package: { "fastagent.config.ts": "import 'no-such-package-here';\nexport default {};\n" },
+    };
+    for (const [name, files] of Object.entries(cases)) {
+      const { message, config } = await failure(name, files);
+      assert.equal(failingConfig(message), config, `${name}: ${message}`);
+    }
+    assert.equal(failingConfig("missing model: set --model"), undefined);
+    assert.equal(failingConfig("/x/fastagent/fastagent.config.ts.broken-1: nope"), undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("only a folder that is not there is missing; one that cannot be looked at says why", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-folder-"));
+  try {
+    await assert.rejects(requireFolder(join(root, "gone")), (error) => error instanceof MissingDirError && /ENOENT/.test(error.message));
+    await writeFile(join(root, "file"), "");
+    await assert.rejects(requireFolder(join(root, "file", "inside")), MissingDirError);
+    await mkdir(join(root, "locked", "agent"), { recursive: true });
+    await chmod(join(root, "locked"), 0o000);
+    await assert.rejects(
+      requireFolder(join(root, "locked", "agent")),
+      (error) => !(error instanceof MissingDirError) && /EACCES/.test(String(error)),
+      "a permission problem is not a folder to go and locate",
+    );
+  } finally {
+    await chmod(join(root, "locked"), 0o755).catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  }
 });

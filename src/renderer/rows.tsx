@@ -1,6 +1,6 @@
 /** The two lists of rows: agents in the sidebar, and one agent's conversations under the header. */
 import { useEffect, useRef, useState } from "react";
-import { DotsThree, GearSix, Plus } from "@phosphor-icons/react";
+import { DotsThree, GearSix, Plus, WarningCircle } from "@phosphor-icons/react";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
 import { stamp, type Row } from "./sessions.ts";
 import { Avatar } from "./avatar.tsx";
@@ -13,6 +13,7 @@ const tones: Record<AgentState, Tone> = {
   ready: "accent",
   missing_model: "warning",
   no_agent: "warning",
+  missing_dir: "danger",
   broken: "danger",
 };
 
@@ -21,6 +22,7 @@ const says: Record<AgentState, string> = {
   ready: "Ready",
   missing_model: "Needs a model",
   no_agent: "No agent in this directory yet",
+  missing_dir: "Folder not found",
   broken: "Broken",
 };
 
@@ -265,9 +267,10 @@ export function Sidebar({
                           <span className="truncate">{says[state].toLowerCase()}</span>
                         </Badge>
                       ) : error ? (
-                        <span className="min-w-0 flex-1 line-clamp-2 break-words text-danger" title={error}>
-                          {error}
-                        </span>
+                        // What it means in the row; the original words on hover, and in full in the list.
+                        <Badge tone="danger" icon={<WarningCircle size={12} />} className="min-w-0 flex-1" title={error}>
+                          <span className="truncate">conversations could not be read</span>
+                        </Badge>
                       ) : (
                         <span className="min-w-0 flex-1 line-clamp-2 break-words font-prose text-muted">
                           {preview?.text ?? (preview ? "New conversation" : last?.label ?? "No conversations yet")}
@@ -406,9 +409,13 @@ export function ConversationList({
         />
       </div>
       {error && (
-        <p role="alert" className="px-2.5 pb-1 text-[11px] text-danger">
-          {error}
-        </p>
+        <div role="alert" className="flex gap-2 px-2.5 pb-1.5 text-[12px]">
+          <WarningCircle size={13} className="mt-0.5 shrink-0 text-danger" />
+          <p className="min-w-0 break-words">
+            <span className="text-text">The list could not be read.</span>{" "}
+            <span className="font-mono text-[12.5px] text-muted">{error}</span>
+          </p>
+        </div>
       )}
       <div className="max-h-[min(28rem,65vh)] overflow-y-auto" onKeyDown={onKeyDown}>
         {rows.map((row) => {

@@ -26,7 +26,18 @@ the header's list button, a round disc beside its info pill, shows and hides; it
 Escape (without stopping a run), and closes when a conversation is chosen or started. Running and
 drafted work stays attached to its originating agent and conversation when navigating.
 
-Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. A
+Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. An agent whose
+directory is no longer there (moved, deleted, a drive not mounted) says so, with Retry and Remove from duang,
+and is never offered a scaffold: its row says `folder not found`. A folder that cannot be looked at (no
+permission, macOS privacy controls) is not missing: it is a broken agent, in the system's own words.
+**Locate folder…** asks where it is now
+and points the same agent there, keeping its name, colour and conversations (they are in the folder); a
+folder that is already another agent is refused. An agent whose config does not load (FastAgent names the
+config for a mistake in it, in a file it imports, or a package it needs) offers **Start a fresh config**: a
+copy of the old file is kept beside it (`fastagent.config.ts.broken-20261003-144000`, which nothing loads, and
+never written over an earlier copy), a new `export default {};` takes its place, and the agent opens asking
+for a model. Main replaces only the config FastAgent said failed, inside the agent's folder; the window does
+not name the file. Any other failure offers Retry and Reveal in Finder. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
@@ -116,16 +127,28 @@ history; the client does not save a second transcript. A conversation can be ren
 with destructive deletion confirmed. The current local view keeps unsent text with its conversation
 across navigation and application restart. A send rejected before admission remains a draft, and a refusal is said each time, even when an
 earlier message got the same one. A run starts only on a model the picker would offer to the agent: a
-conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send
-with `<model> cannot run: …` and **Connect a provider** under it, rather than failing inside the engine with
-its command-line advice. A failed run may already have performed tool work. Stop does not roll back completed work or promise
+conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send,
+and since choosing a model is the way on, the model picker opens by itself on it: a line at its top says
+*anthropic isn't connected* (or that the model is not available with the connection that is), "Choose another
+model to send your message", with **Connect anthropic** when the provider is not connected at all, which
+returns to the picker, where the line is gone once the model is in the list (it says nothing while the
+list loads). The message stays in the composer, the chip is marked until a model is chosen, and
+nothing is written into the conversation, rather than failing inside the engine with its command-line advice. A failed run may already have performed tool work. Stop does not roll back completed work or promise
 to cancel a non-cancellable tool. Stop pressed while a send is still on its way to the runtime keeps it
 from starting a run, and the message returns to the draft without a note; Stop pressed as a run ends
 says nothing, since the run's own ending is already in the transcript.
-An answer that did not end normally says so in the transcript, live and when the conversation is read back
-from history, including runs no window watched: `run failed: <reason>` under a failed answer (with any partial
-text it streamed above it), `run stopped` under a stopped one, `retrying 1/3: <reason>` while watched (a quiet line: the run goes on) and
-`retried: <reason>` read back for an attempt the run retried by itself, and `answer cut off at the model's output limit` for one that reached the limit (the run
+Problems are said as ui.md §9b lays out: what it means, what to do, the way on, and the original words
+verbatim but folded. An answer that did not end normally says so in the transcript, live and when the
+conversation is read back from history, including runs no window watched: a failed answer gets a card
+titled by what the reason means (*The provider did not accept the sign-in* with **Sign in to OpenAI again** for a
+401, which opens Settings on that provider's ways to connect and returns to the conversation once connected;
+*Could not reach the provider* with **Network settings**, which opens Settings at the proxy, for a connection error; *The provider is limiting
+requests* or *had a problem* with **Use another model**, which opens the picker, for a 429 or a 5xx; *The run stopped with
+an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one, one quiet line that moves on with each of pi's own
+retries, gone once the run ends since its ending says how (`retrying 2/3: the provider had a problem`, or the reason's own first line when nothing recognises it, such
+as `retrying 1/3: Request timed out`; never "the run stopped", since it goes on; the provider's words in full on
+hover) and,
+read back, one line for retries in a row (`retried 2 times: …`), and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
 as a new turn, leaving the failure and whatever the failed run did in the transcript. A failure that is a ChatGPT plan's usage limit (`subscription_sharing_usage_limit_exceeded`) also offers View usage, which opens that page. A run that was steered is
@@ -134,7 +157,7 @@ When the failed run had used tools no answer concluded (a steered run's included
 the agent may repeat that work. Nothing is retried without that click, and a stopped run is not offered again.
 Read back from history, the message is the one the runtime recorded, so a slash command is resent expanded. A conversation that is not running but whose history stops partway through a turn (on the message, on a
 tool's result, or on calls that never ran) was cut with nothing recorded, because duang or the machine
-stopped mid-run: it says `run cut short: no answer was recorded` and offers Retry the same way. An agent's row
+stopped mid-run: it says *This run was cut short* and offers Retry the same way. An agent's row
 reads the conversation's state with its history, so a run still going (after a window reload) is not called cut;
 a compaction is not a run, so a turn cut before one still is. One run reads as cut and is not: one whose last
 tool batch ended it on purpose (a tool returning pi's `terminate`), since the history does not record that
@@ -158,11 +181,16 @@ has is being read (and while an agent opens, until it is known to have none), th
 place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment
 before the real one arrives. A view that was at the latest turn stays there while its
 content grows by itself, and choosing the conversation that is already open rebuilds nothing. A failed action
-that belongs to no conversation (adding, renaming, revealing or removing an agent) is said above the pane
-with Dismiss, never written into whichever conversation is open; one about a conversation (renaming or
-deleting it from the list) is said in that conversation when the window holds it, else on its agent's row.
-Only a registry that cannot be read shows the unreadable-registry page. A closed or failed subscription reports that it is no longer receiving updates
-rather than silently leaving a run on screen forever.
+that belongs to no conversation (adding, renaming, revealing or removing an agent) is said in a strip that
+floats under the header, titled by the action (*The agent was not renamed*), with Dismiss, never written into whichever conversation is open; one about a conversation (renaming or
+deleting it from the list) is said in that conversation when the window holds it, else in the same strip,
+titled by the action; an agent's row only ever says that its list could not be read.
+Only a registry that cannot be read shows the unreadable-registry page. A subscription the runtime lets go (a backlog that overflowed, a runtime replaced) is listened to again
+by itself once, which is FastAgent's contract for it, unless a send in it is still answering (a refused one
+puts its words back in the composer, which reopening would replace); one that ends again within 30 seconds,
+one duang ended (the agent was removed) and one that failed say so in the same strip, with Reconnect
+(*This conversation stopped updating*, or *The live connection to this conversation was lost*), rather than
+silently leaving a run on screen forever; the strip floats, so the transcript does not move for it.
 
 Closing the window does not stop main-process work. Quitting with active local work warns that it
 will stop the run; local work does not continue when the app and machine stop. Quit anyway stops each

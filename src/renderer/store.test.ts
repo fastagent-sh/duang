@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
+import type { Ending } from "../main/follow.ts";
 import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
 import { keyStep } from "./settings-store.ts";
 import { createStore } from "./store.ts";
@@ -41,6 +42,8 @@ function harness() {
     readState: async () => ({ status: "idle", pending: { steering: [], followUp: [] } }),
     removeAgent: async () => ({ ok: true }) as SessionResult,
     scaffoldAgent: async () => "/a/fastagent",
+    relocateAgent: async () => undefined,
+    resetAgentConfig: async () => ({ ok: true }),
     listCommands: async () => [],
     revealAgent: async () => {},
     revealRegistry: async () => {},
@@ -103,9 +106,9 @@ function harness() {
   const end = (
     c: NonNullable<ReturnType<typeof store.getSnapshot>["conversation"]>,
     reason: string,
-    expected: boolean,
+    why: Ending,
   ) => {
-    listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, expected } });
+    listener({ agentId: c.agentId, session: c.session, subscription: c.subscription, ended: { reason, why } });
   };
   const step = (s: LoginStep) => stepListener(s);
   return { api, store, emit, end, step, closed, opens };
@@ -177,7 +180,8 @@ test("an unreadable agent list is its own pane; a failure adding an agent is sai
   };
   await store.load();
   assert.equal(store.getSnapshot().pane, "unreadable-registry");
-  assert.equal(store.getSnapshot().alert, "agents.json: Unexpected token");
+  assert.equal(store.getSnapshot().registryError, "agents.json: Unexpected token");
+  assert.equal(store.getSnapshot().alert, undefined, "the page says it; nothing over it repeats it");
 
   api.listAgents = async () => [];
   await store.load();
@@ -187,7 +191,8 @@ test("an unreadable agent list is its own pane; a failure adding an agent is sai
   };
   await store.addAgent();
   assert.equal(store.getSnapshot().pane, "no-agents", "adding failed; the list itself was read fine");
-  assert.match(store.getSnapshot().failure ?? "", /realpath/);
+  assert.equal(store.getSnapshot().failure?.title, "The agent was not added");
+  assert.match(store.getSnapshot().failure?.reason ?? "", /realpath/);
   store.dismissFailure();
   assert.equal(store.getSnapshot().failure, undefined);
   store.dispose();
@@ -415,7 +420,8 @@ test("a failure is shown as the sentence main wrote, wherever it lands", async (
     throw wrapped;
   };
   await store.open("gone");
-  assert.equal(store.getSnapshot().conversation?.error, "no such session");
+  assert.equal(store.getSnapshot().conversation?.error?.reason, "no such session");
+  assert.equal(store.getSnapshot().alert?.title, "This conversation could not be opened");
   api.openSession = async () => empty();
   api.send = async () => {
     throw wrapped;
@@ -424,7 +430,9 @@ test("a failure is shown as the sentence main wrote, wherever it lands", async (
   store.setDraft("hi");
   await store.send();
   const notes = store.getSnapshot().conversation?.items.filter((item) => item.kind === "note");
-  assert.equal(notes?.at(-1)?.text, "no such session", "the banner and the transcript say the same thing");
+  const last = notes?.at(-1);
+  assert.equal(last?.kind === "note" && last.reason, "no such session", "the strip and the transcript keep main's words");
+  assert.equal(last?.kind === "note" && last.title, "The message could not be sent");
   store.dispose();
 });
 
@@ -480,7 +488,7 @@ test("settlement in another agent cannot invalidate the visible agent's list ref
 });
 
 test("failed delete and abort remain visible; a stale stream never changes a reopened session", async () => {
-  const { api, store, emit, end } = harness();
+  const { api, store, emit, end, opens } = harness();
   await store.load();
   const old = store.getSnapshot().conversation!;
   const refusal = { ok: false as const, error: { code: "busy", message: "runtime refused", retryable: true } };
@@ -497,8 +505,12 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   emit(current, "run_started");
   emit(current, "tool_started", { id: "t", name: "bash" });
   assert.equal(store.getSnapshot().busy, true);
-  // A dead subscription reports nothing further, so the run controls must not wait for `run_settled`.
-  end(current, "stream disconnected", false);
+  // A failed stream is said, and waits for the person; a dead subscription reports nothing further, so the
+  // run controls must not wait for `run_settled`.
+  const opened = opens.length;
+  end(current, "stream disconnected", "failed");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(opens.length, opened, "only a subscriber the runtime let go is listened to again by itself");
   assert.equal(store.getSnapshot().busy, false);
   const tool = store.getSnapshot().conversation!.items.find((item) => item.kind === "tool");
   assert.notEqual(tool?.kind === "tool" && tool.ended, undefined, "the tool's clock stops with the stream");
@@ -506,21 +518,28 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   assert.equal(store.getSnapshot().blocked, "reconnect before sending");
   await assert.rejects(() => store.send(), /reconnect before sending/, "a blocked send is a bug, not a no-op");
   assert.equal(current.draft, "keep me");
-  assert.equal(current.error, "stream disconnected");
+  assert.equal(current.error?.reason, "stream disconnected");
+  assert.equal(current.error?.title, "The live connection to this conversation was lost");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.draft, "keep me");
   assert.equal(store.getSnapshot().conversation?.error, undefined);
   store.dispose();
 });
 
-test("an expected end of a subscription is reported without pretending the conversation failed", async () => {
-  const { store, emit, end } = harness();
+test("a subscriber the runtime let go listens again once by itself; any other end is said", async () => {
+  const { store, emit, end, opens } = harness();
   await store.load();
+  const opened = opens.length;
+  end(store.getSnapshot().conversation!, "Its runtime let this subscriber go", "let_go");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(opens.length, opened + 1, "listened to again: FastAgent's contract for a subscriber it let go");
   const c = store.getSnapshot().conversation!;
+  assert.equal(c.ended, undefined, "and nothing is said about it");
   emit(c, "run_started");
-  end(c, "The agent was removed", true);
+  end(c, "Its runtime let this subscriber go", "let_go");
+  assert.equal(opens.length, opened + 1, "not reconnected in a loop");
   const current = store.getSnapshot().conversation!;
-  assert.equal(current.ended, "The agent was removed");
+  assert.equal(current.ended, "Its runtime let this subscriber go");
   assert.equal(current.error, undefined, "an intended end is not a failure");
   assert.ok(
     current.items.every((item) => item.kind !== "note"),
@@ -533,6 +552,45 @@ test("an expected end of a subscription is reported without pretending the conve
   assert.equal(current.draft, "blocked", "sending waits for the reconnect");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.ended, undefined);
+
+  // duang ending it (the agent was removed) is not answered by opening it again.
+  const before = opens.length;
+  end(store.getSnapshot().conversation!, "The agent was removed", "ended");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(opens.length, before, "a removed agent is not reopened");
+  assert.equal(store.getSnapshot().conversation?.ended, "The agent was removed");
+  store.dispose();
+
+  // Nor while a send is still answering: a refusal puts its words back in the composer that reopening replaces.
+  const second = harness();
+  await second.store.load();
+  const sent = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  second.api.send = () => sent.promise;
+  second.store.setDraft("my message");
+  const sending = second.store.send();
+  const waiting = second.opens.length;
+  second.end(second.store.getSnapshot().conversation!, "Its runtime let this subscriber go", "let_go");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(second.opens.length, waiting, "not reopened under a send");
+  sent.resolve({ ok: false, error: { code: "busy", message: "runtime refused", retryable: true } });
+  await sending;
+  assert.equal(second.store.getSnapshot().conversation?.draft, "my message", "the refused words are where the person sees them");
+  second.store.dispose();
+});
+
+test("a config that failed to load is offered afresh once, however often the button is pressed", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => ({ ok: false, code: "failed", message: "/p/fastagent/fastagent.config.ts: Expression expected", inConfig: true });
+  await store.load();
+  assert.equal(store.getSnapshot().errorInConfig, true, "main says the failure is in the config");
+  const reset = deferred<SessionResult>();
+  let calls = 0;
+  api.resetAgentConfig = () => (calls++, reset.promise);
+  const first = store.resetConfig();
+  const second = store.resetConfig();
+  reset.resolve({ ok: true });
+  await Promise.all([first, second]);
+  assert.equal(calls, 1, "a double click is one reset");
   store.dispose();
 });
 
@@ -555,7 +613,11 @@ test("a refused model change or removal is shown, and changes nothing", async ()
   assert.equal(store.getSnapshot().agentId, "a");
   const notes = c.items.filter((item) => item.kind === "note" && item.text === "An agent conversation is running");
   assert.equal(notes.length, 1, "the model refusal is the conversation's own, verbatim");
-  assert.equal(store.getSnapshot().failure, "An agent conversation is running", "the agent's removal is not the conversation's");
+  assert.deepEqual(
+    store.getSnapshot().failure,
+    { title: "The agent was not removed", reason: "An agent conversation is running" },
+    "the agent's removal is not the conversation's",
+  );
   store.dispose();
 });
 
@@ -1269,7 +1331,7 @@ test("a send that returns after the stream ended does not claim its message ran 
   store.setDraft("hello");
   const sending = store.send();
   emit(c, "run_started");
-  end(c, "stream disconnected", false);
+  end(c, "stream disconnected", "failed");
   sent.resolve({ ok: true });
   await sending;
   assert.equal(
@@ -1402,11 +1464,12 @@ test("a rename that cannot be read back, and one refused on a conversation nobod
   await store.renameSession("a", "s1", "Named");
   assert.equal(store.getSnapshot().sessionsError["a"], "runtime would not restart");
 
-  // A conversation of another agent, never opened here: there is no transcript to put a refusal in,
-  // so it goes on that agent's row rather than into the window-wide banner.
+  // A conversation of another agent, never opened here: there is no transcript to put a refusal in, so it
+  // is said by what it was, not as that agent's list failing to read nor with someone else's Retry.
   api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
   await store.renameSession("b", "never-opened", "Named");
-  assert.equal(store.getSnapshot().sessionsError["b"], "session is busy");
+  assert.deepEqual(store.getSnapshot().failure, { title: "The conversation was not renamed", reason: "session is busy" });
+  assert.equal(store.getSnapshot().sessionsError["b"], undefined, "the list was read; this is not that");
   assert.equal(store.getSnapshot().error, undefined, "and not into the banner with someone else's Retry");
   store.dispose();
 });
@@ -1842,7 +1905,7 @@ test("an agent's row does not call a conversation cut short while its run is sti
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(
       store.getSnapshot().previews["b"]?.text,
-      status === "running" ? "You: fix the build" : "run cut short: no answer was recorded",
+      status === "running" ? "You: fix the build" : "This run was cut short",
       status,
     );
     store.dispose();
@@ -1912,22 +1975,24 @@ test("a failure about another conversation is said there, and a refusal said bef
   api.openAgent = async (id) => (id === "b" ? listed("b1") : ready);
   await store.load();
   const c = store.getSnapshot().conversation!;
-  // Deleting a conversation of an agent that is not open: its row says why, not the open transcript.
+  // Deleting a conversation of an agent that is not open: said by what it was, not in the open transcript,
+  // and not as that agent's list failing to read.
   api.deleteSession = async () => ({ ok: false, error: { code: "busy", message: "b1 is running", retryable: true } });
   await store.deleteSession("b", "b1");
-  assert.equal(store.getSnapshot().sessionsError["b"], "b1 is running");
+  assert.deepEqual(store.getSnapshot().failure, { title: "The conversation was not deleted", reason: "b1 is running" });
+  assert.equal(store.getSnapshot().sessionsError["b"], undefined);
   assert.equal(c.items.length, 0, "the open transcript is not where it goes");
 
   // The same refusal twice is said twice: each send says how it ended.
-  const unavailable = { ok: false as const, error: { code: "model_unavailable", message: "anthropic/x cannot run", retryable: true } };
-  api.send = async () => unavailable;
+  const busy = { ok: false as const, error: { code: "agent_changing", message: "Agent settings are changing; try again.", retryable: true } };
+  api.send = async () => busy;
   for (const text of ["first", "second"]) {
     store.setDraft(text);
     await store.send();
   }
-  const refusals = c.items.filter((item) => item.kind === "note" && item.text === "anthropic/x cannot run");
+  const refusals = c.items.filter((item) => item.kind === "note" && item.reason === busy.error.message);
   assert.equal(refusals.length, 2);
-  assert.ok(refusals.every((item) => item.kind === "note" && item.connect), "with the way on: connecting a provider");
+  assert.ok(refusals.every((item) => item.kind === "note" && item.title === "Not sent"));
   assert.equal(c.draft, "second", "and the refused message is back in the draft");
   store.dispose();
 });
@@ -1952,5 +2017,27 @@ test("the model's silence counts from its own output: a steer, or the person's m
   assert.equal(c.heard, quietSince, "the person's own steer is not the model answering");
   emit(c, "message_delta", { channel: "text", delta: "no" });
   assert.ok(c.heard! > quietSince, "the model's output is");
+  store.dispose();
+});
+
+test("a send refused because the model cannot run opens the picker on it, and writes nothing in the conversation", async () => {
+  const { api, store } = harness();
+  api.openSession = async () => ({ ...empty(), state: { ...empty().state, model: "anthropic/claude-sonnet-4-5" } });
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  api.send = async () => ({
+    ok: false,
+    error: { code: "model_unavailable", message: "anthropic/claude-sonnet-4-5 cannot run: …", retryable: true },
+  });
+  store.setDraft("Summarise the latest notes");
+  await store.send();
+  const asked = store.getSnapshot().unavailable;
+  assert.equal(asked?.model, "anthropic/claude-sonnet-4-5");
+  assert.equal(asked?.session, c.session);
+  assert.equal(c.items.length, 0, "nothing happened in the conversation, so nothing is written there");
+  assert.equal(c.draft, "Summarise the latest notes", "the message waits for the model to be chosen");
+  // Choosing a model is the way on, and ends the request.
+  await store.pickModel("provider/model");
+  assert.equal(store.getSnapshot().unavailable, undefined);
   store.dispose();
 });

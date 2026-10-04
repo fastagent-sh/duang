@@ -7,6 +7,7 @@ import type {
   SessionEvent,
   SessionState,
 } from "@fastagent-sh/fastagent/session";
+import { explainRunFailure, recognise, type Fix } from "./problems.ts";
 
 /**
  * When it happened. Required on every item, because both the day separators and the time under a
@@ -45,31 +46,52 @@ export type Item = At &
       ended?: number;
     }
   /**
-   * A fact about the session rather than something anyone said. `tone` decides whether it reads as
-   * a quiet line or as a failure — stopping a run is not an error, and colouring it like one was
-   * the transcript telling the person they broke something.
-   */
-  /**
-   * `resend`: this note is the failure of a run that had taken a message, the one Retry sends again, and
-   * whether that run had started a tool (sending it again may repeat that work). `limit`: the failure is a
-   * plan's usage limit, and the provider whose usage page says more. `connect`: a send refused because the
-   * conversation's model cannot run with the connected providers; connecting one is the way on.
+   * A fact about the session rather than something anyone said. One with a `title` is a problem the
+   * person may have to act on, drawn as a card: what it means (`title`, `advice`), the original
+   * `reason` verbatim, and the way on. One without is a quiet line (`text`): stopping a run or a
+   * retry is not an error, and colouring it like one was the transcript telling the person they broke
+   * something. `text` is the one-line form a roster row quotes.
+   *
+   * `resend`: the failure of a run that had taken a message, the one Retry sends again, and whether that
+   * run had started a tool (sending it again may repeat that work). `limit`: a plan's usage limit, and
+   * the provider whose usage page says more. `fix`: where in duang the way on is.
    */
   | {
       kind: "note";
       tone: "info" | "warning" | "error";
       text: string;
+      title?: string;
+      advice?: string;
+      reason?: string;
+      fix?: Fix;
       resend?: { text: string; toolsRan: boolean };
       limit?: string;
-      connect?: true;
+      /** pi trying the answer again by itself: how many times so far. Consecutive ones are one line. */
+      retry?: number;
     });
 
 /**
- * The provider whose plan limit a failure reports, read from the provider's own error code (OpenAI's
- * documented `subscription_sharing_usage_limit_exceeded`, which pi passes on in the run's error).
+ * A retry's reason in a quiet line: what it means when that is recognised, else the reason's own first line.
+ * Never a failure's ending ("the run stopped"): a retrying run goes on. The words in full stay on the line.
  */
-const limitOf = (message: string | undefined) =>
-  message?.includes("subscription_sharing_usage_limit_exceeded") ? { limit: "openai" } : {};
+const retryReason = (reason: string) => {
+  const title = recognise(reason)?.title;
+  return title ? title.charAt(0).toLowerCase() + title.slice(1) : reason.split("\n")[0]!;
+};
+
+/** A run's failure, as the card says it: what it means, the reason verbatim, and a plan limit's page. */
+function failed(reason: string) {
+  // OpenAI's documented code for a ChatGPT plan's limit, which pi passes on in the run's error.
+  if (reason.includes("subscription_sharing_usage_limit_exceeded"))
+    return {
+      title: "Your ChatGPT plan has reached its limit",
+      advice: "Its usage page says when it resets. Until then, another model can take the message.",
+      reason,
+      limit: "openai",
+      fix: "model" as const,
+    };
+  return { ...explainRunFailure(reason), reason };
+}
 
 /**
  * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of
@@ -292,9 +314,33 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   let unconcluded = 0;
   /** Where the turn stands after the last conversation entry: answered, or cut partway. */
   let open = false;
+  /**
+   * A failure the run did not go on from is its ending, which says how it ended: the line counting the
+   * retries before it goes. Where the failure now is.
+   */
+  const concluded = (index: number) => {
+    const before = items[index - 1];
+    if (before?.kind !== "note" || !before.retry) return index;
+    items.splice(index - 1, 1);
+    return index - 1;
+  };
   const retried = () => {
-    if (failure) items[failure.index] = { kind: "note", tone: "info", text: `retried: ${failure.message}`, at: items[failure.index]!.at };
+    if (!failure) return;
+    const { index, message } = failure;
     failure = undefined;
+    // Retries in a row are one line that counts them.
+    const previous = items[index - 1];
+    const count = previous?.kind === "note" && previous.retry ? previous.retry + 1 : 1;
+    const at = items[index]!.at;
+    if (count > 1) items.splice(index - 1, 1);
+    items[count > 1 ? index - 1 : index] = {
+      kind: "note",
+      tone: "info",
+      text: `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(message)}`,
+      reason: message,
+      retry: count,
+      at,
+    };
   };
   for (const entry of entries) {
     const data = (entry.data ?? {}) as {
@@ -308,7 +354,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
     const at = entry.timestamp;
     if (entry.kind === "user") {
       // The failure ended its run; what follows is the next one.
-      if (failure) unconcluded = failure.index + 1;
+      if (failure) unconcluded = concluded(failure.index) + 1;
       failure = undefined;
       open = true;
       items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
@@ -339,7 +385,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
           text: `run failed${message ? `: ${message}` : ""}`,
           at,
           ...(turn?.kind === "user" ? { resend: { text: turn.text, toolsRan } } : {}),
-          ...limitOf(message),
+          ...failed(message),
         });
       }
       // An answer that called no tool ends its work: a later failure cannot repeat what came before it. One
@@ -363,6 +409,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       open = true;
     }
   }
+  if (!running && failure) concluded(failure.index);
   if (!running) {
     const turn = items.findLast((item) => item.kind === "user");
     if (open && turn?.kind === "user")
@@ -370,6 +417,8 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
         kind: "note",
         tone: "error",
         text: "run cut short: no answer was recorded",
+        title: "This run was cut short",
+        advice: "duang or the computer stopped before an answer was recorded. What it did up to here is kept.",
         at: items.at(-1)!.at,
         resend: { text: turn.text, toolsRan: items.slice(unconcluded).some((item) => item.kind === "tool") },
       });
@@ -471,8 +520,11 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
     const text =
       item.kind === "user"
         ? `You: ${item.text}`
-        : item.kind === "assistant" || item.kind === "note"
+        : item.kind === "assistant"
           ? item.text
+          : item.kind === "note"
+            ? // A problem is quoted by what it means, not by the provider's raw words.
+              item.title ?? item.text
           : item.kind === "tool"
             ? `${item.name} ${firstArg(item.args)}`
             : item.kind === "thinking" && item.open
@@ -571,6 +623,9 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           return { ...item, status: "interrupted", ended: event.timestamp };
         return item;
       });
+      // A run that ends after pi's retries no longer needs the line counting them: its ending says how it ended.
+      const lastLine = items.at(-1);
+      if (lastLine?.kind === "note" && lastLine.retry) items = items.slice(0, -1);
       if (e.data.status === "completed") return items;
       const stopped = e.data.status === "aborted";
       // An aborted run carries the abort machinery's own words ("This operation was aborted",
@@ -586,24 +641,37 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
           // `aborted`, and never `failed` — that word blames the run for their decision.
           text: `run ${stopped ? "stopped" : e.data.status}${error?.message ? `: ${error.message}` : ""}`,
-          ...limitOf(error?.message),
+          ...(stopped ? {} : failed(error?.message ?? "")),
         },
       ];
     }
     case "retry_scheduled":
       // The run goes on: pi tries again by itself, so this is a quiet line, not a failure. If the retries give
       // up, the run's own ending says so.
+      // One line that moves on with each attempt, rather than one per attempt.
       return [
-        ...items,
+        ...(items.at(-1)?.kind === "note" && (items.at(-1) as { retry?: number }).retry ? items.slice(0, -1) : items),
         {
           kind: "note",
           tone: "info",
           at: event.timestamp,
-          text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${e.data.error}`,
+          text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${retryReason(e.data.error)}`,
+          reason: e.data.error,
+          retry: e.data.attempt,
         },
       ];
     case "serving_error":
-      return [...items, { kind: "note", tone: "error", text: e.data.message, at: event.timestamp }];
+      return [
+        ...items,
+        {
+          kind: "note",
+          tone: "error",
+          text: e.data.message,
+          title: "The agent's runtime reported a problem",
+          reason: e.data.message,
+          at: event.timestamp,
+        },
+      ];
     default:
       return items;
   }

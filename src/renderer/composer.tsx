@@ -1,11 +1,13 @@
 /** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Microphone, Paperclip, Stop } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Microphone, Paperclip, Plug, Prohibit, Stop } from "@phosphor-icons/react";
 import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
 import { home } from "./paths.ts";
 import { tokens } from "./usage.ts";
+import { Problem } from "./problem.tsx";
+import { unavailableNotice } from "./problems.ts";
 import type { Models } from "../preload/index.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
@@ -82,6 +84,7 @@ function ModelPicker({
   current,
   thinking,
   needsModel,
+  unavailable,
   onClose,
   onProviders,
 }: {
@@ -94,6 +97,8 @@ function ModelPicker({
    */
   thinking?: { level: string; levels: string[] };
   needsModel: boolean;
+  /** The conversation's model, when a send was just refused because it cannot run: said at the top. */
+  unavailable?: string;
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
@@ -163,11 +168,18 @@ function ModelPicker({
       className="popover fixed m-0 top-auto right-auto w-[300px] flex-col overflow-hidden p-0 text-text open:flex backdrop:bg-transparent"
     >
       {error ? (
-        <div role="alert" className="space-y-2 p-4 text-danger">
-          <p>{error}</p>
-          <Button kind="ghost" size={28} onClick={onRetry}>
-            Retry
-          </Button>
+        // Inside the popover already: the tinted note, not a second floating surface.
+        <div className="p-2">
+        <Problem
+          tone="error"
+          title="This agent's models could not be listed"
+          reason={error}
+          actions={
+            <Button kind="secondary" size={28} onClick={onRetry}>
+              Retry
+            </Button>
+          }
+        />
         </div>
       ) : models?.length === 0 ? (
         <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
@@ -183,6 +195,7 @@ function ModelPicker({
         </div>
       ) : (
         <>
+          {unavailable && <Unavailable model={unavailable} models={models} onProviders={onProviders} />}
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <MagnifyingGlass size={15} className="shrink-0 text-muted" aria-hidden />
             <input
@@ -273,6 +286,34 @@ function ModelPicker({
   );
 }
 
+/**
+ * Why the picker opened by itself: the message just sent cannot run on this conversation's model. Said in
+ * one plain sentence, with the way on: choose a model below, or connect the provider it needs (which
+ * returns here).
+ */
+function Unavailable({ model, models, onProviders }: { model: string; models?: Models; onProviders: () => void }) {
+  const notice = unavailableNotice(model, models);
+  if (!notice) return null;
+  const { title, connect } = notice;
+  return (
+    <div role="status" className="mx-1.5 mt-1.5 flex gap-2.5 rounded-card bg-surface-2 px-3 py-2.5 text-[13px]">
+      <Prohibit size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+      <div className="min-w-0 space-y-1.5">
+        <p className="leading-snug">
+          <span className="font-semibold">{title}</span>
+          <br />
+          <span className="text-muted">Choose another model to send your message{connect ? ", or connect it" : ""}.</span>
+        </p>
+        {connect && (
+          <Button kind="secondary" size={28} icon={<Plug size={12} />} onClick={onProviders}>
+            Connect {connect}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** For measuring a line of the draft in the field's own font, without laying it out. */
 const ruler = document.createElement("canvas").getContext("2d")!;
 
@@ -321,7 +362,7 @@ export function Composer({
   /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
   const needsModel = state === "missing_model";
   const modelDisabled =
-    view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent";
+    view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir";
   /** Why the model cannot be changed right now, or false when it can. */
   const modelReason =
     (!agentId && "Select an agent first") ||
@@ -380,11 +421,17 @@ export function Composer({
   const [picking, setPicking] = useState(false);
   // An agent with no model cannot start: open the list rather than leave the person guessing.
   useEffect(() => setPicking(needsModel), [agentId, needsModel]);
+  // A send refused because this conversation's model cannot run: choosing another is the way on, so the
+  // list opens on it, saying why. The chip stays marked until a model is chosen.
+  const stuck = !!c && view.unavailable?.session === c.session && view.unavailable.agentId === c.agentId && view.unavailable.model === model;
+  useEffect(() => {
+    if (stuck) setPicking(true);
+  }, [stuck, view.unavailable?.asked]);
   // Back from connecting a provider that was started here: the picker comes up again, with the new
   // provider's models in it, and nothing chosen for the person.
   useEffect(() => {
-    if (store.takePickerRequest()) setPicking(true);
-  }, [store]);
+    if (view.pickerAsked !== undefined && store.takePickerRequest()) setPicking(true);
+  }, [view.pickerAsked, store]);
   // Every opening rereads the credential file, so a provider connected in Settings shows up.
   // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
@@ -503,7 +550,7 @@ export function Composer({
               disabled={modelReason && model ? `${modelReason} (${model})` : modelReason}
               title={model ? `Model for this agent: ${model}` : "Model for this agent"}
               // Tinted, so it reads as the button it is beside the field's own text.
-              className={`max-w-full bg-hover ${!model && needsModel ? "text-warning" : ""}`}
+              className={`max-w-full bg-hover ${(!model && needsModel) || stuck ? "text-warning" : ""}`}
             >
               {model ? (
                 // The provider is quieter than the id but never dropped: `openai/` and `azure-openai-responses/`
@@ -527,6 +574,7 @@ export function Composer({
                 current={model}
                 thinking={thinking}
                 needsModel={needsModel}
+                unavailable={stuck ? model : undefined}
                 onClose={() => setPicking(false)}
                 onProviders={() => {
                   setPicking(false);

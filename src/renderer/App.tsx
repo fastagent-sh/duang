@@ -3,7 +3,9 @@ import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
 import { queueView } from "./transcript.ts";
-import { BrokenAgent, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
+import { BrokenAgent, MissingFolder, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
+import { Problem } from "./problem.tsx";
+import { ArrowClockwise } from "@phosphor-icons/react";
 import { ConversationList, Sidebar } from "./rows.tsx";
 import { ConversationHeader } from "./header.tsx";
 import { Transcript } from "./transcript-view.tsx";
@@ -28,7 +30,10 @@ export default function App() {
   // is not remembered across launches. Settings reached from the model picker carries that with it:
   // its "Connect a provider" lands on the providers to add, and a connection made from there
   // returns to the picker. It is part of the same state so that every way out of Settings drops it.
-  const [settings, setSettings] = useState<false | { fromPicker?: true }>(false);
+  // `reconnect`: reached from a problem with a provider's sign-in, whose row opens; a connection made there
+  // returns to the conversation, where Retry waits.
+  // `network`: reached from a problem reaching a provider, with the proxy settings in view.
+  const [settings, setSettings] = useState<false | { fromPicker?: true; reconnect?: string; network?: true }>(false);
   const openSettings = () => setSettings((open) => open || {});
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
@@ -128,6 +133,13 @@ export default function App() {
   useEffect(() => {
     if (provider) void store.loadUsage(provider);
   }, [provider, busy, c?.session, store]);
+  // A problem with this provider's sign-in names it on its button, by pi's name for it, once that is read.
+  const last = c?.items.at(-1);
+  const signInProblem = last?.kind === "note" && last.fix === "providers";
+  useEffect(() => {
+    if (signInProblem && !view.providers) void store.loadProviders();
+  }, [signInProblem, store]);
+  const providerName = provider && (view.providers?.find((row) => row.id === provider)?.name ?? provider);
 
   return (
     // Panels float on the window's canvas rather than filling it edge to edge: the gap is what makes
@@ -166,7 +178,10 @@ export default function App() {
               view={view}
               store={store}
               connectOnOpen={settings.fromPicker}
+              reconnect={settings.reconnect}
+              network={settings.network}
               onConnected={() => {
+                if (settings.reconnect) return setSettings(false);
                 if (!settings.fromPicker) return;
                 store.requestPicker();
                 setSettings(false);
@@ -221,45 +236,74 @@ export default function App() {
                   onMenu={duang.menu}
                 />
               )}
-              {view.failure && (
-                // An action outside any conversation failed: said here, not in the transcript that happens to be open.
-                <div role="alert" className="mt-14 px-6 py-2 text-danger whitespace-pre-wrap break-words">
-                  {view.failure}{" "}
-                  <button className="underline" onClick={store.dismissFailure}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
-              {alert ? (
-                <div role="alert" className={`${view.failure ? "" : "mt-14 "}px-6 py-2 text-danger whitespace-pre-wrap break-words`}>
-                  {alert}{" "}
-                  <button className="underline" onClick={() => void store.retry()}>
-                    Retry
-                  </button>
-                </div>
-              ) : (
-                // An ended subscription is not a failure: the conversation is intact, this view stopped
-                // listening. Say it in the calm voice and offer the one action that fixes it.
-                c?.ended && (
-                  <div role="status" className={`${view.failure ? "" : "mt-14 "}px-6 py-2 text-muted whitespace-pre-wrap break-words`}>
-                    {c.ended}{" "}
-                    <button className="underline" onClick={() => void store.retry()}>
-                      Reconnect
-                    </button>
+              {/* Problems about this view or about an action outside any conversation float under the header,
+                  over the pane, so nothing below moves when one comes or goes (docs/ui.md §9b). */}
+              {(view.failure || alert || c?.ended) && (
+                <div className="pointer-events-none absolute inset-x-0 top-20 z-[7] px-6">
+                  <div className="column space-y-2">
+                    {view.failure && (
+                      <Problem
+                        layout="strip"
+                        tone="error"
+                        title={view.failure.title}
+                        reason={view.failure.reason}
+                        onDismiss={store.dismissFailure}
+                      />
+                    )}
+                    {alert ? (
+                      <Problem
+                        layout="strip"
+                        tone="error"
+                        title={alert.title}
+                        advice={alert.advice}
+                        reason={alert.reason}
+                        actions={
+                          <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
+                            Reconnect
+                          </Button>
+                        }
+                      />
+                    ) : (
+                      // An ended subscription is not a failure: the conversation is intact, this view stopped
+                      // listening. Said in the calm voice, with the one action that fixes it.
+                      c?.ended && (
+                        <Problem
+                          layout="strip"
+                          tone="info"
+                          title="This conversation stopped updating"
+                          advice="Nothing was lost. Reconnect to follow it again."
+                          reason={c.ended}
+                          actions={
+                            <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
+                              Reconnect
+                            </Button>
+                          }
+                        />
+                      )
+                    )}
                   </div>
-                )
+                </div>
               )}
               {pane === "unreadable-registry" ? (
                 // An unreadable registry is not an empty one: offering "add your first agent" would deny the
                 // failure and hand over an action that cannot succeed until the file is fixed.
-                <UnreadableRegistry onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
+                <UnreadableRegistry reason={view.registryError} onReveal={() => void store.reveal()} onRetry={() => void store.retry()} />
               ) : pane === "no-agents" ? (
                 <NoAgents onAdd={() => void store.addAgent()} />
               ) : pane === "broken" ? (
                 <BrokenAgent
                   message={view.error ?? ""}
+                  inConfig={view.errorInConfig}
+                  onFreshConfig={() => void store.resetConfig()}
                   onRemove={remove}
                   onReveal={() => void store.reveal()}
+                  onRetry={() => void store.retry()}
+                />
+              ) : pane === "missing-dir" ? (
+                <MissingFolder
+                  dir={agent?.dir ?? ""}
+                  onLocate={() => void store.relocateAgent()}
+                  onRemove={remove}
                   onRetry={() => void store.retry()}
                 />
               ) : pane === "no-agent" ? (
@@ -275,15 +319,20 @@ export default function App() {
                 <Boundary
                   reset={c.subscription}
                   fallback={(error) => (
-                    // The sidebar and the composer stay: the person can go to another conversation, or try again.
-                    <div role="alert" className="mt-16 flex-1 space-y-2 px-6 text-[13px]">
-                      <p>This conversation could not be drawn.</p>
-                      <pre className="whitespace-pre-wrap break-words font-mono text-[12px] text-danger">{error.message}</pre>
-                      {/* Read again from the runtime's history: a view that went wrong while streaming is rebuilt. */}
-                      <Button kind="secondary" size={28} onClick={() => void store.retry()}>
-                        Try again
-                      </Button>
-                    </div>
+                    // The sidebar and the composer stay: the person can go to another conversation, or try again,
+                    // which reads it again from history, so a view that went wrong while streaming is rebuilt.
+                    <Problem
+                      layout="page"
+                      tone="error"
+                      title="This conversation could not be displayed"
+                      advice="Something in it could not be drawn. Its history is safe: try again to read it afresh, or open another conversation."
+                      reason={error.message}
+                      actions={
+                        <Button kind="primary" size={32} icon={<ArrowClockwise size={14} />} onClick={() => void store.retry()}>
+                          Try again
+                        </Button>
+                      }
+                    />
                   )}
                 >
                   <Transcript
@@ -298,7 +347,11 @@ export default function App() {
                     resume={store.scrollOf(c.agentId, c.session)}
                     onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
                     onUsage={(provider) => void store.openUsagePage(provider)}
-                    onConnect={() => setSettings({ fromPicker: true })}
+                    onSettings={(where) =>
+                      setSettings(where === "network" ? { network: true } : where === "providers" && provider ? { reconnect: provider } : {})
+                    }
+                    onPickModel={store.requestPicker}
+                    provider={providerName}
                     onRetry={
                       view.resend
                         ? () => {

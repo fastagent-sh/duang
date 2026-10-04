@@ -126,16 +126,19 @@ export function Badge({
   icon,
   pulse,
   className = "",
+  title,
   children,
 }: {
   tone: Tone;
   icon?: ReactNode;
   pulse?: boolean;
   className?: string;
+  /** The longer story on hover, such as the original error behind a short word. */
+  title?: string;
   children: ReactNode;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] ${words[tone]} ${className}`}>
+    <span title={title} className={`inline-flex items-center gap-1.5 text-[11px] ${words[tone]} ${className}`}>
       {icon ?? <span className={`size-1.5 shrink-0 rounded-full ${dot[tone]} ${pulse ? "animate-pulse" : ""}`} />}
       {children}
     </span>

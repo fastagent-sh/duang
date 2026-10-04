@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { constants } from "node:fs";
+import { copyFile, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { basename, join, sep } from "node:path";
 import { writeJsonAtomic } from "./json-file.ts";
 
 export interface AgentRow {
@@ -110,6 +111,21 @@ export class AgentRegistry {
     });
   }
 
+  /**
+   * The agent's folder was moved: the same agent (its id, name and colour) is found at `dir` now. Its
+   * conversations are in the folder, so they come with it. A folder another agent already is, is refused.
+   */
+  async relocate(id: string, dir: string): Promise<void> {
+    const canonical = await realpath(dir);
+    return this.change((rows) => {
+      const row = rows.find((row) => row.id === id);
+      if (!row) throw new Error(`unknown agent ${id}`);
+      const other = rows.find((other) => other.dir === canonical && other.id !== id);
+      if (other) throw new Error(`${canonical} is already the agent "${other.name}"`);
+      row.dir = canonical;
+    });
+  }
+
   setModel(id: string, model: string): Promise<void> {
     return this.change((rows) => {
       const row = rows.find((row) => row.id === id);
@@ -117,6 +133,51 @@ export class AgentRegistry {
       row.model = model;
     });
   }
+}
+
+/** FastAgent's one config filename, and what a new one says: nothing, so the agent asks for a model. */
+export const CONFIG_FILE = "fastagent.config.ts";
+const FRESH_CONFIG = "export default {};\n";
+
+/** The registered folder is not there (moved, deleted, a drive not mounted): nothing to scaffold into. */
+export class MissingDirError extends Error {}
+
+/**
+ * Only a folder that is not there is missing. Any other reason it cannot be looked at (no permission, macOS
+ * privacy controls) is its own failure, said in its own words, and not a folder to go and locate.
+ */
+export async function requireFolder(dir: string): Promise<void> {
+  try {
+    await stat(dir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") throw new MissingDirError((error as Error).message);
+    throw error;
+  }
+}
+
+/**
+ * The config a load failed in, as FastAgent's loader names it: every failure of `loadConfig` (a syntax error,
+ * a file it imports, a bad key) starts with the config's own path. Undefined for any other failure.
+ */
+export function failingConfig(message: string): string | undefined {
+  return message.match(/^(\/[^\n]*\/fastagent\.config\.ts): /)?.[1];
+}
+
+/**
+ * Start a fresh config in place of one that does not load, given as FastAgent named it: only a config inside
+ * the agent's folder (a symlink out of it does not count). The old one is copied beside it first, to a name
+ * nothing loads (`fastagent.config.ts.broken-20261003-144000`), and never over an earlier copy.
+ */
+export async function freshConfig(dir: string, config: string, now = new Date()): Promise<void> {
+  const [root, real] = await Promise.all([realpath(dir), realpath(config)]);
+  if (!real.startsWith(`${root}${sep}`) || basename(real) !== CONFIG_FILE) throw new Error(`${config} is not this agent's ${CONFIG_FILE}`);
+  // In the person's own time: they read this name.
+  const two = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+  // EXCL: a second reset in the same second fails here rather than replacing the person's file with the fresh one.
+  await copyFile(real, `${real}.broken-${stamp}`, constants.COPYFILE_EXCL);
+  await writeFile(real, FRESH_CONFIG);
 }
 
 /**
@@ -132,7 +193,7 @@ export async function createAgentIn(dir: string): Promise<string> {
   // No `recursive`: an existing directory fails here with EEXIST and is never touched below.
   await mkdir(agentDir);
   try {
-    await writeFile(join(agentDir, "fastagent.config.ts"), "export default {};\n", { flag: "wx" });
+    await writeFile(join(agentDir, CONFIG_FILE), FRESH_CONFIG, { flag: "wx" });
     await writeFile(join(agentDir, ".gitignore"), ".state/\n.secrets/\n.env\n", { flag: "wx" });
   } catch (error) {
     // This call created the directory, so a half-written one is ours to remove. Leaving it would
