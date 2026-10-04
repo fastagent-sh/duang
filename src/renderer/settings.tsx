@@ -27,6 +27,7 @@ export function Settings({
   view,
   store,
   connectOnOpen,
+  reconnect,
   onConnected,
   onMenu,
   onClose,
@@ -34,6 +35,8 @@ export function Settings({
   view: View;
   store: Store;
   connectOnOpen?: boolean;
+  /** A provider to sign in to again, from a problem that its sign-in was not accepted: its row opens. */
+  reconnect?: string;
   onConnected: () => void;
   onMenu: DuangApi["menu"];
   onClose: () => void;
@@ -98,7 +101,14 @@ export function Settings({
         </div>
 
         <div className="space-y-6">
-          <ProvidersSection view={view} store={store} onMenu={onMenu} focusAdd={connectOnOpen} onConnected={onConnected} />
+          <ProvidersSection
+            view={view}
+            store={store}
+            onMenu={onMenu}
+            focusAdd={connectOnOpen}
+            reconnect={reconnect}
+            onConnected={onConnected}
+          />
           {view.settingsError ? (
             <div role="alert" className="space-y-3">
               <p className="text-danger whitespace-pre-wrap break-words">{view.settingsError}</p>

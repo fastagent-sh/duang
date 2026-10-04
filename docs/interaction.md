@@ -28,7 +28,11 @@ drafted work stays attached to its originating agent and conversation when navig
 
 Adding an agent chooses a directory; a plain project can be scaffolded after confirmation. An agent whose
 directory is no longer there (moved, deleted, a drive not mounted) says so, with Retry and Remove from duang,
-and is never offered a scaffold: its row says `folder not found`. A
+and is never offered a scaffold: its row says `folder not found`. **Locate folder…** asks where it is now
+and points the same agent there, keeping its name, colour and conversations (they are in the folder); a
+folder that is already another agent is refused. An agent whose definition does not load, with an error that
+names a file in its folder, offers to open that file in its default editor, never anything outside the folder
+or a kind the system would run. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
@@ -130,10 +134,13 @@ says nothing, since the run's own ending is already in the transcript.
 Problems are said as ui.md §9b lays out: what it means, what to do, the way on, and the original words
 verbatim but folded. An answer that did not end normally says so in the transcript, live and when the
 conversation is read back from history, including runs no window watched: a failed answer gets a card
-titled by what the reason means (*The provider did not accept the sign-in* with **Model providers** for a
-401, *Could not reach the provider* with **Network settings** for a connection error, *The run stopped with
-an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one, `retrying 1/3: <reason>` while watched (a quiet line: the run goes on) and
-`retried: <reason>` read back for an attempt the run retried by itself, and `answer cut off at the model's output limit` for one that reached the limit (the run
+titled by what the reason means (*The provider did not accept the sign-in* with **Sign in to OpenAI again** for a
+401, which opens Settings on that provider's ways to connect and returns to the conversation once connected;
+*Could not reach the provider* with **Network settings** for a connection error; *The provider is limiting
+requests* or *had a problem* with **Use another model**, which opens the picker, for a 429 or a 5xx; *The run stopped with
+an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one, one quiet line that moves on with each of pi's own
+retries (`retrying 2/3: the provider had a problem`, the provider's words staying with the failure card) and,
+read back, one line for retries in a row (`retried 2 times: …`), and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
 as a new turn, leaving the failure and whatever the failed run did in the transcript. A failure that is a ChatGPT plan's usage limit (`subscription_sharing_usage_limit_exceeded`) also offers View usage, which opens that page. A run that was steered is
@@ -169,7 +176,9 @@ content grows by itself, and choosing the conversation that is already open rebu
 that belongs to no conversation (adding, renaming, revealing or removing an agent) is said in a strip that
 floats under the header, titled by the action (*The agent was not renamed*), with Dismiss, never written into whichever conversation is open; one about a conversation (renaming or
 deleting it from the list) is said in that conversation when the window holds it, else on its agent's row.
-Only a registry that cannot be read shows the unreadable-registry page. A closed or failed subscription says so in the same strip, with Reconnect
+Only a registry that cannot be read shows the unreadable-registry page. A subscription the runtime lets go (a backlog that overflowed, a runtime replaced) is listened to again
+by itself once, which is FastAgent's contract for it; one that ends again within 30 seconds says so in the
+same strip, with Reconnect
 (*This conversation stopped updating*, or *The live connection to this conversation was lost*), rather than
 silently leaving a run on screen forever; the strip floats, so the transcript does not move for it.
 

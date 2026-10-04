@@ -66,7 +66,15 @@ export type Item = At &
       fix?: Fix;
       resend?: { text: string; toolsRan: boolean };
       limit?: string;
+      /** pi trying the answer again by itself: how many times so far. Consecutive ones are one line. */
+      retry?: number;
     });
+
+/** A retry's reason in a quiet line: what it means, not the provider's JSON, which the failure card keeps. */
+const retryReason = (reason: string) => {
+  const { title } = explainRunFailure(reason);
+  return title.charAt(0).toLowerCase() + title.slice(1);
+};
 
 /** A run's failure, as the card says it: what it means, the reason verbatim, and a plan limit's page. */
 function failed(reason: string) {
@@ -74,9 +82,10 @@ function failed(reason: string) {
   if (reason.includes("subscription_sharing_usage_limit_exceeded"))
     return {
       title: "Your ChatGPT plan has reached its limit",
-      advice: "Its usage page says when it resets. The limit is shared with every app that uses the plan.",
+      advice: "Its usage page says when it resets. Until then, another model can take the message.",
       reason,
       limit: "openai",
+      fix: "model" as const,
     };
   return { ...explainRunFailure(reason), reason };
 }
@@ -303,8 +312,21 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   /** Where the turn stands after the last conversation entry: answered, or cut partway. */
   let open = false;
   const retried = () => {
-    if (failure) items[failure.index] = { kind: "note", tone: "info", text: `retried: ${failure.message}`, at: items[failure.index]!.at };
+    if (!failure) return;
+    const { index, message } = failure;
     failure = undefined;
+    // Retries in a row are one line that counts them.
+    const previous = items[index - 1];
+    const count = previous?.kind === "note" && previous.retry ? previous.retry + 1 : 1;
+    const at = items[index]!.at;
+    if (count > 1) items.splice(index - 1, 1);
+    items[count > 1 ? index - 1 : index] = {
+      kind: "note",
+      tone: "info",
+      text: `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(message)}`,
+      retry: count,
+      at,
+    };
   };
   for (const entry of entries) {
     const data = (entry.data ?? {}) as {
@@ -608,13 +630,15 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
     case "retry_scheduled":
       // The run goes on: pi tries again by itself, so this is a quiet line, not a failure. If the retries give
       // up, the run's own ending says so.
+      // One line that moves on with each attempt, rather than one per attempt.
       return [
-        ...items,
+        ...(items.at(-1)?.kind === "note" && (items.at(-1) as { retry?: number }).retry ? items.slice(0, -1) : items),
         {
           kind: "note",
           tone: "info",
           at: event.timestamp,
-          text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${e.data.error}`,
+          text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${retryReason(e.data.error)}`,
+          retry: e.data.attempt,
         },
       ];
     case "serving_error":

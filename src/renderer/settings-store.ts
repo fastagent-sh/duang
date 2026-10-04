@@ -65,12 +65,16 @@ export interface SettingsView {
   providersError?: string;
   /** The sign-in in progress or just finished, shown in its provider's row in Settings. */
   signIn?: SignIn;
+  /**
+   * Someone asked for the model picker: returning from a connection started there, or a problem whose way
+   * on is another model. The composer opens it and takes the request, whenever it is next on screen.
+   */
+  pickerAsked?: number;
 }
 /** What Settings reads and writes of the whole view: its own fields, and the plan numbers a disconnect drops. */
 type Shared = SettingsView & { usage: Record<string, { data?: ProviderUsage; error?: string }> };
 
 export function createSettings(api: DuangApi, view: () => Shared, publish: (patch: Partial<Shared>) => void) {
-  let pickerRequested = false;
   // A slow check for a route that has since changed must not land on the new one, nor an earlier
   // network choice's answer after a later one's.
   let connectionRequest = 0;
@@ -194,15 +198,15 @@ export function createSettings(api: DuangApi, view: () => Shared, publish: (patc
       }
     },
     /**
-     * Connecting from the model picker returns to it. The picker belongs to the composer, which is
-     * not on screen while Settings is, so the request waits here until the composer takes it.
+     * Opens the model picker. It belongs to the composer, which is not on screen while Settings is, so
+     * the request waits in the view until the composer takes it.
      */
     requestPicker() {
-      pickerRequested = true;
+      publish({ pickerAsked: Date.now() });
     },
     takePickerRequest() {
-      const requested = pickerRequested;
-      pickerRequested = false;
+      const requested = view().pickerAsked !== undefined;
+      if (requested) publish({ pickerAsked: undefined });
       return requested;
     },
     async disconnect(provider: string) {

@@ -28,6 +28,8 @@ const MODEL_UNAVAILABLE_CODE = "model_unavailable";
  * the run: they do not end the model's silence.
  */
 const PERSON_SIDE = new Set(["queue_changed", "user_message", "state_changed"]);
+/** A conversation that loses its subscription again within this long of reconnecting by itself waits for the person. */
+const RECONNECT_GAP_MS = 30_000;
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "missing_dir" | "broken";
@@ -800,6 +802,15 @@ export function createStore(api: DuangApi) {
           reason: frame.ended.reason,
         };
       publish();
+      // FastAgent's contract for a subscriber it let go (a backlog that overflowed, a runtime replaced): listen
+      // again and read the history. The open conversation does that once by itself; one that ends again soon
+      // after says so and waits for the person, rather than reconnecting in a loop.
+      const id = key(c.agentId, c.session);
+      if (view.conversation === c && Date.now() - (reconnected.get(id) ?? -Infinity) > RECONNECT_GAP_MS) {
+        reconnected.set(id, Date.now());
+        close(c);
+        void open(c.session);
+      }
       return;
     }
     if (!PERSON_SIDE.has(frame.event.type)) c.heard = Date.now();
@@ -814,6 +825,8 @@ export function createStore(api: DuangApi) {
    * still read history and lists but never heard a live event, and every run looked stuck.
    */
   let stopFrames: (() => void) | undefined;
+  /** When each conversation last reconnected by itself, so a subscription that keeps ending is said, not looped. */
+  const reconnected = new Map<string, number>();
   let stopSteps: (() => void) | undefined;
   const listen = () => {
     stopFrames ??= api.onSessionEvent(onFrame);
@@ -1028,6 +1041,29 @@ export function createStore(api: DuangApi) {
         else await keepListed(c);
       } catch (error) {
         note(c, { error, title: "The effort was not changed" });
+      }
+    },
+    async openAgentFile(file: string) {
+      const id = view.agentId;
+      if (!id) return;
+      try {
+        await api.openAgentFile(id, file);
+      } catch (error) {
+        fail("The file did not open", error);
+      }
+    },
+    /** The agent's folder was moved: the person shows where it is, and the agent opens from there. */
+    async relocateAgent() {
+      const id = view.agentId;
+      if (!id) return;
+      try {
+        const result = await api.relocateAgent(id);
+        if (!result) return;
+        if (!result.ok) return fail("The agent was not moved", result.error.message);
+        publish({ agents: await api.listAgents() });
+        await selectAgent(id);
+      } catch (error) {
+        fail("The agent was not moved", error);
       }
     },
     async scaffold() {

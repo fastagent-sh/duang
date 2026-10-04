@@ -98,6 +98,7 @@ export function ProvidersSection({
   store,
   onMenu,
   focusAdd,
+  reconnect,
   onConnected,
 }: {
   view: View;
@@ -105,6 +106,8 @@ export function ProvidersSection({
   onMenu: DuangApi["menu"];
   /** Reached from the picker's "Connect a provider": the list of what can be added comes into view. */
   focusAdd?: boolean;
+  /** Reached from a problem with this provider's sign-in: its row opens on the ways to connect it again. */
+  reconnect?: string;
   onConnected: () => void;
 }) {
   /** The one row that is open, in either card. */
@@ -132,6 +135,11 @@ export function ProvidersSection({
   useEffect(() => {
     if (focusAdd && view.providers) addCard.current?.scrollIntoView({ block: "start" });
   }, [focusAdd, view.providers !== undefined]);
+  useEffect(() => {
+    if (!reconnect || !view.providers?.some((p) => p.id === reconnect)) return;
+    show(reconnect);
+    requestAnimationFrame(() => document.querySelector(`[data-provider="${reconnect}"]`)?.scrollIntoView({ block: "center" }));
+  }, [reconnect, view.providers !== undefined]);
   // A connection lands in the list above, briefly marked, and the row it came from closes.
   useEffect(() => {
     if (!signIn?.outcome?.ok) return;

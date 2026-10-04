@@ -50,6 +50,13 @@ const api = {
   renameAgent: (agentId: string, name: string): Promise<void> => ipcRenderer.invoke("agent:rename", agentId, name),
   /** Forgets duang's row. Refuses while a conversation is running; the directory is never touched. */
   removeAgent: (agentId: string): Promise<SessionResult> => ipcRenderer.invoke("agent:remove", agentId),
+  /**
+   * Asks where the agent's moved folder is now and points the agent there, keeping its name, colour and
+   * conversations. Undefined when the person cancels; refused while it runs or if another agent is there.
+   */
+  relocateAgent: (agentId: string): Promise<SessionResult | undefined> => ipcRenderer.invoke("agent:relocate", agentId),
+  /** Opens a file of the agent's that a loading error names, in its default editor. */
+  openAgentFile: (agentId: string, file: string): Promise<void> => ipcRenderer.invoke("agent:openFile", agentId, file),
   /** Give a plain project an agent directory. Returns where it was created. */
   scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
   /** The names this agent exposes — what the composer's `/` completion lists. */

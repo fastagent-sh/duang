@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { EDITABLE } from "./editable.ts";
+import { basename, join, sep } from "node:path";
 import { writeJsonAtomic } from "./json-file.ts";
 
 export interface AgentRow {
@@ -110,6 +111,21 @@ export class AgentRegistry {
     });
   }
 
+  /**
+   * The agent's folder was moved: the same agent (its id, name and colour) is found at `dir` now. Its
+   * conversations are in the folder, so they come with it. A folder another agent already is, is refused.
+   */
+  async relocate(id: string, dir: string): Promise<void> {
+    const canonical = await realpath(dir);
+    return this.change((rows) => {
+      const row = rows.find((row) => row.id === id);
+      if (!row) throw new Error(`unknown agent ${id}`);
+      const other = rows.find((other) => other.dir === canonical && other.id !== id);
+      if (other) throw new Error(`${canonical} is already the agent "${other.name}"`);
+      row.dir = canonical;
+    });
+  }
+
   setModel(id: string, model: string): Promise<void> {
     return this.change((rows) => {
       const row = rows.find((row) => row.id === id);
@@ -117,6 +133,16 @@ export class AgentRegistry {
       row.model = model;
     });
   }
+}
+
+/**
+ * A file of the agent's that a loading error names, to open in an editor: its real path, when it is inside
+ * the agent's folder (a symlink out of it does not count) and of a kind people edit. Anything else throws.
+ */
+export async function agentFile(dir: string, file: string): Promise<string> {
+  const [root, real] = await Promise.all([realpath(dir), realpath(file)]);
+  if (!real.startsWith(`${root}${sep}`) || !EDITABLE.test(real)) throw new Error(`${file} is not a file of this agent's to open`);
+  return real;
 }
 
 /**

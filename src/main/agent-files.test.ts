@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AgentRegistry, createAgentIn } from "./agent-files.ts";
+import { AgentRegistry, agentFile, createAgentIn } from "./agent-files.ts";
 
 test("registry serializes writes in one process, survives restart and deduplicates real paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
@@ -124,4 +124,45 @@ test("a scaffold that cannot write its files leaves no directory behind", async 
   });
   await assert.rejects(createAgentIn(root), { code: "EACCES" });
   assert.deepEqual(await readdir(root), [], "a retry must not hit EEXIST on our own leftovers");
+});
+
+test("a moved folder is the same agent where it is now; a folder that is another agent is refused", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
+  try {
+    const registry = new AgentRegistry(join(root, "agents.json"));
+    const [before, after, other] = [join(root, "before"), join(root, "after"), join(root, "other")];
+    await Promise.all([mkdir(before), mkdir(after), mkdir(other)]);
+    const moved = await registry.add(before);
+    const second = await registry.add(other);
+    await registry.relocate(moved.id, after);
+    assert.deepEqual(
+      (await registry.list()).find((row) => row.id === moved.id),
+      { ...moved, dir: await realpath(after) },
+      "its id, name and colour are kept",
+    );
+    await assert.rejects(registry.relocate(moved.id, other), new RegExp(`already the agent "${second.name}"`));
+    await assert.rejects(registry.relocate(moved.id, join(root, "nowhere")), /ENOENT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("only a file inside the agent's folder, of a kind people edit, is opened for a loading error", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-file-"));
+  try {
+    const dir = join(root, "agent");
+    await mkdir(join(dir, "fastagent"), { recursive: true });
+    const config = join(dir, "fastagent", "fastagent.config.ts");
+    await writeFile(config, "export default {};\n");
+    await writeFile(join(dir, "run.command"), "echo hi\n");
+    await writeFile(join(root, "outside.ts"), "");
+    await symlink(join(root, "outside.ts"), join(dir, "escape.ts"));
+    assert.equal(await agentFile(dir, config), await realpath(config));
+    await assert.rejects(agentFile(dir, join(dir, "run.command")), /not a file of this agent's/, "the system would run it");
+    await assert.rejects(agentFile(dir, join(root, "outside.ts")), /not a file of this agent's/);
+    await assert.rejects(agentFile(dir, join(dir, "escape.ts")), /not a file of this agent's/, "a link out of the folder");
+    await assert.rejects(agentFile(dir, join(dir, "nope.ts")), /ENOENT/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

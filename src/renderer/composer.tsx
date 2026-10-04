@@ -429,8 +429,8 @@ export function Composer({
   // Back from connecting a provider that was started here: the picker comes up again, with the new
   // provider's models in it, and nothing chosen for the person.
   useEffect(() => {
-    if (store.takePickerRequest()) setPicking(true);
-  }, [store]);
+    if (view.pickerAsked !== undefined && store.takePickerRequest()) setPicking(true);
+  }, [view.pickerAsked, store]);
   // Every opening rereads the credential file, so a provider connected in Settings shows up.
   // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {

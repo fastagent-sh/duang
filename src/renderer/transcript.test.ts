@@ -271,9 +271,13 @@ test("history follows the active leaf instead of flattening sibling branches", (
 });
 
 test("retry and serving failures preserve the runtime's original message; a retry is not itself a failure", () => {
-  assert.deepEqual(apply([], event("retry_scheduled", { attempt: 1, maxAttempts: 3, error: "429 quota" })), [
-    { kind: "note", tone: "info", text: "retrying 1/3: 429 quota", at: 0 },
+  const first = apply([], event("retry_scheduled", { attempt: 1, maxAttempts: 3, error: "Anthropic API error (429): rate_limit_error" }));
+  assert.deepEqual(first, [
+    { kind: "note", tone: "info", text: "retrying 1/3: the provider is limiting requests", retry: 1, at: 0 },
   ]);
+  // One line that moves on with each attempt; the failure card, if it comes, keeps the provider's words.
+  const second = apply(first, event("retry_scheduled", { attempt: 2, maxAttempts: 3, error: "Anthropic API error (429): rate_limit_error" }));
+  assert.deepEqual(second.map((item) => item.kind === "note" && item.text), ["retrying 2/3: the provider is limiting requests"]);
   assert.deepEqual(apply([], event("serving_error", { message: "disk is full" })), [
     { kind: "note", tone: "error", text: "disk is full", title: "The agent's runtime reported a problem", reason: "disk is full", at: 0 },
   ]);
@@ -385,8 +389,7 @@ test("history says how an answer ended, as a watcher saw it live, and offers a f
     failed("4", "Connection error."),
   ]);
   assert.deepEqual(notes(gaveUp), [
-    ["info", "retried: Connection error."],
-    ["info", "retried: Connection error."],
+    ["info", "retried 2 times: could not reach the provider"],
     ["error", "run failed: Connection error."],
   ]);
   assert.deepEqual((gaveUp.at(-1) as { resend?: unknown }).resend, { text: "summarise it", toolsRan: false });
@@ -394,7 +397,7 @@ test("history says how an answer ended, as a watcher saw it live, and offers a f
   // Still running: the last failure is a retry waiting out its delay, not the run's ending.
   assert.deepEqual(
     notes(fromEntries([entry("1", "user", { text: "summarise it" }), failed("2", "overloaded")], undefined, true)),
-    [["info", "retried: overloaded"]],
+    [["info", "retried once: the provider had a problem"]],
   );
 
   // A partial answer the stream dropped, a stop, and an answer cut off at the output limit.

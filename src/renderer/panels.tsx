@@ -3,7 +3,7 @@
  * agent from opening, and a fresh start. Each says what it means for the person and offers the way on
  * (docs/ui.md §9b).
  */
-import { ArrowClockwise, FolderOpen, FolderSimplePlus, Plus, X } from "@phosphor-icons/react";
+import { ArrowClockwise, FolderOpen, FolderSimplePlus, PencilSimple, Plus, X } from "@phosphor-icons/react";
 import { Button } from "./ui.tsx";
 import { Page, Problem } from "./problem.tsx";
 import { home } from "./paths.ts";
@@ -54,11 +54,16 @@ export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: str
 /** The agent's definition does not load: its own error says where, and the folder is where to fix it. */
 export function BrokenAgent({
   message,
+  file,
+  onOpenFile,
   onRemove,
   onReveal,
   onRetry,
 }: {
   message: string;
+  /** The file in its folder the error names, when it names one: opening it is the way to fix it. */
+  file?: string;
+  onOpenFile: (file: string) => void;
   onRemove: () => void;
   onReveal: () => void;
   onRetry: () => void;
@@ -68,11 +73,20 @@ export function BrokenAgent({
       layout="page"
       tone="error"
       title="This agent could not be loaded"
-      advice="Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
+      advice={
+        file
+          ? "Something in its definition stops it from starting. Fix it in the file below, then retry; duang has changed nothing."
+          : "Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
+      }
       reason={message}
       actions={
         <>
-          <Button kind="primary" size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
+          {file && (
+            <Button kind="primary" size={32} icon={<PencilSimple size={14} />} onClick={() => onOpenFile(file)}>
+              Open {file.split("/").at(-1)}
+            </Button>
+          )}
+          <Button kind={file ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
           <Button size={32} icon={<FolderOpen size={14} />} onClick={onReveal}>
@@ -89,9 +103,19 @@ export function BrokenAgent({
 
 /**
  * The folder the agent was added from is not there: moved, deleted, or on a drive that is not mounted.
- * Retry covers the drive coming back; a moved folder is added again from where it is now.
+ * Locating it points the same agent at where it is now; Retry covers a drive coming back.
  */
-export function MissingFolder({ dir, onRemove, onRetry }: { dir: string; onRemove: () => void; onRetry: () => void }) {
+export function MissingFolder({
+  dir,
+  onLocate,
+  onRemove,
+  onRetry,
+}: {
+  dir: string;
+  onLocate: () => void;
+  onRemove: () => void;
+  onRetry: () => void;
+}) {
   return (
     <Problem
       layout="page"
@@ -99,14 +123,17 @@ export function MissingFolder({ dir, onRemove, onRetry }: { dir: string; onRemov
       title="This agent's folder is not there"
       advice={
         <>
-          duang last found it at <span className="font-mono text-[12.5px]">{home(dir)}</span>. If it is on a drive,
-          connect it and retry. If it was moved, remove this agent and add the folder from where it is now; its
-          conversations travel with the folder.
+          duang last found it at <span className="font-mono text-[12.5px]">{home(dir)}</span>. If it was moved,
+          show duang where it is now: the agent keeps its name and conversations. If it is on a drive, connect it
+          and retry.
         </>
       }
       actions={
         <>
-          <Button kind="primary" size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
+          <Button kind="primary" size={32} icon={<FolderOpen size={14} />} onClick={onLocate}>
+            Locate folder…
+          </Button>
+          <Button size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
           <Button kind="danger" size={32} icon={<X size={14} />} onClick={onRemove}>

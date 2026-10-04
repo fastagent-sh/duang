@@ -248,13 +248,15 @@ export default function Gallery() {
             <div className="flex rounded-float ring-1 ring-stroke">
               <BrokenAgent
                 message={"~/research/fastagent/fastagent.config.ts: Unexpected token '}' (12:3)\n  10 |   model: \"anthropic/claude-sonnet-4-5\",\n  11 |   tools: [\"read\", \"bash\"\n> 12 | }\n     |   ^"}
+                file="~/research/fastagent/fastagent.config.ts"
+                onOpenFile={() => {}}
                 onRemove={() => {}}
                 onReveal={() => {}}
                 onRetry={() => {}}
               />
             </div>
             <div className="flex rounded-float ring-1 ring-stroke">
-              <MissingFolder dir="/Users/someone/research/video-research" onRemove={() => {}} onRetry={() => {}} />
+              <MissingFolder dir="/Users/someone/research/video-research" onLocate={() => {}} onRemove={() => {}} onRetry={() => {}} />
             </div>
           </div>
         </Section>

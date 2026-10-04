@@ -41,6 +41,8 @@ function harness() {
     readState: async () => ({ status: "idle", pending: { steering: [], followUp: [] } }),
     removeAgent: async () => ({ ok: true }) as SessionResult,
     scaffoldAgent: async () => "/a/fastagent",
+    relocateAgent: async () => undefined,
+    openAgentFile: async () => {},
     listCommands: async () => [],
     revealAgent: async () => {},
     revealRegistry: async () => {},
@@ -485,7 +487,7 @@ test("settlement in another agent cannot invalidate the visible agent's list ref
 });
 
 test("failed delete and abort remain visible; a stale stream never changes a reopened session", async () => {
-  const { api, store, emit, end } = harness();
+  const { api, store, emit, end, opens } = harness();
   await store.load();
   const old = store.getSnapshot().conversation!;
   const refusal = { ok: false as const, error: { code: "busy", message: "runtime refused", retryable: true } };
@@ -502,17 +504,30 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   emit(current, "run_started");
   emit(current, "tool_started", { id: "t", name: "bash" });
   assert.equal(store.getSnapshot().busy, true);
-  // A dead subscription reports nothing further, so the run controls must not wait for `run_settled`.
+  // The first end reconnects by itself: listening again and reading the history is FastAgent's contract
+  // for a subscriber it let go.
+  const opened = opens.length;
   end(current, "stream disconnected", false);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(opens.length, opened + 1, "reconnected by itself");
+  const again = store.getSnapshot().conversation!;
+  assert.notEqual(again, current);
+  assert.equal(store.getSnapshot().alert, undefined, "and nothing is said about it");
+  emit(again, "run_started");
+  emit(again, "tool_started", { id: "t", name: "bash" });
+  // One that ends again soon after is said, and waits for the person. A dead subscription reports nothing
+  // further, so the run controls must not wait for `run_settled`.
+  end(again, "stream disconnected", false);
+  assert.equal(opens.length, opened + 1, "not reconnected in a loop");
   assert.equal(store.getSnapshot().busy, false);
   const tool = store.getSnapshot().conversation!.items.find((item) => item.kind === "tool");
   assert.notEqual(tool?.kind === "tool" && tool.ended, undefined, "the tool's clock stops with the stream");
   store.setDraft("keep me");
   assert.equal(store.getSnapshot().blocked, "reconnect before sending");
   await assert.rejects(() => store.send(), /reconnect before sending/, "a blocked send is a bug, not a no-op");
-  assert.equal(current.draft, "keep me");
-  assert.equal(current.error?.reason, "stream disconnected");
-  assert.equal(current.error?.title, "The live connection to this conversation was lost");
+  assert.equal(again.draft, "keep me");
+  assert.equal(again.error?.reason, "stream disconnected");
+  assert.equal(again.error?.title, "The live connection to this conversation was lost");
   await store.retry();
   assert.equal(store.getSnapshot().conversation?.draft, "keep me");
   assert.equal(store.getSnapshot().conversation?.error, undefined);
@@ -522,7 +537,11 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
 test("an expected end of a subscription is reported without pretending the conversation failed", async () => {
   const { store, emit, end } = harness();
   await store.load();
+  // The first end reconnects by itself; the one after it, soon after, is what the person is told.
+  end(store.getSnapshot().conversation!, "Its runtime let this subscriber go", true);
+  await new Promise((resolve) => setImmediate(resolve));
   const c = store.getSnapshot().conversation!;
+  assert.equal(c.ended, undefined, "the first end was answered by listening again");
   emit(c, "run_started");
   end(c, "The agent was removed", true);
   const current = store.getSnapshot().conversation!;

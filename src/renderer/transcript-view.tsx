@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Plug,
+  Swap,
   ArrowClockwise,
   ArrowDown,
   ArrowSquareOut,
@@ -143,6 +144,8 @@ export function Transcript({
   onRetry,
   onUsage,
   onSettings,
+  onPickModel,
+  provider,
 }: {
   items: Item[];
   /**
@@ -168,8 +171,12 @@ export function Transcript({
   onRetry?: () => void;
   /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
   onUsage: (provider: string) => void;
-  /** Opens Settings where a problem's way on is: the model providers, or the network. */
-  onSettings: (where: Fix) => void;
+  /** Opens Settings where a problem's way on is: this conversation's provider's sign-in, or the network. */
+  onSettings: (where: "providers" | "network") => void;
+  /** Opens the model picker, for a problem another model gets round. */
+  onPickModel: () => void;
+  /** The provider this conversation runs on, by the name the person knows it by. */
+  provider?: string;
 }) {
   // The ways on belong to the latest problem only, and only while nothing runs: an earlier one is history.
   const last = items.at(-1);
@@ -178,7 +185,7 @@ export function Transcript({
     <>
       {problem.fix === "providers" && (
         <Button kind="secondary" size={28} onClick={() => onSettings("providers")} icon={<Plug size={12} />}>
-          Model providers
+          {provider ? `Sign in to ${provider} again` : "Model providers"}
         </Button>
       )}
       {problem.fix === "network" && (
@@ -189,6 +196,11 @@ export function Transcript({
       {problem.limit && (
         <Button kind="secondary" size={28} onClick={() => onUsage(problem.limit!)} title="Open the plan's usage page in the browser" icon={<ArrowSquareOut size={12} />}>
           View usage
+        </Button>
+      )}
+      {problem.fix === "model" && (
+        <Button kind="secondary" size={28} onClick={onPickModel} title="Choose another model, then retry" icon={<Swap size={12} />}>
+          Use another model
         </Button>
       )}
       {onRetry && (

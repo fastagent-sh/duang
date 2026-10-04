@@ -708,8 +708,12 @@ the same parts, in this order:
    status, a network error code), conservatively; a reason nothing recognises gets "The run stopped
    with an error", never a guess (`problems.ts`).
 2. **What to do**, one sentence, when there is something besides the buttons.
-3. **The way on**, as buttons, the likeliest fix first: Model providers, Network settings, View usage,
-   Retry, Reconnect. A problem with nothing to do says so by having none.
+3. **The way on**, as buttons that land where the fix is done, the likeliest first: *Sign in to OpenAI
+   again* opens that provider's row ready to connect, *Use another model* opens the picker, *Locate
+   folder…* asks where a moved agent is, *Open fastagent.config.ts* opens the file its error names;
+   then Network settings, View usage, Retry, Reconnect. A problem with nothing to do has none. A way on
+   that is the whole fix happens in place: a send whose model cannot run opens the picker by itself, and a
+   subscription the runtime let go reconnects once by itself.
 4. **The original words**, verbatim, because they are what a report needs (AGENTS.md). Where nothing
    else explains the problem, a short one-line reason is the explanation and reads in place, in the
    app's face. Otherwise it folds to its first line, quietly, and opens into a mono well with a copy

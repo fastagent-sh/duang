@@ -6,9 +6,13 @@
  * status in pi's `… API error (401)`, a network error code), so a reason it does not recognise gets the
  * plain title and no guess.
  */
+import { EDITABLE } from "../main/editable.ts";
 
-/** Where in duang the way on is, when it is somewhere other than trying again. */
-export type Fix = "providers" | "network";
+/**
+ * Where in duang the way on is, when it is somewhere other than trying again: signing in to the provider
+ * again, the network settings, or another model for this conversation.
+ */
+export type Fix = "providers" | "network" | "model";
 
 export interface Explained {
   title: string;
@@ -31,17 +35,21 @@ const RULES: { test: RegExp; explained: Explained }[] = [
     test: /\((?:401|403)\)|\b(?:401|403) (?:unauthori[sz]ed|forbidden)|invalid[_ ]api[_ ]key|incorrect api key|authentication|no api key/i,
     explained: {
       title: "The provider did not accept the sign-in",
-      advice: "The key or sign-in may have expired or been revoked. Reconnect the provider, then retry.",
+      advice: "The key or sign-in may have expired or been revoked. Sign in again, then retry.",
       fix: "providers",
     },
   },
   {
     test: /\(429\)|rate.?limit|too many requests|insufficient_quota|quota exceeded|usage limit/i,
-    explained: { title: "The provider is limiting requests", advice: "Wait a little, then retry." },
+    explained: { title: "The provider is limiting requests", advice: "Wait a little and retry, or use another model.", fix: "model" },
   },
   {
     test: /\((?:500|502|503|504|529)\)|overloaded|server_error|internal server error|bad gateway|service unavailable/i,
-    explained: { title: "The provider had a problem", advice: "This is usually brief. Retry in a moment." },
+    explained: {
+      title: "The provider had a problem",
+      advice: "This is usually brief. Retry in a moment, or use another model.",
+      fix: "model",
+    },
   },
   {
     test: /ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|UND_ERR|fetch failed|connection error|socket hang up|network error|unsupported proxy route/i,
@@ -56,4 +64,16 @@ const RULES: { test: RegExp; explained: Explained }[] = [
 /** A run that ended in a failure, explained from its reason. */
 export function explainRunFailure(reason: string): Explained {
   return RULES.find(({ test }) => test.test(reason))?.explained ?? { title: "The run stopped with an error" };
+}
+
+
+/**
+ * The file in the agent's folder that a loading error names first (`…/fastagent.config.ts: Expected ','`),
+ * so the person can open it where the problem is. Only a path inside `dir`, of a kind people edit; main
+ * checks both again before opening anything.
+ */
+export function fileIn(reason: string, dir: string): string | undefined {
+  const match = reason.match(/^(\/[^\n]*?\.[a-z]+)(?::\d+(?::\d+)?)?[:\s]/m);
+  const file = match?.[1];
+  return file && file.startsWith(`${dir}/`) && EDITABLE.test(file) ? file : undefined;
 }

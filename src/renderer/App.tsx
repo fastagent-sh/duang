@@ -5,6 +5,7 @@ import { rows } from "./sessions.ts";
 import { queueView } from "./transcript.ts";
 import { BrokenAgent, MissingFolder, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
 import { Problem } from "./problem.tsx";
+import { fileIn } from "./problems.ts";
 import { ArrowClockwise } from "@phosphor-icons/react";
 import { ConversationList, Sidebar } from "./rows.tsx";
 import { ConversationHeader } from "./header.tsx";
@@ -30,7 +31,9 @@ export default function App() {
   // is not remembered across launches. Settings reached from the model picker carries that with it:
   // its "Connect a provider" lands on the providers to add, and a connection made from there
   // returns to the picker. It is part of the same state so that every way out of Settings drops it.
-  const [settings, setSettings] = useState<false | { fromPicker?: true }>(false);
+  // `reconnect`: reached from a problem with a provider's sign-in, whose row opens; a connection made there
+  // returns to the conversation, where Retry waits.
+  const [settings, setSettings] = useState<false | { fromPicker?: true; reconnect?: string }>(false);
   const openSettings = () => setSettings((open) => open || {});
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
@@ -130,6 +133,13 @@ export default function App() {
   useEffect(() => {
     if (provider) void store.loadUsage(provider);
   }, [provider, busy, c?.session, store]);
+  // A problem with this provider's sign-in names it on its button, by pi's name for it, once that is read.
+  const last = c?.items.at(-1);
+  const signInProblem = last?.kind === "note" && last.fix === "providers";
+  useEffect(() => {
+    if (signInProblem && !view.providers) void store.loadProviders();
+  }, [signInProblem, store]);
+  const providerName = provider && (view.providers?.find((row) => row.id === provider)?.name ?? provider);
 
   return (
     // Panels float on the window's canvas rather than filling it edge to edge: the gap is what makes
@@ -168,7 +178,9 @@ export default function App() {
               view={view}
               store={store}
               connectOnOpen={settings.fromPicker}
+              reconnect={settings.reconnect}
               onConnected={() => {
+                if (settings.reconnect) return setSettings(false);
                 if (!settings.fromPicker) return;
                 store.requestPicker();
                 setSettings(false);
@@ -280,12 +292,19 @@ export default function App() {
               ) : pane === "broken" ? (
                 <BrokenAgent
                   message={view.error ?? ""}
+                  file={agent && view.error ? fileIn(view.error, agent.dir) : undefined}
+                  onOpenFile={(file) => void store.openAgentFile(file)}
                   onRemove={remove}
                   onReveal={() => void store.reveal()}
                   onRetry={() => void store.retry()}
                 />
               ) : pane === "missing-dir" ? (
-                <MissingFolder dir={agent?.dir ?? ""} onRemove={remove} onRetry={() => void store.retry()} />
+                <MissingFolder
+                  dir={agent?.dir ?? ""}
+                  onLocate={() => void store.relocateAgent()}
+                  onRemove={remove}
+                  onRetry={() => void store.retry()}
+                />
               ) : pane === "no-agent" ? (
                 <NeedsAgent dir={agent?.dir ?? ""} onCreate={() => void store.scaffold()} onRemove={remove} />
               ) : pane === "settling" ? (
@@ -327,7 +346,9 @@ export default function App() {
                     resume={store.scrollOf(c.agentId, c.session)}
                     onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
                     onUsage={(provider) => void store.openUsagePage(provider)}
-                    onSettings={(where) => setSettings(where === "providers" ? { fromPicker: true } : {})}
+                    onSettings={(where) => setSettings(where === "providers" && provider ? { reconnect: provider } : {})}
+                    onPickModel={store.requestPicker}
+                    provider={providerName}
                     onRetry={
                       view.resend
                         ? () => {

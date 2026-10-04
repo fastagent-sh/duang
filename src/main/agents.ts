@@ -145,6 +145,15 @@ export function setAgentModel(row: AgentRow, model: string, session?: string): P
   });
 }
 
+/** Points the agent at the folder it was moved to; the next open builds its runtime from there. */
+export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
+  return change(id, async () => {
+    await registry.relocate(id, dir);
+    opened.delete(id);
+    return { ok: true };
+  });
+}
+
 export function removeAgent(id: string): Promise<SessionResult> {
   return change(id, async () => {
     await registry.remove(id);
