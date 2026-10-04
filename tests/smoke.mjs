@@ -68,7 +68,13 @@ if (!process.versions.electron) {
       join(configured, "models.json"),
       JSON.stringify({
         providers: {
-          local: { baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", apiKey: "ollama", models: [{ id: "m1" }] },
+          // Enough models with the real catalog's to pass the picker's 60-row cut-off, which says so.
+          local: {
+            baseUrl: "http://127.0.0.1:9/v1",
+            api: "openai-completions",
+            apiKey: "ollama",
+            models: [{ id: "m1" }, ...Array.from({ length: 20 }, (_, i) => ({ id: `m-extra-${i + 1}` }))],
+          },
         },
       }),
     );

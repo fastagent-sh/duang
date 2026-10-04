@@ -182,14 +182,14 @@ export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate:
   );
 }
 
-/** The opening screen of a conversation nobody has spoken in yet. */
-export function NewConversation({ children }: { children: React.ReactNode }) {
+/**
+ * The opening screen of a conversation nobody has spoken in yet: the question in the empty page, and the
+ * composer where it stays once the conversation starts, at the bottom, so the first message does not move it.
+ */
+export function NewConversation() {
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto grid place-items-center px-6">
-      <div className="column -mt-16">
-        <h1 className="mb-5 text-center text-[22px] font-medium">What should we work on?</h1>
-        {children}
-      </div>
+    <div className="flex-1 min-h-0 grid place-items-center px-6">
+      <h1 className="column text-center text-[22px] font-medium">What should we work on?</h1>
     </div>
   );
 }

@@ -125,8 +125,9 @@ export default function App() {
   const pending = c?.state?.pending;
   const waiting = c ? queueView(c.waiting, pending?.steering ?? []) : [];
   const { pane, alert } = view;
-  // A transcript fills the pane, and the header and composer float over it.
-  const reading = pane === "settling" || pane === "transcript";
+  // A transcript fills the pane, and the header and composer float over it. A new conversation's composer sits
+  // where its transcript's will, so sending the first message does not move it.
+  const reading = pane === "settling" || pane === "transcript" || pane === "start";
   // The plan that pays for this conversation: its own model's provider, which may differ from the
   // agent default.
   const provider = (c?.state?.model ?? view.model)?.split("/")[0];
@@ -311,7 +312,7 @@ export default function App() {
               ) : pane === "settling" ? (
                 <div className="flex-1 min-h-0" aria-busy="true" />
               ) : pane === "start" || !c /* never both "transcript" and no conversation */ ? (
-                <NewConversation>{composer}</NewConversation>
+                <NewConversation />
               ) : (
                 // 16 below the composer and 48 above it: the transcript is pinned to its bottom while a
                 // run streams, so this gap *is* where the newest line lands. At 16 the line you are
