@@ -59,8 +59,11 @@ it, or the model, makes the runtime keep the conversation, which the list shows 
 until its first message. An agent with no model yet has no levels, so the picker says effort can be set
 once a model is chosen; when the runtime reports no levels for another reason (it could not read the
 conversation's settings), the picker says that instead, and a model with one level says it has no effort
-setting. The level is set on the
-open conversation only, and is refused while it runs; the arrow keys move along the track
+setting, and the chip names the level only when there is a choice. The level is set on the
+open conversation only; a conversation never changed follows the agent's `thinkingLevel`, and a model change
+re-reads the levels, since they belong to the model. While a turn runs the chip is disabled with "Stop the
+turn to change the model or effort" (FastAgent refuses either change then, `session_busy`, rather than
+queueing it); the arrow keys move along the track
 and write nothing, and Enter, Space or a click choose. A list of more than 60 models says how many it left out. The picker shows no credential path and
 links to no provider page; with no model to list its one offer is **Connect a provider**, which
 returns to the picker after connecting. It says no model is available rather than that nothing is
@@ -220,8 +223,8 @@ branching are conditional on demonstrated long-conversation needs, not a checkli
 
 The first version ([#84](https://github.com/fastagent-sh/duang/issues/84)) covers subscription
 sign-in and API keys for pi's built-in providers, disconnecting, and the picker's way in. Custom endpoints come after it
-([design](design.md)). Reasoning effort is its own feature
-([#83](https://github.com/fastagent-sh/duang/issues/83)).
+([design](design.md)). Reasoning effort ([#83](https://github.com/fastagent-sh/duang/issues/83)) is set in
+the model picker, per conversation.
 
 **Model picker.** The list is already the open agent's, custom endpoints included (#59). With
 no model to list it says so (naming a ChatGPT sign-in to reconnect as one cause) and offers **Connect a provider**; otherwise it ends with **Manage

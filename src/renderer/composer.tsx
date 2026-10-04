@@ -363,10 +363,13 @@ export function Composer({
   const needsModel = state === "missing_model";
   const modelDisabled =
     view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir";
-  /** Why the model cannot be changed right now, or false when it can. */
+  /**
+   * Why the model and its effort cannot be changed right now, or false when they can. One chip holds both, and
+   * FastAgent refuses either change while a run holds the conversation (`session_busy`) rather than queueing it.
+   */
   const modelReason =
     (!agentId && "Select an agent first") ||
-    (busy && "Stop the turn to change the model") ||
+    (busy && "Stop the turn to change the model or effort") ||
     (modelDisabled && "This agent is not ready");
   const value = c?.draft ?? "";
   const disabled = !!view.blocked;

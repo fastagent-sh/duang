@@ -67,7 +67,7 @@ export default function Gallery() {
 
         <Section title="Buttons — disabled" note="the prop takes the reason, so nothing greys out silently">
           <Button kind="primary" size={28} icon={<ArrowUp size={15} />} disabled="Select an agent first" />
-          <Button kind="ghost" size={28} disabled="Stop the turn to change the model" className="font-mono">
+          <Button kind="ghost" size={28} disabled="Stop the turn to change the model or effort" className="font-mono">
             anthropic/claude-sonnet-5
           </Button>
           <Button disabled="This agent is not ready">Reveal in Finder</Button>
