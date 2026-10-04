@@ -28,6 +28,7 @@ export function Settings({
   store,
   connectOnOpen,
   reconnect,
+  network,
   onConnected,
   onMenu,
   onClose,
@@ -37,6 +38,8 @@ export function Settings({
   connectOnOpen?: boolean;
   /** A provider to sign in to again, from a problem that its sign-in was not accepted: its row opens. */
   reconnect?: string;
+  /** From a problem reaching a provider: the proxy settings are what to look at, so they are in view. */
+  network?: boolean;
   onConnected: () => void;
   onMenu: DuangApi["menu"];
   onClose: () => void;
@@ -47,6 +50,9 @@ export function Settings({
   const [server, setServer] = useState("");
   const [port, setPort] = useState("");
   const [problem, setProblem] = useState<string>();
+  useEffect(() => {
+    if (network && saved) document.getElementById("network-heading")?.scrollIntoView({ block: "start" });
+  }, [network, !!saved]);
 
   // A file whose manual proxy main did not write is reported like any other unreadable file.
   const load = async () => {

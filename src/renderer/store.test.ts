@@ -1464,11 +1464,12 @@ test("a rename that cannot be read back, and one refused on a conversation nobod
   await store.renameSession("a", "s1", "Named");
   assert.equal(store.getSnapshot().sessionsError["a"], "runtime would not restart");
 
-  // A conversation of another agent, never opened here: there is no transcript to put a refusal in,
-  // so it goes on that agent's row rather than into the window-wide banner.
+  // A conversation of another agent, never opened here: there is no transcript to put a refusal in, so it
+  // is said by what it was, not as that agent's list failing to read nor with someone else's Retry.
   api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
   await store.renameSession("b", "never-opened", "Named");
-  assert.equal(store.getSnapshot().sessionsError["b"], "session is busy");
+  assert.deepEqual(store.getSnapshot().failure, { title: "The conversation was not renamed", reason: "session is busy" });
+  assert.equal(store.getSnapshot().sessionsError["b"], undefined, "the list was read; this is not that");
   assert.equal(store.getSnapshot().error, undefined, "and not into the banner with someone else's Retry");
   store.dispose();
 });
@@ -1974,10 +1975,12 @@ test("a failure about another conversation is said there, and a refusal said bef
   api.openAgent = async (id) => (id === "b" ? listed("b1") : ready);
   await store.load();
   const c = store.getSnapshot().conversation!;
-  // Deleting a conversation of an agent that is not open: its row says why, not the open transcript.
+  // Deleting a conversation of an agent that is not open: said by what it was, not in the open transcript,
+  // and not as that agent's list failing to read.
   api.deleteSession = async () => ({ ok: false, error: { code: "busy", message: "b1 is running", retryable: true } });
   await store.deleteSession("b", "b1");
-  assert.equal(store.getSnapshot().sessionsError["b"], "b1 is running");
+  assert.deepEqual(store.getSnapshot().failure, { title: "The conversation was not deleted", reason: "b1 is running" });
+  assert.equal(store.getSnapshot().sessionsError["b"], undefined);
   assert.equal(c.items.length, 0, "the open transcript is not where it goes");
 
   // The same refusal twice is said twice: each send says how it ended.

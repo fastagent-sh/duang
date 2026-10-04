@@ -475,7 +475,8 @@ export function Message({
       if (item.title)
         return <Problem tone={item.tone} title={item.title} advice={item.advice} reason={item.reason} actions={actions} />;
       return (
-        <div className="flex items-center justify-center gap-1.5 text-[12px] text-muted">
+        // A retry's line keeps the provider's words in full on hover; what it says is their meaning.
+        <div title={item.reason} className="flex items-center justify-center gap-1.5 text-[12px] text-muted">
           <Info size={12} className="shrink-0" />
           <span className="min-w-0 break-words">{item.text}</span>
         </div>

@@ -52,8 +52,10 @@ async function build(row: AgentRow): Promise<Opened> {
 async function assemble(row: AgentRow): Promise<Opened> {
   // FastAgent says "is not a fastagent agent" for a directory that is not there too, and that one must not
   // be offered a scaffold: there is no folder to put it in.
-  await requireFolder(row.dir);
+  // Forgotten before anything can fail: a failure that is not the config's (a folder it may not read) must
+  // not offer to replace the config.
   failedConfigs.delete(row.id);
+  await requireFolder(row.dir);
   try {
     const assembly = await createPiAgentFromDir(row.dir, {
       sessionControl: true,

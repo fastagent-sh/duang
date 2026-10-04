@@ -273,8 +273,20 @@ test("history follows the active leaf instead of flattening sibling branches", (
 test("retry and serving failures preserve the runtime's original message; a retry is not itself a failure", () => {
   const first = apply([], event("retry_scheduled", { attempt: 1, maxAttempts: 3, error: "Anthropic API error (429): rate_limit_error" }));
   assert.deepEqual(first, [
-    { kind: "note", tone: "info", text: "retrying 1/3: the provider is limiting requests", retry: 1, at: 0 },
+    {
+      kind: "note",
+      tone: "info",
+      text: "retrying 1/3: the provider is limiting requests",
+      reason: "Anthropic API error (429): rate_limit_error",
+      retry: 1,
+      at: 0,
+    },
   ]);
+  // A reason nothing recognises is said in its own words, never as a run that stopped: the run goes on.
+  assert.deepEqual(
+    apply([], event("retry_scheduled", { attempt: 1, maxAttempts: 3, error: "Request timed out" })).map((item) => item.kind === "note" && item.text),
+    ["retrying 1/3: Request timed out"],
+  );
   // One line that moves on with each attempt; the failure card, if it comes, keeps the provider's words.
   const second = apply(first, event("retry_scheduled", { attempt: 2, maxAttempts: 3, error: "Anthropic API error (429): rate_limit_error" }));
   assert.deepEqual(second.map((item) => item.kind === "note" && item.text), ["retrying 2/3: the provider is limiting requests"]);

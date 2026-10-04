@@ -7,7 +7,7 @@ import type {
   SessionEvent,
   SessionState,
 } from "@fastagent-sh/fastagent/session";
-import { explainRunFailure, type Fix } from "./problems.ts";
+import { explainRunFailure, recognise, type Fix } from "./problems.ts";
 
 /**
  * When it happened. Required on every item, because both the day separators and the time under a
@@ -70,10 +70,13 @@ export type Item = At &
       retry?: number;
     });
 
-/** A retry's reason in a quiet line: what it means, not the provider's JSON, which the failure card keeps. */
+/**
+ * A retry's reason in a quiet line: what it means when that is recognised, else the reason's own first line.
+ * Never a failure's ending ("the run stopped"): a retrying run goes on. The words in full stay on the line.
+ */
 const retryReason = (reason: string) => {
-  const { title } = explainRunFailure(reason);
-  return title.charAt(0).toLowerCase() + title.slice(1);
+  const title = recognise(reason)?.title;
+  return title ? title.charAt(0).toLowerCase() + title.slice(1) : reason.split("\n")[0]!;
 };
 
 /** A run's failure, as the card says it: what it means, the reason verbatim, and a plan limit's page. */
@@ -334,6 +337,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       kind: "note",
       tone: "info",
       text: `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(message)}`,
+      reason: message,
       retry: count,
       at,
     };
@@ -652,6 +656,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           tone: "info",
           at: event.timestamp,
           text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${retryReason(e.data.error)}`,
+          reason: e.data.error,
           retry: e.data.attempt,
         },
       ];

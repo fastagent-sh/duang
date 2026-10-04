@@ -7,6 +7,7 @@ import type { Store, View } from "./store.ts";
 import { home } from "./paths.ts";
 import { tokens } from "./usage.ts";
 import { Problem } from "./problem.tsx";
+import { unavailableNotice } from "./problems.ts";
 import type { Models } from "../preload/index.ts";
 
 /** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
@@ -288,26 +289,24 @@ function ModelPicker({
 /**
  * Why the picker opened by itself: the message just sent cannot run on this conversation's model. Said in
  * one plain sentence, with the way on: choose a model below, or connect the provider it needs (which
- * returns here). Whether the provider is connected at all is read from the list itself: one with no model
- * in it is not.
+ * returns here).
  */
 function Unavailable({ model, models, onProviders }: { model: string; models?: Models; onProviders: () => void }) {
-  const provider = model.slice(0, model.indexOf("/"));
-  const connected = models?.some(({ spec }) => spec.startsWith(`${provider}/`));
+  const notice = unavailableNotice(model, models);
+  if (!notice) return null;
+  const { title, connect } = notice;
   return (
     <div role="status" className="mx-1.5 mt-1.5 flex gap-2.5 rounded-card bg-surface-2 px-3 py-2.5 text-[13px]">
       <Prohibit size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
       <div className="min-w-0 space-y-1.5">
         <p className="leading-snug">
-          <span className="font-semibold">
-            {connected === false ? `${provider} isn't connected` : `${model.slice(provider.length + 1)} isn't available`}
-          </span>
+          <span className="font-semibold">{title}</span>
           <br />
-          <span className="text-muted">Choose another model to send your message{connected === false ? ", or connect it" : ""}.</span>
+          <span className="text-muted">Choose another model to send your message{connect ? ", or connect it" : ""}.</span>
         </p>
-        {connected === false && (
+        {connect && (
           <Button kind="secondary" size={28} icon={<Plug size={12} />} onClick={onProviders}>
-            Connect {provider}
+            Connect {connect}
           </Button>
         )}
       </div>

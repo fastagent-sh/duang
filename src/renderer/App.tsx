@@ -32,7 +32,8 @@ export default function App() {
   // returns to the picker. It is part of the same state so that every way out of Settings drops it.
   // `reconnect`: reached from a problem with a provider's sign-in, whose row opens; a connection made there
   // returns to the conversation, where Retry waits.
-  const [settings, setSettings] = useState<false | { fromPicker?: true; reconnect?: string }>(false);
+  // `network`: reached from a problem reaching a provider, with the proxy settings in view.
+  const [settings, setSettings] = useState<false | { fromPicker?: true; reconnect?: string; network?: true }>(false);
   const openSettings = () => setSettings((open) => open || {});
   // Whether the conversation list is showing, for the header button's pressed look. The popover owns
   // the fact; this mirror arrives a task later, with the popover's `toggle` event.
@@ -178,6 +179,7 @@ export default function App() {
               store={store}
               connectOnOpen={settings.fromPicker}
               reconnect={settings.reconnect}
+              network={settings.network}
               onConnected={() => {
                 if (settings.reconnect) return setSettings(false);
                 if (!settings.fromPicker) return;
@@ -345,7 +347,9 @@ export default function App() {
                     resume={store.scrollOf(c.agentId, c.session)}
                     onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
                     onUsage={(provider) => void store.openUsagePage(provider)}
-                    onSettings={(where) => setSettings(where === "providers" && provider ? { reconnect: provider } : {})}
+                    onSettings={(where) =>
+                      setSettings(where === "network" ? { network: true } : where === "providers" && provider ? { reconnect: provider } : {})
+                    }
                     onPickModel={store.requestPicker}
                     provider={providerName}
                     onRetry={

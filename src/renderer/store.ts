@@ -33,18 +33,18 @@ const RECONNECT_GAP_MS = 30_000;
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
 export type AgentState = "ready" | "missing_model" | "no_agent" | "missing_dir" | "broken";
-/**
- * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
- * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
- * of the wrong screen.
- * `start` is that page, for a new conversation or an agent with no model yet.
- */
 /** A problem said over the pane: what it means, what to do, and the original words. */
 export interface Trouble {
   title: string;
   advice?: string;
   reason: string;
 }
+/**
+ * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
+ * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
+ * of the wrong screen.
+ * `start` is that page, for a new conversation or an agent with no model yet.
+ */
 export type Pane =
   | "unreadable-registry"
   | "no-agents"
@@ -431,13 +431,13 @@ export function createStore(api: DuangApi) {
   const fail = (title: string, error: unknown) => publish({ failure: { title, reason: message(error) } });
   /**
    * About one conversation that may not be the open one (renaming or deleting it from the list): in its
-   * transcript when this window holds it, else on its agent's row, where the sidebar says why a list is not
-   * what you expected.
+   * transcript when this window holds it, else above the pane by what it was. Never on its agent's row,
+   * which says that the list could not be read: a refused delete is not that.
    */
   const reportOn = (agentId: string, session: string, title: string, error: unknown, tone: "warning" | "error") => {
     const held = conversations.get(key(agentId, session));
     if (held) note(held, { error, title, tone });
-    else publish({ sessionsError: { ...view.sessionsError, [agentId]: message(error) } });
+    else fail(title, error);
   };
   const close = (c: Conversation) => {
     drafts.set(key(c.agentId, c.session), c.draft);

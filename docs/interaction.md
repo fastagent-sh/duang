@@ -131,7 +131,8 @@ conversation whose provider was disconnected, or recorded on a route duang no lo
 and since choosing a model is the way on, the model picker opens by itself on it: a line at its top says
 *anthropic isn't connected* (or that the model is not available with the connection that is), "Choose another
 model to send your message", with **Connect anthropic** when the provider is not connected at all, which
-returns to the picker. The message stays in the composer, the chip is marked until a model is chosen, and
+returns to the picker, where the line is gone once the model is in the list (it says nothing while the
+list loads). The message stays in the composer, the chip is marked until a model is chosen, and
 nothing is written into the conversation, rather than failing inside the engine with its command-line advice. A failed run may already have performed tool work. Stop does not roll back completed work or promise
 to cancel a non-cancellable tool. Stop pressed while a send is still on its way to the runtime keeps it
 from starting a run, and the message returns to the draft without a note; Stop pressed as a run ends
@@ -141,10 +142,12 @@ verbatim but folded. An answer that did not end normally says so in the transcri
 conversation is read back from history, including runs no window watched: a failed answer gets a card
 titled by what the reason means (*The provider did not accept the sign-in* with **Sign in to OpenAI again** for a
 401, which opens Settings on that provider's ways to connect and returns to the conversation once connected;
-*Could not reach the provider* with **Network settings** for a connection error; *The provider is limiting
+*Could not reach the provider* with **Network settings**, which opens Settings at the proxy, for a connection error; *The provider is limiting
 requests* or *had a problem* with **Use another model**, which opens the picker, for a 429 or a 5xx; *The run stopped with
 an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one, one quiet line that moves on with each of pi's own
-retries, gone once the run ends since its ending says how (`retrying 2/3: the provider had a problem`, the provider's words staying with the failure card) and,
+retries, gone once the run ends since its ending says how (`retrying 2/3: the provider had a problem`, or the reason's own first line when nothing recognises it, such
+as `retrying 1/3: Request timed out`; never "the run stopped", since it goes on; the provider's words in full on
+hover) and,
 read back, one line for retries in a row (`retried 2 times: …`), and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
@@ -180,7 +183,8 @@ before the real one arrives. A view that was at the latest turn stays there whil
 content grows by itself, and choosing the conversation that is already open rebuilds nothing. A failed action
 that belongs to no conversation (adding, renaming, revealing or removing an agent) is said in a strip that
 floats under the header, titled by the action (*The agent was not renamed*), with Dismiss, never written into whichever conversation is open; one about a conversation (renaming or
-deleting it from the list) is said in that conversation when the window holds it, else on its agent's row.
+deleting it from the list) is said in that conversation when the window holds it, else in the same strip,
+titled by the action; an agent's row only ever says that its list could not be read.
 Only a registry that cannot be read shows the unreadable-registry page. A subscription the runtime lets go (a backlog that overflowed, a runtime replaced) is listened to again
 by itself once, which is FastAgent's contract for it, unless a send in it is still answering (a refused one
 puts its words back in the composer, which reopening would replace); one that ends again within 30 seconds,

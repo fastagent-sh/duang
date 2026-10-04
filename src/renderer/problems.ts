@@ -60,7 +60,24 @@ const RULES: { test: RegExp; explained: Explained }[] = [
   },
 ];
 
+/** What a reason means, when its own markers say; undefined when nothing here recognises it. */
+export const recognise = (reason: string): Explained | undefined => RULES.find(({ test }) => test.test(reason))?.explained;
+
 /** A run that ended in a failure, explained from its reason. */
 export function explainRunFailure(reason: string): Explained {
-  return RULES.find(({ test }) => test.test(reason))?.explained ?? { title: "The run stopped with an error" };
+  return recognise(reason) ?? { title: "The run stopped with an error" };
+}
+
+/**
+ * What the picker says when it opened because the conversation's model cannot run, read from the list it
+ * shows: a provider with none of its models in it is not connected (and connecting it is offered); once the
+ * model is in the list (its provider was just connected) there is nothing to say, and nothing while the list
+ * is still loading, which would say the wrong thing first.
+ */
+export function unavailableNotice(model: string, models: readonly { spec: string }[] | undefined): { title: string; connect?: string } | undefined {
+  if (!models || models.some(({ spec }) => spec === model)) return undefined;
+  const provider = model.slice(0, model.indexOf("/"));
+  return models.some(({ spec }) => spec.startsWith(`${provider}/`))
+    ? { title: `${model.slice(provider.length + 1)} isn't available` }
+    : { title: `${provider} isn't connected`, connect: provider };
 }

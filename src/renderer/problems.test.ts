@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explainRunFailure } from "./problems.ts";
+import { explainRunFailure, unavailableNotice } from "./problems.ts";
 
 test("a run's failure is explained from its own markers, and an unknown one gets the plain title, not a guess", () => {
   const title = (reason: string) => explainRunFailure(reason).title;
@@ -23,4 +23,12 @@ test("a run's failure is explained from its own markers, and an unknown one gets
   });
   // A number that is not a status is not read as one.
   assert.equal(title("read 401 lines and then failed"), "The run stopped with an error");
+});
+
+test("the picker's notice follows the list it shows: connect, not available, or nothing once it can run", () => {
+  const model = "anthropic/claude-sonnet-4-5";
+  assert.equal(unavailableNotice(model, undefined), undefined, "nothing while the list loads, rather than the wrong thing first");
+  assert.deepEqual(unavailableNotice(model, [{ spec: "openai/gpt-5" }]), { title: "anthropic isn't connected", connect: "anthropic" });
+  assert.deepEqual(unavailableNotice(model, [{ spec: "anthropic/claude-opus-4" }]), { title: "claude-sonnet-4-5 isn't available" });
+  assert.equal(unavailableNotice(model, [{ spec: model }]), undefined, "connected now: the model runs, so nothing is wrong");
 });
