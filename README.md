@@ -2,11 +2,20 @@
 
 **A native workbench for agents you make, use and share.**
 
-Build an agent in a local directory, use it every day in duang, and keep working in the same client
-when you run a copy online. An online agent can execute routines while your laptop is off, be added
-as a contact by other people, or answer in Slack, Feishu and other FastAgent channels. Sharing a
-preset instead gives someone their own independent agent. Conversations do not automatically follow
-the definition between locations or people.
+Create an agent, give it the folders it works on and the ones it should know, use it every day in
+duang, and keep working in the same client when it also runs online. An online instance can execute
+routines while your laptop is off, be added as a contact by other people, or answer in Slack, Feishu
+and other FastAgent channels. Giving someone the Agent instead gives them their own copy, with their
+own credentials and conversations. Conversations stay with the instance they happened in.
+
+The words are FastAgent's ([agent model](https://github.com/fastagent-sh/fastagent/issues/684)):
+
+| Word | Means |
+|---|---|
+| **Agent** | The definition: its model, its harness (`SYSTEM.md`, skills, tools, routines, `fastagent.config.ts`) and its contexts, in a directory of its own, which is also where it works |
+| **Context** | A directory the agent **works on** or **knows** (read-only): a project, a folder of notes, a repository |
+| **Instance** | One Agent running in one place, on this Mac or on a host, with its own conversations and credentials |
+| **Conversation** | A FastAgent session of one instance |
 
 ## The bet
 
@@ -16,15 +25,15 @@ read the result and continue. Existing chat channels are convenient additional e
 main workbench. FastAgent supplies the agent runtime and channel adapters; duang makes local work,
 remote use and distribution one understandable experience without inventing a second transcript.
 
-Two kinds of sharing must stay distinct: **copy a preset** (the recipient owns a new instance,
-credentials and conversations) and **invite someone to an online agent** (the owner keeps the
-running instance; the visitor gets access to their own conversation). An owner can also keep an
+Two kinds of sharing must stay distinct: **give someone the Agent** (they get their own copy and run
+their own instance, with their credentials and conversations) and **invite someone to an online
+instance** (the owner keeps it running; the visitor gets access to their own conversation). An owner can also keep an
 online agent entirely private just to run routines and work while their computer sleeps.
 
 ## Who it's for, first
 
-People who create agents in local directories and want to use them themselves, keep them working
-online, or share them with friends and teammates. Recipients use those agents mainly in duang;
+People who create agents and want to use them themselves, keep them working online, or share them
+with friends and teammates. Recipients use those agents mainly in duang;
 they need not install the development tools. The owner may additionally put an agent in an existing
 chat group. This is not an enterprise administration suite or a replacement code editor.
 
@@ -38,12 +47,12 @@ subsequent stages below are plans, not shipped capabilities.
 The local client runs `createPiAgentFromDir` in Electron main without opening a local port. For
 remote work, FastAgent exposes `connectAgent` and `connectSessionControl` over HTTP/SSE. duang will
 use those public contracts behind a protected endpoint, without copying the runtime's session store
-or exposing filesystem and credentials to the renderer. A definition can run in multiple places;
-its local and online conversations remain separate. Available actions depend on the endpoint's
+or exposing filesystem and credentials to the renderer. An Agent can run as several instances; its
+local and online conversations remain separate. Available actions depend on the endpoint's
 `capabilities()`.
 
-When local file and diff inspection is added, main will read the agent directory; the renderer
-will not gain filesystem access or tunnel a remote workspace into a file browser. The local runtime currently shares Electron main; see
+When local file and diff inspection is added, main will read the agent's directory and contexts; the
+renderer will not gain filesystem access or tunnel a remote context into a file browser. The local runtime currently shares Electron main; see
 [architecture](docs/architecture.md) for the failure boundary. An agent may be hosted by its owner
 or, later, by duang cloud. Neither option makes a public, unauthenticated FastAgent endpoint safe
 for invitations. Existing group channels remain separate from duang's private conversations.
@@ -57,13 +66,14 @@ not offer arbitrary high-privilege tools to untrusted visitors.
 
 An owner may run an online agent on their own host or choose duang cloud. The first online path is
 private: the owner connects to it in duang and its routines work after the desktop and laptop have
-closed. Inviting someone to that running agent and exporting a preset are separate, optional paths.
+closed. Inviting someone to that running instance and giving someone the Agent are separate, optional paths.
 Cloud conversations live with the online runtime; local conversations never migrate on deploy.
 
 A remote model needs server-side credentials: a local Claude/ChatGPT subscription login is not a
 cloud credential. Deployment must explicitly exclude local secrets, private sessions and
 machine-specific state, then set the required cloud secrets at the host. A published version is a
-snapshot of the agent definition; edits on the laptop do not silently change the live agent.
+snapshot of the Agent; edits on the laptop do not silently change the online instance. A context the
+online instance needs reaches it as FastAgent's context types allow (a copy, or a repository it clones).
 
 Routine execution is not guaranteed by a suspended machine: a cron instant does not wake it. Start
 with a resident machine and show its cost. Consider an external clock only once it reliably wakes
@@ -72,7 +82,7 @@ scheduler. FastAgent's routine API and deployment residency are the locked versi
 contract before implementing hosting. See
 [architecture](docs/architecture.md#online-execution-and-routines).
 
-The desktop client and preset sharing are free. duang cloud is an optional paid host, not a
+The desktop client and giving someone an Agent are free. duang cloud is an optional paid host, not a
 prerequisite for using or sharing an agent. A flat `$9/account` including several agents is an
 unverified pricing hypothesis, not a promise; hosting cost, usage limits and payment terms need
 real measurements. No token resale is planned.
@@ -82,16 +92,20 @@ real measurements. No token resale is planned.
 Week 1 local setup, streaming, history and navigation have been accepted. Stages 1–5 below
 are **not yet accepted**. A stage number is an outcome gate, not a calendar week.
 
-1. **Daily local workbench.** Find an agent, start work, switch away, return to the real outcome and
-   continue without a terminal. Connect a model provider (subscription, API key or custom endpoint)
+1. **Daily local workbench.** Create an agent with the contexts it works on and knows, start work,
+   switch away, return to the real outcome and continue without a terminal. Creating agents with
+   contexts waits for FastAgent's agent-directory release
+   ([#133](https://github.com/fastagent-sh/duang/issues/133)); today an agent is still added from a
+   directory. Connect a model provider (subscription, API key or custom endpoint)
    in the app rather than through `fastagent login`. The network already follows the system proxy
    per request, with a setting to override it (Settings → Network, `⌘,`).
    Inspect the loaded definition and relevant local changes as needed.
    Reuse Week 1 chat; prioritize demonstrated gaps over a full IDE, file tree or every session
    control. Local routine inspection must not promise execution after the laptop closes.
-2. **Share a preset.** Another person imports a portable definition on a different machine and
-   runs their own instance with new credentials and independent history. No secrets, private
-   sessions or machine-only paths travel with it.
+2. **Give someone the Agent.** Another person gets their own copy of an Agent on a different machine
+   and runs their own instance with new credentials and independent history. Its contexts travel as
+   their types allow (a repository by reference; a local folder only as a reviewed copy). No secrets,
+   runtime state or machine-only paths travel with it.
 3. **Add an online contact.** First connect the owner's protected, already-running remote agent and
    observe its routine work in duang; then invite someone else. With the owner's desktop closed,
    the visitor can work, cannot read someone else's private conversations and can lose access when
@@ -106,7 +120,7 @@ are **not yet accepted**. A stage number is an outcome gate, not a calendar week
 
 ## How we know it worked
 
-Measure time from a working local definition to daily use, then to the first successful routine
+Measure time from creating an agent to daily use, then to the first successful routine
 while the owner's laptop is off, and to the first non-owner successfully using a shared agent.
 Measure whether owners and recipients return to complete work, and whether hosting revenue covers
 its actual cost. Uptime alone does not prove an agent helped anyone; there is no fixed install or
@@ -131,10 +145,12 @@ credential values.
 FastAgent is pinned to an exact published version. Setup, review and merge workflow:
 [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
-Point *Add agent* at a FastAgent directory or a plain project. A plain project offers to create
+Today, point *Add agent* at a FastAgent directory or a plain project. A plain project offers to create
 `fastagent/fastagent.config.ts` and `.gitignore` after confirmation; an existing `fastagent/`
 directory is never overwritten. A scaffolded agent has no model, so duang asks for one and stores
-the choice in its registry rather than editing the agent's config.
+the choice in its registry rather than editing the agent's config. This layout goes with FastAgent's
+agent-directory release: agents will be created in duang, in a folder of duang's, with their contexts
+([#133](https://github.com/fastagent-sh/duang/issues/133)).
 
 The registry uses atomic writes, serialized within one running instance — there is no cross-process
 lock yet, so two instances writing at once can drop each other's rows. Invalid or unreadable data is
@@ -218,7 +234,7 @@ Accepted limitations, each recorded in its issue:
   [#10](https://github.com/fastagent-sh/duang/issues/10) rather than patched blind.
 
 Currently out of scope: duang does not start local channels or routines; online connections,
-preset sharing, duang cloud, files/diffs and advanced session controls are not implemented. Their
+giving someone an Agent, duang cloud, files/diffs and advanced session controls are not implemented. Their
 planned scope and order are described in [Delivery stages](#delivery-stages).
 
 ## Relationship to duang-v1 / duang-v2

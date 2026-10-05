@@ -2,10 +2,16 @@
 
 ## Product and authority
 
-A native local-first workbench for FastAgent agents: use one locally, copy its portable preset,
-connect to your own or an invited online agent, or optionally host it with duang cloud for
-continuous routines. Agents are contacts; conversations and history belong to each FastAgent
-runtime, not a duang transcript store. Only the Week 1 local path is implemented.
+A native local-first workbench for FastAgent agents: create one with the contexts it works on and
+knows, use it locally, give someone their own copy of the Agent, connect to your own or an invited
+online instance, or optionally host it with duang cloud for continuous routines. Agents are contacts;
+conversations and history belong to each FastAgent instance, not a duang transcript store. Only the
+Week 1 local path is implemented.
+
+Vocabulary follows FastAgent's agent model (`docs/design/agent-model.md` there): an **Agent** is the
+definition (model, harness, contexts) in its own directory; an **instance** is one Agent running in
+one place; a **context** is a directory it works on or knows. Do not say preset, workspace or
+deployment for these.
 
 - `README.md`: positioning and milestone scope.
 - `docs/design.md`: product objects, surfaces and flows.
@@ -29,16 +35,21 @@ verification of existing code, not a rewrite. Resolve conflicting product polici
   an empty list, hide failure as a fallback, or automatically replay accepted tool work.
 - No real credentials, private sessions or project contents in commits, CI or shared artifacts.
   Local real-provider and OAuth checks are fine; report them separately from mocked results.
-- Follow the outcome-gated stages in `README.md`: local daily workbench, preset copy, protected
-  online contacts (including the owner's private routine work), optional hosting, then groups or
-  discovery only if needed. Do not present planned screens or routine outcomes as shipped.
-- A preset never exports secrets or session state. Remote invites require a host-side protected
+- Follow the outcome-gated stages in `README.md`: local daily workbench, someone's own copy of an
+  Agent, protected online contacts (including the owner's private routine work), optional hosting,
+  then groups or discovery only if needed. Do not present planned screens or routine outcomes as
+  shipped.
+- A copy of an Agent never carries secrets or runtime state (`.secrets/`, `.state/`). Remote invites require a host-side protected
   access boundary and per-visitor conversation isolation; never expose a raw FastAgent endpoint
-  or deployment-wide session list to visitors. No enterprise administration or audit UI.
+  or instance-wide session list to visitors. No enterprise administration or audit UI.
 - Avoid placeholder cloud UI, a built-in agent editor, permission prompts, remote file browsing or
   advanced session controls without a demonstrated product need.
 
 ## Working and verification
+
+duang is unreleased: there are no real agents or users. Never add backward compatibility,
+migrations, legacy-format detection or compatibility shims. When a format, layout or contract
+changes, change the code, tests and docs to the new one and drop the old.
 
 Read the affected path and callers first. Prefer existing helpers, the standard library and native
 Electron/Chromium behavior; avoid speculative layers. Separate refactoring from behavior changes.

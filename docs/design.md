@@ -9,22 +9,24 @@ planned below needs its own implementation and acceptance evidence.
 ## One agent, several ways to use it
 
 An agent is a contact: someone can give it work in duang and come back to the result. The creator
-can work with a local definition, connect their own online instance, export a preset or invite
-someone to use that instance. These are different outcomes, not four modes of one global switch.
+can use it locally, connect their own online instance, give someone the Agent (their own copy) or
+invite someone to use that instance. These are different outcomes, not four modes of one global switch.
 Slack, Feishu, Telegram and other FastAgent channels are additional entrances to an online agent;
 duang is the full native workbench for long work and follow-up.
 
+The objects are FastAgent's agent model ([fastagent#684](https://github.com/fastagent-sh/fastagent/issues/684)),
+seen as a person using duang:
+
 | Object | Owner and meaning |
 |---|---|
-| Agent definition | The creator's directory; skills, tools and routines belong to it. A preset is a portable copy of selected definition content, not a live pointer. |
-| Contact | A local agent, an owned online instance or an online agent someone invited you to use. One owned agent can have a local and an online location. |
-| Conversation | A FastAgent session, owned by its runtime. Local, online, personal and group conversations do not merge automatically. |
+| Agent | The definition: model, harness (`SYSTEM.md`, `APPEND_SYSTEM.md`, skills, tools, routines, `fastagent.config.ts`) and the contexts it declares, in a directory of its own that is also its working directory. Someone given the Agent gets their own copy, not a live pointer. |
+| Context | A directory the agent **works on** or **knows** (read-only): a project, a folder, a repository. Several agents can share one; it belongs to its project, not to any agent. Its type (local folder, local folder copied to a host, GitHub repository) says how it reaches an instance elsewhere. |
+| Instance | One Agent running in one place, on this Mac or on a host: its conversations, credentials and what it fetched. duang shows an instance as a contact. One owned Agent can have a local and an online instance. |
+| Conversation | A FastAgent session, owned by its instance. Local, online, personal and group conversations do not merge automatically. |
 | Run | One turn of work. Accepted, running, settled and unknown-after-disconnect are different conditions; stopping does not undo completed tool work. |
-| Deployment | An owned, published snapshot at a protected endpoint, self-hosted or on optional duang cloud. Local edits do not silently change it. |
-| Invitation | Access to an existing online agent, not a copy of its definition or a right to read everyone else's sessions. It can be revoked. |
+| Invitation | Access to an existing online instance, not a copy of the Agent or a right to read everyone else's sessions. It can be revoked. |
 
-There is no second durable transcript in duang. A shared definition is not shared conversation
-memory. Shared knowledge, if declared by the agent, must be a deliberate input with its own
+There is no second durable transcript in duang. A shared Agent is not shared conversation memory. Shared knowledge, if declared by the agent, must be a deliberate input with its own
 access boundary, not scraped from other people's chats.
 
 ## The workbench
@@ -64,11 +66,11 @@ history rather than replaying an accepted send. A lost connection is **unknown e
 until the runtime can answer, not an automatic failure or success.
 
 An optional detail surface serves the question at hand. A local owner can inspect the **actually
-loaded** model, skills, tools and routines where FastAgent exposes them, plus relevant read-only
-files and diffs from their directory. If a field is unavailable, say so rather than infer runtime
+loaded** model, skills, tools, routines and contexts where FastAgent exposes them, plus relevant
+read-only files and diffs from the agent's directory and its contexts. If a field is unavailable, say so rather than infer runtime
 state from a filename. The same surface on an owned online agent shows its published version,
 connection, routine status and recorded outcomes. An invited contact does not expose the owner's
-files, secrets or deployment controls. No in-app code editor or general remote filesystem browser.
+files, secrets or hosting controls. No in-app code editor or general remote filesystem browser.
 
 Routines belong on an owner's online agent even if that agent has never been shared. Show declared
 names and schedules, and a recent result/failure/skip **only where the runtime or host reports it**;
@@ -78,14 +80,14 @@ next run or a success badge requires an authoritative clock/outcome source, not 
 
 ## Settings: model providers and network (stage 1; network and the first providers version shipped)
 
-The first run must not require a terminal, and a preset recipient must be able to add their own
+The first run must not require a terminal, and someone given an Agent must be able to add their own
 credentials. Settings open in the content area (the App menu's Settings… `⌘,`, or the Settings
 row at the foot of the sidebar, or the model picker's empty-state **Connect a provider**); the sidebar stays visible so running work remains in view. One page, two groups, no
 empty categories: Model providers, then Network.
 
 **Model providers.** The goal: on a new machine, from installing duang to the first answer
-without opening a terminal. It serves the owner on a new machine and, above all, a preset
-recipient, who brings their own credentials and need not install developer tools.
+without opening a terminal. It serves the owner on a new machine and, above all, someone given an
+Agent, who brings their own credentials and need not install developer tools.
 
 *Connect a provider* starts with the provider (Anthropic, OpenAI, GitHub Copilot, …), then asks how
 to connect when there is more than one way: **Subscription** (OAuth: Claude Pro/Max, ChatGPT,
@@ -147,32 +149,61 @@ and accounts are not settings until a shipped feature needs them.
 
 ## Paths through the product
 
+**Create an agent (planned with FastAgent's agent-directory release, [#133](https://github.com/fastagent-sh/duang/issues/133)).**
+duang only ever creates agents; there is no opening an agent from a directory, and nothing is
+scaffolded inside a project. *Create agent* asks for a name and the contexts, the way Codex creates a
+project and attaches folders:
+
+```text
+┌ Create agent ──────────────────────────────────┐
+│ [icon] Agent name                              │
+│ Contexts                                       │
+│ ┌────────────────────────────────────────────┐ │
+│ │  Add a folder on this computer ▾   [+ Add] │ │
+│ │  app   ~/code/app           Works on  ✕    │ │
+│ │  handbook ~/docs/handbook   Knows     ✕    │ │
+│ └────────────────────────────────────────────┘ │
+│                          Cancel  [Create agent] │
+└────────────────────────────────────────────────┘
+```
+
+Each context is a row: its name, where it is, **Works on** or **Knows**, and remove. The source menu
+offers what the locked FastAgent version supports: a folder on this computer now, a GitHub repository
+once FastAgent clones them. An agent with no context is valid; it works only in its own directory.
+duang creates the agent's directory in one folder of its own and writes its config from scratch; it
+never rewrites a config someone edited. The new agent has no default model, so its first
+conversation asks for one. Its header then says what it works on (`works on app · knows handbook`)
+rather than where its directory is. Removing an agent removes its directory and conversations (they
+are duang's), after asking, to the Trash; its contexts are never touched.
+
 **Daily local use (current foundation).** Connect a model provider in duang (into its own
-credential file), add an agent directory, choose a model, start work,
+credential file), add an agent (today, from a directory), choose a model, start work,
 switch away, return to the real outcome, continue. Stage 1 strengthens the return-to-work flow,
-loaded-definition visibility and relevant local change review, using real tasks before adding
+visibility of the loaded Agent and relevant local change review, using real tasks before adding
 compact, fork or a complete file tree. The current client already covers the basic chat, history,
 steering, stop, drafts and background navigation.
 
-**Copy a preset (planned stage 2).** Export only portable definition content; review exactly what
-travels. No credentials, private sessions, machine-specific paths or ambient project contents.
-The recipient imports into their own directory, configures their own provider and connected
-services and has independent conversations and routines. A successful zip export without an
-independent run on another machine is not acceptance.
+**Give someone the Agent (planned stage 2).** They get their own copy of the Agent; review exactly
+what travels. Its harness travels; its contexts travel as their types allow: a GitHub repository by
+reference (they need their own access), a local folder only if the owner chooses to include a copy of
+it. No credentials, runtime state (`.state/`, `.secrets/`) or machine-specific paths. The recipient
+has their own instance, connects their own provider and services, and has independent conversations
+and routines. A successful export without an independent run on another machine is not acceptance.
 
 **Use my own online agent (planned stage 3).** Connect an already running, protected endpoint; the
 same owner can choose local for testing and online for ongoing work. Online history is separate.
 With duang and the laptop closed, scheduled routines must be observed through the remote runtime
 and a real clock. Stage 3 tests this on a self-hosted instance; stage 4 makes deploying it easy on
-duang cloud. Moving the *definition* does not move a local session or OAuth subscription login.
+duang cloud. Running the Agent elsewhere does not move a local conversation or OAuth subscription login.
 
-**Invite to an online agent (planned stage 3).** An invitation adds a contact, not a preset. A
+**Invite to an online instance (planned stage 3).** An invitation adds a contact, not a copy of the Agent. A
 visitor can start and return to their own conversations while the owner's desktop is closed. The
 owner can revoke the invitation. First scope is access by possession of an individual, revocable
 invitation; a promise to restrict it to a named person would need identity verification. The
-endpoint must not expose deployment-wide `sessions.list()` to visitors.
+endpoint must not expose the instance-wide `sessions.list()` to visitors.
 
-**Host on duang cloud (planned stage 4).** Show the definition snapshot, excluded files and
+**Host on duang cloud (planned stage 4).** Show the Agent snapshot, how each context reaches the host
+(copied or cloned, or refused when it is a local folder not marked to copy), excluded files and
 server-side credential requirements before publish. After publishing, return to the agent's
 online conversation and routines, with a clear live version and an update/stop path. Routines
 must actually fire with the laptop off; a sleeping VM without an external clock cannot keep that
@@ -187,7 +218,7 @@ direct invitations fail a real need; do not silently treat one person's session 
 
 ## Failure and safety rules
 
-- Invalid local definitions, unreadable state, provider refusals and deployment failures keep the
+- Invalid local Agents, unreadable state, provider refusals and deployment failures keep the
   original diagnostic and an action the person can take. Never turn a failed list into an empty one.
 - A remote timeout or disconnected stream never replays an accepted run or routine. On recovery,
   read state and history and report any outcome the runtime cannot prove as unknown.
@@ -204,5 +235,5 @@ direct invitations fail a real need; do not silently treat one person's session 
 
 A built-in editor, general Git client, remote files, social discovery directory, native group chat,
 web/mobile workbench and centralized transcript service are not prerequisites for local work,
-presets, protected online contacts or optional hosting. Billing and usage limits for duang cloud
+giving someone an Agent, protected online contacts or optional hosting. Billing and usage limits for duang cloud
 need measured running costs; `$9/account` is not a committed product price.
