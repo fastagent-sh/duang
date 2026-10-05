@@ -149,7 +149,7 @@ named person. If named recipients are required, add authentication before making
 
 A protected endpoint must enforce the invite boundary on **both** `POST /invoke` and `/control/*`.
 FastAgent has no built-in control token (0.23), so a shared host brings its own boundary; the
-`FASTAGENT_CONTROL_TOKEN` of earlier versions is not a design to build on. A raw deployment-wide
+`FASTAGENT_CONTROL_TOKEN` of earlier versions is not a design to build on. A raw instance-wide
 `SessionControl.sessions.list()` enumerates everyone's sessions, so a shared host must scope reads,
 writes and events to the visitor's own sessions without storing a second transcript. Owner-only
 routines, Agent updates and hosting controls must not be exposed through a visitor invite.
