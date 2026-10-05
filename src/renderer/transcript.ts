@@ -77,14 +77,14 @@ const isRetry = (item: Item | undefined): item is RetryNote => item?.kind === "n
 const retriedText = (count: number, reason: string) => `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(reason)}`;
 
 /**
- * A retry the run went on from (an answer, a thought or a call came after it) is said in the past, as it reads
- * back from history: `retrying 2/3` would claim a wait that is over.
+ * A retry the run went on from (an answer, a thought, a call, or a steer the next attempt took in came after it)
+ * is said in the past, as it reads back from history: `retrying 2/3` would claim a wait that is over.
  */
-function wentOn(items: Item[]): Item[] {
-  const last = items.at(-1);
-  if (!isRetry(last) || last.of === undefined) return items;
-  const { of: _waiting, ...note } = last;
-  return [...items.slice(0, -1), { ...note, text: retriedText(last.retry, last.reason ?? "") }];
+export function wentOn(items: Item[]): Item[] {
+  const index = items.findLastIndex((item) => isRetry(item) && item.of !== undefined);
+  if (index < 0) return items;
+  const { of: _waiting, ...note } = items[index] as RetryNote;
+  return items.with(index, { ...note, text: retriedText(note.retry, note.reason ?? "") });
 }
 
 /**

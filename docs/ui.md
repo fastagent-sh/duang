@@ -565,7 +565,8 @@ Everything else follows from those two:
   running or a thought being written carry the dot, word and clock on their own line (which still opens
   into the calls or the thought); a retry being waited out is said by this line alone (`retrying 2/3 the
   provider had a problem`), and becomes `retried 2 times: …` above whatever the run went on to; an
-  answer being written is its own sign of life, with no line under it.
+  answer being written is its own sign of life, with no line under it until it stops coming: after 30
+  seconds without a word the line is back, saying `answering · 31s · no output for 31s`.
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
   tool's name, the command, and the state immediately after the command rather than pushed to the
   far right where it loses its subject — on no fill and behind no border, the same weight as the

@@ -15,6 +15,7 @@ import {
   phase,
   previewOf,
   queueView,
+  wentOn,
   type Activity,
   type Item,
   type UserItem,
@@ -758,7 +759,8 @@ export function createStore(api: DuangApi) {
       c.waiting = c.waiting.filter((item) => item !== own);
       c.returned.delete(own);
     }
-    if (!known) c.items = [...c.items, { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
+    // A steer typed while pi waited out a retry enters as the next attempt starts: the wait is over.
+    if (!known) c.items = [...wentOn(c.items), { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
     c.runHasUser = true;
     // The message the run is answering now; a steer replaces the opening one. What was typed, if it was ours.
     if (c.run) c.run.message = own?.text ?? text;

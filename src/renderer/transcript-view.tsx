@@ -59,24 +59,33 @@ export function RunStatus({
   status,
   started,
   heard,
+  quietOnly,
+  className = "",
 }: {
   items: Item[];
   status: SessionState["status"] | undefined;
   started?: number;
   /** When this window last heard from the run: a model quiet for long is said, so it does not look stuck. */
   heard?: number;
+  /** An answer being written is its own sign of life: the status is drawn only once the answer stops coming. */
+  quietOnly?: boolean;
+  /** The space above it, which depends on the line it follows. */
+  className?: string;
 }) {
   const { word, detail, activity } = phase(items, status);
   const elapsed = useElapsed(started, undefined);
   // A running tool may rightly be quiet for minutes, and has its own clock; only the model's silence is said.
   const quiet = useElapsed(activity === "tool" ? undefined : heard, undefined, QUIET_MS);
+  if (quietOnly && !quiet) return null;
   return (
+    <div className={className}>
     <div className="enter flex h-7 items-center gap-2 text-[12px]">
       <span className="bounce size-[7px] shrink-0 rounded-full bg-accent" aria-hidden />
       <span className="shimmer shrink-0">{word}</span>
       {detail && <span className={`min-w-0 truncate text-muted ${word === "thinking" ? "" : "font-mono"}`}>{detail}</span>}
       {elapsed && <span className="shrink-0 text-muted tabular-nums">· {elapsed}</span>}
       {quiet && <span className="shrink-0 text-muted tabular-nums">· no output for {quiet}</span>}
+    </div>
     </div>
   );
 }
@@ -260,10 +269,10 @@ export function Transcript({
     );
 
   const shown = group(lines(items));
-  const live = <RunStatus items={items} status={status} started={started} heard={heard} />;
   // The live end of a run is one line. When the newest line is what the run is on now, it is that line, not one
   // above another saying the same: calls running or a thought being written carry the status themselves, a
-  // retry being waited out is said by the status alone, and an answer being written is its own sign of life.
+  // retry being waited out is said by the status alone, and an answer being written is its own sign of life
+  // until it stops coming (the status then says so).
   const end = shown.at(-1);
   const now = busy && !waiting.some(({ opens }) => opens) ? end : undefined;
   const liveBlock =
@@ -273,6 +282,11 @@ export function Transcript({
       : undefined;
   const waitingRetry = now?.kind === "note" && now.of !== undefined ? now : undefined;
   const answering = now?.kind === "assistant" && now.open;
+  // The line the status follows is the last one drawn: a retry it says itself is not.
+  const above = waiting.some(({ opens }) => opens) ? "user" : (waitingRetry ? shown.at(-2) : end)?.kind;
+  const live = (
+    <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={answering} className={gap(above, "status")} />
+  );
   /**
    * `enter` is for what arrives, and history has not arrived — it was already there. This component
    * remounts for every conversation it shows (keyed by subscription), and it mounts with the history
@@ -374,11 +388,7 @@ export function Transcript({
           ),
         )}
         {queue(true)}
-        {busy && !liveBlock && !answering && (
-          <div className={gap(waiting.some(({ opens }) => opens) ? "user" : shown.at(-1)?.kind, "status")}>
-            {live}
-          </div>
-        )}
+        {busy && !liveBlock && live}
         {queue(false)}
       </div>
     </div>
