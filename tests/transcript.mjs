@@ -79,8 +79,12 @@ if (!process.versions.electron) {
   writeFileSync(join(dir, "fastagent", "fastagent.config.ts"), 'export default { model: "mock/mock" };\n');
   writeFileSync(join(data, "agents.json"), JSON.stringify([{ id: "t", name: "Live", dir, colour: 3 }]));
 
-  /** A command that runs until the scenario lets it finish; it runs in the project, where the gate is made. */
-  const waitsFor = (name) => `until [ -e gate-${name} ]; do sleep 0.05; done`;
+  /**
+   * A command that runs until the scenario lets it finish; it runs in the project, where the gate is made. It
+   * gives up by itself after a minute, so a run killed before its gate is made (a timeout, or the parent ending
+   * Electron) leaves no shell looping on a fixture that is gone.
+   */
+  const waitsFor = (name) => `for i in $(seq 600); do [ -e gate-${name} ] && exit 0; sleep 0.1; done; exit 1`;
   const release = (name) => writeFileSync(join(dir, `gate-${name}`), "");
   const deferred = () => {
     let resolve;
@@ -139,7 +143,7 @@ if (!process.versions.electron) {
     await until(`!!document.querySelector('button[aria-label="Stop the run"]')`, "Stop again once it is empty");
     release("a");
     await until(`!/running 2 tools/.test(document.querySelector('[aria-label="Transcript"]').innerText)`, "one call finished");
-    await oneLine("the call left running", { inBlock: true, says: /running until \[ -e gate-b \]/ });
+    await oneLine("the call left running", { inBlock: true, says: /running for .*gate-b/ });
     release("b");
     await until(`document.querySelector('[aria-label="Transcript"]').innerText.includes('Both done.')`, "the answer");
     await idle();
@@ -149,7 +153,7 @@ if (!process.versions.electron) {
     script.push({ tools: [waitsFor("c")] }, { text: "Lone done." });
     await send("run one");
     await until(`/gate-c/.test(document.querySelector('[aria-label="Transcript"] .bounce')?.parentElement.innerText ?? '')`, "a lone call running");
-    await oneLine("a lone call running", { inBlock: true, says: /running until \[ -e gate-c \]/ });
+    await oneLine("a lone call running", { inBlock: true, says: /running for .*gate-c/ });
     release("c");
     await until(`document.querySelector('[aria-label="Transcript"]').innerText.includes('Lone done.')`, "its answer");
     await idle();
