@@ -39,8 +39,9 @@ never written over an earlier copy), a new `export default {};` takes its place,
 for a model. Main replaces only the config FastAgent said failed, inside the agent's folder; the window does
 not name the file. Any other failure offers Retry and Reveal in Finder. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
-has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
-only the local registry row, not the directory or history. Changing the model or removing an agent
+has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal today deletes
+only the local registry row, not the directory or history ([#133](https://github.com/fastagent-sh/duang/issues/133)
+moves the directory duang created to the Trash, after asking). Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
 An agent with no default model opens like any other, on the conversation it was left on or its latest: a
 conversation runs on the model it records. Only a conversation that records none (a new one, or one whose
@@ -219,11 +220,11 @@ error in its place, with Try again, which reads it again from history, while the
 an error anywhere else in the window shows it with Reload and Open on a New Conversation. Local channels
 and routines are not started by duang. The current client has no online contacts or share UI.
 
-## Planned: daily local use and definition inspection (stage 1)
+## Planned: daily local use and inspecting the loaded Agent (stage 1)
 
 Walk a real task through find → send → switch away → return to result → continue before adding
-controls. A local owner may open a read-only detail view for the definition actually loaded by
-FastAgent and relevant files/diffs; if runtime discovery is unavailable, say so. A local routine
+controls. A local owner may open a read-only detail view for the Agent actually loaded by
+FastAgent, its contexts and relevant files/diffs; if runtime discovery is unavailable, say so. A local routine
 shown in this view is **declared**, not guaranteed to run while the app is closed. Compact and
 branching are conditional on demonstrated long-conversation needs, not a checklist of Pi commands.
 
@@ -278,19 +279,20 @@ never reaches the CLI's or pi's stores. If an environment variable also supplies
 confirmation names it and says requests continue with it; otherwise it says conversations using the
 provider fail on their next request with the provider's own error.
 
-## Planned: copy a preset (stage 2)
+## Planned: give someone the Agent (stage 2)
 
-"Copy preset" previews exactly which portable definition files travel and explicitly excludes
-secrets, private sessions, machine paths and unrelated project data. A recipient imports an
-independent directory, configures their own credentials and can edit their own copy. A failed
-import leaves the original untouched. Never present a preset as continued access to the author's
-runtime, or imply that importing also copies their conversations.
+Giving someone an Agent previews exactly what travels: its harness, and each context as its type
+allows (a repository by reference, a local folder only as a copy the owner chooses), and explicitly
+excludes secrets, runtime state, machine paths and anything outside the Agent and the chosen
+contexts. The recipient gets their own copy, connects their own credentials and can change it. A
+failed import leaves the original untouched. Never present it as continued access to the author's
+instance, or imply that it also copies their conversations.
 
 ## Planned: use an online agent (stage 3)
 
 An owned agent may have a local test location and a separate online location; select the location
-on that contact, not with a global app switch. The owner can also add a protected self-hosted agent
-with no local directory. An invited agent appears under "shared with me" and exposes only the
+on that contact, not with a global app switch. The owner can also add a protected self-hosted instance
+whose Agent is not on this machine. An invited agent appears under "shared with me" and exposes only the
 visitor's authorized conversations. Do not expose the author's files, model credentials or owner
 controls. The private online conversation is distinct from channel-group history.
 
@@ -304,13 +306,13 @@ present it as a complete replay.
 
 ## Planned: hosted online work and routines (stage 4)
 
-Before publishing, review the versioned definition snapshot, excluded files, server-side model
-credentials, routine schedule and running-host cost. Publishing an agent with no channel or invite
+Before publishing, review the versioned Agent snapshot, how each context reaches the host, excluded
+files, server-side model credentials, routine schedule and running-host cost. Publishing an agent with no channel or invite
 is valid: the owner may need it only for private conversation or timed work. Keep local OAuth
 credentials and local conversations on the laptop. A remote model choice is governed by the remote
 runtime, not by the local credential picker.
 
-After publish, the owner can see which definition is live, update or stop it, and see verified
+After publish, the owner can see which version of the Agent is live, update or stop it, and see verified
 routine results. A scheduled run must actually fire while the desktop and laptop are closed. Show
 failed, skipped or interrupted runs as such; if the host cannot report the outcome, say it is
 unknown. Do not invent a "next run" or "done" from a declaration alone. A channel is an optional

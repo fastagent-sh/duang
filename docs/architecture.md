@@ -19,7 +19,7 @@ Electron renderer ── typed preload ── Electron main ── local FastAge
 The renderer has `contextIsolation` on and no Node integration. It never gets arbitrary filesystem,
 IPC, shell or credential access. Main owns the local runtime, directory reads and future remote
 connections. FastAgent owns sessions at each location. A visitor's protected remote endpoint must
-not grant direct access to another visitor's sessions. Optional hosting will operate deployments;
+not grant direct access to another visitor's sessions. Optional hosting will operate hosted instances;
 it need not proxy every conversation or own a transcript.
 
 ## The client
@@ -137,21 +137,22 @@ error, not a first run.
 `ponytail:` one JSON file with atomic writes; move to SQLite when a list of agents stops fitting in
 memory, which is not a real horizon for this product.
 
-## Portable definitions and online contacts (planned)
+## Copies of an Agent and online contacts (planned)
 
-A preset carries only reviewed, portable agent definition content; importing creates a separate
-owner and separate runtime state. Do not package local `.secrets`, `.env`, session state, `.git`,
-`node_modules` or unrelated project files. The recipient supplies their own model and service
+A copy of an Agent carries only its reviewed harness and the contexts its owner chose to include as
+their types allow; the recipient's copy has a separate owner and separate runtime state. Do not
+package `.secrets/`, `.env`, `.state/`, `.git` internals, `node_modules` or anything outside the Agent
+and its chosen contexts. The recipient supplies their own model and service
 credentials. An online invitation instead points to the owner's existing runtime. An individual
 revocable invite may initially mean "anyone holding this link"; it must not claim to identify a
 named person. If named recipients are required, add authentication before making that promise.
 
 A protected endpoint must enforce the invite boundary on **both** `POST /invoke` and `/control/*`.
 FastAgent has no built-in control token (0.23), so a shared host brings its own boundary; the
-`FASTAGENT_CONTROL_TOKEN` of earlier versions is not a design to build on. A raw deployment-wide
+`FASTAGENT_CONTROL_TOKEN` of earlier versions is not a design to build on. A raw instance-wide
 `SessionControl.sessions.list()` enumerates everyone's sessions, so a shared host must scope reads,
 writes and events to the visitor's own sessions without storing a second transcript. Owner-only
-routines, definition updates and deployment controls must not be exposed through a visitor invite.
+routines, Agent updates and hosting controls must not be exposed through a visitor invite.
 The concrete host-side access boundary needs a tested design at stage 3, not a client-only filter.
 
 Each location owns its own session store: local history stays local, online history stays with its
@@ -164,10 +165,10 @@ reissue accepted work merely to restore a stream.
 ## Online execution and routines
 
 **Planned.** Stage 3 connects to an already-running, protected instance owned by the user. Stage 4 offers a
-hosted alternative: publish a reviewed definition snapshot, set required model/channel secrets on
+hosted alternative: publish a reviewed Agent snapshot (with its contexts as their types allow), set required model/channel secrets on
 the host, provision durable runtime state, and provide update and stop controls. The desktop can
 close without stopping online turns or routines. Owner-hosted agents do not depend on our hosting
-service; duang cloud needs only deployment and access metadata, not a centralized chat store.
+service; duang cloud needs only hosting and access metadata, not a centralized chat store.
 Do not claim a specific Fly topology, sign-in provider or price before verifying the hosting path.
 
 A clock must remain available while the owner's laptop is off. On Fly, the safe first configuration
@@ -188,14 +189,15 @@ work may already have happened. These are data-integrity constraints, not an ent
 
 | State | Owner | Boundary |
 |---|---|---|
-| Definition / preset | author's directory / recipient's independent imported directory | Only reviewed portable content travels. |
-| Local conversations | FastAgent local state root | Already implemented; not uploaded on publish. |
+| Agent | its own directory; today chosen by the person, with FastAgent's agent-directory release `~/Agents/<name>/` ([#133](https://github.com/fastagent-sh/duang/issues/133)) / a recipient's own copy | Only the reviewed harness and chosen contexts travel. |
+| Context (planned, [#133](https://github.com/fastagent-sh/duang/issues/133); today the project around a `fastagent/` agent) | its project or folder, outside every Agent directory; a host's copy or clone in that instance's state | Never moved or deleted by removing an Agent. |
+| Local conversations | the local instance's state (`.state/` in the Agent's directory) | Already implemented; not uploaded on publish. |
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
-| Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a remote deployment. |
-| Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a preset or deployment. |
+| Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a hosted instance. |
+| Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a copy of an Agent or a hosted instance. |
 | App preferences | `userData/settings.json` | Network mode and avatar style; never credentials. |
-| Routine definition and execution | agent definition + running host and clock | Display only verified schedule and outcomes. |
+| Routine declaration and execution | the Agent's harness + running host and clock | Display only verified schedule and outcomes. |
 | Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |
 
 No universal message database, enterprise membership/approval/audit system, web workbench, social
