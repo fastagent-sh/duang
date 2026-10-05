@@ -252,7 +252,7 @@ would be furniture.
 
 The composer floats the same way at the bottom, and the transcript passes beneath both. It is one row
 in Telegram's shape: an attach button, the field, and one round button that is whatever the next
-action is (voice while the field is empty, Send once it holds text, Stop while a run is live). What
+action is (voice while the field is empty, Send once it holds text; while a run is live, Stop with the field empty and Steer once it holds text, Esc stopping either way). What
 belongs to the next message rather than to the app, the model chip, sits inside the field at its
 right end, where Telegram keeps its emoji. The field is a 40px pill that grows into a rounded
 rectangle as it takes lines (up to eight), and the buttons stay level with its last line. The chip

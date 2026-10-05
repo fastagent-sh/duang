@@ -1336,6 +1336,23 @@ test("a steer queued before a reload returns to the draft when the run drops it"
   store.dispose();
 });
 
+test("a message sent to start a turn is what the row quotes at once, not the failure before it", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "failed", error: { message: "OpenAI API error (529): overloaded", retryable: true } });
+  assert.equal(store.getSnapshot().previews["a"]?.text, "The provider had a problem");
+  const sent = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  api.send = () => sent.promise;
+  store.setDraft("try again please");
+  const sending = store.send();
+  assert.equal(store.getSnapshot().previews["a"]?.text, "You: try again please", "before the runtime reports it");
+  sent.resolve({ ok: true });
+  await sending;
+  store.dispose();
+});
+
 test("a send that returns after the stream ended does not claim its message ran without entering", async () => {
   const { api, store, emit, end } = harness();
   await store.load();
