@@ -1517,14 +1517,14 @@ if (!process.versions.electron) {
       await click("Retry");
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
-      // An agent whose default is on pi's retired ChatGPT route asks for a model instead of running there.
+      // A default duang chose on pi's retired ChatGPT route is no default: the agent opens on its own config's.
       await writeFile(
         registry,
         JSON.stringify([...JSON.parse(savedRegistry), { id: "legacy", name: "Legacy", dir: join(root, "configured"), model: "openai-codex/gpt-5.5", colour: 4 }]),
       );
       const legacy = await evaluate("window.duang.openAgent('legacy')");
-      assert.equal(legacy.code, "missing_model", legacy.message);
-      assert.match(legacy.message, /openai-codex\/gpt-5\.5 is no longer offered/);
+      assert.equal(legacy.ok, true, legacy.message);
+      assert.equal(legacy.model, "openai/gpt-4o-mini", "the retired route is not the default it opens with");
       await writeFile(registry, savedRegistry);
 
       // The header names the agent and, under it, where the agent lives: a long name stays inside the header

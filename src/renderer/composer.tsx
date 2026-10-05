@@ -94,7 +94,7 @@ function ModelPicker({
   current?: string;
   /**
    * The levels the runtime lists for the model the conversation runs on. Absent when it has none to list:
-   * the agent has no model yet (`needsModel`), or the runtime could not read the conversation's settings.
+   * the conversation has no model yet (`needsModel`), or the runtime could not read the conversation's settings.
    */
   thinking?: { level: string; levels: string[] };
   needsModel: boolean;
@@ -360,8 +360,11 @@ export function Composer({
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
       ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
       : undefined;
-  /** The agent really has no model, as opposed to duang not knowing it yet. Only this warns. */
-  const needsModel = state === "missing_model";
+  /**
+   * This conversation will run on no model: it records none, and its agent has no default. As opposed to duang
+   * not knowing yet, which does not warn.
+   */
+  const needsModel = state === "ready" && !!c && !c.loading && !model;
   const modelDisabled =
     view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir";
   /**
@@ -423,8 +426,8 @@ export function Composer({
     if (stepped.current) list.current?.querySelector("[data-chosen]")?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
   const [picking, setPicking] = useState(false);
-  // An agent with no model cannot start: open the list rather than leave the person guessing.
-  useEffect(() => setPicking(needsModel), [agentId, needsModel]);
+  // A conversation with no model cannot start: open the list rather than leave the person guessing.
+  useEffect(() => setPicking(needsModel), [agentId, c?.session, needsModel]);
   // A send refused because this conversation's model cannot run: choosing another is the way on, so the
   // list opens on it, saying why. The chip stays marked until a model is chosen.
   const stuck = !!c && view.unavailable?.session === c.session && view.unavailable.agentId === c.agentId && view.unavailable.model === model;

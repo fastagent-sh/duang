@@ -42,10 +42,10 @@ broken agent shows its original failure with a way to retry, reveal or remove it
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
 only the local registry row, not the directory or history. Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
-An agent with no model yet ([fastagent#706](https://github.com/fastagent-sh/fastagent/issues/706): FastAgent
-cannot open it without one, so its conversations cannot be listed) opens on a new conversation with the picker;
-the model chosen there runs that conversation, which stays open, rather than its latest one, which keeps its
-own model. A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
+An agent with no default model opens like any other, on the conversation it was left on or its latest: a
+conversation runs on the model it records. Only a conversation that records none (a new one, or one whose
+model is no longer in the catalog) with no default to fall back on asks for one: the picker opens on it and
+the composer says "pick a model to start"; the model chosen there runs that conversation. A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
 moves to the new runtime in main, so the transcript stays as it is (the same rows, the same scroll position)
 and only the chip and the effort track are read again. While the new model is set up, the composer says
 "changing the model…", not that a conversation is opening.
@@ -62,7 +62,7 @@ the models under their provider with the selected one first, and ends with the c
 track of the thinking levels the runtime lists for the conversation's model. A new conversation has them
 before its first message (what its first turn would run on), so effort can be set before sending; setting
 it, or the model, makes the runtime keep the conversation, which the list shows as *New conversation*
-until its first message. An agent with no model yet has no levels, so the picker says effort can be set
+until its first message. A conversation with no model yet has no levels, so the picker says effort can be set
 once a model is chosen; when the runtime reports no levels for another reason (it could not read the
 conversation's settings), the picker says that instead, and a model with one level says it has no effort
 setting, and the chip names the level only when there is a choice. The level is set on the
@@ -153,8 +153,8 @@ titled by what the reason means (*The provider did not accept the sign-in* with 
 401, which opens Settings on that provider's ways to connect and returns to the conversation once connected;
 *Could not reach the provider* with **Network settings**, which opens Settings at the proxy, for a connection error; *The provider is limiting
 requests* or *had a problem* with **Use another model**, which opens the picker, for a 429 or a 5xx; *The run stopped with
-an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one (read back, a run stopped during a tool
-currently reads as failed: [fastagent#712](https://github.com/fastagent-sh/fastagent/issues/712)), one live line
+an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one (live and read back alike, wherever the stop
+landed), one live line
 while pi waits out its own retries, which becomes `retried 2 times: …` once the run goes on and is gone if
 the run ends there, since its ending says how (`retrying 2/3: the provider had a problem`, or the reason's own first line when nothing recognises it, such
 as `retrying 1/3: Request timed out`; never "the run stopped", since it goes on; the provider's words in full on

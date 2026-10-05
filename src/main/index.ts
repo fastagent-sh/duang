@@ -6,7 +6,6 @@ import {
   createAgentIn,
   listAgents,
   MissingDirError,
-  MissingModelError,
   NoAgentError,
   openAgent,
   refuse,
@@ -216,14 +215,7 @@ function register(): void {
       const { control, modelSpec } = await openAgent(await requireAgent(agentId));
       return { ok: true, sessions: await control.sessions.list(), model: modelSpec };
     } catch (error) {
-      const code =
-        error instanceof MissingModelError
-          ? "missing_model"
-          : error instanceof NoAgentError
-            ? "no_agent"
-            : error instanceof MissingDirError
-              ? "missing_dir"
-              : "failed";
+      const code = error instanceof NoAgentError ? "no_agent" : error instanceof MissingDirError ? "missing_dir" : "failed";
       const message = error instanceof Error ? error.message : String(error);
       return code === "failed" && configFailed(agentId) ? { ok: false, code, message, inConfig: true } : { ok: false, code, message };
     }

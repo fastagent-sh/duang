@@ -203,9 +203,10 @@ Accepted limitations, each recorded in its issue:
   engine does not know, typed by hand, reaches the model as plain text without a warning. duang does
   not expand commands itself, because that breaks for remote agents whose files are not on this
   machine.
-- **History replay is partial.** Durable entries expose tool names and results but not tool
-  arguments, thinking or settled run outcomes, and partial output emitted before a reload is not
-  replayed. Nothing presents partial history as a complete trace.
+- **History replay leaves out timing and partial output.** Durable entries carry each call's
+  arguments and result, an answer's recorded thinking and how it ended, but not how long thinking or a
+  call took, and output streamed before a reload that never became an entry is not replayed. Nothing
+  presents partial history as a complete trace.
 - **Token counts and cost are not shown.** The header shows how full the context is, from the
   session's `state().usage` ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)),
   which also carries the latest answer's tokens and cost; duang does not display those. A Claude

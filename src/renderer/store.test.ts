@@ -212,33 +212,26 @@ test("a setup problem is its own pane, and its prose is not repeated above it", 
   store.dispose();
 });
 
-test("first model selection unlocks a new conversation; configured models come from the runtime", async () => {
+test("an agent with no default opens on its latest conversation; only a new one with no model asks for one", async () => {
   const { api, store } = harness();
-  api.openAgent = async () => ({ ok: false, code: "missing_model", message: "missing model" });
+  // No default model: the agent opens all the same, and its conversation runs on the model it recorded.
+  api.openAgent = async () => ({ ok: true, sessions: [{ session: "older", updatedAt: 5, createdAt: 0, messageCount: 2 }] }) as never;
+  api.openSession = async (_id, session) =>
+    session === "older" ? { ...empty(), state: { ...empty().state, model: "provider/model" } } : empty();
   await store.load();
-  assert.equal(store.getSnapshot().states.a, "missing_model");
-  assert.equal(store.getSnapshot().conversation, undefined);
+  assert.equal(store.getSnapshot().conversation?.session, "older", "straight to its history, no model asked for");
+  assert.equal(store.getSnapshot().blocked, undefined);
+  // A new conversation records no model and has no default to fall back on: it asks.
+  await store.newConversation();
+  const fresh = store.getSnapshot().conversation!;
+  assert.notEqual(fresh.session, "older");
   assert.equal(store.getSnapshot().blocked, "pick a model to start");
-  api.openAgent = async () => ready;
-  await store.pickModel("provider/model");
-  assert.equal(store.getSnapshot().states.a, "ready");
-  assert.equal(store.getSnapshot().model, "provider/model");
-  assert.equal(store.getSnapshot().conversation?.loading, false);
-  assert.equal(store.getSnapshot().blocked, undefined, "the one rule that disables the composer");
-  store.dispose();
-});
-
-test("a model chosen on the new-conversation page stays on it, not the agent's latest conversation", async () => {
-  const { api, store, opens } = harness();
-  api.openAgent = async () => ({ ok: false, code: "missing_model", message: "missing model" });
-  await store.load();
-  // The agent has a conversation already; the person was on a new one when they chose.
+  // Chosen there, it runs on it, and the page stays the one the model was chosen on.
+  api.readState = async () => ({ status: "idle", pending: { steering: [], followUp: [] }, model: "provider/model" });
   api.openAgent = async () => listed("older");
   await store.pickModel("provider/model");
-  const c = store.getSnapshot().conversation!;
-  assert.notEqual(c.session, "older", "the page the model was chosen on, whose composer runs on it");
-  assert.ok(!opens.includes("older"));
-  assert.equal(store.getSnapshot().pane, "start");
+  assert.equal(store.getSnapshot().conversation, fresh);
+  assert.equal(store.getSnapshot().blocked, undefined, "the one rule that disables the composer");
   store.dispose();
 });
 

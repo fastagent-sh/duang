@@ -34,7 +34,6 @@ const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
 const changing = new Map<string, Promise<void>>();
 
-export class MissingModelError extends Error {}
 export class NoAgentError extends Error {}
 /**
  * The config each agent last failed to load in, as FastAgent named it: the only file a fresh config may
@@ -42,14 +41,11 @@ export class NoAgentError extends Error {}
  */
 const failedConfigs = new Map<string, string>();
 
+/**
+ * An agent opens with or without a default model: a conversation that records its own runs on it, and only a
+ * new one with none asks for one. A default duang chose on a route it no longer runs is no default.
+ */
 async function build(row: AgentRow): Promise<Opened> {
-  const opened = await assemble(row);
-  // A default on a provider duang no longer runs is no default: the agent asks for a model, as one without any does.
-  if (retired(opened.modelSpec)) throw new MissingModelError(`${opened.modelSpec} is no longer offered: pick a model`);
-  return opened;
-}
-
-async function assemble(row: AgentRow): Promise<Opened> {
   // FastAgent says "is not a fastagent agent" for a directory that is not there too, and that one must not
   // be offered a scaffold: there is no folder to put it in.
   // Forgotten before anything can fail: a failure that is not the config's (a folder it may not read) must
@@ -60,14 +56,13 @@ async function assemble(row: AgentRow): Promise<Opened> {
     const assembly = await createPiAgentFromDir(row.dir, {
       sessionControl: true,
       authPath,
-      ...(row.model ? { model: row.model } : {}),
+      ...(row.model && !retired(row.model) ? { model: row.model } : {}),
     });
     if (!assembly.sessionControl) throw new Error(`${row.dir}: no session control`);
     return { ...assembly, control: assembly.sessionControl };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // FastAgent currently exposes these setup conditions as prose, not error codes.
-    if (/missing model/i.test(message)) throw new MissingModelError(message);
+    // FastAgent exposes this setup condition as prose, not an error code.
     if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
     const config = failingConfig(message);
     if (config) failedConfigs.set(row.id, config);

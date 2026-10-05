@@ -10,7 +10,7 @@ test("an agent's face is what it most asks of the person: setup, then work, then
   assert.equal(faceOf({ ...ready, outcomes: ["done"], open: true }), "done", "an outcome waiting beats being open");
   assert.equal(faceOf({ ...ready, outcomes: ["done", "failed"] }), "failed", "one failure among them is what it shows");
   assert.equal(faceOf({ ...ready, outcomes: ["failed"], doing: "tool" }), "tool", "work in flight beats an older outcome");
-  assert.equal(faceOf({ ...ready, state: "missing_model", doing: "thinking" }), "asleep", "a setup problem beats everything");
+  assert.equal(faceOf({ ...ready, state: "missing_dir", doing: "thinking" }), "broken", "a setup problem beats everything");
   assert.equal(faceOf({ ...ready, state: "no_agent" }), "unborn");
   assert.equal(faceOf({ ...ready, state: "broken", outcomes: ["done"] }), "broken");
 });

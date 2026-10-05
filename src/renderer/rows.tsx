@@ -11,7 +11,6 @@ import type { Activity } from "./transcript.ts";
 
 const tones: Record<AgentState, Tone> = {
   ready: "accent",
-  missing_model: "warning",
   no_agent: "warning",
   missing_dir: "danger",
   broken: "danger",
@@ -20,7 +19,6 @@ const tones: Record<AgentState, Tone> = {
 /** The dot's colour in words: hover and assistive technology must not have to read the palette. */
 const says: Record<AgentState, string> = {
   ready: "Ready",
-  missing_model: "Needs a model",
   no_agent: "No agent in this directory yet",
   missing_dir: "Folder not found",
   broken: "Broken",

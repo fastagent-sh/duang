@@ -174,7 +174,7 @@ export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate:
           {`${home(dir)}/fastagent/\n  fastagent.config.ts\n  .gitignore`}
         </pre>
         <p className="text-[12px] text-muted">
-          Two files, nothing else. For the full scaffold (persona, skills, an example tool) run{" "}
+          Two files, nothing else. For the full scaffold (standing instructions, skills, an example tool) run{" "}
           <span className="font-mono text-[12.5px]">fastagent init</span> instead.
         </p>
       </div>

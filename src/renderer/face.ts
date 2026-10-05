@@ -15,7 +15,6 @@ export type Face =
   | "answering"
   | "done"
   | "failed"
-  | "asleep"
   | "unborn"
   | "broken";
 
@@ -36,7 +35,6 @@ export function faceOf({
   /** It is the agent on screen. */
   open: boolean;
 }): Face {
-  if (state === "missing_model") return "asleep";
   if (state === "no_agent") return "unborn";
   if (state === "broken" || state === "missing_dir") return "broken";
   if (doing) return doing;

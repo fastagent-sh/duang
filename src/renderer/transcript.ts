@@ -238,8 +238,10 @@ const WORK = [
 export function summarize(items: Work["items"]): string {
   const all = items.filter((item): item is Tool => item.kind === "tool");
   const tools = all.filter((tool) => tool.status !== "running");
-  const thought = items.reduce((ms, item) => (item.kind === "thinking" && !item.open ? ms + item.at - item.started : ms), 0);
-  const parts = thought >= 1000 ? [`thought ${Math.round(thought / 1000)}s`] : [];
+  // How long, when it is known and worth saying; read back from history it is not, and the thought still counts.
+  const thoughts = items.filter((item): item is Thinking => item.kind === "thinking" && !item.open);
+  const thought = thoughts.reduce((ms, item) => ms + item.at - item.started, 0);
+  const parts = thoughts.length ? [thought >= 1000 ? `thought ${Math.round(thought / 1000)}s` : "thought"] : [];
   for (const kind of WORK) {
     const mine = tools.filter((tool) => kind.tools.includes(tool.name));
     const n = kind.distinct ? new Set(mine.map((tool) => (tool.args as { path?: unknown } | undefined)?.path ?? tool.id)).size : mine.length;
@@ -392,6 +394,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       isError?: boolean;
       outcome?: AnswerOutcome;
       terminate?: true;
+      thinking?: string;
     };
     const at = entry.timestamp;
     if (entry.kind === "user") {
@@ -402,6 +405,8 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
     } else if (entry.kind === "assistant") {
       retried();
+      // The reasoning the answer recorded, as it streamed live. How long it took is not recorded.
+      if (data.thinking) items.push({ kind: "thinking", text: data.thinking, open: false, started: at, at });
       if (data.text) items.push({ kind: "assistant", text: data.text, open: false, at });
       for (const call of data.toolCalls ?? []) {
         items.push({
