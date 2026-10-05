@@ -39,8 +39,9 @@ never written over an earlier copy), a new `export default {};` takes its place,
 for a model. Main replaces only the config FastAgent said failed, inside the agent's folder; the window does
 not name the file. Any other failure offers Retry and Reveal in Finder. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
-has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal deletes
-only the local registry row, not the directory or history. Changing the model or removing an agent
+has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal today deletes
+only the local registry row, not the directory or history ([#133](https://github.com/fastagent-sh/duang/issues/133)
+moves the directory duang created to the Trash, after asking). Changing the model or removing an agent
 is refused while one of its conversations is running, including a turn still opening the runtime.
 An agent with no default model opens like any other, on the conversation it was left on or its latest: a
 conversation runs on the model it records. Only a conversation that records none (a new one, or one whose

@@ -150,8 +150,9 @@ and accounts are not settings until a shipped feature needs them.
 ## Paths through the product
 
 **Create an agent (planned with FastAgent's agent-directory release, [#133](https://github.com/fastagent-sh/duang/issues/133)).**
-duang only ever creates agents; there is no opening an agent from a directory, and nothing is
-scaffolded inside a project. *Create agent* asks for a name and the contexts, the way Codex creates a
+In duang an agent is created; there is no opening an arbitrary directory as an agent, and nothing is
+scaffolded inside a project. An Agent made elsewhere (a clone, a copy someone gave) comes in through
+stage 2's import, which is the only other way in; until then, creating is. *Create agent* asks for a name and the contexts, the way Codex creates a
 project and attaches folders:
 
 ```text
@@ -170,13 +171,19 @@ project and attaches folders:
 Each context is a row: its name, where it is, **Works on** or **Knows**, and remove. The source menu
 offers what the locked FastAgent version supports: a folder on this computer now, a GitHub repository
 once FastAgent clones them. An agent with no context is valid; it works only in its own directory.
-duang creates the agent's directory as `~/Agents/<name>/` (the folder is made with the first agent) and
-writes its config from scratch; it never rewrites a config someone edited. The folder is visible, like
+duang creates the agent's directory in `~/Agents/` (the folder is made with the first agent) and writes
+its config from scratch, never rewriting a config someone edited, together with a `.gitignore` for
+`.state/`, `.secrets/` and `.env`, both written only if absent: the directory is meant for git, and its
+conversations and credentials must never be committed with it. The directory's name is the agent's
+name made one safe path segment (letters, digits, `-` and `_`, the spelling FastAgent requires of a
+name), with `-2`, `-3` added when it is taken; the name shown in duang is the name as typed, kept apart.
+Renaming an agent changes the name shown, never its directory, as today. The folder is visible, like
 `~/IdeaProjects`, because a person edits the harness, keeps it in git and gives it to someone; not under
 `~/Library`, which hides it, nor `~/Documents`, which iCloud syncs along with the agent's `.secrets/`. The new agent has no default model, so its first
 conversation asks for one. Its header then says what it works on (`works on app · knows handbook`)
-rather than where its directory is. Removing an agent removes its directory and conversations (they
-are duang's), after asking, to the Trash; its contexts are never touched.
+rather than where its directory is. Removing an agent moves its directory, conversations included, to the
+Trash after asking, because duang created that directory; its contexts are never touched. (Today,
+removing an agent deletes only its registry row.)
 
 **Daily local use (current foundation).** Connect a model provider in duang (into its own
 credential file), add an agent (today, from a directory), choose a model, start work,

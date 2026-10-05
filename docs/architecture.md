@@ -19,7 +19,7 @@ Electron renderer ── typed preload ── Electron main ── local FastAge
 The renderer has `contextIsolation` on and no Node integration. It never gets arbitrary filesystem,
 IPC, shell or credential access. Main owns the local runtime, directory reads and future remote
 connections. FastAgent owns sessions at each location. A visitor's protected remote endpoint must
-not grant direct access to another visitor's sessions. Optional hosting will operate deployments;
+not grant direct access to another visitor's sessions. Optional hosting will operate hosted instances;
 it need not proxy every conversation or own a transcript.
 
 ## The client
@@ -168,7 +168,7 @@ reissue accepted work merely to restore a stream.
 hosted alternative: publish a reviewed Agent snapshot (with its contexts as their types allow), set required model/channel secrets on
 the host, provision durable runtime state, and provide update and stop controls. The desktop can
 close without stopping online turns or routines. Owner-hosted agents do not depend on our hosting
-service; duang cloud needs only deployment and access metadata, not a centralized chat store.
+service; duang cloud needs only hosting and access metadata, not a centralized chat store.
 Do not claim a specific Fly topology, sign-in provider or price before verifying the hosting path.
 
 A clock must remain available while the owner's laptop is off. On Fly, the safe first configuration
@@ -190,11 +190,11 @@ work may already have happened. These are data-integrity constraints, not an ent
 | State | Owner | Boundary |
 |---|---|---|
 | Agent | its own directory; today chosen by the person, with FastAgent's agent-directory release `~/Agents/<name>/` ([#133](https://github.com/fastagent-sh/duang/issues/133)) / a recipient's own copy | Only the reviewed harness and chosen contexts travel. |
-| Context | its project or folder, outside every Agent directory; a host's copy or clone in that instance's state | Never moved or deleted by removing an Agent. |
+| Context (planned, [#133](https://github.com/fastagent-sh/duang/issues/133); today the project around a `fastagent/` agent) | its project or folder, outside every Agent directory; a host's copy or clone in that instance's state | Never moved or deleted by removing an Agent. |
 | Local conversations | the local instance's state (`.state/` in the Agent's directory) | Already implemented; not uploaded on publish. |
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
 | Invitation and endpoint access | host-side protection, with optional hosting metadata | Revocable; do not put secrets in a public URL without labeling its bearer semantics. |
-| Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a remote deployment. |
+| Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a hosted instance. |
 | Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a copy of an Agent or a hosted instance. |
 | App preferences | `userData/settings.json` | Network mode and avatar style; never credentials. |
 | Routine declaration and execution | the Agent's harness + running host and clock | Display only verified schedule and outcomes. |

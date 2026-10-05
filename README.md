@@ -8,7 +8,10 @@ routines while your laptop is off, be added as a contact by other people, or ans
 and other FastAgent channels. Giving someone the Agent instead gives them their own copy, with their
 own credentials and conversations. Conversations stay with the instance they happened in.
 
-The words are FastAgent's ([agent model](https://github.com/fastagent-sh/fastagent/issues/684)):
+The words are FastAgent's ([agent model](https://github.com/fastagent-sh/fastagent/issues/684)). They
+describe the model FastAgent is moving to, which duang follows with its next release
+([#133](https://github.com/fastagent-sh/duang/issues/133)); today an agent is a `fastagent/` directory
+inside a project and works on the project around it, with no declared contexts:
 
 | Word | Means |
 |---|---|
@@ -155,7 +158,8 @@ agent-directory release: agents will be created in duang, as `~/Agents/<name>/`,
 The registry uses atomic writes, serialized within one running instance — there is no cross-process
 lock yet, so two instances writing at once can drop each other's rows. Invalid or unreadable data is
 reported rather than replaced with an empty list. Adding the same resolved directory reuses its
-existing row, and removing an agent never deletes the directory or conversation history.
+existing row, and removing an agent today deletes only that row, never the directory or conversation
+history (with #133, duang's own agents go to the Trash, after asking).
 
 The picker, every conversation and plan usage use duang's own credential file, `auth.json` in its
 user data (`~/Library/Application Support/duang/` on macOS, `%APPDATA%\duang\` on Windows,
