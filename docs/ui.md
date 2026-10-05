@@ -118,7 +118,7 @@ least says where the work is. The titles are in the conversation list.
 The conversation a row speaks for is the one a click on it would show: the one on screen for the
 open agent, otherwise the one the agent was left on, otherwise its newest. The quote is the last
 thing in that conversation — the agent's answer, the tool it is running (`bash npm run build`),
-a failure note, the line it is thinking while it thinks (`thinking: …`), or your own message as
+a failure note, the line it is thinking while it thinks (`thinking: …`, by the rule in §8), or your own message as
 `You: …` — as plain text, with markdown marks dropped and finished thinking passed over. While this window holds the conversation (the one on screen, or one running
 in the background after you walked away from it), the quote follows it as it streams. Otherwise it
 is read once from the conversation's history, through FastAgent's public `entries()`, and read again
@@ -239,11 +239,11 @@ act on) and a Manage providers link (Settings is in the sidebar; the empty picke
 **Connect a provider**).
 
 **The header is two parts.** What you are looking at (avatar, agent name, folder,
-`working`, the context meter, `queued`) is one pill. `working` is about the open conversation; while only
-others of the agent run, it reads `1 other working`, and a click opens that one (or, for several, the
-conversation list, which marks each), and the one action on it, the
-conversation list, is a round disc beside it, as Telegram splits a chat's info from its call, search
-and menu. The header runs the pane's width: it is chrome, and held to the reading column it would read as a
+`working`, the context meter, `queued`) is one pill, and the conversation list, the one thing to do about
+it, is a round disc beside it, as Telegram splits a chat's info from its call, search and menu. `working`
+is about the open conversation. While only other conversations of the agent run, it reads `1 other
+working` instead, and a click on it opens that conversation (or, for several, the conversation list, which
+marks each). The header runs the pane's width: it is chrome, and held to the reading column it would read as a
 card in the middle of a page. The composer does not: it sits in the reading column, its attach and
 voice/send discs on the text's edges, because the eye goes from the last line down to the field and
 a field wider than the text made that a jump. The disc is alone because nothing else on a
@@ -550,7 +550,7 @@ Everything else follows from those two:
 - **The live end of a run says what it is doing.** For the whole run, not only its silences, the
   transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
   (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
-  reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking), and
+  reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking, by the rule in §8), and
   how long the run has taken. No capsule, border or icon: they would make one line of status the
   loudest thing on screen. A bare `working…` answers neither "is it alive" nor "what is it on", and
   it comes and goes between steps. The clock counts
@@ -573,7 +573,11 @@ Everything else follows from those two:
   window watched has a time: history records when a call was announced and answered, not how long
   it ran, so a reopened call shows none. The clock stops when this view stops hearing the run.
 - **Thinking** collapses to one muted line (`thinking · 3s`, trailed by the line it is on) and
-  expands into a quoted block.
+  expands into a quoted block. While it streams, the line it is on is its last *complete* line: the one
+  still being written reads as a fragment (`- The tot`). Before it has one, it is the words written so far
+  without the one being written, or, in a script written without spaces, the text so far; with nothing
+  yet, it is just `thinking`. The live status, the roster's quote and this row read it the same way
+  (`thinkingLine`).
 - **System events are one centred muted line**: model changed, run stopped, a retry, a command that
   ran. They are facts about the session, not things anyone said. A problem the person may have to act
   on (a run that failed or was cut short, a send refused) is a card instead (§9b).

@@ -237,6 +237,7 @@ export function summarize(items: Work["items"]): string {
  * The line a thinking block is on: its last one, which is what it is thinking now. While it streams, its last
  * line is usually still being written and reads as a fragment (`- The tot`), so a streaming block shows its
  * last complete line instead, and before it has one, the words written so far without the one being written.
+ * A script written without spaces (Chinese, Japanese) has no word to leave out: its text so far is shown.
  */
 export function thinkingLine(text: string, streaming = false): string {
   const last = (lines: string) => lines.trim().split("\n").at(-1) ?? "";
@@ -244,7 +245,8 @@ export function thinkingLine(text: string, streaming = false): string {
   const complete = last(text.slice(0, Math.max(0, text.lastIndexOf("\n"))));
   if (complete) return complete;
   const words = text.trim();
-  return words.slice(0, Math.max(0, words.lastIndexOf(" ")));
+  const space = words.lastIndexOf(" ");
+  return space < 0 ? words : words.slice(0, space);
 }
 
 /** What kind of work a live run is in, for what follows it without reading its words (the avatar's face). */
@@ -546,7 +548,7 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
           : item.kind === "tool"
             ? `${item.name} ${firstArg(item.args)}`
             : item.kind === "thinking" && item.open
-              ? `thinking: ${thinkingLine(item.text, true)}`
+              ? ["thinking", thinkingLine(item.text, true)].filter(Boolean).join(": ")
               : "";
     const plain = text
       .replace(/^(#{1,6}|>)\s*/gm, "")

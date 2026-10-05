@@ -379,14 +379,18 @@ test("a streaming thought is quoted by a line it finished, never one cut mid-wor
   assert.equal(thinkingLine("The user wants me to:\n1. Find out why it fails\n", true), "1. Find out why it fails");
   // No line finished yet: the words so far, without the one being written.
   assert.equal(thinkingLine("Let me look at the tes", true), "Let me look at the");
-  assert.equal(thinkingLine("Let", true), "");
+  assert.equal(thinkingLine("Let me", true), "Let");
+  // A script written without spaces has no word to leave out: what it has written so far.
+  assert.equal(thinkingLine("让我看看这个测试为什么失败", true), "让我看看这个测试为什么失败");
   // Settled, the last line is complete and is the one shown.
   assert.equal(thinkingLine("first\n- The total is right"), "- The total is right");
   // The live status and the preview read it the same way.
   const streaming: Item = { kind: "thinking", text: "first line\n- The tot", open: true, started: 0, at: 0 };
   assert.equal(phase([streaming], "running").detail, "first line");
   assert.equal(previewOf([streaming])?.text, "thinking: first line");
-  assert.equal(phase([{ ...streaming, text: "Let" } as Item], "running").detail, undefined, "nothing worth saying yet");
+  assert.equal(phase([{ ...streaming, text: "" } as Item], "running").detail, undefined, "nothing worth saying yet");
+  // Nothing to quote yet: the preview says thinking, not a label with nothing after it.
+  assert.equal(previewOf([{ ...streaming, text: "" } as Item])?.text, "thinking");
 });
 
 test("the live status says what the run is doing now", () => {
