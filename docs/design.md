@@ -170,8 +170,10 @@ project and attaches folders:
 Each context is a row: its name, where it is, **Works on** or **Knows**, and remove. The source menu
 offers what the locked FastAgent version supports: a folder on this computer now, a GitHub repository
 once FastAgent clones them. An agent with no context is valid; it works only in its own directory.
-duang creates the agent's directory in one folder of its own and writes its config from scratch; it
-never rewrites a config someone edited. The new agent has no default model, so its first
+duang creates the agent's directory as `~/Agents/<name>/` (the folder is made with the first agent) and
+writes its config from scratch; it never rewrites a config someone edited. The folder is visible, like
+`~/IdeaProjects`, because a person edits the harness, keeps it in git and gives it to someone; not under
+`~/Library`, which hides it, nor `~/Documents`, which iCloud syncs along with the agent's `.secrets/`. The new agent has no default model, so its first
 conversation asks for one. Its header then says what it works on (`works on app · knows handbook`)
 rather than where its directory is. Removing an agent removes its directory and conversations (they
 are duang's), after asking, to the Trash; its contexts are never touched.

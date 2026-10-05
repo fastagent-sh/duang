@@ -149,7 +149,7 @@ Today, point *Add agent* at a FastAgent directory or a plain project. A plain pr
 `fastagent/fastagent.config.ts` and `.gitignore` after confirmation; an existing `fastagent/`
 directory is never overwritten. A scaffolded agent has no model, so duang asks for one and stores
 the choice in its registry rather than editing the agent's config. This layout goes with FastAgent's
-agent-directory release: agents will be created in duang, in a folder of duang's, with their contexts
+agent-directory release: agents will be created in duang, as `~/Agents/<name>/`, with their contexts
 ([#133](https://github.com/fastagent-sh/duang/issues/133)).
 
 The registry uses atomic writes, serialized within one running instance — there is no cross-process

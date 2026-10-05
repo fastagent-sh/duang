@@ -189,7 +189,7 @@ work may already have happened. These are data-integrity constraints, not an ent
 
 | State | Owner | Boundary |
 |---|---|---|
-| Agent | its own directory; today chosen by the person, with FastAgent's agent-directory release a folder of duang's ([#133](https://github.com/fastagent-sh/duang/issues/133)) / a recipient's own copy | Only the reviewed harness and chosen contexts travel. |
+| Agent | its own directory; today chosen by the person, with FastAgent's agent-directory release `~/Agents/<name>/` ([#133](https://github.com/fastagent-sh/duang/issues/133)) / a recipient's own copy | Only the reviewed harness and chosen contexts travel. |
 | Context | its project or folder, outside every Agent directory; a host's copy or clone in that instance's state | Never moved or deleted by removing an Agent. |
 | Local conversations | the local instance's state (`.state/` in the Agent's directory) | Already implemented; not uploaded on publish. |
 | Online and channel conversations | FastAgent on the owner-controlled host | Access-scoped per visitor or channel, no second client transcript. |
