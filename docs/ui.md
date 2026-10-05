@@ -532,8 +532,11 @@ Everything else follows from those two:
 
 - **A stretch of work is one line.** Consecutive tool calls and thinking fold into a work block that
   says what kind of work it was: `thought 6s, read 4 files, searched once, ran 1 command`. It counts
-  only calls that finished; one still running is `1 running` (`ran 1 command, 1 running`), and the live
-  status below says what it is, so the block never says in the past tense what is still happening. A reading
+  only calls that finished, so it never says in the past tense what is still happening. While its calls
+  are what the run is on, the block's line *is* the live status (below): `running 2 tools · 24s` with
+  the bouncing dot, still opening into the calls, rather than a count above a status line saying the
+  same; once they finish it reads `ran 2 commands` again. (A call still running in a block that is not
+  the live end, with a message waiting between, is counted as `1 running`.) A reading
   session of twenty files was twenty lines, none of them something the person needed; what they
   need is the kind of work. A call that failed is not called out on the block: the agent reads its
   own failures and carries on, so a failed call asks nothing of the person, and whether the work as
@@ -550,7 +553,7 @@ Everything else follows from those two:
   would; when it is the current step, the live status below it gives the step's word without
   repeating what it is on.
 - **The live end of a run says what it is doing.** For the whole run, not only its silences, the
-  transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
+  transcript ends in one plain line (the last work block's own line, when its calls are the step): a bouncing accent dot, the step as a word that sweeps
   (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
   reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking, by the rule in §8), and
   how long the run has taken. No capsule, border or icon: they would make one line of status the

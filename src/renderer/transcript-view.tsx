@@ -263,6 +263,18 @@ export function Transcript({
     );
 
   const shown = group(lines(items));
+  const live = <RunStatus items={items} status={status} started={started} heard={heard} shown={isLone(shown.at(-1))} />;
+  // The last block holds the calls the run is on now, and nothing waits between it and the end: it is the live
+  // status itself, so the transcript does not say `2 running` above `running 2 tools`.
+  const end = shown.at(-1);
+  const liveBlock =
+    busy &&
+    end?.kind === "work" &&
+    !isLone(end) &&
+    end.items.some((item) => item.kind === "tool" && item.status === "running") &&
+    !waiting.some(({ opens }) => opens)
+      ? end
+      : undefined;
   /**
    * `enter` is for what arrives, and history has not arrived — it was already there. This component
    * remounts for every conversation it shows (keyed by subscription), and it mounts with the history
@@ -356,7 +368,7 @@ export function Transcript({
             // the same node, so the rise does not restart on every token.
             <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
-                <WorkBlock work={line} />
+                <WorkBlock work={line} live={line === liveBlock ? live : undefined} />
               ) : (
                 <Message item={line} ends={ends(all[index + 1], busy)} actions={line === problem ? actions : undefined} />
               )}
@@ -364,9 +376,9 @@ export function Transcript({
           ),
         )}
         {queue(true)}
-        {busy && (
+        {busy && !liveBlock && (
           <div className={gap(waiting.some(({ opens }) => opens) ? "user" : shown.at(-1)?.kind, "status")}>
-            <RunStatus items={items} status={status} started={started} heard={heard} shown={isLone(shown.at(-1))} />
+            {live}
           </div>
         )}
         {queue(false)}
@@ -531,13 +543,14 @@ const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.
 /**
  * A stretch of tool calls and thinking as one line that says what kind of work it was, opening into
  * the calls themselves, where a call that failed still says so. It stays closed while it grows: the
- * live status below says what the run is on.
+ * live status says what the run is on. When its calls are what the run is on now, it is the live status
+ * (`live`), rather than a line above another saying the same thing.
  *
  * A lone call is a one-item block drawn as the call alone (open, summary hidden), so that when the
  * next call folds it into a block it is still the same element. A card opened while it stood alone
  * keeps the block open once it folds, rather than vanishing from under the person reading it.
  */
-export function WorkBlock({ work }: { work: Work }) {
+export function WorkBlock({ work, live }: { work: Work; live?: ReactNode }) {
   const lone = isLone(work);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDetailsElement>(null);
@@ -562,7 +575,7 @@ export function WorkBlock({ work }: { work: Work }) {
         className="cursor-default select-none flex h-7 items-center gap-2 text-[12px] text-muted transition-colors hover:text-text"
       >
         <CaretRight size={11} className="shrink-0 transition-transform group-open/work:rotate-90" />
-        <span className="truncate">{summarize(work.items)}</span>
+        {live ?? <span className="truncate">{summarize(work.items)}</span>}
       </summary>
       <div className={lone ? "" : "mt-1 ml-[5px] space-y-0.5 border-l border-stroke pl-3.5"}>
         {work.items.map((item, index) => (
