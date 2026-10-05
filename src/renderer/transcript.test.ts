@@ -371,6 +371,9 @@ test("a work block counts files once and names the kind of work", () => {
   );
   // History carries no arguments, so every reopened call counts on its own.
   assert.equal(summarize([tool("read", undefined), tool("read", undefined)] as never), "read 2 files");
+  // A call still running is not counted as done: the block says how many run, the live status what they are.
+  assert.equal(summarize([tool("bash", {}, { status: "running", id: "a" }), tool("bash", {}, { status: "running", id: "b" })] as never), "2 running");
+  assert.equal(summarize([tool("bash", {}, { id: "a" }), tool("bash", {}, { status: "running", id: "b" })] as never), "ran 1 command, 1 running");
 });
 
 test("a streaming thought is quoted by a line it finished, never one cut mid-word", () => {

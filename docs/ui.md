@@ -531,7 +531,9 @@ in the transcript really is chat. Ours is the work.
 Everything else follows from those two:
 
 - **A stretch of work is one line.** Consecutive tool calls and thinking fold into a work block that
-  says what kind of work it was: `thought 6s, read 4 files, searched once, ran 1 command`. A reading
+  says what kind of work it was: `thought 6s, read 4 files, searched once, ran 1 command`. It counts
+  only calls that finished; one still running is `1 running` (`ran 1 command, 1 running`), and the live
+  status below says what it is, so the block never says in the past tense what is still happening. A reading
   session of twenty files was twenty lines, none of them something the person needed; what they
   need is the kind of work. A call that failed is not called out on the block: the agent reads its
   own failures and carries on, so a failed call asks nothing of the person, and whether the work as

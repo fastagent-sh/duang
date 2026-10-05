@@ -215,9 +215,12 @@ const WORK = [
  * stopped`): the agent never read a result and the run did not go on, and reopened from history
  * nothing else says the run was cut short. Files are counted once however often they were read, live
  * and reopened alike (history keeps each call's arguments); a call with no path counts once each.
+ * Only finished calls are counted as done: one still running is `2 running`, and the live status below
+ * says what it is, so the block never claims in the past tense what is still happening.
  */
 export function summarize(items: Work["items"]): string {
-  const tools = items.filter((item): item is Tool => item.kind === "tool");
+  const all = items.filter((item): item is Tool => item.kind === "tool");
+  const tools = all.filter((tool) => tool.status !== "running");
   const thought = items.reduce((ms, item) => (item.kind === "thinking" && !item.open ? ms + item.at - item.started : ms), 0);
   const parts = thought >= 1000 ? [`thought ${Math.round(thought / 1000)}s`] : [];
   for (const kind of WORK) {
@@ -230,6 +233,8 @@ export function summarize(items: Work["items"]): string {
   for (const [name, n] of others) parts.push(`used ${name}${n > 1 ? ` ×${n}` : ""}`);
   const stopped = tools.filter((tool) => tool.status === "interrupted").length;
   if (stopped) parts.push(`${stopped} stopped`);
+  const running = all.length - tools.length;
+  if (running) parts.push(`${running} running`);
   return parts.join(", ") || "thought";
 }
 
