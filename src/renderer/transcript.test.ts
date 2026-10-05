@@ -11,6 +11,7 @@ import {
   fromEntries,
   group,
   lines,
+  liveEnd,
   phase,
   summarize,
   previewOf,
@@ -625,3 +626,38 @@ test("a call reopened from history keeps its arguments: its path, and the count 
   assert.deepEqual(tools.map((tool) => tool.args), [{ path: "/repo/src/app.ts" }, { path: "/repo/src/app.ts" }]);
   assert.equal(summarize(tools), "read 1 file", "the same file read twice is one file, reopened as live");
 });
+
+test("the live end of a run is one line: the step itself when it is the newest line", () => {
+  const user: Item = { kind: "user", text: "go", at: 0 };
+  const end = (items: Item[], busy = true, opening = false) => {
+    const shown = group(lines(items));
+    const result = liveEnd(shown, busy, opening);
+    return {
+      status: result.status,
+      block: result.block ? shown.indexOf(result.block) : undefined,
+      hidden: result.hidden ? shown.indexOf(result.hidden) : undefined,
+      quietOnly: result.quietOnly,
+      above: result.above,
+    };
+  };
+  const running = (id: string) => tool("bash", { command: `sleep ${id}` }, { status: "running", id });
+  const waiting: Item = { kind: "note", tone: "info", text: "retrying 1/3: the provider had a problem", retry: 1, of: 3, reason: "529", at: 0 };
+
+  assert.deepEqual(end([user], false), { status: false, block: undefined, hidden: undefined, quietOnly: false, above: "user" }, "no run, no line");
+  assert.deepEqual(end([user]), { status: true, block: undefined, hidden: undefined, quietOnly: false, above: "user" });
+  // Calls running, alone or together, and a thought being written carry the status themselves.
+  assert.deepEqual(end([user, running("a"), running("b")]), { status: false, block: 1, hidden: undefined, quietOnly: false, above: "work" });
+  assert.equal(end([user, running("a")]).block, 1, "a lone call too");
+  assert.equal(end([user, { kind: "thinking", text: "hm", open: true, started: 0, at: 0 }]).block, 1, "a thought being written");
+  // Once they are done, the status stands on its own under them.
+  assert.deepEqual(end([user, tool("bash", {}), { kind: "thinking", text: "hm", open: false, started: 0, at: 0 }]).status, true);
+  // A retry being waited out is said by the status alone, which keeps the space it has under the message.
+  assert.deepEqual(end([user, waiting]), { status: true, block: undefined, hidden: 1, quietOnly: false, above: "user" });
+  assert.equal(end([user, { ...waiting, of: undefined, text: "retried once: …" } as Item]).hidden, undefined, "one the run went on from is drawn");
+  // An answer being written is its own sign of life: the status only once it stops coming.
+  assert.deepEqual(end([user, { kind: "assistant", text: "Here", open: true, at: 0 }]).quietOnly, true);
+  assert.deepEqual(end([user, { kind: "assistant", text: "Here", open: false, at: 0 }]).quietOnly, false);
+  // A sent message waiting to open the next turn sits between: nothing above it is the step.
+  assert.deepEqual(end([user, running("a")], true, true), { status: true, block: undefined, hidden: undefined, quietOnly: false, above: "user" });
+});
+

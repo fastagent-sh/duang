@@ -213,6 +213,40 @@ export function group(lines: Line[]): (Line | Work)[] {
 }
 
 /**
+ * How the live end of a run is drawn: one line saying what the run is doing. Where the newest line already is
+ * that step, it is that line, never one above another saying the same:
+ *
+ * - calls running, or a thought being written: that block carries the status itself (`block`);
+ * - a retry pi is waiting out: the status says it, and the waiting line is not drawn (`hidden`);
+ * - an answer being written: its own sign of life, so the status is drawn only once it stops coming
+ *   (`quietOnly`);
+ * - otherwise, or with a sent message waiting to open the next turn, the status line stands on its own.
+ *
+ * `above` is the kind of the line the status follows, for the space between them: the last line drawn.
+ */
+export function liveEnd(
+  shown: (Line | Work)[],
+  busy: boolean,
+  opening: boolean,
+): { status: boolean; block?: Work; hidden?: Line; quietOnly: boolean; above?: string } {
+  const end = shown.at(-1);
+  const now = busy && !opening ? end : undefined;
+  const block =
+    now?.kind === "work" &&
+    now.items.some((item) => (item.kind === "tool" && item.status === "running") || (item.kind === "thinking" && item.open))
+      ? now
+      : undefined;
+  const hidden = now?.kind === "note" && now.of !== undefined ? now : undefined;
+  return {
+    status: busy && !block,
+    ...(block && { block }),
+    ...(hidden && { hidden }),
+    quietOnly: now?.kind === "assistant" && now.open,
+    above: opening ? "user" : (hidden ? shown.at(-2) : end)?.kind,
+  };
+}
+
+/**
  * Tools by the kind of work they do: how a running one is described, and how a finished stretch counts
  * them. Anything else is named by its own name.
  */

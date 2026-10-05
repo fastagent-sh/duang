@@ -50,3 +50,6 @@ jobs:
 
       - name: Electron local-workflow smoke (isolated fake provider)
         run: node tests/smoke.mjs
+
+      - name: Electron live transcript (isolated fake model endpoint)
+        run: node tests/transcript.mjs
