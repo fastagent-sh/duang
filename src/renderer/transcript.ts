@@ -68,7 +68,24 @@ export type Item = At &
       limit?: string;
       /** pi trying the answer again by itself: how many times so far. Consecutive ones are one line. */
       retry?: number;
+      /** A retry still waiting, live: of how many pi will make. Absent once the run went on from it. */
+      of?: number;
     });
+
+type RetryNote = Extract<Item, { kind: "note" }> & { retry: number };
+const isRetry = (item: Item | undefined): item is RetryNote => item?.kind === "note" && !!item.retry;
+const retriedText = (count: number, reason: string) => `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(reason)}`;
+
+/**
+ * A retry the run went on from (an answer, a thought, a call, or a steer the next attempt took in came after it)
+ * is said in the past, as it reads back from history: `retrying 2/3` would claim a wait that is over.
+ */
+export function wentOn(items: Item[]): Item[] {
+  const index = items.findLastIndex((item) => isRetry(item) && item.of !== undefined);
+  if (index < 0) return items;
+  const { of: _waiting, ...note } = items[index] as RetryNote;
+  return items.with(index, { ...note, text: retriedText(note.retry, note.reason ?? "") });
+}
 
 /**
  * A retry's reason in a quiet line: what it means when that is recognised, else the reason's own first line.
@@ -215,9 +232,12 @@ const WORK = [
  * stopped`): the agent never read a result and the run did not go on, and reopened from history
  * nothing else says the run was cut short. Files are counted once however often they were read, live
  * and reopened alike (history keeps each call's arguments); a call with no path counts once each.
+ * Only finished calls are counted as done: one still running is `2 running`, and the live status below
+ * says what it is, so the block never claims in the past tense what is still happening.
  */
 export function summarize(items: Work["items"]): string {
-  const tools = items.filter((item): item is Tool => item.kind === "tool");
+  const all = items.filter((item): item is Tool => item.kind === "tool");
+  const tools = all.filter((tool) => tool.status !== "running");
   const thought = items.reduce((ms, item) => (item.kind === "thinking" && !item.open ? ms + item.at - item.started : ms), 0);
   const parts = thought >= 1000 ? [`thought ${Math.round(thought / 1000)}s`] : [];
   for (const kind of WORK) {
@@ -230,6 +250,8 @@ export function summarize(items: Work["items"]): string {
   for (const [name, n] of others) parts.push(`used ${name}${n > 1 ? ` ×${n}` : ""}`);
   const stopped = tools.filter((tool) => tool.status === "interrupted").length;
   if (stopped) parts.push(`${stopped} stopped`);
+  const running = all.length - tools.length;
+  if (running) parts.push(`${running} running`);
   return parts.join(", ") || "thought";
 }
 
@@ -237,7 +259,8 @@ export function summarize(items: Work["items"]): string {
  * The line a thinking block is on: its last one, which is what it is thinking now. While it streams, its last
  * line is usually still being written and reads as a fragment (`- The tot`), so a streaming block shows its
  * last complete line instead, and before it has one, the words written so far without the one being written.
- * A script written without spaces (Chinese, Japanese) has no word to leave out: its text so far is shown.
+ * A script written without spaces (Chinese, Japanese) has no word to leave out: its text so far is shown. A
+ * spaced script's first word alone may still be half-written (`Th`), so it shows nothing yet.
  */
 export function thinkingLine(text: string, streaming = false): string {
   const last = (lines: string) => lines.trim().split("\n").at(-1) ?? "";
@@ -246,7 +269,8 @@ export function thinkingLine(text: string, streaming = false): string {
   if (complete) return complete;
   const words = text.trim();
   const space = words.lastIndexOf(" ");
-  return space < 0 ? words : words.slice(0, space);
+  if (space >= 0) return words.slice(0, space);
+  return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(words) ? words : "";
 }
 
 /** What kind of work a live run is in, for what follows it without reading its words (the avatar's face). */
@@ -275,6 +299,9 @@ export function phase(
   }
   const last = items.at(-1);
   if (last?.kind === "assistant" && last.open) return { word: "answering", activity: "answering" };
+  // Waiting out pi's retry delay is not thinking: it says the retry, and what it is retrying.
+  if (isRetry(last) && last.of !== undefined)
+    return { word: `retrying ${last.retry}/${last.of}`, detail: retryReason(last.reason ?? ""), activity: "thinking" };
   const thought = last?.kind === "thinking" && last.open ? thinkingLine(last.text, true) || undefined : undefined;
   return { word: "thinking", detail: thought, activity: "thinking" };
 }
@@ -350,7 +377,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
     items[count > 1 ? index - 1 : index] = {
       kind: "note",
       tone: "info",
-      text: `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(message)}`,
+      text: retriedText(count, message),
       reason: message,
       retry: count,
       at,
@@ -531,12 +558,15 @@ export function firstArg(args: unknown): string {
 /**
  * What a roster row quotes: the newest thing said or done in a conversation, as plain text. Thinking
  * still going is what the agent is doing now, so it quotes the line it is on; settled, thinking is not
- * output and is passed over, like an answer with no text yet. Markdown
+ * output and is passed over, like an answer with no text yet. While calls run, the newest still running
+ * is quoted, not one started after it that already finished (`ls` beside a running `sleep`). Markdown
  * loses only the marks that would show up as noise in two lines of plain text.
  */
 export function previewOf(items: Item[]): { text: string; at: number } | undefined {
+  const running = items.findLastIndex((item) => item.kind === "tool" && item.status === "running");
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i]!;
+    if (running >= 0 && i > running && item.kind === "tool") continue;
     const text =
       item.kind === "user"
         ? `You: ${item.text}`
@@ -582,6 +612,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
   const e = known(event);
   switch (e.type) {
     case "message_delta": {
+      items = wentOn(items);
       const last = items.at(-1);
       const delta = e.data.delta;
       if (e.data.channel === "thinking") {
@@ -613,7 +644,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
     }
     case "tool_started":
       return [
-        ...stopThinking(items, event.timestamp),
+        ...stopThinking(wentOn(items), event.timestamp),
         {
           kind: "tool",
           id: e.data.id,
@@ -678,6 +709,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           text: `retrying ${e.data.attempt}/${e.data.maxAttempts}: ${retryReason(e.data.error)}`,
           reason: e.data.error,
           retry: e.data.attempt,
+          of: e.data.maxAttempts,
         },
       ];
     case "serving_error":

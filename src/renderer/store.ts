@@ -15,6 +15,7 @@ import {
   phase,
   previewOf,
   queueView,
+  wentOn,
   type Activity,
   type Item,
   type UserItem,
@@ -371,9 +372,13 @@ export function createStore(api: DuangApi) {
     view = { ...view, ...patch };
     // A conversation this window holds is live, so its row quotes it as it streams. Read before the
     // loop below releases anything: the last event of a settled run is what the row should keep.
+    // A message sent to start a turn is the newest thing in it from the moment it is sent, not once the
+    // runtime reports it: until then the row would quote what came before, such as the last failure.
     for (const c of conversations.values())
-      if (!c.loading && selectedSession(c.agentId) === c.session)
-        previews.set(c.agentId, { session: c.session, ...previewOf(c.items) });
+      if (!c.loading && selectedSession(c.agentId) === c.session) {
+        const opening = c.waiting.findLast((item) => item.opens);
+        previews.set(c.agentId, { session: c.session, ...previewOf(opening ? [...c.items, opening] : c.items) });
+      }
     // A quote from a conversation the row no longer speaks for (deleted, or left for another) is
     // dropped rather than shown as current; `readPreview` fetches the right one.
     for (const [id, preview] of previews) if (selectedSession(id) !== preview.session) previews.delete(id);
@@ -754,7 +759,8 @@ export function createStore(api: DuangApi) {
       c.waiting = c.waiting.filter((item) => item !== own);
       c.returned.delete(own);
     }
-    if (!known) c.items = [...c.items, { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
+    // A steer typed while pi waited out a retry enters as the next attempt starts: the wait is over.
+    if (!known) c.items = [...wentOn(c.items), { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
     c.runHasUser = true;
     // The message the run is answering now; a steer replaces the opening one. What was typed, if it was ours.
     if (c.run) c.run.message = own?.text ?? text;

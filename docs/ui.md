@@ -252,7 +252,7 @@ would be furniture.
 
 The composer floats the same way at the bottom, and the transcript passes beneath both. It is one row
 in Telegram's shape: an attach button, the field, and one round button that is whatever the next
-action is (voice while the field is empty, Send once it holds text, Stop while a run is live). What
+action is (voice while the field is empty, Send once it holds text; while a run is live, Stop with the field empty and Steer once it holds text, Esc stopping either way). What
 belongs to the next message rather than to the app, the model chip, sits inside the field at its
 right end, where Telegram keeps its emoji. The field is a 40px pill that grows into a rounded
 rectangle as it takes lines (up to eight), and the buttons stay level with its last line. The chip
@@ -531,7 +531,12 @@ in the transcript really is chat. Ours is the work.
 Everything else follows from those two:
 
 - **A stretch of work is one line.** Consecutive tool calls and thinking fold into a work block that
-  says what kind of work it was: `thought 6s, read 4 files, searched once, ran 1 command`. A reading
+  says what kind of work it was: `thought 6s, read 4 files, searched once, ran 1 command`. It counts
+  only calls that finished, so it never says in the past tense what is still happening. While its calls
+  are what the run is on, the block's line *is* the live status (below): `running 2 tools · 24s` with
+  the bouncing dot, still opening into the calls, rather than a count above a status line saying the
+  same; once they finish it reads `ran 2 commands` again. (A call still running in a block that is not
+  the live end, with a message waiting between, is counted as `1 running`.) A reading
   session of twenty files was twenty lines, none of them something the person needed; what they
   need is the kind of work. A call that failed is not called out on the block: the agent reads its
   own failures and carries on, so a failed call asks nothing of the person, and whether the work as
@@ -547,15 +552,21 @@ Everything else follows from those two:
   under the person reading it. A lone call keeps its own line, which says more than a count of one
   would; when it is the current step, the live status below it gives the step's word without
   repeating what it is on.
-- **The live end of a run says what it is doing.** For the whole run, not only its silences, the
+- **The live end of a run says what it is doing, once.** For the whole run, not only its silences, the
   transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
-  (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
+  (`thinking`, `reading`, `running`, `retrying 2/3`, `compacting`, and `starting` before the runtime
   reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking, by the rule in §8), and
   how long the run has taken. No capsule, border or icon: they would make one line of status the
   loudest thing on screen. A bare `working…` answers neither "is it alive" nor "what is it on", and
   it comes and goes between steps. The clock counts
   from when this window saw the run start, so a run that was already going when the conversation
   opened shows none rather than a wrong one.
+  When the newest line is that step, it is that line, never one above another saying the same: calls
+  running or a thought being written carry the dot, word and clock on their own line (which still opens
+  into the calls or the thought); a retry being waited out is said by this line alone (`retrying 2/3 the
+  provider had a problem`), and becomes `retried 2 times: …` above whatever the run went on to; an
+  answer being written is its own sign of life, with no line under it until it stops coming: after 30
+  seconds without a word the line is back, saying `answering · 31s · no output for 31s`.
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
   tool's name, the command, and the state immediately after the command rather than pushed to the
   far right where it loses its subject — on no fill and behind no border, the same weight as the

@@ -588,9 +588,9 @@ export function Composer({
             )}
           </div>
         </div>
-        {/* While a turn runs, the button that sent it is the button that stops it — stopping is where
-            the eye already is, not in a corner of the window. */}
-        {busy ? (
+        {/* While a turn runs and nothing is typed, the button that sent it is the button that stops it:
+            stopping is where the eye already is, not in a corner of the window. */}
+        {busy && empty ? (
           <Button
             kind="danger"
             loud
@@ -606,13 +606,15 @@ export function Composer({
             <Button kind="ghost" size={40} disabled="Voice input is not available yet" aria-label="Voice input" icon={<Microphone size={20} />} />
           </Disc>
         ) : (
+          // While a turn runs, what is typed steers it: it joins after the current step. Stop is back once the
+          // field is empty, and Esc stops at any time.
           <Button
             kind="primary"
             size={40}
             onClick={() => void store.send()}
             disabled={view.blocked ?? false}
-            aria-label="Send"
-            title="Send (⏎) · newline (⇧⏎)"
+            aria-label={busy ? "Steer the run" : "Send"}
+            title={busy ? "Steer the run (⏎): it joins after the current step · Stop with Esc" : "Send (⏎) · newline (⇧⏎)"}
             icon={<ArrowUp size={18} />}
           />
         )}

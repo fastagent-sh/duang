@@ -51,35 +51,41 @@ import type { Fix } from "./problems.ts";
  * the whole run rather than filling silences, so the bottom of a working transcript always answers
  * "is it alive, and what is it on". The dot bounces (duang is the sound of one) and the word sweeps;
  * the clock is the run's, counted from when this window saw it start, so a run reopened halfway shows
- * none rather than a wrong one. `shown`: the step already stands on its own line right above (a lone
- * call or thinking), so what it is on is not said twice.
+ * none rather than a wrong one. Where the newest line is the step itself, this is drawn in it (`WorkBlock`'s
+ * `live`), so what the run is on is said once.
  */
 export function RunStatus({
   items,
   status,
   started,
   heard,
-  shown,
+  quietOnly,
+  className = "",
 }: {
   items: Item[];
   status: SessionState["status"] | undefined;
   started?: number;
   /** When this window last heard from the run: a model quiet for long is said, so it does not look stuck. */
   heard?: number;
-  shown?: boolean;
+  /** An answer being written is its own sign of life: the status is drawn only once the answer stops coming. */
+  quietOnly?: boolean;
+  /** The space above it, which depends on the line it follows. */
+  className?: string;
 }) {
-  const { word, detail: on, activity } = phase(items, status);
-  const detail = shown ? undefined : on;
+  const { word, detail, activity } = phase(items, status);
   const elapsed = useElapsed(started, undefined);
   // A running tool may rightly be quiet for minutes, and has its own clock; only the model's silence is said.
   const quiet = useElapsed(activity === "tool" ? undefined : heard, undefined, QUIET_MS);
+  if (quietOnly && !quiet) return null;
   return (
+    <div className={className}>
     <div className="enter flex h-7 items-center gap-2 text-[12px]">
       <span className="bounce size-[7px] shrink-0 rounded-full bg-accent" aria-hidden />
       <span className="shimmer shrink-0">{word}</span>
       {detail && <span className={`min-w-0 truncate text-muted ${word === "thinking" ? "" : "font-mono"}`}>{detail}</span>}
       {elapsed && <span className="shrink-0 text-muted tabular-nums">· {elapsed}</span>}
       {quiet && <span className="shrink-0 text-muted tabular-nums">· no output for {quiet}</span>}
+    </div>
     </div>
   );
 }
@@ -263,6 +269,24 @@ export function Transcript({
     );
 
   const shown = group(lines(items));
+  // The live end of a run is one line. When the newest line is what the run is on now, it is that line, not one
+  // above another saying the same: calls running or a thought being written carry the status themselves, a
+  // retry being waited out is said by the status alone, and an answer being written is its own sign of life
+  // until it stops coming (the status then says so).
+  const end = shown.at(-1);
+  const now = busy && !waiting.some(({ opens }) => opens) ? end : undefined;
+  const liveBlock =
+    now?.kind === "work" &&
+    now.items.some((item) => (item.kind === "tool" && item.status === "running") || (item.kind === "thinking" && item.open))
+      ? now
+      : undefined;
+  const waitingRetry = now?.kind === "note" && now.of !== undefined ? now : undefined;
+  const answering = now?.kind === "assistant" && now.open;
+  // The line the status follows is the last one drawn: a retry it says itself is not.
+  const above = waiting.some(({ opens }) => opens) ? "user" : (waitingRetry ? shown.at(-2) : end)?.kind;
+  const live = (
+    <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={answering} className={gap(above, "status")} />
+  );
   /**
    * `enter` is for what arrives, and history has not arrived — it was already there. This component
    * remounts for every conversation it shows (keyed by subscription), and it mounts with the history
@@ -343,7 +367,7 @@ export function Transcript({
     >
       <div className="column">
         {shown.map((line, index, all) =>
-          line.kind === "day" ? (
+          line === waitingRetry ? null : line.kind === "day" ? (
             // Reading yesterday's run is the normal case here; without this the whole conversation
             // reads as one sitting.
             <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
@@ -356,7 +380,7 @@ export function Transcript({
             // the same node, so the rise does not restart on every token.
             <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
-                <WorkBlock work={line} />
+                <WorkBlock work={line} live={line === liveBlock ? live : undefined} />
               ) : (
                 <Message item={line} ends={ends(all[index + 1], busy)} actions={line === problem ? actions : undefined} />
               )}
@@ -364,11 +388,7 @@ export function Transcript({
           ),
         )}
         {queue(true)}
-        {busy && (
-          <div className={gap(waiting.some(({ opens }) => opens) ? "user" : shown.at(-1)?.kind, "status")}>
-            <RunStatus items={items} status={status} started={started} heard={heard} shown={isLone(shown.at(-1))} />
-          </div>
-        )}
+        {busy && !liveBlock && live}
         {queue(false)}
       </div>
     </div>
@@ -531,14 +551,16 @@ const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.
 /**
  * A stretch of tool calls and thinking as one line that says what kind of work it was, opening into
  * the calls themselves, where a call that failed still says so. It stays closed while it grows: the
- * live status below says what the run is on.
+ * live status says what the run is on. When its calls are what the run is on now, it is the live status
+ * (`live`), rather than a line above another saying the same thing.
  *
  * A lone call is a one-item block drawn as the call alone (open, summary hidden), so that when the
  * next call folds it into a block it is still the same element. A card opened while it stood alone
  * keeps the block open once it folds, rather than vanishing from under the person reading it.
  */
-export function WorkBlock({ work }: { work: Work }) {
-  const lone = isLone(work);
+export function WorkBlock({ work, live }: { work: Work; live?: ReactNode }) {
+  // A lone call or thought is drawn as itself; while it is the step the run is on, as the live line.
+  const lone = isLone(work) && !live;
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -562,7 +584,7 @@ export function WorkBlock({ work }: { work: Work }) {
         className="cursor-default select-none flex h-7 items-center gap-2 text-[12px] text-muted transition-colors hover:text-text"
       >
         <CaretRight size={11} className="shrink-0 transition-transform group-open/work:rotate-90" />
-        <span className="truncate">{summarize(work.items)}</span>
+        {live ?? <span className="truncate">{summarize(work.items)}</span>}
       </summary>
       <div className={lone ? "" : "mt-1 ml-[5px] space-y-0.5 border-l border-stroke pl-3.5"}>
         {work.items.map((item, index) => (

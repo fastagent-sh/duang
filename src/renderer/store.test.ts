@@ -1336,6 +1336,44 @@ test("a steer queued before a reload returns to the draft when the run drops it"
   store.dispose();
 });
 
+test("a steer that enters as pi's next attempt starts ends the retry's wait, and a later one is one line", async () => {
+  const { store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  const retries = () => c.items.filter((item) => item.kind === "note" && item.retry).map((item) => (item as { text: string }).text);
+  emit(c, "run_started");
+  emit(c, "user_message", { entryId: "u1", text: "fix it" });
+  emit(c, "retry_scheduled", { attempt: 1, maxAttempts: 3, error: "OpenAI API error (529): overloaded" });
+  // Typed during the wait, the steer enters when the next attempt starts.
+  emit(c, "user_message", { entryId: "u2", text: "and the tests" });
+  assert.deepEqual(retries(), ["retried once: the provider had a problem"], "the wait is over once the steer enters");
+  emit(c, "message_delta", { channel: "text", delta: "On it" });
+  assert.deepEqual(retries(), ["retried once: the provider had a problem"]);
+  // That attempt fails too: one line waits again, after the steer; the earlier one stays said in the past.
+  emit(c, "retry_scheduled", { attempt: 2, maxAttempts: 3, error: "OpenAI API error (529): overloaded" });
+  assert.deepEqual(retries(), ["retried once: the provider had a problem", "retrying 2/3: the provider had a problem"]);
+  emit(c, "run_settled", { status: "completed" });
+  assert.deepEqual(retries(), ["retried once: the provider had a problem"], "a wait the run ended in goes with it");
+  store.dispose();
+});
+
+test("a message sent to start a turn is what the row quotes at once, not the failure before it", async () => {
+  const { api, store, emit } = harness();
+  await store.load();
+  const c = store.getSnapshot().conversation!;
+  emit(c, "run_started");
+  emit(c, "run_settled", { status: "failed", error: { message: "OpenAI API error (529): overloaded", retryable: true } });
+  assert.equal(store.getSnapshot().previews["a"]?.text, "The provider had a problem");
+  const sent = deferred<Awaited<ReturnType<DuangApi["send"]>>>();
+  api.send = () => sent.promise;
+  store.setDraft("try again please");
+  const sending = store.send();
+  assert.equal(store.getSnapshot().previews["a"]?.text, "You: try again please", "before the runtime reports it");
+  sent.resolve({ ok: true });
+  await sending;
+  store.dispose();
+});
+
 test("a send that returns after the stream ended does not claim its message ran without entering", async () => {
   const { api, store, emit, end } = harness();
   await store.load();
