@@ -183,6 +183,15 @@ test("tool summaries keep the beginning of commands and the end of file paths", 
   assert.equal(firstArg({ pattern: "/api/v1/start" }), "/api/v1/start");
 });
 
+test("a preview quotes the call still running, not one started after it that already finished", () => {
+  const items = [
+    tool("bash", { command: "sleep 6" }, { status: "running", id: "a" }),
+    tool("bash", { command: "ls" }, { id: "b" }),
+  ] as Item[];
+  assert.equal(previewOf(items)?.text, "bash sleep 6");
+  assert.equal(previewOf([items[0]!, { ...(items[1] as object), status: "running" } as Item])?.text, "bash ls");
+});
+
 test("a preview quotes the newest output as plain text, and follows a streaming answer", () => {
   assert.equal(previewOf([]), undefined);
   let items: Item[] = [{ kind: "user", text: "Deploy it", at: 1 }];
@@ -280,6 +289,7 @@ test("retry and serving failures preserve the runtime's original message; a retr
       text: "retrying 1/3: the provider is limiting requests",
       reason: "Anthropic API error (429): rate_limit_error",
       retry: 1,
+      of: 3,
       at: 0,
     },
   ]);
@@ -291,6 +301,18 @@ test("retry and serving failures preserve the runtime's original message; a retr
   // One line that moves on with each attempt; the failure card, if it comes, keeps the provider's words.
   const second = apply(first, event("retry_scheduled", { attempt: 2, maxAttempts: 3, error: "Anthropic API error (429): rate_limit_error" }));
   assert.deepEqual(second.map((item) => item.kind === "note" && item.text), ["retrying 2/3: the provider is limiting requests"]);
+  // While it waits, the live status says the retry, not "thinking".
+  assert.deepEqual(phase(second, "running"), { word: "retrying 2/3", detail: "the provider is limiting requests", activity: "thinking" });
+  // The run went on from it: the line says it in the past, as it reads back from history.
+  const answered = apply(second, { type: "message_delta", timestamp: 1, runId: "r", data: { channel: "text", delta: "Here" } });
+  assert.deepEqual(
+    answered.map((item) => item.kind === "note" ? [item.text, item.of] : item.kind),
+    [["retried 2 times: the provider is limiting requests", undefined], "assistant"],
+  );
+  assert.equal(
+    (apply(second, event("tool_started", { id: "t", name: "bash", args: {} }))[0] as { text: string }).text,
+    "retried 2 times: the provider is limiting requests",
+  );
   const ended = apply(second, event("run_settled", { status: "failed", error: { message: "Anthropic API error (429): rate_limit_error", retryable: true } }));
   assert.deepEqual(
     ended.map((item) => item.kind === "note" && item.title),
@@ -383,6 +405,8 @@ test("a streaming thought is quoted by a line it finished, never one cut mid-wor
   // No line finished yet: the words so far, without the one being written.
   assert.equal(thinkingLine("Let me look at the tes", true), "Let me look at the");
   assert.equal(thinkingLine("Let me", true), "Let");
+  // A spaced script's first word alone may be half-written: nothing yet.
+  assert.equal(thinkingLine("Th", true), "");
   // A script written without spaces has no word to leave out: what it has written so far.
   assert.equal(thinkingLine("让我看看这个测试为什么失败", true), "让我看看这个测试为什么失败");
   // Settled, the last line is complete and is the one shown.

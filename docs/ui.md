@@ -552,15 +552,20 @@ Everything else follows from those two:
   under the person reading it. A lone call keeps its own line, which says more than a count of one
   would; when it is the current step, the live status below it gives the step's word without
   repeating what it is on.
-- **The live end of a run says what it is doing.** For the whole run, not only its silences, the
-  transcript ends in one plain line (the last work block's own line, when its calls are the step): a bouncing accent dot, the step as a word that sweeps
-  (`thinking`, `reading`, `running`, `answering`, `compacting`, and `starting` before the runtime
+- **The live end of a run says what it is doing, once.** For the whole run, not only its silences, the
+  transcript ends in one plain line: a bouncing accent dot, the step as a word that sweeps
+  (`thinking`, `reading`, `running`, `retrying 2/3`, `compacting`, and `starting` before the runtime
   reports the run), what it is on (`…/src/a.ts`, `npm test`, or the line the model is thinking, by the rule in §8), and
   how long the run has taken. No capsule, border or icon: they would make one line of status the
   loudest thing on screen. A bare `working…` answers neither "is it alive" nor "what is it on", and
   it comes and goes between steps. The clock counts
   from when this window saw the run start, so a run that was already going when the conversation
   opened shows none rather than a wrong one.
+  When the newest line is that step, it is that line, never one above another saying the same: calls
+  running or a thought being written carry the dot, word and clock on their own line (which still opens
+  into the calls or the thought); a retry being waited out is said by this line alone (`retrying 2/3 the
+  provider had a problem`), and becomes `retried 2 times: …` above whatever the run went on to; an
+  answer being written is its own sign of life, with no line under it.
 - **A tool call is a line, and becomes a card when it is opened.** Closed it carries an icon, the
   tool's name, the command, and the state immediately after the command rather than pushed to the
   far right where it loses its subject — on no fill and behind no border, the same weight as the

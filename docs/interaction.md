@@ -153,11 +153,13 @@ titled by what the reason means (*The provider did not accept the sign-in* with 
 401, which opens Settings on that provider's ways to connect and returns to the conversation once connected;
 *Could not reach the provider* with **Network settings**, which opens Settings at the proxy, for a connection error; *The provider is limiting
 requests* or *had a problem* with **Use another model**, which opens the picker, for a 429 or a 5xx; *The run stopped with
-an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one, one quiet line that moves on with each of pi's own
-retries, gone once the run ends since its ending says how (`retrying 2/3: the provider had a problem`, or the reason's own first line when nothing recognises it, such
+an error* for a reason nothing recognises), below any partial text it streamed; `run stopped` under a stopped one (read back, a run stopped during a tool
+currently reads as failed: [fastagent#712](https://github.com/fastagent-sh/fastagent/issues/712)), one live line
+while pi waits out its own retries, which becomes `retried 2 times: …` once the run goes on and is gone if
+the run ends there, since its ending says how (`retrying 2/3: the provider had a problem`, or the reason's own first line when nothing recognises it, such
 as `retrying 1/3: Request timed out`; never "the run stopped", since it goes on; the provider's words in full on
 hover) and,
-read back, one line for retries in a row (`retried 2 times: …`), and `answer cut off at the model's output limit` for one that reached the limit (the run
+read back, the same `retried 2 times: …`, and `answer cut off at the model's output limit` for one that reached the limit (the run
 goes on; a call that answer made is shown failed). A conversation that ends on a failed turn (a run that took
 the message and then failed) offers Retry under the failure while nothing runs: it sends that message again
 as a new turn, leaving the failure and whatever the failed run did in the transcript. A failure that is a ChatGPT plan's usage limit (`subscription_sharing_usage_limit_exceeded`) also offers View usage, which opens that page. A run that was steered is
