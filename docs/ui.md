@@ -130,7 +130,7 @@ quoted.
 
 While any of the agent's conversations runs, `working` (or `2 working`) takes the time's place: the
 quote below is the work itself and must not be replaced by a word about it. The agent's setup
-problem (`needs a model`, `no agent yet`, `broken`) or the reason its list could not be read takes
+problem (`no agent yet`, `broken`, `folder not found`) or the reason its list could not be read takes
 the quote's place, since there is nothing to quote. An empty list and a list that could not be read
 are not the same answer, and the failure stays on that agent's row: a background read never changes
 what the main panel believes about the agent being read.
@@ -180,7 +180,6 @@ doing. The *ring* is presence. One face at a time, by how much it asks of the pe
 
 | Face | When | Shown as |
 |---|---|---|
-| `asleep` | needs a model | eyes closed, slow breathing |
 | `unborn` | no agent yet | an outline, no face |
 | `broken` | broken | grey, eyes closed, still |
 | `thinking` | a run is thinking, starting or compacting | ring; eyes drift up and aside |
@@ -227,7 +226,7 @@ anchored to the chip's right edge: a search row (with a quiet refresh button at 
 pressed, one line of what it found or why it failed), the models under their provider (each by its declared name,
 its context window quiet at the right end, in the system face rather than mono, at 13px; the id on hover),
 and the effort. Effort is a track with a stop per level; the runtime's list is the stops, and it is per
-conversation, a new one included, so only an agent with no model yet says it has none. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
+conversation, a new one included, so only a conversation with no model yet says it has none. The track shows the level the runtime reports and nothing ahead of it: a choice reaches the runtime
 and comes back as `state_changed`. Choosing writes a durable entry into the conversation's record, so
 choosing is explicit: the stops are buttons in a `radiogroup`, the arrow keys move the focus along them,
 and Enter, Space or a click choose (a native radio group would choose at every stop the arrows cross).
@@ -326,7 +325,7 @@ primary action.
 | `danger-fill` | `oklch(0.52 0.2 25)` | same | danger as a surface (Stop) |
 | `fill-fg` | `oklch(1 0 0)` | same | text on either fill |
 | `success` | `oklch(0.72 0.14 150)` | `oklch(0.50 0.14 150)` | tool finished |
-| `warning` | `oklch(0.79 0.15 65)` | `oklch(0.58 0.15 60)` | needs a model, no agent yet |
+| `warning` | `oklch(0.79 0.15 65)` | `oklch(0.58 0.15 60)` | no agent yet, refused |
 | `danger` | `oklch(0.68 0.17 25)` | `oklch(0.52 0.19 25)` | broken, failed, destructive |
 
 Accent as text and accent as a surface cannot be one value. As text it sits against the page, so
@@ -588,7 +587,8 @@ Everything else follows from those two:
   still being written reads as a fragment (`- The tot`). Before it has one, it is the words written so far
   without the one being written, or, in a script written without spaces, the text so far; with nothing
   yet, it is just `thinking`. The live status, the roster's quote and this row read it the same way
-  (`thinkingLine`).
+  (`thinkingLine`). Read back from history a thought is there as it streamed, but how long it took is not
+  recorded: its row is `thinking` with its last line, and a block counts it as `thought`.
 - **System events are one centred muted line**: model changed, run stopped, a retry, a command that
   ran. They are facts about the session, not things anyone said. A problem the person may have to act
   on (a run that failed or was cut short, a send refused) is a card instead (§9b).
@@ -658,7 +658,7 @@ away, so "is it still working" must be answerable from the sidebar without openi
 
 | Tier | States | How it is shown |
 |---|---|---|
-| **Needs a decision** | broken, needs a model, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
+| **Needs a decision** | broken, folder not found, no agent yet, failed, stopped, refused | Text always, plus icon or shape. Colour is the third signal, never the only one. |
 | **Reassurance only** | working, thinking, running | A still ring and a working face on the agent's avatar and the word on its row, a pulsing dot and the word on the conversation row, and at the end of the transcript one live status line: the current step and the run's clock. |
 | **Nothing to do** | ready, done *(already seen)* | Show nothing. A tool that worked wears no badge; a trace where nine cards in ten say `done` is how the one that failed gets lost. |
 
@@ -666,7 +666,7 @@ One vocabulary everywhere — the same condition must not be `working` in one pl
 another:
 
 `working` · `thinking` · `running` · `reading` · `searching` · `editing` · `fetching` · `answering` · `compacting` · `starting` · `done` · `failed` · `stopped` · `refused` · `unsent` ·
-`needs a model` · `no agent yet` · `broken`
+`no agent yet` · `folder not found` · `broken`
 
 `unsent` earns its place in the list rather than being an exception to it: a conversation holding
 text nobody sent is unfinished work, and no other word in the list says that. `done` stays in the
@@ -705,8 +705,8 @@ conversation list answer *which one* with a pulsing dot and the word. Each level
 give; none of them repeats the other, and none of them is colour alone. A conversation holding
 unsent text says `unsent` in the same place, because that is also work that is not finished.
 
-The tier-1 states reach the sidebar as words too: an agent that is `broken`, `needs a model` or has
-`no agent yet` says so on its row. A coloured dot on its own was colour doing the work, readable
+The tier-1 states reach the sidebar as words too: an agent that is `broken`, whose folder is not
+found, or that has `no agent yet` says so on its row. A coloured dot on its own was colour doing the work, readable
 only through a tooltip.
 
 A send refused because the conversation's model cannot run is not a card: choosing a model is the way on,

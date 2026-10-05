@@ -17,7 +17,7 @@ test("a gaze avatar wears the agent's own colour, its own eyes at rest, and the 
   assert.equal(eyesOf(avatarSvg("gaze", { ...agent, face: "done" })), "happy");
   assert.equal(eyesOf(avatarSvg("gaze", { ...agent, face: "failed" })), "small");
   // Every face but an outcome keeps the agent's own eyes; the rest of the state is motion (index.css).
-  for (const face of ["open", "thinking", "tool", "answering", "asleep", "broken"] as const)
+  for (const face of ["open", "thinking", "tool", "answering", "broken"] as const)
     assert.equal(eyesOf(avatarSvg("gaze", { ...agent, face })), eyesOf(idle), face);
 });
 

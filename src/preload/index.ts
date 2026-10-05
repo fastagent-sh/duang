@@ -24,10 +24,11 @@ import type { Frame } from "../main/follow.ts";
 import type { ProviderUsage } from "../main/usage.ts";
 
 export type OpenResult =
-  | { ok: true; sessions: SessionSummary[]; model: string }
+  /** `model`: the agent's default, for conversations that have none of their own; an agent may have none. */
+  | { ok: true; sessions: SessionSummary[]; model?: string }
   | {
       ok: false;
-      code: "missing_model" | "no_agent" | "missing_dir" | "failed";
+      code: "no_agent" | "missing_dir" | "failed";
       message: string;
       /** The failure is in the agent's config, or a file it imports: a fresh config gets past it. */
       inConfig?: true;

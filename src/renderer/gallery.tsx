@@ -116,13 +116,12 @@ export default function Gallery() {
           <Badge tone="danger">failed</Badge>
           <Badge tone="muted">stopped</Badge>
           <Badge tone="warning">refused</Badge>
-          <Badge tone="warning">needs a model</Badge>
           <Badge tone="warning">no agent yet</Badge>
           <Badge tone="danger">broken</Badge>
         </Section>
 
         <Section title="Avatars — one face per state" note="the drawing is who it is and never changes; the face is what it is doing; the words say it too">
-          {(["idle", "open", "thinking", "tool", "answering", "done", "failed", "asleep", "unborn", "broken"] satisfies Face[]).map((face, colour) => (
+          {(["idle", "open", "thinking", "tool", "answering", "done", "failed", "unborn", "broken"] satisfies Face[]).map((face, colour) => (
             <div key={face} className="flex flex-col items-center gap-1.5 text-[11px] text-muted">
               <Avatar id={`gallery-${face}`} name={face} colour={colour} size={48} face={face} />
               {face}

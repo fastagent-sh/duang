@@ -592,6 +592,21 @@ test("a turn cut before a compaction is still cut, and its failure is not rewrit
   assert.deepEqual(last.resend, { text: "summarise it", toolsRan: false });
 });
 
+test("an answer read back keeps the reasoning it recorded, as the block it was in live", () => {
+  const items = fromEntries([
+    { id: "1", timestamp: 1, kind: "user", data: { text: "read it" } },
+    { id: "2", parentId: "1", timestamp: 2, kind: "assistant", data: { text: "", thinking: "First the file.\nThen the answer.", toolCalls: [{ id: "a", name: "read", args: { path: "/r/a.ts" } }] } },
+    { id: "3", parentId: "2", timestamp: 3, kind: "tool", data: { toolCallId: "a", toolName: "read", text: "x" } },
+    { id: "4", parentId: "3", timestamp: 4, kind: "assistant", data: { text: "done" } },
+  ]);
+  assert.deepEqual(items.map((item) => item.kind), ["user", "thinking", "tool", "assistant"], "before the calls it led to, as live");
+  const thought = items[1] as Extract<Item, { kind: "thinking" }>;
+  assert.equal(thought.text, "First the file.\nThen the answer.");
+  assert.equal(thought.open, false);
+  // How long it took is not recorded, and the block still says there was a thought.
+  assert.equal(summarize(items.slice(1, 3) as never), "thought, read 1 file");
+});
+
 test("a call reopened from history keeps its arguments: its path, and the count of distinct files", () => {
   const items = fromEntries([
     { id: "1", timestamp: 1, kind: "user", data: { text: "read it" } },

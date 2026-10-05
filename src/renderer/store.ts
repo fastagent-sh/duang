@@ -33,7 +33,7 @@ const PERSON_SIDE = new Set(["queue_changed", "user_message", "state_changed"]);
 const RECONNECT_GAP_MS = 30_000;
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
-export type AgentState = "ready" | "missing_model" | "no_agent" | "missing_dir" | "broken";
+export type AgentState = "ready" | "no_agent" | "missing_dir" | "broken";
 /** A problem said over the pane: what it means, what to do, and the original words. */
 export interface Trouble {
   title: string;
@@ -44,7 +44,7 @@ export interface Trouble {
  * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
  * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
  * of the wrong screen.
- * `start` is that page, for a new conversation or an agent with no model yet.
+ * `start` is that page, for a new conversation.
  */
 export type Pane =
   | "unreadable-registry"
@@ -259,7 +259,6 @@ function paneOf(view: View): Pane {
   // Not known yet: the agent is still opening (at launch, or the first time it is chosen), and may well
   // have conversations to show.
   if (state === undefined) return "settling";
-  if (state !== "ready") return "start";
   const sessions = view.sessions[agentId] ?? [];
   // A ready agent with no conversation open is about to open one: its newest, if it has any.
   if (c ? c.loading && sessions.some((s) => s.session === c.session) : sessions.length > 0) return "settling";
@@ -274,7 +273,7 @@ function alertOf(view: View): Trouble | undefined {
   // A setup problem's own panel explains it and offers the fix. The runtime's prose above it would
   // contradict that: a plain project is told to run `fastagent init` while duang offers to scaffold it.
   const state = view.states[view.agentId];
-  if (state === "broken" || state === "missing_model" || state === "no_agent" || state === "missing_dir") return undefined;
+  if (state === "broken" || state === "no_agent" || state === "missing_dir") return undefined;
   return { title: "This agent could not be opened", advice: "Try again; its folder and conversations are untouched.", reason: view.error };
 }
 /** In the order the person should hear it: the nearest reason first, the agent's setup after. */
@@ -287,9 +286,11 @@ function blockedBy(view: View): string | undefined {
   if (state === "broken") return "this agent is broken";
   if (state === "no_agent") return "create an agent here first";
   if (state === "missing_dir") return "this agent's folder is missing";
-  if (state === "missing_model") return "pick a model to start";
   if (!c) return "no conversation";
-  return state === "ready" ? undefined : "this agent is not ready";
+  if (state !== "ready") return "this agent is not ready";
+  // A conversation that records no model, of an agent with no default: it runs once one is chosen.
+  if (!(c.state?.model ?? view.model)) return "pick a model to start";
+  return undefined;
 }
 
 /** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
@@ -1013,7 +1014,8 @@ export function createStore(api: DuangApi) {
     async pickModel(model: string) {
       const id = view.agentId;
       const c = view.conversation;
-      if (!id) return;
+      // The picker belongs to the conversation on screen; an agent that is open always has one.
+      if (!id || !c) return;
       const request = navigation;
       // Cleared however the change ends, including after the person went to another agent.
       const settle = () => {
@@ -1034,12 +1036,8 @@ export function createStore(api: DuangApi) {
         // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
         // The runtime announced the change before that subscription listened again, so the model and
         // levels are read, not waited for.
-        if (c) {
-          await readSettings(c);
-          await keepListed(c);
-          // Chosen on the new-conversation page of an agent with no model yet: that page, whose composer now runs
-          // on it, not the agent's latest conversation, which keeps the model it was recorded with.
-        } else await selectAgent(id, crypto.randomUUID());
+        await readSettings(c);
+        await keepListed(c);
       } catch (error) {
         settle();
         if (request === navigation) note(c, { error, title: "The model was not changed" });
