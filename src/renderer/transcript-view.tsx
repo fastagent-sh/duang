@@ -31,6 +31,7 @@ import {
   foldHead,
   group,
   lines,
+  liveEnd,
   phase,
   stringify,
   summarize,
@@ -269,23 +270,9 @@ export function Transcript({
     );
 
   const shown = group(lines(items));
-  // The live end of a run is one line. When the newest line is what the run is on now, it is that line, not one
-  // above another saying the same: calls running or a thought being written carry the status themselves, a
-  // retry being waited out is said by the status alone, and an answer being written is its own sign of life
-  // until it stops coming (the status then says so).
-  const end = shown.at(-1);
-  const now = busy && !waiting.some(({ opens }) => opens) ? end : undefined;
-  const liveBlock =
-    now?.kind === "work" &&
-    now.items.some((item) => (item.kind === "tool" && item.status === "running") || (item.kind === "thinking" && item.open))
-      ? now
-      : undefined;
-  const waitingRetry = now?.kind === "note" && now.of !== undefined ? now : undefined;
-  const answering = now?.kind === "assistant" && now.open;
-  // The line the status follows is the last one drawn: a retry it says itself is not.
-  const above = waiting.some(({ opens }) => opens) ? "user" : (waitingRetry ? shown.at(-2) : end)?.kind;
+  const end = liveEnd(shown, busy, waiting.some(({ opens }) => opens));
   const live = (
-    <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={answering} className={gap(above, "status")} />
+    <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={end.quietOnly} className={gap(end.above, "status")} />
   );
   /**
    * `enter` is for what arrives, and history has not arrived — it was already there. This component
@@ -367,7 +354,7 @@ export function Transcript({
     >
       <div className="column">
         {shown.map((line, index, all) =>
-          line === waitingRetry ? null : line.kind === "day" ? (
+          line === end.hidden ? null : line.kind === "day" ? (
             // Reading yesterday's run is the normal case here; without this the whole conversation
             // reads as one sitting.
             <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
@@ -380,7 +367,7 @@ export function Transcript({
             // the same node, so the rise does not restart on every token.
             <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
-                <WorkBlock work={line} live={line === liveBlock ? live : undefined} />
+                <WorkBlock work={line} live={line === end.block ? live : undefined} />
               ) : (
                 <Message item={line} ends={ends(all[index + 1], busy)} actions={line === problem ? actions : undefined} />
               )}
@@ -388,7 +375,7 @@ export function Transcript({
           ),
         )}
         {queue(true)}
-        {busy && !liveBlock && live}
+        {end.status && live}
         {queue(false)}
       </div>
     </div>

@@ -79,10 +79,12 @@ threads; address every item before resolving its thread.
 
 ## Product-specific verification
 
-`Desktop checks` runs tests, a production build and `node tests/smoke.mjs` on macOS with Node 24 —
-the smoke launches a real Electron window, so it runs on the only platform duang supports. The smoke
-drives the real Electron/preload/IPC/FastAgent stack with synthetic credentials and fake HTTP; run
-`npm run test:smoke` locally to build and run it. It is not an installer/signing check and claims
+`Desktop checks` runs tests, a production build, `node tests/smoke.mjs` and `node tests/transcript.mjs` on
+macOS with Node 24 — both launch a real Electron window, so they run on the only platform duang supports. The
+smoke drives the real Electron/preload/IPC/FastAgent stack with synthetic credentials and fake HTTP. The
+transcript check holds runs at the steps the live end of a run must draw as one line (calls running, a
+thought, an answer being written, a retry waited out) against a local fake model endpoint. Run
+`npm run test:smoke` locally to build and run both. It is not an installer/signing check and claims
 neither Windows/Linux support nor real-provider/OAuth validation nor full Week 1 acceptance. The
 [release gate](https://github.com/fastagent-sh/duang/issues/16) still requires workflow evidence.
 
