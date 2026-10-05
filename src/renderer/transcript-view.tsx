@@ -451,7 +451,7 @@ export function Message({
       // Collapsed, a bare "thinking" says nothing about what happened. How long it took and the
       // line it is on are the two facts worth reading without expanding (docs/ui.md §8).
       const seconds = Math.round((item.at - item.started) / 1000);
-      const trail = thinkingLine(item.text);
+      const trail = thinkingLine(item.text, item.open);
       return (
         <details className="group text-muted text-[12px]">
           <summary className="cursor-default select-none flex h-7 items-center gap-2">

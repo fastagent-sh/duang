@@ -186,6 +186,7 @@ export function ConversationHeader({
   face,
   dir,
   working,
+  others,
   context,
   plan,
   queued,
@@ -200,7 +201,13 @@ export function ConversationHeader({
   /** The same face as its roster row's, except that it does not look toward itself. */
   face: Face;
   dir?: string;
+  /** The open conversation is running. */
   working: boolean;
+  /**
+   * Other conversations of the agent that are running while this one is not: the header says so rather than
+   * presenting this one as working, and a click goes to the one (`open`) or to the list of them.
+   */
+  others?: { count: number; open?: () => void };
   context?: { used: number; window: number };
   plan?: { data?: ProviderUsage; error?: string };
   queued?: number;
@@ -239,7 +246,25 @@ export function ConversationHeader({
               </button>
             )}
           </div>
-          {working && <Badge tone="accent" pulse>working</Badge>}
+          {working ? (
+            <Badge tone="accent" pulse>
+              working
+            </Badge>
+          ) : (
+            others && (
+              <button
+                // One goes straight to it; several open the conversation list, which marks each.
+                onClick={others.open}
+                popoverTarget={others.open ? undefined : "conversations"}
+                title={others.open ? "Open the conversation that is working" : "Show the conversations that are working"}
+                className="pointer-events-auto shrink-0 rounded-full px-1.5 py-0.5 hover:bg-hover"
+              >
+                <Badge tone="accent" pulse>
+                  {others.count} other working
+                </Badge>
+              </button>
+            )
+          )}
           <UsageMeter plan={plan} context={context} onPage={onUsagePage} />
           {!!queued && <span className="shrink-0 text-[11px] text-muted">{queued} queued</span>}
         </div>

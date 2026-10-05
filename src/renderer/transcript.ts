@@ -233,8 +233,21 @@ export function summarize(items: Work["items"]): string {
   return parts.join(", ") || "thought";
 }
 
-/** The line a thinking block is on: its last one, which is what it is thinking now. */
-export const thinkingLine = (text: string): string => text.trim().split("\n").at(-1) ?? "";
+/**
+ * The line a thinking block is on: its last one, which is what it is thinking now. While it streams, its last
+ * line is usually still being written and reads as a fragment (`- The tot`), so a streaming block shows its
+ * last complete line instead, and before it has one, the words written so far without the one being written.
+ * A script written without spaces (Chinese, Japanese) has no word to leave out: its text so far is shown.
+ */
+export function thinkingLine(text: string, streaming = false): string {
+  const last = (lines: string) => lines.trim().split("\n").at(-1) ?? "";
+  if (!streaming || text.endsWith("\n")) return last(text);
+  const complete = last(text.slice(0, Math.max(0, text.lastIndexOf("\n"))));
+  if (complete) return complete;
+  const words = text.trim();
+  const space = words.lastIndexOf(" ");
+  return space < 0 ? words : words.slice(0, space);
+}
 
 /** What kind of work a live run is in, for what follows it without reading its words (the avatar's face). */
 export type Activity = "thinking" | "tool" | "answering";
@@ -262,7 +275,7 @@ export function phase(
   }
   const last = items.at(-1);
   if (last?.kind === "assistant" && last.open) return { word: "answering", activity: "answering" };
-  const thought = last?.kind === "thinking" && last.open ? thinkingLine(last.text) : undefined;
+  const thought = last?.kind === "thinking" && last.open ? thinkingLine(last.text, true) || undefined : undefined;
   return { word: "thinking", detail: thought, activity: "thinking" };
 }
 
@@ -535,7 +548,7 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
           : item.kind === "tool"
             ? `${item.name} ${firstArg(item.args)}`
             : item.kind === "thinking" && item.open
-              ? `thinking: ${thinkingLine(item.text)}`
+              ? ["thinking", thinkingLine(item.text, true)].filter(Boolean).join(": ")
               : "";
     const plain = text
       .replace(/^(#{1,6}|>)\s*/gm, "")
