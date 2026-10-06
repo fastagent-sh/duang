@@ -240,9 +240,20 @@ direct invitations fail a real need; do not silently treat one person's session 
   Do not promise arbitrary high-privilege tools are safe for untrusted visitors. No enterprise
   roles, administration suite, approval prompt system or compliance audit UI is planned.
 
+## How we know it worked
+
+A stage is accepted on evidence from real use, not on shipped screens or mocked tests. Measure:
+
+- the time from creating an agent to using it daily;
+- the time to the first routine that succeeds while the owner's laptop is off;
+- the time to the first person other than the owner successfully using a shared agent;
+- whether owners and recipients come back to complete work.
+
+Uptime alone does not prove an agent helped anyone, and there is no fixed install threshold yet. Do not
+claim an online or shared flow has shipped based on local mock tests.
+
 ## Deliberately deferred
 
 A built-in editor, general Git client, remote files, social discovery directory, native group chat,
 web/mobile workbench and centralized transcript service are not prerequisites for local work,
-giving someone an Agent, protected online contacts or optional hosting. Billing and usage limits for duang cloud
-need measured running costs; `$9/account` is not a committed product price.
+giving someone an Agent, protected online contacts or optional hosting.

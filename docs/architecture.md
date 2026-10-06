@@ -3,7 +3,7 @@
 Which process owns what, and where the boundaries are. [Product design](design.md) defines the
 experience and [README.md](../README.md) defines delivery stages. The local process below exists;
 **all remote, sharing and hosting boundaries are plans, not implemented or verified behavior.**
-See [Week 1 acceptance](../README.md#week-1-acceptance-status) for local limits.
+See [known limitations](../README.md#known-limitations) for local limits.
 
 ## Processes
 
@@ -61,7 +61,7 @@ rule, without an override: the smoke writes synthetic credentials into its isola
 stay unread. The opt-in live check keeps its isolated userData but makes that `auth.json` a symlink
 to the developer's real duang file, never a copy, so a real refresh writes back to the one grant;
 it runs with duang closed, because each process locks the path it was given. See the
-[credential policy](../README.md#run-it).
+[credential policy](../README.md#how-it-works).
 
 **Sign-in runs in main** (`src/main/providers.ts`). Main calls FastAgent's public `login`
 ([fastagent#602](https://github.com/fastagent-sh/fastagent/issues/602)) with that same `authPath`
