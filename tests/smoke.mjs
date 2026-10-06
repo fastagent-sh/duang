@@ -510,11 +510,20 @@ if (!process.versions.electron) {
       // the drawn copies stand still (a descendant selector reaches the one and not the other).
       const face = await evaluate(`(() => { const r = ${smokeAvatar}.getBoundingClientRect(); return { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()`);
       const frames = [];
+      // What each frame was taken of, said if they never differ (#142, seen once on CI): the face it wore, where the
+      // avatar was by then, and whether the page was visible and focused.
+      const seen = [];
       for (let i = 0; i < 8; i++) {
         frames.push((await win.webContents.capturePage(face)).toBitmap());
+        seen.push(
+          await evaluate(`(() => { const a = ${smokeAvatar}; const r = a.getBoundingClientRect(); return a.dataset.face + ' @' + Math.floor(r.x) + ',' + Math.floor(r.y) + ' ' + document.visibilityState + (document.hasFocus() ? ' focused' : ''); })()`),
+        );
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
-      assert.ok(frames.some((frame) => !frame.equals(frames[0])), "and the drawn face moves while it works");
+      assert.ok(
+        frames.some((frame) => !frame.equals(frames[0])),
+        `and the drawn face moves while it works: 8 identical frames of ${JSON.stringify(face)}, window ${win.isVisible() ? "visible" : "not visible"}${win.isFocused() ? ", focused" : ""}, ${JSON.stringify(seen)}`,
+      );
       // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
       // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
       // machine delivers a real Escape inside that gap.
