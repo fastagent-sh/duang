@@ -1,0 +1,26 @@
+# The macOS app: `npm run package` builds it into dist/, `npm run test:package` builds and checks it. Unsigned until
+# there is an Apple Developer ID, so a first open needs right-click → Open (or System Settings → Privacy & Security →
+# Open Anyway).
+#
+# What ships in app.asar is package.json's `dependencies`: only what main imports at run time. The renderer's libraries
+# are bundled into out/renderer by Vite, so they are devDependencies. `hono` is a direct dependency because
+# FastAgent's @hono/node-server needs it as a peer, and electron-builder leaves peers out; tests/packaged.mjs fails on
+# any such gap (fastagent#724).
+appId: sh.fastagent.duang
+productName: duang
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64]
+  # No Developer ID yet: the app is ad-hoc signed, which Apple silicon requires to run at all.
+  identity: "-"
+  hardenedRuntime: false
+dmg:
+  writeUpdateInfo: false

@@ -412,6 +412,19 @@ function register(): void {
   });
 }
 
+// One duang per data directory: the installed app and `npm run dev` share it (Electron's userData), and two of them
+// would write one agent registry with no lock between processes, and refresh one OAuth login twice. The second one
+// shows the first and leaves.
+if (!app.requestSingleInstanceLock()) {
+  console.error(`duang is already running with ${app.getPath("userData")}; showing that one instead.`);
+  app.exit(0);
+} else
+  app.on("second-instance", () => {
+    const [window] = BrowserWindow.getAllWindows();
+    if (window?.isMinimized()) window.restore();
+    window?.focus();
+  });
+
 void app
   .whenReady()
   .then(async () => {

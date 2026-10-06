@@ -1,0 +1,192 @@
+/**
+ * The installed app, as someone gets it: the packaged duang.app copied out of the repository, so nothing resolves
+ * from the repository's node_modules (inside it, a module missing from app.asar is found there anyway, and the gap
+ * stays hidden). Run after `npm run package`, which `npm run test:package` does.
+ *
+ * 1. Every package in app.asar finds each dependency and required peer inside the bundle.
+ * 2. The app starts on an isolated profile, loads an agent's TypeScript config, runs a bash call and answers, against
+ *    a local fake model endpoint in the agent's models.json. Driven over the DevTools protocol.
+ * 3. A second duang on the same profile shows the first and leaves.
+ *
+ * No credentials or network needed.
+ */
+import assert from "node:assert/strict";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { extractAll } from "@electron/asar";
+
+const built = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "mac-arm64", "duang.app");
+assert.ok(existsSync(built), `${built} does not exist: run npm run package first`);
+const root = mkdtempSync(join(tmpdir(), "duang-packaged-"));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Each package's dependencies and non-optional peers, resolved the way Node would from inside the bundle. */
+function missingDependencies(bundle) {
+  const packages = [];
+  const walk = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir)) {
+      if (name.startsWith(".")) continue;
+      const path = join(dir, name);
+      if (name.startsWith("@")) walk(path);
+      else if (existsSync(join(path, "package.json"))) {
+        packages.push(path);
+        walk(join(path, "node_modules"));
+      }
+    }
+  };
+  walk(join(bundle, "node_modules"));
+  const resolves = (from, dependency) => {
+    for (let dir = from; dir.startsWith(bundle); dir = dirname(dir))
+      if (existsSync(join(dir, "node_modules", dependency, "package.json"))) return true;
+    return false;
+  };
+  const missing = [];
+  for (const path of packages) {
+    const manifest = JSON.parse(readFileSync(join(path, "package.json"), "utf8"));
+    const optional = new Set([
+      ...Object.keys(manifest.optionalDependencies ?? {}),
+      ...Object.entries(manifest.peerDependenciesMeta ?? {}).flatMap(([name, meta]) => (meta.optional ? [name] : [])),
+    ]);
+    for (const dependency of [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {})])
+      if (!optional.has(dependency) && !resolves(path, dependency))
+        missing.push(`${dependency}, needed by ${path.slice(bundle.length + 1)}`);
+  }
+  return { checked: packages.length, missing };
+}
+
+/** A local model: the first answer calls bash, the second answers. */
+let calls = 0;
+const server = createServer((req, res) => {
+  req.resume();
+  req.on("end", () => {
+    calls++;
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    const chunk = (delta, finish = null) =>
+      `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+    if (calls === 1) {
+      res.write(chunk({ role: "assistant", content: "Checking.", tool_calls: [{ index: 0, id: "c1", type: "function", function: { name: "bash", arguments: JSON.stringify({ command: "echo installed > proof.txt" }) } }] }));
+      res.write(chunk({}, "tool_calls"));
+    } else {
+      res.write(chunk({ role: "assistant", content: "Installed answer." }));
+      res.write(chunk({}, "stop"));
+    }
+    res.end("data: [DONE]\n\n");
+  });
+});
+
+const children = [];
+function launch(app, data) {
+  const env = { ...process.env, HOME: root };
+  for (const name of Object.keys(env)) if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^PI_|PROXY$/i.test(name)) delete env[name];
+  const child = spawn(app, [`--user-data-dir=${data}`, "--remote-debugging-port=0"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += chunk));
+  child.stderr.on("data", (chunk) => (output += chunk));
+  children.push(child);
+  return { child, output: () => output };
+}
+
+async function run() {
+  // 1. The bundle is complete.
+  const bundle = join(root, "bundle");
+  extractAll(join(built, "Contents", "Resources", "app.asar"), bundle);
+  const unpacked = join(built, "Contents", "Resources", "app.asar.unpacked");
+  if (existsSync(unpacked)) cpSync(unpacked, bundle, { recursive: true });
+  const { checked, missing } = missingDependencies(bundle);
+  assert.deepEqual(missing, [], `app.asar is missing modules (found only through the repository's node_modules)`);
+
+  // 2. The app runs outside the repository.
+  const installed = join(root, "Applications", "duang.app");
+  cpSync(built, installed, { recursive: true, verbatimSymlinks: true });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const data = join(root, "user-data");
+  const project = join(root, "project");
+  mkdirSync(data, { recursive: true });
+  mkdirSync(join(project, "fastagent"), { recursive: true });
+  writeFileSync(
+    join(project, "fastagent", "models.json"),
+    JSON.stringify({ providers: { mock: { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: "openai-completions", apiKey: "mock", models: [{ id: "mock" }] } } }),
+  );
+  // A type import, as FastAgent's own scaffold writes: the config is TypeScript, loaded by the app's runtime.
+  writeFileSync(
+    join(project, "fastagent", "fastagent.config.ts"),
+    'import type { FastagentConfig } from "@fastagent-sh/fastagent";\nexport default { model: "mock/mock" } satisfies FastagentConfig;\n',
+  );
+  writeFileSync(join(data, "agents.json"), JSON.stringify([{ id: "p", name: "Installed", dir: project, colour: 2 }]));
+  const binary = join(installed, "Contents", "MacOS", "duang");
+  const first = launch(binary, data);
+
+  // Chromium writes the port it chose to DevToolsActivePort in the profile.
+  let page;
+  for (let t = 0; t < 300 && !page; t++) {
+    await sleep(100);
+    const file = join(data, "DevToolsActivePort");
+    if (!existsSync(file)) continue;
+    const port = readFileSync(file, "utf8").split("\n")[0];
+    page = await fetch(`http://127.0.0.1:${port}/json`)
+      .then((r) => r.json())
+      .then((targets) => targets.find((target) => target.type === "page"))
+      .catch(() => undefined);
+  }
+  assert.ok(page, `the installed app opened no window:\n${first.output()}`);
+  const socket = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve);
+    socket.addEventListener("error", reject);
+  });
+  let id = 0;
+  const pending = new Map();
+  socket.addEventListener("message", (message) => {
+    const reply = JSON.parse(message.data);
+    pending.get(reply.id)?.(reply);
+  });
+  const evaluate = (expression) =>
+    new Promise((resolve) => {
+      const n = ++id;
+      pending.set(n, (reply) => resolve(reply.result?.result?.value));
+      socket.send(JSON.stringify({ id: n, method: "Runtime.evaluate", params: { expression, awaitPromise: true, returnByValue: true } }));
+    });
+  async function until(expression, what, ms = 30000) {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await evaluate(expression)) return;
+    throw new Error(`Timed out: ${what}\n${await evaluate("document.querySelector('main')?.innerText")}\n${first.output()}`);
+  }
+
+  assert.equal(await evaluate("window.duang.listAgents().then((agents) => agents.map((a) => a.name).join())"), "Installed", "the isolated profile");
+  await until("!!document.querySelector('textarea') && !document.querySelector('textarea').disabled", "the agent opens");
+  await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, 'go'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until("!!document.querySelector('button[aria-label=Send]')", "Send is offered");
+  await evaluate("document.querySelector('button[aria-label=Send]').click()");
+  await until("document.querySelector('main').innerText.includes('Installed answer.')", "the answer");
+  assert.equal(readFileSync(join(project, "proof.txt"), "utf8").trim(), "installed", "bash ran in the project");
+
+  // 3. One duang per profile: a second one shows the first and leaves.
+  const second = launch(binary, data);
+  const code = await Promise.race([new Promise((resolve) => second.child.on("exit", resolve)), sleep(20000).then(() => "still running")]);
+  assert.equal(code, 0, `a second duang on the same profile leaves: ${second.output()}`);
+  assert.match(second.output(), /already running/);
+  assert.equal(await evaluate("document.querySelector('main').innerText.includes('Installed answer.')"), true, "the first carries on");
+  socket.close();
+  console.log(`Packaged app passed: ${checked} bundled packages complete, an agent answered with a bash call outside the repository, one duang per profile.`);
+}
+
+const timeout = setTimeout(() => {
+  console.error("Packaged check timed out");
+  process.exit(1);
+}, 150000);
+run()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    clearTimeout(timeout);
+    server.close();
+    for (const child of children) child.kill();
+    await sleep(500);
+    rmSync(root, { recursive: true, force: true });
+  });
