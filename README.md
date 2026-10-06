@@ -140,6 +140,7 @@ DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine
 npm run shots       # screenshots of the real window in both colour modes, into out/shots/
 npm run package     # the macOS app and its dmg, into dist/
 npm run test:package  # package, then run the installed app outside the checkout
+npm run test:perf   # a 150-turn conversation: open, scroll and stream timings (machine-dependent, not in CI)
 ```
 
 **Installing the app.** Open `dist/duang-<version>-arm64.dmg` (or the `duang-macos-arm64` artifact of a CI run)

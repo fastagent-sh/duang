@@ -1,5 +1,5 @@
 /** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Plug,
   Swap,
@@ -367,9 +367,9 @@ export function Transcript({
             // the same node, so the rise does not restart on every token.
             <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
-                <WorkBlock work={line} live={line === end.block ? live : undefined} />
+                <SettledWork work={line} live={line === end.block ? live : undefined} />
               ) : (
-                <Message item={line} ends={ends(all[index + 1], busy)} actions={line === problem ? actions : undefined} />
+                <SettledMessage item={line} ends={ends(all[index + 1], busy)} actions={line === problem ? actions : undefined} />
               )}
             </div>
           ),
@@ -382,6 +382,21 @@ export function Transcript({
     </div>
   );
 }
+
+/**
+ * A line that did not change is not drawn again. A streamed word replaces only the newest item (`apply` keeps every
+ * other item the same object), and without this every word redrew the whole conversation, every answer's
+ * markdown parsed again: a 150-turn conversation streamed at about 8 frames a second. A work block is rebuilt by
+ * `group` on each render, so it is the same when it holds the same items.
+ */
+const SettledMessage = memo(Message);
+const SettledWork = memo(
+  WorkBlock,
+  (before, after) =>
+    before.live === after.live &&
+    before.work.items.length === after.work.items.length &&
+    before.work.items.every((item, index) => item === after.work.items[index]),
+);
 
 /**
  * Only `code` is overridden. Streamdown's own `pre` is what marks a child as a fenced block, so

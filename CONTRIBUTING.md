@@ -86,7 +86,9 @@ transcript check holds runs at the steps the live end of a run must draw as one 
 thought, an answer being written, a retry waited out) against a local fake model endpoint. Run
 `npm run test:smoke` locally to build and run both. A second job, `Package (macOS)`, builds the app and its dmg,
 checks that the bundle carries every module it needs, runs the installed app outside the checkout against a fake
-model endpoint, and keeps the dmg as an artifact; `npm run test:package` does the same locally. It is not an installer/signing check and claims
+model endpoint, and keeps the dmg as an artifact; `npm run test:package` does the same locally. `npm run test:perf`
+measures a long conversation (open, scroll, a new turn streaming) and is run by hand before and after a change to
+how the transcript renders; it depends on the machine, so it is not in CI. It is not an installer/signing check and claims
 neither Windows/Linux support nor real-provider/OAuth validation nor full Week 1 acceptance. The
 [release gate](https://github.com/fastagent-sh/duang/issues/16) still requires workflow evidence.
 
