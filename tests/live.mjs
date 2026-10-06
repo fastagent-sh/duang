@@ -11,36 +11,22 @@
  * different locks over the same file and could refresh one login at once.
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, symlinkSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { isolated } from "./harness.mjs";
 
 const ASK = "Reply with exactly: OK";
 
-if (!process.versions.electron) {
-  if (process.env.DUANG_LIVE !== "1") {
-    console.log("Skipped: set DUANG_LIVE=1 to spend real model credits against the real credential file.");
-    process.exit(0);
-  }
-  const root = mkdtempSync(join(tmpdir(), "duang-live-"));
-  try {
-    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
-      stdio: "inherit",
-      env: { ...process.env, DUANG_LIVE_ROOT: root },
-      timeout: 300000,
-    });
-    process.exitCode = child.status ?? 1;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-} else {
+if (!process.versions.electron && process.env.DUANG_LIVE !== "1") {
+  console.log("Skipped: set DUANG_LIVE=1 to spend real model credits against the real credential file.");
+  process.exit(0);
+}
+// The real HOME: the credential file this check links to is the developer's own.
+const root = await isolated(import.meta.url, { name: "live", timeout: 300000, home: false });
+if (root) {
   const { app } = electron;
-  const root = process.env.DUANG_LIVE_ROOT;
-  assert.ok(root, "Run with node tests/live.mjs");
   const data = join(root, "user-data");
   const dir = join(root, "agent");
   app.setPath("userData", data);
