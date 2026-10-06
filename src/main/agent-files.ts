@@ -136,7 +136,7 @@ export class AgentRegistry {
 }
 
 /** FastAgent's one config filename, and what a new one says: nothing, so the agent asks for a model. */
-export const CONFIG_FILE = "fastagent.config.ts";
+const CONFIG_FILE = "fastagent.config.ts";
 const FRESH_CONFIG = "export default {};\n";
 
 /** The registered folder is not there (moved, deleted, a drive not mounted): nothing to scaffold into. */
