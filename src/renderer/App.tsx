@@ -351,7 +351,7 @@ export default function App() {
                     heard={c.heard}
                     bottomGap={composerHeight + 64}
                     resume={store.scrollOf(c.agentId, c.session)}
-                    onRest={(top) => store.rememberScroll(c.agentId, c.session, top)}
+                    onRest={(place) => store.rememberScroll(c.agentId, c.session, place)}
                     onUsage={(provider) => void store.openUsagePage(provider)}
                     onSettings={(where) =>
                       setSettings(where === "network" ? { network: true } : where === "providers" && provider ? { reconnect: provider } : {})

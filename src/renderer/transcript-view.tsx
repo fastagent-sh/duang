@@ -1,5 +1,6 @@
 /** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
 import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import {
   Plug,
   Swap,
@@ -30,15 +31,18 @@ import {
   firstArg,
   foldHead,
   group,
+  lineOf,
   lines,
   liveEnd,
   phase,
+  placeAt,
   stringify,
   summarize,
   thinkingLine,
   toolText,
   type Item,
   type Line,
+  type Place,
   type Work,
 } from "./transcript.ts";
 import type { SessionState } from "@fastagent-sh/fastagent/session";
@@ -135,6 +139,39 @@ function gap(previous: string | undefined, kind: string): string {
 /** An answer ends its turn unless the run goes on to work after it; only then does it get a footer. */
 const ends = (next: Line | Work | undefined, busy: boolean) => (next ? next.kind !== "work" : !busy);
 
+/** How much of a long conversation is drawn when it opens, and then per idle moment until it is all there. */
+const FIRST_LINES = 40;
+const LINES_PER_BATCH = 15;
+
+/** Where the conversation's lines end, in the scroll area's own coordinates (the space under them excluded). */
+const linesEnd = (el: HTMLElement) => el.firstElementChild!.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop;
+/** How far the view's top is from the end of the lines: a place that lines drawn above it do not move. */
+const fromEnd = (el: HTMLElement) => linesEnd(el) - el.scrollTop;
+
+const drawnLines = (el: HTMLElement) => [...el.firstElementChild!.children].filter((row): row is HTMLElement => row instanceof HTMLElement && row.dataset.line !== undefined);
+const top = (row: Element, el: HTMLElement) => row.getBoundingClientRect().top - el.getBoundingClientRect().top;
+/** A drawn line by its index in this view, and how far its top is from the view's top. */
+type Spot = { line: number; offset: number };
+/** The first line reaching into the view, and where its top is. Undefined when no line is drawn. */
+function spotOf(el: HTMLElement): Spot | undefined {
+  const row = drawnLines(el).find((row) => row.getBoundingClientRect().bottom > el.getBoundingClientRect().top);
+  return row && { line: Number(row.dataset.line), offset: top(row, el) };
+}
+/**
+ * Scrolls so the place's line is where it was. A line no longer drawn there gives way to the next one, at its top:
+ * a retry note the status line now stands in for, or a line only this window showed, gone once the conversation is
+ * read back from history. Past the last line (the end of the last turn was such a line) it is the last one; no
+ * window test makes a line of this window's own vanish, so that case is covered by `lineOf`'s test only. An
+ * expanded card comes back folded: a place further into it than its folded height is put at its top, not past it.
+ */
+function scrollToSpot(el: HTMLElement, place: Spot) {
+  const rows = drawnLines(el);
+  const row = rows.find((row) => Number(row.dataset.line) >= place.line) ?? rows.at(-1);
+  if (!row) return;
+  const offset = Number(row.dataset.line) === place.line && -place.offset < row.offsetHeight ? place.offset : 0;
+  el.scrollTop += top(row, el) - offset;
+}
+
 /** Within a line or two of the end: where a conversation opens, and what "following" means. */
 const atLatest = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 40;
 
@@ -171,9 +208,9 @@ export function Transcript({
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
   /** Where this conversation was left, read once when the view mounts; absent means the latest line. */
-  resume?: number;
-  /** Where the view rests now: a position above the latest line, or undefined while it follows. */
-  onRest: (top: number | undefined) => void;
+  resume?: Place;
+  /** Where the view rests now, or undefined while it follows the latest line. */
+  onRest: (place: Place | undefined) => void;
   /** The conversation ends on a failed turn that can be sent again: the action sits under its failure. */
   onRetry?: () => void;
   /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
@@ -217,14 +254,26 @@ export function Transcript({
       )}
     </>
   );
+  const shown = group(lines(items));
+  const current = useRef(shown);
+  current.current = shown;
+  const placeOf = (el: HTMLElement) => {
+    const spot = spotOf(el);
+    return spot && placeAt(current.current, spot.line, spot.offset);
+  };
+  /** Where the view returns to, read once: none when it was left at the latest line, or its message is gone. */
+  const [back] = useState((): Spot | undefined => {
+    const line = resume && lineOf(shown, resume);
+    return line === undefined ? undefined : { line, offset: resume!.offset };
+  });
   const box = useRef<HTMLDivElement>(null);
-  const follow = useRef(resume === undefined);
+  const follow = useRef(back === undefined);
   /**
    * A view that returns to where it was left holds that place while its layout settles (a remounted
    * conversation grows for a moment as its fonts and code blocks arrive, and reading "near the bottom"
    * from the short first layout would forget the place), until the person scrolls.
    */
-  const restoring = useRef(resume !== undefined);
+  const restoring = useRef(back !== undefined);
   const scrolled = () => {
     restoring.current = false;
   };
@@ -240,23 +289,23 @@ export function Transcript({
     const el = box.current;
     if (!el) return;
     if (restoring.current) {
-      if (el.scrollTop !== resume) el.scrollTop = resume!;
+      scrollToSpot(el, back!);
       follow.current = false;
       setAway(true);
       return;
     }
     follow.current = atLatest(el);
     setAway(!follow.current);
-    onRest(follow.current ? undefined : el.scrollTop);
+    onRest(follow.current ? undefined : placeOf(el));
   };
   // Before the first paint, so the conversation is never seen at the bottom first.
   useLayoutEffect(() => {
-    if (resume !== undefined) box.current!.scrollTop = resume;
+    if (back !== undefined) scrollToSpot(box.current!, back);
     // A scroll event that has not fired yet cannot tell the place a view is leaving from, so it is read
     // here, while the element is still attached. A view still holding a place keeps what it was given.
     return () => {
       const el = box.current;
-      if (el && !restoring.current) onRest(atLatest(el) ? undefined : el.scrollTop);
+      if (el && !restoring.current) onRest(atLatest(el) ? undefined : placeOf(el));
     };
   }, []);
 
@@ -269,7 +318,6 @@ export function Transcript({
       ) : null,
     );
 
-  const shown = group(lines(items));
   const end = liveEnd(shown, busy, waiting.some(({ opens }) => opens));
   const live = (
     <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={end.quietOnly} className={gap(end.above, "status")} />
@@ -281,6 +329,37 @@ export function Transcript({
    * Without this, opening a conversation floated its whole backlog in at once.
    */
   const history = useRef(shown.length);
+  /**
+   * A long conversation opened at its latest line draws that end first and the rest above it in small batches while
+   * the window is idle, so opening it is not one long freeze (150 turns took about a second). Each batch lands
+   * above what is on screen, and the view is put back at the same distance from the end before it is painted:
+   * Chromium's scroll anchoring would do that too, except at `scrollTop` 0 (a first batch shorter than the window,
+   * or a person who scrolled to the top of what is drawn), where it pushes the view to the oldest line. The batch
+   * is committed synchronously (`flushSync`) so no scroll can come between reading the place and restoring it.
+   * A view returning to a place it was left at draws from that place's line, or from the last 40 when it is
+   * nearer the end, and the rest above it the same way.
+   */
+  const [from, setFrom] = useState(() => Math.min(back?.line ?? Infinity, Math.max(0, shown.length - FIRST_LINES)));
+  useEffect(() => {
+    if (from === 0) return;
+    const id = requestIdleCallback(
+      () => {
+        const el = box.current!;
+        const place = fromEnd(el);
+        flushSync(() => setFrom((at) => Math.max(0, at - LINES_PER_BATCH)));
+        el.scrollTop = linesEnd(el) - place;
+        drewAbove.current = true;
+      },
+      { timeout: 100 },
+    );
+    return () => cancelIdleCallback(id);
+  }, [from]);
+  /**
+   * The growth a batch causes is above the view, which has been put back already: the growth observer below must
+   * not read it as content added under a view at its end. The observer runs after the frame's layout, later than
+   * the batch.
+   */
+  const drewAbove = useRef(false);
 
   useEffect(() => {
     const el = box.current;
@@ -295,12 +374,16 @@ export function Transcript({
     // Content also grows after it is laid out (fonts, code blocks), with no scroll event and no new item:
     // a view that was at the latest line stays on it, and one holding a place keeps the place. "Was" is
     // judged against the height before this growth, because the growth itself puts the end out of reach.
+    // Growth from a batch drawn above is not judged at all: the view was put back, moving scrollTop by its height, so
+    // against the old height a view the person scrolled up from would read as at the end and be pulled down.
     let height = 0;
     const grown = new ResizeObserver(() => {
       const wasAtEnd = height - el.scrollTop - el.clientHeight < 40;
       height = el.scrollHeight;
+      const above = drewAbove.current;
+      drewAbove.current = false;
       if (restoring.current) check();
-      else if (wasAtEnd) {
+      else if (wasAtEnd && !above) {
         el.scrollTop = el.scrollHeight;
         check();
       }
@@ -354,10 +437,10 @@ export function Transcript({
     >
       <div className="column">
         {shown.map((line, index, all) =>
-          line === end.hidden ? null : line.kind === "day" ? (
+          index < from || line === end.hidden ? null : line.kind === "day" ? (
             // Reading yesterday's run is the normal case here; without this the whole conversation
             // reads as one sitting.
-            <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
+            <div key={index} data-line={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
               <span className="h-px flex-1 bg-stroke" />
               {dayLabel(line.at)}
               <span className="h-px flex-1 bg-stroke" />
@@ -365,7 +448,7 @@ export function Transcript({
           ) : (
             // `enter` runs once, when the element is created — a streaming answer re-renders into
             // the same node, so the rise does not restart on every token.
-            <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
+            <div key={index} data-line={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
                 <SettledWork work={line} live={line === end.block ? live : undefined} />
               ) : (

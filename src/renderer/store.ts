@@ -18,6 +18,7 @@ import {
   wentOn,
   type Activity,
   type Item,
+  type Place,
   type UserItem,
 } from "./transcript.ts";
 import { message } from "./message.ts";
@@ -320,7 +321,7 @@ export function createStore(api: DuangApi) {
    * closes when it is left and its view unmounts (Settings, another agent), and what the person was
    * reading is where they expect to come back to. Presentation only, kept for the window's life.
    */
-  const scrolls = new Map<string, number>();
+  const scrolls = new Map<string, Place>();
   let persisted = "";
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
@@ -883,9 +884,9 @@ export function createStore(api: DuangApi) {
     /** Where this conversation was left, if it was left above the latest line. */
     scrollOf: (agentId: string, session: string) => scrolls.get(key(agentId, session)),
     /** `undefined`: at the latest line, which is where a conversation opens anyway. */
-    rememberScroll(agentId: string, session: string, top: number | undefined) {
-      if (top === undefined) scrolls.delete(key(agentId, session));
-      else scrolls.set(key(agentId, session), top);
+    rememberScroll(agentId: string, session: string, place: Place | undefined) {
+      if (place === undefined) scrolls.delete(key(agentId, session));
+      else scrolls.set(key(agentId, session), place);
     },
     subscribe: (listener: () => void) => {
       listeners.add(listener);

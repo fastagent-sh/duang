@@ -8,7 +8,7 @@
  * composer's round button stops or steers it (docs/ui.md §8, `liveEnd`).
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -77,7 +77,28 @@ if (!process.versions.electron) {
     JSON.stringify({ providers: { mock: { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: "openai-completions", apiKey: "mock", models: [{ id: "mock", reasoning: true }] } } }),
   );
   writeFileSync(join(dir, "fastagent", "fastagent.config.ts"), 'export default { model: "mock/mock" };\n');
-  writeFileSync(join(data, "agents.json"), JSON.stringify([{ id: "t", name: "Live", dir, colour: 3 }]));
+  // A second agent whose one conversation is already long: made by FastAgent itself, before duang starts.
+  const long = join(root, "long");
+  mkdirSync(join(long, "fastagent"), { recursive: true });
+  writeFileSync(join(long, "fastagent", "models.json"), readFileSync(join(dir, "fastagent", "models.json")));
+  writeFileSync(join(long, "fastagent", "fastagent.config.ts"), 'export default { model: "mock/mock" };\n');
+  const LONG_TURNS = 40;
+  {
+    const { createPiAgentFromDir } = await import("@fastagent-sh/fastagent/pi");
+    const { agent } = await createPiAgentFromDir(long, { sessionControl: true, authPath: join(data, "long-auth.json") });
+    for (let n = 1; n <= LONG_TURNS; n++) {
+      script.push({ text: `Answer ${n}.` });
+      for await (const event of agent.invoke({ session: "long" }, { text: `Turn ${n} of the long one` }))
+        if (event.type === "failed") throw new Error(event.details);
+    }
+  }
+  writeFileSync(
+    join(data, "agents.json"),
+    JSON.stringify([
+      { id: "t", name: "Live", dir, colour: 3 },
+      { id: "l", name: "Long", dir: long, colour: 5 },
+    ]),
+  );
 
   /**
    * A command that runs until the scenario lets it finish; it runs in the project, where the gate is made. It
@@ -188,8 +209,204 @@ if (!process.versions.electron) {
     await idle();
     assert.match(await transcript(), /retried once: the provider had a problem/);
     assert.doesNotMatch(await transcript(), /retrying/, "no wait is left claimed");
+    // A long conversation opens at its latest line at once, and its older lines are drawn above it while the view
+    // stays where it is. Watched on every change to the page, so how fast the batches come does not matter.
+    await evaluate(`(() => {
+      const transcript = () => document.querySelector('[aria-label="Transcript"]');
+      const has = (n) => transcript()?.innerText.includes('Turn ' + n + ' of the long one');
+      window.__long = { first: undefined, moved: 0 };
+      new MutationObserver(() => {
+        const el = transcript();
+        if (!el || !has(${LONG_TURNS})) return;
+        if (window.__long.first === undefined) window.__long.first = has(1);
+        window.__long.moved = Math.max(window.__long.moved, Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight));
+      }).observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+    await until(`document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn 1 of the long one')`, "all of the long conversation drawn in the end");
+    await new Promise((r) => setTimeout(r, 300));
+    const { first, moved } = await evaluate("window.__long");
+    assert.equal(first, false, "its latest turn is shown before its oldest is drawn");
+    assert.ok(moved < 2, `the view stays at the latest line while older lines are drawn above it (it moved ${moved} px)`);
+    // While the older lines are still being drawn: a person scrolling up stays where they scrolled to (it is not
+    // pulled back to the latest line as the lines above arrive, nor pushed down to the oldest at the top of what
+    // is drawn), and one who leaves from there comes back to the same place.
+    // A wheel event first: a view returned to a place holds it until the person scrolls.
+    const atEnd = `(() => { const el = document.querySelector('[aria-label="Transcript"]'); el.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true })); el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event('scroll')); })()`;
+    const shown = (text) => `document.querySelector('[aria-label="Transcript"]')?.innerText.includes(${JSON.stringify(text)})`;
+    const offsetOf = (text) =>
+      evaluate(`(() => { const el = document.querySelector('[aria-label="Transcript"]'); const row = [...el.querySelector('.column').children].find((r) => r.innerText === ${JSON.stringify(text)}); return row ? row.getBoundingClientRect().top - el.getBoundingClientRect().top : null; })()`);
+    const openLong = async () => {
+      await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+      await until(shown("Turn 1 of the long one"), "all of the long conversation drawn");
+      await new Promise((r) => setTimeout(r, 300));
+    };
+    const fromLive = async () => {
+      await evaluate(atEnd);
+      await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+      await until(shown("Answered after a retry."), "Live shown");
+    };
+    /**
+     * Opens the long conversation and, two frames after its latest turn first shows (once the view has mounted at
+     * its end, as a person would act), runs `scroll` and records the first row reaching into the view. With `leave`,
+     * it then switches to Live from there.
+     */
+    const scrollWhileDrawing = async (scroll, { leave = false } = {}) => {
+      await fromLive();
+      await evaluate(`(() => {
+        window.__early = undefined;
+        const observer = new MutationObserver(() => {
+          const el = document.querySelector('[aria-label="Transcript"]');
+          if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
+          observer.disconnect();
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            ${scroll};
+            el.dispatchEvent(new Event('scroll'));
+            const top = el.getBoundingClientRect().top + 60;
+            const row = [...el.querySelector('.column').children].find((r) => r.getBoundingClientRect().bottom > top);
+            window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
+            if (${leave}) document.querySelector('aside button[aria-label="Live"]').click();
+          }));
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      })()`);
+      if (leave) {
+        await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+        await until("window.__early !== undefined", "left the long conversation while it was being drawn");
+        await until(shown("Answered after a retry."), "away on Live");
+      }
+      await openLong();
+      const early = await evaluate("window.__early");
+      assert.equal(early.drawnAll, false, "acted while the older lines were still to be drawn");
+      return { early, now: await offsetOf(early.text) };
+    };
+    for (const [scroll, what] of [
+      ["el.scrollTop -= 400", "scrolled up"],
+      // At scrollTop 0 Chromium's scroll anchoring does not hold the view: each batch would push it down.
+      ["el.scrollTop = 0", "scrolled to the top of what is drawn"],
+    ]) {
+      const { early, now } = await scrollWhileDrawing(scroll);
+      assert.ok(now !== null && Math.abs(now - early.offset) < 2, `a person who ${what} stays there as older lines arrive (row moved from ${early.offset} to ${now})`);
+    }
+    {
+      const { early, now } = await scrollWhileDrawing("el.scrollTop -= 400", { leave: true });
+      assert.ok(now !== null && Math.abs(now - early.offset) < 2, `coming back finds the place it was left at (row at ${now}, left at ${early.offset})`);
+    }
+    // A first batch shorter than the window leaves the view at scrollTop 0 too: the view still ends at the latest
+    // line once everything is drawn. The page is given a 4000 px tall viewport (the screen limits a real window):
+    // about the height of the first batch's 40 lines, under that of the whole conversation.
+    await fromLive();
+    win.webContents.debugger.attach();
+    const [width] = win.getContentSize();
+    await win.webContents.debugger.sendCommand("Emulation.setDeviceMetricsOverride", { width, height: 4000, deviceScaleFactor: 1, mobile: false });
+    await evaluate(`(() => {
+      window.__short = undefined;
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one')) return;
+        observer.disconnect();
+        window.__short = el.scrollHeight <= el.clientHeight;
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await openLong();
+    const short = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      return { firstFit: window.__short, overflowed: el.scrollHeight > el.clientHeight, fromEnd: el.scrollHeight - el.scrollTop - el.clientHeight };
+    })()`);
+    await win.webContents.debugger.sendCommand("Emulation.clearDeviceMetricsOverride");
+    win.webContents.debugger.detach();
+    assert.ok(short.firstFit && short.overflowed, `the first batch fits the window and the whole conversation does not (${JSON.stringify(short)})`);
+    assert.ok(short.fromEnd < 2, `a first batch shorter than the window still ends at the latest line (${JSON.stringify(short)})`);
+    // A run that goes on while the person is away, scrolled up in it: coming back finds the same line where it was,
+    // and output that goes on arriving after that does not move it either (the place is held until they scroll).
+    const more = deferred();
+    const rest = Array.from({ length: 30 }, (_, n) => `More output ${n + 1}.`).join("\n\n");
+    script.push({ text: "Working on it.", tools: [waitsFor("d")] }, { text: "Part one.", hold: more.promise, rest: `\n\n${rest}` });
+    await send("keep going");
+    await until(`/running/.test(document.querySelector('[aria-label="Transcript"]').innerText)`, "the long conversation's run is working");
+    const reading = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      el.scrollTop -= 600;
+      el.dispatchEvent(new Event('scroll'));
+      const top = el.getBoundingClientRect().top + 60;
+      const row = [...el.querySelector('.column').children].find((r) => r.getBoundingClientRect().bottom > top);
+      return { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top };
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+    await until(shown("Answered after a retry."), "away on Live");
+    writeFileSync(join(long, "gate-d"), "");
+    for (let t = 0; t < 400 && script.length > 0; t++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(script.length, 0, "the run went on to its answer while the person was away");
+    await new Promise((r) => setTimeout(r, 500));
+    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+    await until(shown("Part one."), "back on the long conversation, with what was written while away");
+    await new Promise((r) => setTimeout(r, 300));
+    const returned = await offsetOf(reading.text);
+    assert.ok(returned !== null && Math.abs(returned - reading.offset) < 2, `coming back to a run that went on finds the same line (row at ${returned}, left at ${reading.offset})`);
+    more.resolve();
+    await until(shown("More output 30."), "the rest of the answer arrives");
+    await new Promise((r) => setTimeout(r, 300));
+    const held = await offsetOf(reading.text);
+    assert.ok(held !== null && Math.abs(held - reading.offset) < 2, `output arriving under a returned place does not move it (row at ${held}, left at ${reading.offset})`);
+    await idle();
+    // A place far above the last lines is drawn from its own line on return, the lines above it after: it is
+    // where it was, and stays there while they are drawn.
+    const far = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      el.scrollTop = 900;
+      el.dispatchEvent(new Event('scroll'));
+      const top = el.getBoundingClientRect().top + 60;
+      const row = [...el.querySelector('.column').children].find((r) => r.getBoundingClientRect().bottom > top);
+      return { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top };
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+    await until(shown("Answered after a retry."), "away on Live");
+    await evaluate(`(() => {
+      window.__far = undefined;
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        if (!el || !el.innerText.includes(${JSON.stringify(far.text)})) return;
+        observer.disconnect();
+        window.__far = el.innerText.includes('Turn 1 of the long one');
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await openLong();
+    assert.equal(await evaluate("window.__far"), false, "a place far up is drawn before the lines above it");
+    const farBack = await offsetOf(far.text);
+    assert.ok(farBack !== null && Math.abs(farBack - far.offset) < 2, `a place far above the last lines is found again (row at ${farBack}, left at ${far.offset})`);
+    // A place inside a card that was expanded: the card comes back folded, shorter than how far into it the place
+    // was, so the place returns to the card's top rather than past it.
+    const cardRow = `[...document.querySelectorAll('[aria-label="Transcript"] .column > [data-line]')].findLast((r) => r.querySelector('details'))`;
+    const folded = await evaluate(`${cardRow}.offsetHeight`);
+    // The step's row, then the call in it: each opens what it holds.
+    await evaluate(`${cardRow}.querySelector('details').open = true`);
+    await until(`${cardRow}.querySelectorAll('details').length > 1`, "the step's calls are shown");
+    await evaluate(`${cardRow}.querySelectorAll('details')[1].open = true`);
+    await new Promise((r) => setTimeout(r, 200));
+    const card = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      const row = ${cardRow};
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      const into = Math.round((${folded} + row.offsetHeight) / 2);
+      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top + into;
+      el.dispatchEvent(new Event('scroll'));
+      return { line: row.dataset.line, into, folded: ${folded}, open: row.offsetHeight };
+    })()`);
+    assert.ok(card.into > card.folded && card.into < card.open, `the place is inside the open card and past its folded height (${JSON.stringify(card)})`);
+    await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+    await until(shown("Answered after a retry."), "away on Live");
+    await openLong();
+    const cardTop = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      return el.querySelector('[data-line="${card.line}"]').getBoundingClientRect().top - el.getBoundingClientRect().top;
+    })()`);
+    assert.ok(Math.abs(cardTop) < 2, `a place inside a card that comes back folded returns to its top (card at ${cardTop})`);
     assert.equal(script.length, 0, "every scripted answer was asked for");
-    console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line.");
+    console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line; a long conversation opens at its end and fills in above it.");
   }
 
   const timeout = setTimeout(() => {
