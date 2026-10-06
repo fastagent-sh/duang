@@ -60,7 +60,8 @@ context is and, for a Claude subscription, the plan's usage windows.
 **Problems that say what to do.** A failure keeps the provider's original words and adds what they
 mean and the way on: **Sign in again** for a rejected login, **Use another model** for an overloaded
 provider, **Network settings** for a connection error, **Locate folder…** for an agent that moved,
-**Start a fresh config** for one whose config no longer loads (the old file is kept beside it).
+**Start a fresh config** for one whose config no longer loads (the old file is kept beside it), **Use its own
+default** for one whose default model is gone.
 
 **Works behind a proxy.** Every model and sign-in request follows the system proxy as it is at that
 moment, including PAC rules and a VPN switched on later; Settings → Network can fix a proxy or turn

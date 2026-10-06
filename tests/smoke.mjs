@@ -1534,7 +1534,29 @@ if (root) {
       assert.equal(legacy.model, "openai-codex/gpt-5.5", "the default is the one the registry names");
       const legacySend = await evaluate("window.duang.send('legacy', crypto.randomUUID(), 'hello')");
       assert.equal(legacySend.ok === false && legacySend.error.code, "model_unavailable", "a send on it asks for another model");
+      // A default of duang's that pi does not know at all (its endpoint was removed from a models.json) stops the
+      // agent opening; the page offers the agent's own default, which opens it and leaves the registry without one.
+      await writeFile(
+        registry,
+        JSON.stringify([...JSON.parse(savedRegistry), { id: "stale", name: "Stale", dir: join(root, "configured"), model: "local/gone", colour: 5 }]),
+      );
+      win.webContents.reload();
+      await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      await until(`!!document.querySelector('button[aria-label="Stale"]')`, "the agent with a stale default is listed");
+      await evaluate(`document.querySelector('button[aria-label="Stale"]').click()`);
+      await until("document.body.innerText.includes('Use its own default')", "a default pi does not know offers the agent's own");
+      assert.match(await evaluate("document.querySelector('main').innerText"), /local\/gone/, "the page names the default it does not know");
+      await click("Use its own default");
+      await until("!document.body.innerText.includes('could not be loaded') && !!document.querySelector('textarea')", "the agent opens on its own default");
+      assert.equal(
+        JSON.parse(await readFile(registry, "utf8")).find((row) => row.id === "stale").model,
+        undefined,
+        "duang's default is gone from the registry, and only that",
+      );
       await writeFile(registry, savedRegistry);
+      win.webContents.reload();
+      await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      await until("document.querySelector('main').innerText.includes('Smoke answer')", "back on the agent the checks below use");
 
       // The header names the agent and, under it, where the agent lives: a long name stays inside the header
       // with the whole of it as a tooltip, and the folder is a button that opens it. The conversation's title

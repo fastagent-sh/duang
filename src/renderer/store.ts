@@ -131,6 +131,8 @@ export interface View extends SettingsView {
   error?: string;
   /** The open agent failed to load in its config, which a fresh one would get past. */
   errorInConfig?: true;
+  /** The open agent failed to load because pi does not know duang's default model for it, this one. */
+  errorModel?: string;
   /**
    * An action that belongs to no conversation failed (renaming, adding, revealing or removing an agent):
    * said above the pane until dismissed, never written into whichever conversation is open.
@@ -606,6 +608,7 @@ export function createStore(api: DuangApi) {
       model: undefined,
       error: undefined,
       errorInConfig: undefined,
+      errorModel: undefined,
       loading: true,
       commands: [],
       commandsError: undefined,
@@ -614,7 +617,13 @@ export function createStore(api: DuangApi) {
       const result = await api.openAgent(id);
       if (request !== navigation) return;
       if (!result.ok) {
-        publish({ loading: false, states: { ...view.states, [id]: result.code }, error: result.message, errorInConfig: result.inConfig });
+        publish({
+          loading: false,
+          states: { ...view.states, [id]: result.code },
+          error: result.message,
+          errorInConfig: result.inConfig,
+          errorModel: result.unknownModel,
+        });
         return;
       }
       publish({
@@ -955,6 +964,18 @@ export function createStore(api: DuangApi) {
         fail("The config was not replaced", error);
       } finally {
         resetting = false;
+      }
+    },
+    /** The default model duang keeps for the agent is one pi does not know: the agent opens on its own instead. */
+    async useOwnDefault() {
+      const id = view.agentId;
+      if (!id) return;
+      try {
+        const result = await api.clearAgentModel(id);
+        if (!result.ok) return fail("The default model was not dropped", result.error.message);
+        await selectAgent(id);
+      } catch (error) {
+        fail("The default model was not dropped", error);
       }
     },
     /** The agent's folder was moved: the person shows where it is, and the agent opens from there. */

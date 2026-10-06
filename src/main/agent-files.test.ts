@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
-import { AgentRegistry, createAgentIn, failingConfig, freshConfig, MissingDirError, requireFolder } from "./agent-files.ts";
+import { AgentRegistry, createAgentIn, failingConfig, freshConfig, MissingDirError, requireFolder, unknownDefault } from "./agent-files.ts";
 
 test("registry serializes writes in one process, survives restart and deduplicates real paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "duang-registry-"));
@@ -27,6 +27,8 @@ test("registry serializes writes in one process, survives restart and deduplicat
     await assert.rejects(registry.rename(second.id, "gone"), /unknown agent/);
     const restarted = new AgentRegistry(file);
     assert.deepEqual(await restarted.list(), [{ ...first, name: "Reviewer", model: "provider/model" }]);
+    await restarted.setModel(first.id, undefined);
+    assert.deepEqual(await new AgentRegistry(file).list(), [{ ...first, name: "Reviewer" }], "no default is no key, not an empty one");
     assert.deepEqual(await readdir(join(root, "data")), ["agents.json"]);
     await restarted.remove(first.id);
     assert.deepEqual(await restarted.list(), []);
@@ -226,6 +228,30 @@ test("only a folder that is not there is missing; one that cannot be looked at s
     );
   } finally {
     await chmod(join(root, "locked"), 0o755).catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a load that failed on duang's default model is told apart from one on the config's own", async () => {
+  const root = await mkdtemp(join(tmpdir(), "duang-default-"));
+  const message = async (config: string, model?: string) => {
+    await rm(join(root, "fastagent"), { recursive: true, force: true });
+    await mkdir(join(root, "fastagent"));
+    await writeFile(join(root, "fastagent", "fastagent.config.ts"), config);
+    return createPiAgentFromDir(root, { sessionControl: true, authPath: join(root, "auth.json"), ...(model ? { model } : {}) }).then(
+      () => assert.fail("it loaded"),
+      (error: Error) => error.message,
+    );
+  };
+  try {
+    // An endpoint that was in a models.json and is not any more: pi does not know the model.
+    const gone = await message("export default {};\n", "local/gone");
+    assert.ok(unknownDefault(gone, "local/gone"), gone);
+    // The config's own unknown model is the config's to fix, with or without a default of duang's beside it.
+    const own = await message('export default { model: "local/also-gone" };\n');
+    assert.equal(unknownDefault(own, undefined), false, own);
+    assert.equal(unknownDefault(own, "local/gone"), false, own);
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

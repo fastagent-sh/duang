@@ -44,6 +44,7 @@ function harness() {
     scaffoldAgent: async () => "/a/fastagent",
     relocateAgent: async () => undefined,
     resetAgentConfig: async () => ({ ok: true }),
+    clearAgentModel: async () => ({ ok: true }),
     listCommands: async () => [],
     revealAgent: async () => {},
     revealRegistry: async () => {},
@@ -598,6 +599,36 @@ test("a config that failed to load is offered afresh once, however often the but
   reset.resolve({ ok: true });
   await Promise.all([first, second]);
   assert.equal(calls, 1, "a double click is one reset");
+  store.dispose();
+});
+
+test("an agent whose default model pi does not know opens on its own default once that is dropped", async () => {
+  const { api, store } = harness();
+  let dropped = false;
+  api.openAgent = async () =>
+    dropped
+      ? { ok: true, sessions: [] }
+      : { ok: false, code: "broken", message: 'unknown model "local/gone" (provider "local" / id "gone" not in registry)', unknownModel: "local/gone" };
+  await store.load();
+  assert.equal(store.getSnapshot().pane, "broken");
+  assert.equal(store.getSnapshot().errorModel, "local/gone", "main says which default pi does not know");
+  const asked: string[] = [];
+  api.clearAgentModel = async (id) => {
+    asked.push(id);
+    dropped = true;
+    return { ok: true };
+  };
+  await store.useOwnDefault();
+  assert.deepEqual(asked, ["a"]);
+  assert.equal(store.getSnapshot().errorModel, undefined);
+  assert.equal(store.getSnapshot().states.a, "ready", "the agent opens on its own default");
+  // A refusal (it runs, or is changing) is said, and the agent is left as it was.
+  dropped = false;
+  await store.selectAgent("a");
+  api.clearAgentModel = async () => ({ ok: false, error: { code: "agent_changing", message: "Agent settings are changing; try again.", retryable: true } });
+  await store.useOwnDefault();
+  assert.equal(store.getSnapshot().failure?.title, "The default model was not dropped");
+  assert.equal(store.getSnapshot().pane, "broken");
   store.dispose();
 });
 
