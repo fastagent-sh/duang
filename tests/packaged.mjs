@@ -146,17 +146,24 @@ async function run() {
     const reply = JSON.parse(message.data);
     pending.get(reply.id)?.(reply);
   });
+  // A script that throws rejects with what it threw, rather than reading as undefined.
   const evaluate = (expression) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const n = ++id;
-      pending.set(n, (reply) => resolve(reply.result?.result?.value));
+      pending.set(n, (reply) => {
+        const thrown = reply.result?.exceptionDetails;
+        if (thrown) reject(new Error(`${expression}\n${thrown.exception?.description ?? thrown.text}`));
+        else resolve(reply.result?.result?.value);
+      });
       socket.send(JSON.stringify({ id: n, method: "Runtime.evaluate", params: { expression, awaitPromise: true, returnByValue: true } }));
     });
   async function until(expression, what, ms = 30000) {
-    for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await evaluate(expression)) return;
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await evaluate(expression).catch(() => false)) return;
     throw new Error(`Timed out: ${what}\n${await evaluate("document.querySelector('main')?.innerText")}\n${first.output()}`);
   }
 
+  // The page is listed as soon as the window exists, before its preload has run: wait for the app's API.
+  await until("typeof window.duang?.listAgents === 'function'", "the window's preload API");
   assert.equal(await evaluate("window.duang.listAgents().then((agents) => agents.map((a) => a.name).join())"), "Installed", "the isolated profile");
   await until("!!document.querySelector('textarea') && !document.querySelector('textarea').disabled", "the agent opens");
   await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, 'go'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
