@@ -1,6 +1,6 @@
 /** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Microphone, Paperclip, Plug, Prohibit, Stop } from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Plug, Prohibit, Stop } from "@phosphor-icons/react";
 import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
 import type { Store, View } from "./store.ts";
@@ -319,22 +319,9 @@ function Unavailable({ model, models, onProviders }: { model: string; models?: M
 const ruler = document.createElement("canvas").getContext("2d")!;
 
 /**
- * The floating disc behind a round composer button that is not the primary action. It is a wrapper
- * because a disabled button dims as a whole: with the surface on the button itself, the disc would
- * vanish on the canvas along with its icon.
- */
-function Disc({ children }: { children: ReactNode }) {
-  return (
-    <span className="composer-card grid size-10 shrink-0 place-items-center rounded-full bg-surface ring-1 ring-stroke">
-      {children}
-    </span>
-  );
-}
-
-/**
- * The composer, in Telegram's one-row shape: attach on the left, the field in the middle, and one
- * round button on the right that is what the next action is — voice while the field is empty, Send
- * once it holds a message, Stop while a run is live. The settings that belong to the next message
+ * The composer, in Telegram's one-row shape: the field, and one round button on the right that is
+ * what the next action is — Send, Stop while a run is live and nothing is typed, Steer while it is
+ * live and something is. The settings that belong to the next message
  * rather than to the app sit inside the field, where Telegram keeps its emoji, which is why the
  * model chip lives here and not in a settings screen.
  *
@@ -377,7 +364,7 @@ export function Composer({
     (modelDisabled && "This agent is not ready");
   const value = c?.draft ?? "";
   const disabled = !!view.blocked;
-  /** Nothing to send: whitespace is not a message, so the right-hand button stays the voice one. */
+  /** Nothing to send: whitespace is not a message. */
   const empty = value.trim() === "";
 
   const input = useRef<HTMLTextAreaElement>(null);
@@ -466,22 +453,19 @@ export function Composer({
     // Positioned so it paints above the veil beneath it, which is absolutely placed and would
     // otherwise blur every button in the row.
     <div className="composer relative">
-      {/* pl-12 is the attach disc (40) and the gap (8): these lines start where the field does. */}
+      {/* pl-4 is the field's own inset: these lines start where its text does. */}
       {view.commandsError && query !== undefined && (
-        <p role="alert" className="text-danger text-[11px] mb-1.5 pl-12">
+        <p role="alert" className="text-danger text-[11px] mb-1.5 pl-4">
           {view.commandsError}
         </p>
       )}
       {/* Pressing `/` on an agent with no skills would do nothing at all, which reads as broken. */}
       {query !== undefined && !view.commandsError && view.commands.length === 0 && agent && (
-        <p className="text-muted text-[11px] mb-1.5 pl-12">
+        <p className="text-muted text-[11px] mb-1.5 pl-4">
           No commands — this agent has no skills in <span className="font-mono">{home(agent.dir)}/fastagent/skills</span>
         </p>
       )}
       <div className="flex items-end gap-2">
-        <Disc>
-          <Button kind="ghost" size={40} disabled="Attachments are not supported yet" aria-label="Attach" icon={<Paperclip size={20} />} />
-        </Disc>
         <div ref={field} className="composer-card relative flex min-w-0 flex-1 flex-wrap items-end gap-x-2 gap-y-1 rounded-composer bg-surface py-1.5 pr-1.5 pl-4 ring-1 ring-stroke focus-within:ring-accent/50">
           {suggestions.length > 0 && (
             // The model picker's surface and rows: one list look, so the two floating lists read as the same kind of thing.
@@ -604,18 +588,14 @@ export function Composer({
             title="Stop (Esc) — work its tools already finished is not undone"
             icon={<Stop size={16} weight="fill" />}
           />
-        ) : empty ? (
-          <Disc>
-            <Button kind="ghost" size={40} disabled="Voice input is not available yet" aria-label="Voice input" icon={<Microphone size={20} />} />
-          </Disc>
         ) : (
           // While a turn runs, what is typed steers it: it joins after the current step. Stop is back once the
-          // field is empty, and Esc stops at any time.
+          // field is empty, and Esc stops at any time. With nothing typed it stays, dimmed, saying why.
           <Button
             kind="primary"
             size={40}
             onClick={() => void store.send()}
-            disabled={view.blocked ?? false}
+            disabled={view.blocked ?? (empty && "Nothing to send yet")}
             aria-label={busy ? "Steer the run" : "Send"}
             title={busy ? "Steer the run (⏎): it joins after the current step · Stop with Esc" : "Send (⏎) · newline (⇧⏎)"}
             icon={<ArrowUp size={18} />}

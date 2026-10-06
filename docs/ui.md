@@ -243,26 +243,25 @@ it, is a round disc beside it, as Telegram splits a chat's info from its call, s
 is about the open conversation. While only other conversations of the agent run, it reads `1 other
 working` instead, and a click on it opens that conversation (or, for several, the conversation list, which
 marks each). The header runs the pane's width: it is chrome, and held to the reading column it would read as a
-card in the middle of a page. The composer does not: it sits in the reading column, its attach and
-voice/send discs on the text's edges, because the eye goes from the last line down to the field and
+card in the middle of a page. The composer does not: it sits in the reading column, its round button on the text's right
+edge, because the eye goes from the last line down to the field and
 a field wider than the text made that a jump. The disc is alone because nothing else on a
 conversation is an action yet: new conversation lives in the sidebar, and a menu with nothing in it
 would be furniture.
 
 The composer floats the same way at the bottom, and the transcript passes beneath both. It is one row
-in Telegram's shape: an attach button, the field, and one round button that is whatever the next
-action is (voice while the field is empty, Send once it holds text; while a run is live, Stop with the field empty and Steer once it holds text, Esc stopping either way). What
+in Telegram's shape: the field, and one round button that is whatever the next action is (Send,
+dimmed while the field is empty; while a run is live, Stop with the field empty and Steer once it holds
+text, Esc stopping either way). What
 belongs to the next message rather than to the app, the model chip, sits inside the field at its
 right end, where Telegram keeps its emoji. The field is a 40px pill that grows into a rounded
 rectangle as it takes lines (up to eight), and the buttons stay level with its last line. The chip
 sits beside the text while the draft is one line and drops to a row of its own under the text once it
 is not (a newline, or a line wider than the room beside the chip): beside a taller draft it reserved
 a column down every line and left the first lines wrapping short of the field's edge. The choice is
-made from the draft and the room, not from how the text wraps, so the change of width cannot flip it back. Attach and
-voice are shown but disabled with their reason: attachments have no path through duang yet, and a
-sent image would not come back in the transcript, because FastAgent's `user_message` leaves images out.
-They are placeholders by decision, kept for the layout's sake, and each goes when the feature lands or
-the layout stops wanting it.
+made from the draft and the room, not from how the text wraps, so the change of width cannot flip it back. There
+is no attach or voice button until either works: a control that can only say it is not there yet is
+furniture.
 
 The strips past the header and the composer, above one and below the other, are veiled rather than painted over: the canvas
 at 65% over a 3px blur, strongest at the window's edge and clear by the bar's inner edge. A line
@@ -466,7 +465,7 @@ component; what varies is a prop.
 
 **A disabled control says why.** The `disabled` prop takes the reason rather than a boolean, so a
 control cannot be greyed out silently: it dims to 40% and carries the reason. In light mode a
-disabled Send takes a neutral fill. "Stop the turn to change the model or effort", "Voice input is not available yet". It is disabled with `aria-disabled`
+disabled Send takes a neutral fill. "Stop the turn to change the model or effort", "Nothing to send yet". It is disabled with `aria-disabled`
 rather than the native attribute and stays focusable, because a natively disabled button cannot be
 reached by keyboard and a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is
 dropped by the component.
