@@ -185,15 +185,19 @@ function requireSession(session: string): void {
   if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
 }
 
+/** A conversation on its agent's current runtime, after checking both ids as above. */
+async function sessionOf(agentId: string, session: string) {
+  requireSession(session);
+  return (await openAgent(await requireAgent(agentId))).control.sessions.get(session);
+}
+
 /** The one sign-in in progress, and the window it belongs to. */
 let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
 
 /** Sends in main's hands, per conversation: a Stop before the run exists is answered here. */
 const inFlight = sends();
 
-const sessions = subscriptions(
-  async (agentId: string, session: string) => (await openAgent(await requireAgent(agentId))).control.sessions.get(session),
-);
+const sessions = subscriptions(sessionOf);
 /** A window as its subscriptions post to it: a window that has gone hears nothing. */
 const listener = (sender: WebContents): Listener<SessionEvent> => ({
   id: sender.id,
@@ -241,17 +245,11 @@ function register(): void {
     if (result.ok) await sessions.rebindAgent(id);
     return result;
   });
-  ipcMain.handle("session:state", async (_e, id: string, session: string) => {
-    requireSession(session);
-    const { control } = await openAgent(await requireAgent(id));
-    return control.sessions.get(session).state();
-  });
+  ipcMain.handle("session:state", async (_e, id: string, session: string) => (await sessionOf(id, session)).state());
   ipcMain.handle("session:setThinking", async (_e, id: string, session: string, level: string) => {
-    requireSession(session);
     if (typeof level !== "string") throw new Error("Thinking level must be a string");
-    const { control } = await openAgent(await requireAgent(id));
     // FastAgent checks the level against what this conversation's model supports, and refuses while it runs.
-    return control.sessions.get(session).update({ thinkingLevel: level });
+    return (await sessionOf(id, session)).update({ thinkingLevel: level });
   });
   ipcMain.handle("agent:remove", async (_e, id: string) => {
     const result = await removeAgent(id);
@@ -368,24 +366,15 @@ function register(): void {
     });
   });
   ipcMain.handle("session:rename", async (_e, id: string, session: string, name: string) => {
-    requireSession(session);
     if (typeof name !== "string" || !name.trim()) throw new Error("A conversation name cannot be empty");
-    const { control } = await openAgent(await requireAgent(id));
     // FastAgent owns the label: `update({ name })` is what `sessions.list()` then reports.
-    return control.sessions.get(session).update({ name: name.trim() });
+    return (await sessionOf(id, session)).update({ name: name.trim() });
   });
-  ipcMain.handle("session:delete", async (_e, id: string, session: string) => {
-    requireSession(session);
-    const { control } = await openAgent(await requireAgent(id));
-    // A refused delete must leave the live subscription intact.
-    return control.sessions.get(session).delete();
-  });
+  // A refused delete must leave the live subscription intact.
+  ipcMain.handle("session:delete", async (_e, id: string, session: string) => (await sessionOf(id, session)).delete());
   ipcMain.handle("session:close", (e, subscription: string) => sessions.close(e.sender.id, subscription));
   // History without a subscription: what a roster row quotes from a conversation nobody has open.
-  ipcMain.handle("session:entries", async (_e, id: string, session: string) => {
-    requireSession(session);
-    return (await openAgent(await requireAgent(id))).control.sessions.get(session).entries();
-  });
+  ipcMain.handle("session:entries", async (_e, id: string, session: string) => (await sessionOf(id, session)).entries());
   ipcMain.handle("session:open", async (e, id: string, session: string, subscription: string) => {
     requireSession(session);
     const bound = await sessions.open(listener(e.sender), id, session, subscription);
@@ -406,9 +395,7 @@ function register(): void {
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
     requireSession(session);
-    return inFlight.stop(`${id}/${session}`, async () =>
-      (await openAgent(await requireAgent(id))).control.sessions.get(session).abort(),
-    );
+    return inFlight.stop(`${id}/${session}`, async () => (await sessionOf(id, session)).abort());
   });
 }
 
@@ -487,8 +474,7 @@ app.on("before-quit", (event) => {
   void inFlight
     .stopAll(async (key) => {
       const slash = key.indexOf("/");
-      const row = await requireAgent(key.slice(0, slash));
-      return (await openAgent(row)).control.sessions.get(key.slice(slash + 1)).abort();
+      return (await sessionOf(key.slice(0, slash), key.slice(slash + 1))).abort();
     }, QUIT_WAIT_MS)
     .then((settled) => {
       if (!settled) console.error(`duang: a stopped run had not settled after ${QUIT_WAIT_MS} ms; quitting cuts it`);
