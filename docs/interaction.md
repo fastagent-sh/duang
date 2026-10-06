@@ -330,8 +330,8 @@ is valid: the owner may need it only for private conversation or timed work. Kee
 credentials and local conversations on the laptop. A remote model choice is governed by the remote
 runtime, not by the local credential picker.
 
-After publish, the owner can see which version of the Agent is live, update or stop it, and see each
-schedule's verified results in its `schedule:<name>` session. A schedule must actually fire while the desktop
+After publish, the owner can see which version of the Agent is live, update or stop it, and see how each
+schedule's fires ended, from the host's fire history, with what each run said in its `schedule:<name>` session. A schedule must actually fire while the desktop
 and laptop are closed. Show
 failed, skipped or interrupted runs as such; if the host cannot report the outcome, say it is
 unknown. Do not invent a "next run" or "done" from a declaration alone. A channel is an optional

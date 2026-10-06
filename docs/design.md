@@ -73,9 +73,10 @@ connection, schedules and their recorded outcomes. An invited contact does not e
 files, secrets or hosting controls. No in-app code editor or general remote filesystem browser.
 
 Schedules belong on an owner's online agent even if that agent has never been shared. A schedule
-(`schedules/<name>.md`: a cron, a timezone and a prompt) continues one session, `schedule:<name>`, so its
-recent results, failures and skips are read from that session's history, **only as the runtime reports
-them**. FastAgent has no remote route that lists an instance's schedules
+(`schedules/<name>.md`: a cron, a timezone and a prompt) continues one session, `schedule:<name>`, which
+shows what each run said. Whether a fire completed, failed, was skipped or was interrupted is the host's fire
+history, **only as the host reports it**, never read off the session. FastAgent has no remote route for an
+instance's schedules or their fire history yet; until it has, a remote outcome is unavailable
 ([architecture](architecture.md#online-execution-and-schedules)). A local preview must not imply that a
 schedule will fire after the laptop is turned off. Showing an exact next run or a success badge requires an
 authoritative clock/outcome source, not a guessed timer.
@@ -236,8 +237,8 @@ direct invitations fail a real need; do not silently treat one person's session 
 - Hosting must not copy local credentials or conversations. The remote service has no built-in
   authentication in newer FastAgent; protect both control and invoke, isolate visitors' session
   access, and make invitations revocable before sharing an endpoint.
-- A schedule's clock requires a resident machine, or a verified external clock calling `POST /invoke`
-  in place of the schedule. Failed, skipped and
+- On Fly or Railway, a schedule's clock requires a resident machine, or a verified external clock calling
+  `POST /invoke` in place of the schedule; AgentCore wakes the container for it through EventBridge. Failed, skipped and
   interrupted fires are not successes; stop does not roll back tool effects.
 - FastAgent does not yet sandbox the entire general agent process or guarantee exactly-once work.
   Do not promise arbitrary high-privilege tools are safe for untrusted visitors. No enterprise

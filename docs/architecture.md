@@ -29,7 +29,7 @@ it need not proxy every conversation or own a transcript.
 public `connectAgent` and `connectSessionControl`, subject to the endpoint's `capabilities()`.
 Local turns use `agent.invoke`; observing, steering, stopping and reading history use the bound
 session control. The locked FastAgent version's remote contract (authentication, invoke paths,
-schedules) is what a remote client builds on; bump the version with the feature that needs a newer one.
+prompt templates sent through `/invoke`) is what a remote client builds on; bump the version with the feature that needs a newer one.
 
 **The preload exposes typed, named operations**, not a stringly-typed gateway. It exposes only
 the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
@@ -174,21 +174,26 @@ Timed work is a **schedule**, from FastAgent's release after 0.24.4
 ([#145](https://github.com/fastagent-sh/duang/issues/145)): `schedules/<name>.md` in the Agent's directory,
 `cron` and `tz` in its frontmatter and the prompt as its body. It is data, so duang can write one without
 TypeScript. Nothing runs a schedule by name: work started on demand is `POST /invoke`, and a prompt template
-is sent as `/<name>`. Every fire continues one session, `schedule:<name>`, so what a schedule did is that
-session's history, read like any other conversation. A fire skipped because the previous one still ran is
-not in it: the host records it as `skipped` in the schedule's fire history. There is no remote route that lists an instance's schedules: in process, a serve's
-`AgentService.schedules` lists what it loaded, and the CLI has `fastagent schedules list`. If duang needs the
-list remotely, ask FastAgent for it rather than infer it from files.
+is sent as `/<name>`. Every fire continues one session, `schedule:<name>`, which holds what each run
+**said**. How each fire **ended** is not in it: the host's fire history records it (`completed`, `failed`,
+`skipped` when the previous fire still held the session, `interrupted`), in claim files under its state root,
+`schedule/claims/<name>/`. Neither the list of an instance's schedules nor their fire history has a remote
+route: in process, a serve's `AgentService.schedules` lists what it loaded, and on the host
+`fastagent schedules list --json` prints both. If duang needs them remotely, ask FastAgent for a route rather
+than infer them from files or from the session.
 
-A clock must remain available while the owner's laptop is off. A schedule is the agent's own clock and keeps
-a Fly or Railway machine resident; a sleeping machine cannot wake itself for its own cron. Scaling to zero
-means a clock outside the instance calling `POST /invoke` with the prompt template *in place of* the schedule,
+A clock must remain available while the owner's laptop is off. On Fly or Railway a schedule is the agent's own
+clock and keeps the machine resident; a sleeping machine cannot wake itself for its own cron. On AgentCore the
+container mirrors schedules into one-shot EventBridge alarms that wake it, so it scales to zero with the schedule
+itself. Elsewhere, scaling to zero means a clock outside the instance calling `POST /invoke` with the prompt
+template *in place of* the schedule,
 never beside it (both would fire into `schedule:<name>`). That route is anonymous with full tools, so it needs
 a gateway in front, and the outside clock needs demonstrated delivery, authorization, deduplication and
 honest failure/skip reporting before it replaces residency.
 
-If a host cannot provide a recent outcome through the schedule's session, claim records or host telemetry,
-show "outcome unavailable" rather than infer success from a declaration. A successful send or invoke
+Until a remote instance's fire history can be read, its schedules' outcomes are "outcome unavailable": never
+inferred from the `schedule:<name>` session (a skipped or interrupted fire leaves nothing there, or a partial
+run) nor from a declaration. A successful send or invoke
 admission is not a successful outcome. Never auto-replay scheduled work that may already have happened.
 These are data-integrity constraints, not an enterprise audit UI.
 
@@ -204,7 +209,7 @@ These are data-integrity constraints, not an enterprise audit UI.
 | Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a hosted instance. |
 | Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a copy of an Agent or a hosted instance. |
 | App preferences | `userData/settings.json` | Network mode and avatar style; never credentials. |
-| Schedule declaration and execution | the Agent's `schedules/` + the running host and clock; outcomes in each `schedule:<name>` session | Display only verified schedules and outcomes. |
+| Schedule declaration and execution | the Agent's `schedules/` + the running host and clock; how each fire ended in the host's fire history, what it said in its `schedule:<name>` session | Display only verified schedules and outcomes. |
 | Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |
 
 No universal message database, enterprise membership/approval/audit system, web workbench, social
