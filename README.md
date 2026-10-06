@@ -138,7 +138,15 @@ npm test        # registry, routing, selection, drafts, transcript and command r
 npm run test:smoke  # real Electron + IPC + FastAgent with a fake model: the workflow, then the live transcript
 DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls using this machine's credential file
 npm run shots       # screenshots of the real window in both colour modes, into out/shots/
+npm run package     # the macOS app and its dmg, into dist/
+npm run test:package  # package, then run the installed app outside the checkout
 ```
+
+**Installing the app.** Open `dist/duang-<version>-arm64.dmg` (or the `duang-macos-arm64` artifact of a CI run)
+and drag duang to Applications. It is not signed with an Apple Developer ID yet, so the first open is refused:
+right-click duang → Open, or System Settings → Privacy & Security → Open Anyway. Apple silicon only for now. The
+installed app and `npm run dev` share one data directory (`~/Library/Application Support/duang/`: agents,
+credentials, settings), so only one of them runs at a time; starting the other brings the running one forward.
 
 `test:live` is the only check that proves authentication end to end: it makes unfaked OpenAI (Sign in
 with ChatGPT) and Anthropic requests through the real IPC path, so it spends model credits and needs working logins.
@@ -155,8 +163,9 @@ the choice in its registry rather than editing the agent's config. This layout g
 agent-directory release: agents will be created in duang, as `~/Agents/<name>/`, with their contexts
 ([#133](https://github.com/fastagent-sh/duang/issues/133)).
 
-The registry uses atomic writes, serialized within one running instance — there is no cross-process
-lock yet, so two instances writing at once can drop each other's rows. Invalid or unreadable data is
+The registry uses atomic writes, serialized within one running duang. The file itself has no
+cross-process lock; what keeps two processes from writing it at once is that only one duang runs per data
+directory (a second one brings the first forward and leaves). Invalid or unreadable data is
 reported rather than replaced with an empty list. Adding the same resolved directory reuses its
 existing row, and removing an agent today deletes only that row, never the directory or conversation
 history (with #133, duang's own agents go to the Trash, after asking).
