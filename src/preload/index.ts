@@ -28,7 +28,7 @@ export type OpenResult =
   | { ok: true; sessions: SessionSummary[]; model?: string }
   | {
       ok: false;
-      code: "no_agent" | "missing_dir" | "failed";
+      code: "no_agent" | "missing_dir" | "broken";
       message: string;
       /** The failure is in the agent's config, or a file it imports: a fresh config gets past it. */
       inConfig?: true;
