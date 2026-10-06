@@ -26,9 +26,9 @@ import type { ProviderUsage } from "../main/usage.ts";
 export type OpenResult =
   /**
    * `model`: the agent's default, for conversations that have none of their own; an agent may have none.
-   * `staleModel`: the default duang keeps for it is one pi does not know, so it opened without it.
+   * `staleDefault`: the default model duang keeps for it is one pi does not know, so it opened without it.
    */
-  | { ok: true; sessions: SessionSummary[]; model?: string; staleModel?: string }
+  | { ok: true; sessions: SessionSummary[]; model?: string; staleDefault?: string }
   | {
       ok: false;
       code: "no_agent" | "missing_dir" | "broken";

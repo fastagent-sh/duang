@@ -47,8 +47,9 @@ moves the directory duang created to the Trash, after asking). Changing the mode
 is refused while one of its conversations is running, including a turn still opening the runtime.
 A default model duang keeps for an agent that this computer no longer knows (its endpoint was removed from a
 `models.json`, say) does not stop the agent opening: it opens on its config's model, or with none, and the picker
-opens with `<model> is no longer available` at its top; the model chosen there becomes the default. Closed
-without a choice, it opens again the next time the agent is opened.
+opens with `<model> is no longer available` at its top; the model chosen there becomes the default and, as any
+choice in the picker does, the open conversation's model, which the notice says. Other conversations keep the
+models they recorded. Closed without a choice, it opens again the next time the agent is opened.
 An agent with no default model opens like any other, on the conversation it was left on or its latest: a
 conversation runs on the model it records. Only a conversation that records none (a new one, or one whose
 model is no longer in the catalog) with no default to fall back on asks for one: the picker opens on it and

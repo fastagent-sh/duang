@@ -649,7 +649,7 @@ export function createStore(api: DuangApi) {
       // Choosing another model is the way on, so the picker opens on the conversation that just opened, once it has:
       // opening one sets the picker by whether that conversation has a model to run.
       if (request === navigation)
-        publish(result.staleModel ? { staleDefault: { agentId: id, model: result.staleModel }, picker: true } : { staleDefault: undefined });
+        publish(result.staleDefault ? { staleDefault: { agentId: id, model: result.staleDefault }, picker: true } : { staleDefault: undefined });
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });

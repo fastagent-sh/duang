@@ -604,7 +604,7 @@ test("a config that failed to load is offered afresh once, however often the but
 test("an agent whose default model pi does not know opens, with the picker open on it, until another is chosen", async () => {
   const { api, store } = harness();
   api.openAgent = async (id) =>
-    id === "a" ? { ok: true, sessions: [], model: "provider/model", staleModel: "local/gone" } : { ok: true, sessions: [], model: "provider/model" };
+    id === "a" ? { ok: true, sessions: [], model: "provider/model", staleDefault: "local/gone" } : { ok: true, sessions: [], model: "provider/model" };
   await store.load();
   assert.equal(store.getSnapshot().pane, "start", "the agent opens on its own model");
   assert.deepEqual(store.getSnapshot().staleDefault, { agentId: "a", model: "local/gone" });

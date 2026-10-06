@@ -101,7 +101,10 @@ function ModelPicker({
   needsModel: boolean;
   /** The conversation's model, when a send was just refused because it cannot run: said at the top. */
   unavailable?: string;
-  /** The agent's default in duang, which this computer does not know any more: said at the top. */
+  /**
+   * The agent's default in duang, which this computer does not know any more: said at the top. A model chosen
+   * here sets the open conversation's model too, as any choice in the picker does, so the notice says so.
+   */
   stale?: string;
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
@@ -202,7 +205,12 @@ function ModelPicker({
           {unavailable ? (
             <Unavailable model={unavailable} models={models} onProviders={onProviders} />
           ) : (
-            stale && <Notice title={`${stale} is no longer available`} advice="It is this agent's default. Choose a model for it." />
+            stale && (
+              <Notice
+                title={`${stale} is no longer available`}
+                advice="It is this agent's default. The model you choose here becomes the default, and this conversation's model."
+              />
+            )
           )}
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <MagnifyingGlass size={15} className="shrink-0 text-muted" aria-hidden />

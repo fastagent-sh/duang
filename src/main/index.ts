@@ -216,7 +216,7 @@ function register(): void {
   ipcMain.handle("agent:open", async (_e, agentId: string) => {
     try {
       const { control, modelSpec, staleDefault } = await openAgent(await requireAgent(agentId));
-      return { ok: true, sessions: await control.sessions.list(), model: modelSpec, ...(staleDefault && { staleModel: staleDefault }) };
+      return { ok: true, sessions: await control.sessions.list(), model: modelSpec, ...(staleDefault && { staleDefault }) };
     } catch (error) {
       const code = error instanceof NoAgentError ? "no_agent" : error instanceof MissingDirError ? "missing_dir" : "broken";
       const message = error instanceof Error ? error.message : String(error);

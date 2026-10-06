@@ -76,13 +76,24 @@ async function build(row: AgentRow): Promise<Opened> {
     const message = error instanceof Error ? error.message : String(error);
     // FastAgent exposes this setup condition as prose, not an error code.
     if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
-    // duang's default is a model pi does not know (its endpoint was removed from a models.json, say). The agent
-    // opens without it, on its config's model or none, and says which default it could not use, so the window
-    // asks for another rather than the agent failing to open where no model can be chosen.
-    if (unknownDefault(message, row.model)) return { ...(await build({ ...row, model: undefined })), staleDefault: row.model };
     const config = failingConfig(message);
     if (config) failedConfigs.set(row.id, config);
     throw error;
+  }
+}
+
+/**
+ * Opening only: duang's default is a model pi does not know (its endpoint was removed from a models.json, say).
+ * The agent opens without it, on its config's model or none, and says which default it could not use, so the
+ * window asks for another rather than the agent failing to open where no model can be chosen. A model change
+ * builds with `build` itself, which refuses such a model instead.
+ */
+async function buildToOpen(row: AgentRow): Promise<Opened> {
+  try {
+    return await build(row);
+  } catch (error) {
+    if (!unknownDefault(error instanceof Error ? error.message : String(error), row.model)) throw error;
+    return { ...(await build({ ...row, model: undefined })), staleDefault: row.model };
   }
 }
 
@@ -96,7 +107,7 @@ export async function openAgent(row: AgentRow): Promise<Opened> {
   }
   const cached = opened.get(row.id);
   if (cached) return cached;
-  const promise = build(row);
+  const promise = buildToOpen(row);
   opened.set(row.id, promise);
   void promise.catch(() => {
     if (opened.get(row.id) === promise) opened.delete(row.id);
