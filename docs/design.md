@@ -2,7 +2,7 @@
 
 The product and delivery gates are in [README.md](../README.md). This document defines the
 surfaces and flows; [interaction.md](interaction.md) covers behavior and failures, [ui.md](ui.md)
-records the shipped Week 1 visual system, and [architecture.md](architecture.md) owns process and
+gives the interface's principles, and [architecture.md](architecture.md) owns process and
 trust boundaries. **Only the local Week 1 client is implemented and accepted.** Everything marked
 planned below needs its own implementation and acceptance evidence.
 

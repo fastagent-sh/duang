@@ -2,7 +2,7 @@
 @source "../../node_modules/streamdown/dist/*.js";
 
 /*
- * Tokens per docs/ui.md. Every interactive role is a set — a component picks `bg-hover`, it never
+ * Tokens for the rules in docs/ui.md §4. Every interactive role is a set — a component picks `bg-hover`, it never
  * computes a hover colour from a base. The neutral ramp carries a trace of the accent hue so violet
  * reads as part of the family rather than applied on top.
  */

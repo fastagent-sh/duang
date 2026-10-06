@@ -121,7 +121,7 @@ renderer (React) ── typed preload API ── Electron main ── FastAgent,
 
 More: [architecture](docs/architecture.md) (processes, state ownership, network route),
 [interaction](docs/interaction.md) (behavior and failure handling), [design](docs/design.md)
-(surfaces and flows) and [UI](docs/ui.md) (the visual system).
+(surfaces and flows) and [UI](docs/ui.md) (interface principles).
 
 ## Known limitations
 
