@@ -31,7 +31,7 @@ Local turns use `agent.invoke`; observing, steering, stopping and reading histor
 session control. The locked FastAgent version's remote contract (authentication, invoke paths,
 routines) is what a remote client builds on; bump the version with the feature that needs a newer one.
 
-**The preload exposes typed, named operations**, not a stringly-typed gateway. Week 1 exposes only
+**The preload exposes typed, named operations**, not a stringly-typed gateway. It exposes only
 the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
 session and subscription id. Stale subscriptions cannot replace the current view. Idle subscriptions
 close on navigation; running conversations retain theirs until settlement, so switching away does
@@ -94,8 +94,7 @@ system proxy switched while duang runs is expected from Chromium's configuration
 dispatcher asks per request, but switching one was not tested. Only the first entry of a PAC list
 is used, and proxy authentication is unsupported until a real user needs it: Chromium's route answer
 (`PROXY h:p`) carries no credentials. A launch variable with a user name or password therefore fails
-every request with that explanation instead of the proxy's bare 407; before this route existed,
-undici read such credentials from `HTTPS_PROXY` directly, so that launch is a regression.
+every request with that explanation instead of the proxy's bare 407.
 
 Agent commands cannot use the dispatcher: pi's shell tool spawns with `getShellEnv()`, a copy of
 `process.env` taken at each spawn, so the only lever is main's own `process.env`, shared by every
