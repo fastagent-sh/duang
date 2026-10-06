@@ -133,7 +133,10 @@ function fold(c: Conversation, event: SessionEvent, now: number): Settled | unde
   c.items = apply(c.items, event);
   // A run heard from its start that failed after taking a message offers that message again. One that
   // failed before (no credential, say) already returned the text to the draft. A run joined midway does not
-  // know its start here; reopened, its history does.
+  // know its start here; reopened, its history does. `toolsRan` counts every tool since `run_started`, while
+  // `fromEntries` reads back only those after the last answer that ended the work: a steer that carried the
+  // run past such an answer asks here and not after a reopen. Live knows where the run began and history
+  // does not, so the difference is kept on the side that asks (docs/interaction.md).
   const failure = c.items.at(-1);
   if (e.type === "run_settled" && e.data.status === "failed" && run?.message !== undefined && failure?.kind === "note")
     c.items = [...c.items.slice(0, -1), { ...failure, resend: { text: run.message, toolsRan: run.toolsRan } }];
