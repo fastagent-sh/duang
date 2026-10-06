@@ -5,6 +5,7 @@ import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
 import { retired } from "./providers.ts";
+import { refuse } from "./send.ts";
 import { AgentRegistry, failingConfig, freshConfig, MissingDirError, requireFolder, type AgentRow } from "./agent-files.ts";
 
 export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
@@ -103,15 +104,6 @@ export async function withAgentRun(
     else sending.delete(row.id);
   }
 }
-
-/**
- * An expected refusal is an answer, not an exception: the person can act on it, and a thrown one
- * would reach the renderer wrapped in Electron's `Error invoking remote method` prose.
- */
-export const refuse = (code: string, message: string): SessionResult => ({
-  ok: false,
-  error: { code, message, retryable: true },
-});
 
 /** One agent's settings change, excluded against its own sends and announced to its own readers. */
 function change(id: string, apply: () => Promise<SessionResult>): Promise<SessionResult> {
