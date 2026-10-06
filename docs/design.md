@@ -244,5 +244,4 @@ direct invitations fail a real need; do not silently treat one person's session 
 
 A built-in editor, general Git client, remote files, social discovery directory, native group chat,
 web/mobile workbench and centralized transcript service are not prerequisites for local work,
-giving someone an Agent, protected online contacts or optional hosting. Billing and usage limits for duang cloud
-need measured running costs; `$9/account` is not a committed product price.
+giving someone an Agent, protected online contacts or optional hosting.

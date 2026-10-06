@@ -91,11 +91,6 @@ scheduler. FastAgent's routine API and deployment residency are the locked versi
 contract before implementing hosting. See
 [architecture](docs/architecture.md#online-execution-and-routines).
 
-The desktop client and giving someone an Agent are free. duang cloud is an optional paid host, not a
-prerequisite for using or sharing an agent. A flat `$9/account` including several agents is an
-unverified pricing hypothesis, not a promise; hosting cost, usage limits and payment terms need
-real measurements. No token resale is planned.
-
 ## Delivery stages
 
 Week 1 local setup, streaming, history and navigation have been accepted. Stages 1–5 below
@@ -131,9 +126,8 @@ are **not yet accepted**. A stage number is an outcome gate, not a calendar week
 
 Measure time from creating an agent to daily use, then to the first successful routine
 while the owner's laptop is off, and to the first non-owner successfully using a shared agent.
-Measure whether owners and recipients return to complete work, and whether hosting revenue covers
-its actual cost. Uptime alone does not prove an agent helped anyone; there is no fixed install or
-price threshold yet. Do not claim an online or shared flow has shipped based on local mock tests.
+Measure whether owners and recipients return to complete work. Uptime alone does not prove an
+agent helped anyone; there is no fixed install threshold yet. Do not claim an online or shared flow has shipped based on local mock tests.
 
 ## Run it
 
@@ -256,12 +250,6 @@ Accepted limitations, each recorded in its issue:
 Currently out of scope: duang does not start local channels or routines; online connections,
 giving someone an Agent, duang cloud, files/diffs and advanced session controls are not implemented. Their
 planned scope and order are described in [Delivery stages](#delivery-stages).
-
-## Relationship to duang-v1 / duang-v2
-
-Those repositories designed a collaboration platform (two planes, invite primitives, named hosts,
-build pipeline) before a single user existed. The domain thinking is preserved in git history and
-can be reintroduced one entity at a time, each paid for by an actual blocked user.
 
 ## License
 
