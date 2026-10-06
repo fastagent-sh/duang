@@ -344,7 +344,7 @@ export function Transcript({
     // Content also grows after it is laid out (fonts, code blocks), with no scroll event and no new item:
     // a view that was at the latest line stays on it, and one holding a place keeps the place. "Was" is
     // judged against the height before this growth, because the growth itself puts the end out of reach.
-    // Growth from a batch drawn above is not judged at all: anchoring has moved scrollTop by its height, so
+    // Growth from a batch drawn above is not judged at all: the view was put back, moving scrollTop by its height, so
     // against the old height a view the person scrolled up from would read as at the end and be pulled down.
     let height = 0;
     const grown = new ResizeObserver(() => {
