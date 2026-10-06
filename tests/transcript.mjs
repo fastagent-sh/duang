@@ -229,73 +229,94 @@ if (!process.versions.electron) {
     assert.equal(first, false, "its latest turn is shown before its oldest is drawn");
     assert.ok(moved < 2, `the view stays at the latest line while older lines are drawn above it (it moved ${moved} px)`);
     // While the older lines are still being drawn: a person scrolling up stays where they scrolled to (it is not
-    // pulled back to the latest line as the lines above arrive), and one who leaves from there comes back to the
-    // same place. Both act the moment the latest turn first shows, when drawing has just begun.
-    const atEnd = `(() => { const el = document.querySelector('[aria-label="Transcript"]'); el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event('scroll')); })()`;
-    const visit = async (name, ready) => {
-      await evaluate(`document.querySelector('aside button[aria-label="${name}"]').click()`);
-      await until(ready, `${name} shown`);
-    };
-    await evaluate(atEnd);
-    await visit("Live", `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Answered after a retry.')`);
-    await evaluate(`(() => {
-      window.__early = undefined;
-      const observer = new MutationObserver(() => {
-        const el = document.querySelector('[aria-label="Transcript"]');
-        if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
-        observer.disconnect();
-        // Two frames later, as a person would: the view has mounted and settled at its end (its first layout ends
-        // there), older lines still to come.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-        el.scrollTop -= 400;
-        el.dispatchEvent(new Event('scroll'));
-        const top = el.getBoundingClientRect().top + 60;
-        const row = [...el.querySelector('.column').children].find((r) => { const b = r.getBoundingClientRect(); return b.top <= top && b.bottom > top; });
-        window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
-        }));
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    })()`);
-    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
-    await until(`document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn 1 of the long one')`, "the rest drawn while scrolled up");
-    await new Promise((r) => setTimeout(r, 300));
-    const early = await evaluate("window.__early");
-    assert.equal(early.drawnAll, false, "scrolled up while the older lines were still to be drawn");
+    // pulled back to the latest line as the lines above arrive, nor pushed down to the oldest at the top of what
+    // is drawn), and one who leaves from there comes back to the same place.
+    // A wheel event first: a view returned to a place holds it until the person scrolls.
+    const atEnd = `(() => { const el = document.querySelector('[aria-label="Transcript"]'); el.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true })); el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event('scroll')); })()`;
+    const shown = (text) => `document.querySelector('[aria-label="Transcript"]')?.innerText.includes(${JSON.stringify(text)})`;
     const offsetOf = (text) =>
       evaluate(`(() => { const el = document.querySelector('[aria-label="Transcript"]'); const row = [...el.querySelector('.column').children].find((r) => r.innerText === ${JSON.stringify(text)}); return row ? row.getBoundingClientRect().top - el.getBoundingClientRect().top : null; })()`);
-    const stayed = await offsetOf(early.text);
-    assert.ok(stayed !== null && Math.abs(stayed - early.offset) < 2, `a person who scrolled up is not pulled back as older lines arrive (row moved from ${early.offset} to ${stayed})`);
-
-    await evaluate(atEnd);
-    await visit("Live", `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Answered after a retry.')`);
+    const openLong = async () => {
+      await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+      await until(shown("Turn 1 of the long one"), "all of the long conversation drawn");
+      await new Promise((r) => setTimeout(r, 300));
+    };
+    const fromLive = async () => {
+      await evaluate(atEnd);
+      await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+      await until(shown("Answered after a retry."), "Live shown");
+    };
+    /**
+     * Opens the long conversation and, two frames after its latest turn first shows (once the view has mounted at
+     * its end, as a person would act), runs `scroll` and records the first row reaching into the view. With `leave`,
+     * it then switches to Live from there.
+     */
+    const scrollWhileDrawing = async (scroll, { leave = false } = {}) => {
+      await fromLive();
+      await evaluate(`(() => {
+        window.__early = undefined;
+        const observer = new MutationObserver(() => {
+          const el = document.querySelector('[aria-label="Transcript"]');
+          if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
+          observer.disconnect();
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            ${scroll};
+            el.dispatchEvent(new Event('scroll'));
+            const top = el.getBoundingClientRect().top + 60;
+            const row = [...el.querySelector('.column').children].find((r) => r.getBoundingClientRect().bottom > top);
+            window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
+            if (${leave}) document.querySelector('aside button[aria-label="Live"]').click();
+          }));
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      })()`);
+      if (leave) {
+        await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+        await until("window.__early !== undefined", "left the long conversation while it was being drawn");
+        await until(shown("Answered after a retry."), "away on Live");
+      }
+      await openLong();
+      const early = await evaluate("window.__early");
+      assert.equal(early.drawnAll, false, "acted while the older lines were still to be drawn");
+      return { early, now: await offsetOf(early.text) };
+    };
+    for (const [scroll, what] of [
+      ["el.scrollTop -= 400", "scrolled up"],
+      // At scrollTop 0 Chromium's scroll anchoring does not hold the view: each batch would push it down.
+      ["el.scrollTop = 0", "scrolled to the top of what is drawn"],
+    ]) {
+      const { early, now } = await scrollWhileDrawing(scroll);
+      assert.ok(now !== null && Math.abs(now - early.offset) < 2, `a person who ${what} stays there as older lines arrive (row moved from ${early.offset} to ${now})`);
+    }
+    {
+      const { early, now } = await scrollWhileDrawing("el.scrollTop -= 400", { leave: true });
+      assert.ok(now !== null && Math.abs(now - early.offset) < 2, `coming back finds the place it was left at (row at ${now}, left at ${early.offset})`);
+    }
+    // A first batch shorter than the window leaves the view at scrollTop 0 too: the view still ends at the latest
+    // line once everything is drawn. Zoomed out in a window as tall as the screen allows, it is tall enough.
+    await fromLive();
+    const bounds = win.getBounds();
+    win.setBounds({ ...bounds, height: 3000 });
+    win.webContents.setZoomFactor(0.25);
     await evaluate(`(() => {
-      window.__early = undefined;
+      window.__short = undefined;
       const observer = new MutationObserver(() => {
         const el = document.querySelector('[aria-label="Transcript"]');
-        if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
+        if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one')) return;
         observer.disconnect();
-        // Two frames later, as a person would: the view has mounted and settled at its end (its first layout ends
-        // there), older lines still to come.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-        el.scrollTop -= 400;
-        el.dispatchEvent(new Event('scroll'));
-        const top = el.getBoundingClientRect().top + 60;
-        const row = [...el.querySelector('.column').children].find((r) => { const b = r.getBoundingClientRect(); return b.top <= top && b.bottom > top; });
-        window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
-        document.querySelector('aside button[aria-label="Live"]').click();
-        }));
+        window.__short = el.scrollHeight <= el.clientHeight;
       });
       observer.observe(document.body, { childList: true, subtree: true });
     })()`);
-    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
-    await until("window.__early !== undefined", "left the long conversation while it was being drawn");
-    await until(`document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Answered after a retry.')`, "away on Live");
-    await visit("Long", `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn 1 of the long one')`);
-    await new Promise((r) => setTimeout(r, 300));
-    const left = await evaluate("window.__early");
-    assert.equal(left.drawnAll, false, "left while the older lines were still to be drawn");
-    const back = await offsetOf(left.text);
-    assert.ok(back !== null && Math.abs(back - left.offset) < 2, `coming back finds the place it was left at (row at ${back}, left at ${left.offset})`);
+    await openLong();
+    const short = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      return { firstFit: window.__short, overflowed: el.scrollHeight > el.clientHeight, fromEnd: el.scrollHeight - el.scrollTop - el.clientHeight };
+    })()`);
+    win.webContents.setZoomFactor(1);
+    win.setBounds(bounds);
+    assert.ok(short.firstFit && short.overflowed, `the first batch fits the window and the whole conversation does not (${JSON.stringify(short)})`);
+    assert.ok(short.fromEnd < 2, `a first batch shorter than the window still ends at the latest line (${JSON.stringify(short)})`);
     assert.equal(script.length, 0, "every scripted answer was asked for");
     console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line; a long conversation opens at its end and fills in above it.");
   }

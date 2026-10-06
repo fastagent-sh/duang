@@ -1,5 +1,6 @@
 /** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
 import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import {
   Plug,
   Swap,
@@ -300,27 +301,35 @@ export function Transcript({
   /**
    * A long conversation opened at its latest line draws that end first and the rest above it in small batches while
    * the window is idle, so opening it is not one long freeze (150 turns took about a second). Each batch lands
-   * above what is on screen, where Chromium's scroll anchoring keeps the view still. A view returning to a place
+   * above what is on screen, and the view is put back at the same distance from the end before it is painted:
+   * Chromium's scroll anchoring would do that too, except at `scrollTop` 0 (a first batch shorter than the window,
+   * or a person who scrolled to the top of what is drawn), where it pushes the view to the oldest line. The batch
+   * is committed synchronously (`flushSync`) so no scroll can come between reading the place and restoring it.
+   * A view returning to a place
    * it was left at draws everything at once: drawn from the end, it would first sit wherever the drawn part
    * reaches and then move as the batches reach the place.
    */
   const [from, setFrom] = useState(() => (resume === undefined ? Math.max(0, shown.length - FIRST_LINES) : 0));
   useEffect(() => {
     if (from === 0) return;
-    const id = requestIdleCallback(() => setFrom((at) => Math.max(0, at - LINES_PER_BATCH)), { timeout: 100 });
+    const id = requestIdleCallback(
+      () => {
+        const el = box.current!;
+        const place = fromEnd(el);
+        flushSync(() => setFrom((at) => Math.max(0, at - LINES_PER_BATCH)));
+        el.scrollTop = linesEnd(el) - place;
+        drewAbove.current = true;
+      },
+      { timeout: 100 },
+    );
     return () => cancelIdleCallback(id);
   }, [from]);
   /**
-   * The growth a batch causes is above the view, where scroll anchoring already keeps the view still: the growth
-   * observer below must not read it as content added under a view at its end. Set before that observer runs (a
-   * layout effect runs as the batch is committed, the observer after the frame's layout).
+   * The growth a batch causes is above the view, which has been put back already: the growth observer below must
+   * not read it as content added under a view at its end. The observer runs after the frame's layout, later than
+   * the batch.
    */
   const drewAbove = useRef(false);
-  const drawnFrom = useRef(from);
-  useLayoutEffect(() => {
-    if (from < drawnFrom.current) drewAbove.current = true;
-    drawnFrom.current = from;
-  }, [from]);
 
   useEffect(() => {
     const el = box.current;
