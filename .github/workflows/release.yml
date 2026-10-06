@@ -1,0 +1,72 @@
+name: Release
+
+# Builds the macOS app for a published GitHub Release and attaches the dmg and its SHA-256 to it. The release
+# environment is the manual gate (a maintainer approves the run); this job also checks that the tag is the
+# package's version and points to a commit on main. Unsigned (ad-hoc) until there is an Apple Developer ID.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and attach the app
+    runs-on: macos-15
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write # upload the release's assets
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check that the tag points to a commit on main
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "release tag must point to a commit on main" >&2
+            exit 1
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check that the tag is the package's version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: node -e 'const want = "v" + require("./package.json").version; if (process.env.TAG !== want) { console.error("release tag " + process.env.TAG + " does not match " + want); process.exit(1) }'
+
+      - name: Test
+        run: npm test
+
+      - name: Build the app and its dmg
+        run: npm run package
+
+      - name: Packaged app (outside the checkout, isolated fake model endpoint)
+        run: node tests/packaged.mjs
+
+      - name: Attach the dmg and its SHA-256
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          dmg="duang-${TAG#v}-arm64.dmg"
+          cd dist
+          shasum -a 256 "$dmg" > "$dmg.sha256"
+          gh release upload "$TAG" "$dmg" "$dmg.sha256"
