@@ -188,8 +188,11 @@ navigation, and the transcript is focusable. While a run waits on the model and 
 moments, while the view stays where it is; one returning to a place it was left at draws from that place the same way. Scrolling up suspends tail-follow; a control returns
 to the latest turn. A conversation is opened at its latest turn, or, when it was left scrolled up, where it was
 left, through Settings or another agent and back (for the window's life, not across launches). The place is the line
-at the top of the view, at the same height in it: lines drawn above it and output the run added while the person
-was away do not move it, and a card that was expanded comes back folded (a place inside one returns to its top).
+at the top of the view, at the same height in it, counted within its turn from the person's message: lines drawn
+above it and output the run added while the person was away do not move it, and a card that was expanded comes back
+folded (a place inside one returns to its top). A conversation left idle is read back from history on return, which
+does not have the lines only this window showed (a "Not sent" note, `ran /cmd`); a place later in the same turn as one
+of them comes back one line off.
 The place is held while the layout settles and while output goes on arriving, until the person scrolls. While the history of a conversation the runtime already
 has is being read (and while an agent opens, until it is known to have none), the pane is empty with the composer in
 place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment

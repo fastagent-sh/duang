@@ -170,11 +170,29 @@ export function queueView(waiting: UserItem[], pending: string[]): { item: UserI
 export type Line = Item | { kind: "day"; at: number };
 
 /**
- * Where a conversation was left above its latest line: the line at the top of the view (its index among the drawn
- * lines) and how far its top is from the view's top. Lines drawn above it later (a long conversation's older lines)
- * and lines added under it (a run going on while the person is away) move neither.
+ * Where a conversation was left above its latest line: the line at the top of the view and how far its top is from
+ * the view's top. The line is counted from the person's message that opened its turn (`turn`, the runtime's entry
+ * id; absent before the first message), because a conversation left idle is read back from history on return and
+ * loses the lines only this window showed (a "Not sent" note, `ran /cmd`): counted from the start, every line after
+ * one of those would come back one off. Lines drawn above it later and lines added under it move neither.
  */
-export type Place = { line: number; offset: number };
+export type Place = { turn?: string; row: number; offset: number };
+
+/** The place of the line at `index`, `offset` from the view's top. */
+export function placeAt(shown: (Line | Work)[], index: number, offset: number): Place {
+  for (let at = index; at >= 0; at--) {
+    const line = shown[at]!;
+    if (line.kind === "user" && line.entryId !== undefined) return { turn: line.entryId, row: index - at, offset };
+  }
+  return { row: index, offset };
+}
+
+/** The index of the line a place names, or undefined when its message is no longer in the conversation. */
+export function lineOf(shown: (Line | Work)[], place: Place): number | undefined {
+  if (place.turn === undefined) return place.row;
+  const at = shown.findIndex((line) => line.kind === "user" && line.entryId === place.turn);
+  return at === -1 ? undefined : at + place.row;
+}
 
 /**
  * Items with the day boundaries between them. Pure, and separate from rendering, because "when did

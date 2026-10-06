@@ -31,9 +31,11 @@ import {
   firstArg,
   foldHead,
   group,
+  lineOf,
   lines,
   liveEnd,
   phase,
+  placeAt,
   stringify,
   summarize,
   thinkingLine,
@@ -148,19 +150,23 @@ const fromEnd = (el: HTMLElement) => linesEnd(el) - el.scrollTop;
 
 const drawnLines = (el: HTMLElement) => [...el.firstElementChild!.children].filter((row): row is HTMLElement => row instanceof HTMLElement && row.dataset.line !== undefined);
 const top = (row: Element, el: HTMLElement) => row.getBoundingClientRect().top - el.getBoundingClientRect().top;
+/** A drawn line by its index in this view, and how far its top is from the view's top. */
+type Spot = { line: number; offset: number };
 /** The first line reaching into the view, and where its top is. Undefined when no line is drawn. */
-function placeOf(el: HTMLElement): Place | undefined {
+function spotOf(el: HTMLElement): Spot | undefined {
   const row = drawnLines(el).find((row) => row.getBoundingClientRect().bottom > el.getBoundingClientRect().top);
   return row && { line: Number(row.dataset.line), offset: top(row, el) };
 }
 /**
- * Scrolls so the place's line is where it was. A line no longer drawn there (a retry note the status line now
- * stands in for) gives way to the next one, at its top; with none after it either (a place past the lines, which
- * only grow), the view stays where it is. An expanded card comes back folded: a place further into
- * it than its folded height is put at its top, not past it.
+ * Scrolls so the place's line is where it was. A line no longer drawn there gives way to the next one, at its top:
+ * a retry note the status line now stands in for, or a line only this window showed, gone once the conversation is
+ * read back from history. Past the last line (the end of the last turn was such a line) it is the last one; no
+ * window test makes a line of this window's own vanish, so that case is covered by `lineOf`'s test only. An
+ * expanded card comes back folded: a place further into it than its folded height is put at its top, not past it.
  */
-function scrollToPlace(el: HTMLElement, place: Place) {
-  const row = drawnLines(el).find((row) => Number(row.dataset.line) >= place.line);
+function scrollToSpot(el: HTMLElement, place: Spot) {
+  const rows = drawnLines(el);
+  const row = rows.find((row) => Number(row.dataset.line) >= place.line) ?? rows.at(-1);
   if (!row) return;
   const offset = Number(row.dataset.line) === place.line && -place.offset < row.offsetHeight ? place.offset : 0;
   el.scrollTop += top(row, el) - offset;
@@ -248,14 +254,26 @@ export function Transcript({
       )}
     </>
   );
+  const shown = group(lines(items));
+  const current = useRef(shown);
+  current.current = shown;
+  const placeOf = (el: HTMLElement) => {
+    const spot = spotOf(el);
+    return spot && placeAt(current.current, spot.line, spot.offset);
+  };
+  /** Where the view returns to, read once: none when it was left at the latest line, or its message is gone. */
+  const [back] = useState((): Spot | undefined => {
+    const line = resume && lineOf(shown, resume);
+    return line === undefined ? undefined : { line, offset: resume!.offset };
+  });
   const box = useRef<HTMLDivElement>(null);
-  const follow = useRef(resume === undefined);
+  const follow = useRef(back === undefined);
   /**
    * A view that returns to where it was left holds that place while its layout settles (a remounted
    * conversation grows for a moment as its fonts and code blocks arrive, and reading "near the bottom"
    * from the short first layout would forget the place), until the person scrolls.
    */
-  const restoring = useRef(resume !== undefined);
+  const restoring = useRef(back !== undefined);
   const scrolled = () => {
     restoring.current = false;
   };
@@ -271,7 +289,7 @@ export function Transcript({
     const el = box.current;
     if (!el) return;
     if (restoring.current) {
-      scrollToPlace(el, resume!);
+      scrollToSpot(el, back!);
       follow.current = false;
       setAway(true);
       return;
@@ -282,7 +300,7 @@ export function Transcript({
   };
   // Before the first paint, so the conversation is never seen at the bottom first.
   useLayoutEffect(() => {
-    if (resume !== undefined) scrollToPlace(box.current!, resume);
+    if (back !== undefined) scrollToSpot(box.current!, back);
     // A scroll event that has not fired yet cannot tell the place a view is leaving from, so it is read
     // here, while the element is still attached. A view still holding a place keeps what it was given.
     return () => {
@@ -300,7 +318,6 @@ export function Transcript({
       ) : null,
     );
 
-  const shown = group(lines(items));
   const end = liveEnd(shown, busy, waiting.some(({ opens }) => opens));
   const live = (
     <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={end.quietOnly} className={gap(end.above, "status")} />
@@ -322,7 +339,7 @@ export function Transcript({
    * A view returning to a place it was left at draws from that place's line, or from the last 40 when it is
    * nearer the end, and the rest above it the same way.
    */
-  const [from, setFrom] = useState(() => Math.min(resume?.line ?? Infinity, Math.max(0, shown.length - FIRST_LINES)));
+  const [from, setFrom] = useState(() => Math.min(back?.line ?? Infinity, Math.max(0, shown.length - FIRST_LINES)));
   useEffect(() => {
     if (from === 0) return;
     const id = requestIdleCallback(

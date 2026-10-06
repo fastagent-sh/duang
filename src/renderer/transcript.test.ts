@@ -10,8 +10,10 @@ import {
   foldHead,
   fromEntries,
   group,
+  lineOf,
   lines,
   liveEnd,
+  placeAt,
   phase,
   summarize,
   previewOf,
@@ -683,3 +685,19 @@ test("an event leaves every item it does not change the same object, so the tran
   assert.ok(!settled.includes(open), "the open answer closes");
 });
 
+
+test("a place names the same line after a conversation is read back without the lines only this window showed", () => {
+  const user = (entryId: string): Item => ({ kind: "user", text: entryId, entryId, at: 0 });
+  const answer = (text: string): Item => ({ kind: "assistant", text, open: false, at: 0 });
+  const ran: Item = { kind: "note", tone: "info", text: "ran /x", at: 0 };
+  const live = group(lines([answer("before any message"), user("e1"), answer("a1"), ran, user("e2"), answer("a2"), user("e3"), answer("a3")]));
+  const readBack = group(lines([answer("before any message"), user("e1"), answer("a1"), user("e2"), answer("a2"), user("e3"), answer("a3")]));
+
+  const inA2 = placeAt(live, 5, -500);
+  assert.equal((readBack[lineOf(readBack, inA2)!] as { text: string }).text, "a2", "the same answer, though a line above it is gone");
+  assert.deepEqual(inA2, { turn: "e2", row: 1, offset: -500 }, "counted from the message that opened its turn");
+  assert.equal(lineOf(live, inA2), 5, "and the same line where nothing changed");
+  assert.equal(lineOf(readBack, placeAt(live, 7, 0)), 6, "the last line, which a count from the start would put past the end");
+  assert.deepEqual(placeAt(live, 0, 10), { row: 0, offset: 10 }, "a line before the first message is counted from the start");
+  assert.equal(lineOf(readBack, { turn: "gone", row: 0, offset: 0 }), undefined, "a place whose message is gone names no line");
+});

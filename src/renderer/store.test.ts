@@ -716,20 +716,20 @@ test("where a conversation was left above the latest line is remembered until it
   await store.load();
   const c = store.getSnapshot().conversation!;
   assert.equal(store.scrollOf(c.agentId, c.session), undefined, "a conversation opens at its latest line");
-  store.rememberScroll(c.agentId, c.session, { line: 12, offset: -30 });
-  store.rememberScroll("b", "b-1", { line: 3, offset: 0 });
-  assert.deepEqual(store.scrollOf(c.agentId, c.session), { line: 12, offset: -30 });
-  assert.deepEqual(store.scrollOf("b", "b-1"), { line: 3, offset: 0 }, "each conversation has its own place");
+  store.rememberScroll(c.agentId, c.session, { turn: "e-12", row: 1, offset: -30 });
+  store.rememberScroll("b", "b-1", { turn: "e-3", row: 0, offset: 0 });
+  assert.deepEqual(store.scrollOf(c.agentId, c.session), { turn: "e-12", row: 1, offset: -30 });
+  assert.deepEqual(store.scrollOf("b", "b-1"), { turn: "e-3", row: 0, offset: 0 }, "each conversation has its own place");
   store.rememberScroll(c.agentId, c.session, undefined);
   assert.equal(store.scrollOf(c.agentId, c.session), undefined, "scrolling back to the latest line forgets it");
 
-  store.rememberScroll(c.agentId, c.session, { line: 12, offset: -30 });
+  store.rememberScroll(c.agentId, c.session, { turn: "e-12", row: 1, offset: -30 });
   await store.deleteSession(c.agentId, c.session);
   assert.equal(store.scrollOf(c.agentId, c.session), undefined, "a deleted conversation leaves no place behind");
-  store.rememberScroll("a", "later", { line: 1, offset: 0 });
+  store.rememberScroll("a", "later", { row: 1, offset: 0 });
   await store.removeAgent();
   assert.equal(store.scrollOf("a", "later"), undefined, "a removed agent leaves none behind");
-  assert.deepEqual(store.scrollOf("b", "b-1"), { line: 3, offset: 0 }, "another agent's places are not touched");
+  assert.deepEqual(store.scrollOf("b", "b-1"), { turn: "e-3", row: 0, offset: 0 }, "another agent's places are not touched");
   store.dispose();
 });
 
