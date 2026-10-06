@@ -236,13 +236,13 @@ one it was showing still in the list (or **Close Window**); that choice holds ac
 another conversation is opened. A conversation that cannot be drawn shows the
 error in its place, with Try again, which reads it again from history, while the sidebar and composer stay usable;
 an error anywhere else in the window shows it with Reload and Open on a New Conversation. Local channels
-and routines are not started by duang. The current client has no online contacts or share UI.
+and schedules are not started by duang. The current client has no online contacts or share UI.
 
 ## Planned: daily local use and inspecting the loaded Agent (stage 1)
 
 Walk a real task through find → send → switch away → return to result → continue before adding
 controls. A local owner may open a read-only detail view for the Agent actually loaded by
-FastAgent, its contexts and relevant files/diffs; if runtime discovery is unavailable, say so. A local routine
+FastAgent, its contexts and relevant files/diffs; if runtime discovery is unavailable, say so. A local schedule
 shown in this view is **declared**, not guaranteed to run while the app is closed. Compact and
 branching are conditional on demonstrated long-conversation needs, not a checklist of Pi commands.
 
@@ -322,16 +322,17 @@ tool work. Calls refused by `capabilities()` are disabled with their reason rath
 silently. On return, read runtime history; if partial history lacks tool args or outcomes, never
 present it as a complete replay.
 
-## Planned: hosted online work and routines (stage 4)
+## Planned: hosted online work and schedules (stage 4)
 
 Before publishing, review the versioned Agent snapshot, how each context reaches the host, excluded
-files, server-side model credentials, routine schedule and running-host cost. Publishing an agent with no channel or invite
+files, server-side model credentials, schedules and running-host cost. Publishing an agent with no channel or invite
 is valid: the owner may need it only for private conversation or timed work. Keep local OAuth
 credentials and local conversations on the laptop. A remote model choice is governed by the remote
 runtime, not by the local credential picker.
 
-After publish, the owner can see which version of the Agent is live, update or stop it, and see verified
-routine results. A scheduled run must actually fire while the desktop and laptop are closed. Show
+After publish, the owner can see which version of the Agent is live, update or stop it, and see how each
+schedule's fires ended, from the host's fire history, with what each run said in its `schedule:<name>` session. A schedule must actually fire while the desktop
+and laptop are closed. Show
 failed, skipped or interrupted runs as such; if the host cannot report the outcome, say it is
 unknown. Do not invent a "next run" or "done" from a declaration alone. A channel is an optional
 additional entrance: a private message in duang does not post into a Slack/Feishu/Telegram group.
@@ -339,9 +340,9 @@ An online agent belongs to its host when the client window closes.
 
 ## Failures everywhere
 
-Keep the original diagnostic at the affected agent, conversation, routine or publish action, with
+Keep the original diagnostic at the affected agent, conversation, schedule or publish action, with
 the action that can actually remedy it. An unreadable session list is not an empty one; a refused
 send is not delivery; an accepted run is not a successful outcome. A failed update must not be
 shown as a newly published version. Do not treat a lost network connection as grounds to replay a
-run or routine. Preserve context across navigation without attributing a late event to a different
+run or scheduled fire. Preserve context across navigation without attributing a late event to a different
 contact, location, session or subscription.

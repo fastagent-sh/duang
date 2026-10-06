@@ -19,7 +19,7 @@ seen as a person using duang:
 
 | Object | Owner and meaning |
 |---|---|
-| Agent | The definition: model, harness (`SYSTEM.md`, `APPEND_SYSTEM.md`, skills, tools, routines, `fastagent.config.ts`) and the contexts it declares, in a directory of its own that is also its working directory. Someone given the Agent gets their own copy, not a live pointer. |
+| Agent | The definition: model, harness (`SYSTEM.md`, `APPEND_SYSTEM.md`, skills, tools, schedules, `fastagent.config.ts`) and the contexts it declares, in a directory of its own that is also its working directory. Someone given the Agent gets their own copy, not a live pointer. |
 | Context | A directory the agent **works on** or **knows** (read-only): a project, a folder, a repository. Several agents can share one; it belongs to its project, not to any agent. Its type (local folder, local folder copied to a host, GitHub repository) says how it reaches an instance elsewhere. |
 | Instance | One Agent running in one place, on this Mac or on a host: its conversations, credentials and what it fetched. duang shows an instance as a contact. One owned Agent can have a local and an online instance. |
 | Conversation | A FastAgent session, owned by its instance. Local, online, personal and group conversations do not merge automatically. |
@@ -66,17 +66,20 @@ history rather than replaying an accepted send. A lost connection is **unknown e
 until the runtime can answer, not an automatic failure or success.
 
 An optional detail surface serves the question at hand. A local owner can inspect the **actually
-loaded** model, skills, tools, routines and contexts where FastAgent exposes them, plus relevant
+loaded** model, skills, tools, schedules and contexts where FastAgent exposes them, plus relevant
 read-only files and diffs from the agent's directory and its contexts. If a field is unavailable, say so rather than infer runtime
 state from a filename. The same surface on an owned online agent shows its published version,
-connection, routine status and recorded outcomes. An invited contact does not expose the owner's
+connection, schedules and their recorded outcomes. An invited contact does not expose the owner's
 files, secrets or hosting controls. No in-app code editor or general remote filesystem browser.
 
-Routines belong on an owner's online agent even if that agent has never been shared. Show declared
-names and schedules, and a recent result/failure/skip **only where the runtime or host reports it**;
-`GET /routines` in newer FastAgent lists names and schedules, not execution outcomes. A local
-preview must not imply that a routine will fire after the laptop is turned off. Showing an exact
-next run or a success badge requires an authoritative clock/outcome source, not a guessed timer.
+Schedules belong on an owner's online agent even if that agent has never been shared. A schedule
+(`schedules/<name>.md`: a cron, a timezone and a prompt) continues one session, `schedule:<name>`, which
+shows what each run said. Whether a fire completed, failed, was skipped or was interrupted is the host's fire
+history, **only as the host reports it**, never read off the session. FastAgent has no remote route for an
+instance's schedules or their fire history yet; until it has, a remote outcome is unavailable
+([architecture](architecture.md#online-execution-and-schedules)). A local preview must not imply that a
+schedule will fire after the laptop is turned off. Showing an exact next run or a success badge requires an
+authoritative clock/outcome source, not a guessed timer.
 
 ## Settings: model providers and network (stage 1; network and the first providers version shipped)
 
@@ -197,11 +200,11 @@ what travels. Its harness travels; its contexts travel as their types allow: a G
 reference (they need their own access), a local folder only if the owner chooses to include a copy of
 it. No credentials, runtime state (`.state/`, `.secrets/`) or machine-specific paths. The recipient
 has their own instance, connects their own provider and services, and has independent conversations
-and routines. A successful export without an independent run on another machine is not acceptance.
+and schedule sessions. A successful export without an independent run on another machine is not acceptance.
 
 **Use my own online agent (planned stage 3).** Connect an already running, protected endpoint; the
 same owner can choose local for testing and online for ongoing work. Online history is separate.
-With duang and the laptop closed, scheduled routines must be observed through the remote runtime
+With duang and the laptop closed, schedules must be observed firing through the remote runtime
 and a real clock. Stage 3 tests this on a self-hosted instance; stage 4 makes deploying it easy on
 duang cloud. Running the Agent elsewhere does not move a local conversation or OAuth subscription login.
 
@@ -214,10 +217,10 @@ endpoint must not expose the instance-wide `sessions.list()` to visitors.
 **Host on duang cloud (planned stage 4).** Show the Agent snapshot, how each context reaches the host
 (copied or cloned, or refused when it is a local folder not marked to copy), excluded files and
 server-side credential requirements before publish. After publishing, return to the agent's
-online conversation and routines, with a clear live version and an update/stop path. Routines
+online conversation and schedules, with a clear live version and an update/stop path. Schedules
 must actually fire with the laptop off; a sleeping VM without an external clock cannot keep that
 promise. Add a channel used by real users without making a channel or invitation mandatory for
-private routine work. Channel conversations keep their own identity and reply path; a private
+private scheduled work. Channel conversations keep their own identity and reply path; a private
 message in duang does not automatically post back to the group.
 
 **Group use (later).** Existing Slack/Feishu/Telegram groups already provide group conversation.
@@ -229,12 +232,13 @@ direct invitations fail a real need; do not silently treat one person's session 
 
 - Invalid local Agents, unreadable state, provider refusals and deployment failures keep the
   original diagnostic and an action the person can take. Never turn a failed list into an empty one.
-- A remote timeout or disconnected stream never replays an accepted run or routine. On recovery,
+- A remote timeout or disconnected stream never replays an accepted run or scheduled fire. On recovery,
   read state and history and report any outcome the runtime cannot prove as unknown.
 - Hosting must not copy local credentials or conversations. The remote service has no built-in
   authentication in newer FastAgent; protect both control and invoke, isolate visitors' session
   access, and make invitations revocable before sharing an endpoint.
-- Routine time requires a resident machine or a verified external scheduler. Failed, skipped and
+- On Fly or Railway, a schedule's clock requires a resident machine, or a verified external clock calling
+  `POST /invoke` in place of the schedule; AgentCore wakes the container for it through EventBridge. Failed, skipped and
   interrupted fires are not successes; stop does not roll back tool effects.
 - FastAgent does not yet sandbox the entire general agent process or guarantee exactly-once work.
   Do not promise arbitrary high-privilege tools are safe for untrusted visitors. No enterprise
@@ -245,7 +249,7 @@ direct invitations fail a real need; do not silently treat one person's session 
 A stage is accepted on evidence from real use, not on shipped screens or mocked tests. Measure:
 
 - the time from creating an agent to using it daily;
-- the time to the first routine that succeeds while the owner's laptop is off;
+- the time to the first schedule that succeeds while the owner's laptop is off;
 - the time to the first person other than the owner successfully using a shared agent;
 - whether owners and recipients come back to complete work.
 
