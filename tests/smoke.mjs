@@ -280,6 +280,11 @@ if (root) {
       // page is told to behave as focused instead, as Playwright does for every Chromium page.
       win.webContents.debugger.attach();
       await win.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
+      // GitHub's macOS runners have the system's Reduce motion on, where every face keeps its pose by design;
+      // the checks of motion need it off, and reduced motion is checked on its own below (#142).
+      const motion = (value) =>
+        win.webContents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value }] });
+      await motion("no-preference");
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
       assert.ok(
         !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
@@ -493,20 +498,35 @@ if (root) {
       // the drawn copies stand still (a descendant selector reaches the one and not the other).
       const face = await evaluate(`(() => { const r = ${smokeAvatar}.getBoundingClientRect(); return { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()`);
       const frames = [];
-      // What each frame was taken of, said if they never differ (#142, seen once on CI): the face it wore, where the
-      // avatar was by then, and whether the page was visible and focused.
+      // What each frame was taken of, said if they never differ: whether reduced motion is in force (it stops every
+      // face by design, and an emulation that did not take was #142 on CI's runners), the face it wore, the
+      // animations running on the avatar, and where it was by then.
       const seen = [];
       for (let i = 0; i < 8; i++) {
         frames.push((await win.webContents.capturePage(face)).toBitmap());
         seen.push(
-          await evaluate(`(() => { const a = ${smokeAvatar}; const r = a.getBoundingClientRect(); return a.dataset.face + ' @' + Math.floor(r.x) + ',' + Math.floor(r.y) + ' ' + document.visibilityState + (document.hasFocus() ? ' focused' : ''); })()`),
+          await evaluate(`(() => {
+            const a = ${smokeAvatar};
+            const r = a.getBoundingClientRect();
+            const running = document.getAnimations().filter((x) => a.contains(x.effect?.target) && x.playState === 'running').map((x) => x.animationName);
+            const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced motion' : 'motion allowed';
+            return reduced + ', ' + a.dataset.face + ' [' + running.join(' ') + '] @' + Math.floor(r.x) + ',' + Math.floor(r.y);
+          })()`),
         );
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
       assert.ok(
         frames.some((frame) => !frame.equals(frames[0])),
-        `and the drawn face moves while it works: 8 identical frames of ${JSON.stringify(face)}, window ${win.isVisible() ? "visible" : "not visible"}${win.isFocused() ? ", focused" : ""}, ${JSON.stringify(seen)}`,
+        `and the drawn face moves while it works: 8 identical frames of ${JSON.stringify(face)}, ${JSON.stringify(seen)}`,
       );
+      // With reduced motion, nothing in the roster moves: the face keeps its pose and `working` its dot.
+      await motion("reduce");
+      assert.deepEqual(
+        await evaluate(`document.getAnimations().filter((a) => a.effect?.target?.closest?.('aside') && a.playState === 'running').map((a) => a.animationName)`),
+        [],
+        "reduced motion stops every animation in the roster",
+      );
+      await motion("no-preference");
       // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
       // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
       // machine delivers a real Escape inside that gap.
