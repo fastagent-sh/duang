@@ -6,7 +6,7 @@
  * 1. Every package in app.asar finds each dependency and required peer inside the bundle.
  * 2. The app starts on an isolated profile, loads an agent's TypeScript config, runs a bash call and answers, against
  *    a local fake model endpoint in the agent's models.json. Driven over the DevTools protocol.
- * 3. A second duang on the same profile shows the first and leaves.
+ * 3. A second duang on the same profile shows the first, a new window when it had none, and leaves.
  *
  * No credentials or network needed.
  */
@@ -123,11 +123,12 @@ async function run() {
 
   // Chromium writes the port it chose to DevToolsActivePort in the profile.
   let page;
+  let port;
   for (let t = 0; t < 300 && !page; t++) {
     await sleep(100);
     const file = join(data, "DevToolsActivePort");
     if (!existsSync(file)) continue;
-    const port = readFileSync(file, "utf8").split("\n")[0];
+    port = readFileSync(file, "utf8").split("\n")[0];
     page = await fetch(`http://127.0.0.1:${port}/json`)
       .then((r) => r.json())
       .then((targets) => targets.find((target) => target.type === "page"))
@@ -164,13 +165,23 @@ async function run() {
   await until("document.querySelector('main').innerText.includes('Installed answer.')", "the answer");
   assert.equal(readFileSync(join(project, "proof.txt"), "utf8").trim(), "installed", "bash ran in the project");
 
-  // 3. One duang per profile: a second one shows the first and leaves.
+  // 3. One duang per profile: a second one shows the first and leaves, also when the first has no window left (on
+  //    macOS it keeps running after its last window closes, and a second launch must not look like nothing happened).
+  const pages = () =>
+    fetch(`http://127.0.0.1:${port}/json`)
+      .then((r) => r.json())
+      .then((targets) => targets.filter((target) => target.type === "page").length);
+  // The page goes with its window, so its reply never comes.
+  void evaluate("window.close()");
+  for (let t = 0; t < 50 && (await pages()) > 0; t++) await sleep(100);
+  assert.equal(await pages(), 0, "the first duang's window closed, the app still running");
+  assert.equal(first.child.exitCode, null);
   const second = launch(binary, data);
   const code = await Promise.race([new Promise((resolve) => second.child.on("exit", resolve)), sleep(20000).then(() => "still running")]);
   assert.equal(code, 0, `a second duang on the same profile leaves: ${second.output()}`);
   assert.match(second.output(), /already running/);
-  assert.equal(await evaluate("document.querySelector('main').innerText.includes('Installed answer.')"), true, "the first carries on");
-  socket.close();
+  for (let t = 0; t < 100 && (await pages()) === 0; t++) await sleep(100);
+  assert.equal(await pages(), 1, "the first one shows a window again");
   console.log(`Packaged app passed: ${checked} bundled packages complete, an agent answered with a bash call outside the repository, one duang per profile.`);
 }
 

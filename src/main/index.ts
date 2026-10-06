@@ -420,9 +420,11 @@ if (!app.requestSingleInstanceLock()) {
   app.exit(0);
 } else
   app.on("second-instance", () => {
+    // On macOS duang keeps running with its last window closed: then there is nothing to show but a new one.
     const [window] = BrowserWindow.getAllWindows();
-    if (window?.isMinimized()) window.restore();
-    window?.focus();
+    if (!window) return void createWindow();
+    if (window.isMinimized()) window.restore();
+    window.focus();
   });
 
 void app

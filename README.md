@@ -163,8 +163,9 @@ the choice in its registry rather than editing the agent's config. This layout g
 agent-directory release: agents will be created in duang, as `~/Agents/<name>/`, with their contexts
 ([#133](https://github.com/fastagent-sh/duang/issues/133)).
 
-The registry uses atomic writes, serialized within one running instance — there is no cross-process
-lock yet, so two instances writing at once can drop each other's rows. Invalid or unreadable data is
+The registry uses atomic writes, serialized within one running duang. The file itself has no
+cross-process lock; what keeps two processes from writing it at once is that only one duang runs per data
+directory (a second one brings the first forward and leaves). Invalid or unreadable data is
 reported rather than replaced with an empty list. Adding the same resolved directory reuses its
 existing row, and removing an agent today deletes only that row, never the directory or conversation
 history (with #133, duang's own agents go to the Trash, after asking).
