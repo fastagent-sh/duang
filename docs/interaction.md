@@ -18,7 +18,9 @@ time, and its avatar's face shows what kind of work it is (docs/ui.md §3); a se
 unreadable list or history replaces the quote. Reading every row's list
 at launch boots each agent's runtime. A failed list read is shown on
 that agent's row, not as an empty list. An agent's name can be changed from its row's context menu
-or by double-clicking it; this renames duang's registry entry, never the directory.
+or by double-clicking it; this renames duang's registry entry, never the directory. The window opens
+at a size that fits the sidebar and the reading column, and reopens where it was left; a window whose
+display is gone comes back on an attached one.
 
 Clicking an agent row restores its last open conversation if still available, otherwise an active
 run, then the most recent conversation (or a new one). The open agent's conversations are in a list
@@ -134,7 +136,9 @@ not something to act on. The context is FastAgent's, once it reports it
 
 A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
 history; the client does not save a second transcript. A conversation can be renamed and deleted,
-with destructive deletion confirmed. The current local view keeps unsent text with its conversation
+with destructive deletion confirmed. Until it is named, its row borrows its first message. Renaming is
+`Rename…` in the row's native context menu (also Shift+F10 and the Menu key) or a double click, in place;
+an empty name is not a rename, and duang never invents a name from the model's output. The current local view keeps unsent text with its conversation
 across navigation and application restart. A send rejected before admission remains a draft, and a refusal is said each time, even when an
 earlier message got the same one. A run starts only on a model the picker would offer to the agent: a
 conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send,
