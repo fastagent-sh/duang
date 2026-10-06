@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { clock } from "./sessions.ts";
 import { pace, paceLabel, resetLabel, tokens } from "./usage.ts";
 
 const HOUR = 3600;
@@ -17,10 +18,11 @@ test("pace is used minus the elapsed share, and only for windows of a day or mor
   assert.equal(pace({ ...week, resetsAt: undefined }, now), undefined);
 });
 
-test("a reset reads as a time inside a day, and as a weekday beyond one", () => {
+test("a reset reads as a time inside a day, and as a weekday beyond one, in the transcript's clock", () => {
   const resetsAt = new Date(2026, 8, 25, 3, 59).getTime(); // a Friday, local time
-  assert.equal(resetLabel({ label: "5h", percent: 4, resetsAt, windowSeconds: 5 * HOUR }), "03:59");
-  assert.equal(resetLabel({ label: "7d", percent: 18, resetsAt, windowSeconds: 7 * DAY }), "Fri 03:59");
+  const weekday = new Date(resetsAt).toLocaleDateString([], { weekday: "short" });
+  assert.equal(resetLabel({ label: "5h", percent: 4, resetsAt, windowSeconds: 5 * HOUR }), clock(resetsAt));
+  assert.equal(resetLabel({ label: "7d", percent: 18, resetsAt, windowSeconds: 7 * DAY }), `${weekday} ${clock(resetsAt)}`);
   assert.equal(resetLabel({ label: "7d", percent: 18, windowSeconds: 7 * DAY }), undefined);
 });
 
