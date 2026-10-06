@@ -113,13 +113,11 @@ export class AgentRegistry {
     });
   }
 
-  /** duang's default model for the agent; none leaves the agent's own (its config's), if it has one. */
-  setModel(id: string, model: string | undefined): Promise<void> {
+  setModel(id: string, model: string): Promise<void> {
     return this.change((rows) => {
       const row = rows.find((row) => row.id === id);
       if (!row) throw new Error(`unknown agent ${id}`);
-      if (model === undefined) delete row.model;
-      else row.model = model;
+      row.model = model;
     });
   }
 }

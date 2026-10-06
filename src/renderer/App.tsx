@@ -300,9 +300,7 @@ export default function App() {
                 <BrokenAgent
                   message={view.error ?? ""}
                   inConfig={view.errorInConfig}
-                  unknownModel={view.errorModel}
                   onFreshConfig={() => void store.resetConfig()}
-                  onOwnDefault={() => void store.useOwnDefault()}
                   onRemove={remove}
                   onReveal={() => void store.reveal()}
                   onRetry={() => void store.retry()}

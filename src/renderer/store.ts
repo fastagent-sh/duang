@@ -131,8 +131,11 @@ export interface View extends SettingsView {
   error?: string;
   /** The open agent failed to load in its config, which a fresh one would get past. */
   errorInConfig?: true;
-  /** The open agent failed to load because pi does not know duang's default model for it, this one. */
-  errorModel?: string;
+  /**
+   * The default model duang keeps for this agent is one pi does not know (its endpoint was removed, say), so the
+   * agent opened without it. The picker opens on it, saying so, until another model is chosen.
+   */
+  staleDefault?: { agentId: string; model: string };
   /**
    * An action that belongs to no conversation failed (renaming, adding, revealing or removing an agent):
    * said above the pane until dismissed, never written into whichever conversation is open.
@@ -608,7 +611,6 @@ export function createStore(api: DuangApi) {
       model: undefined,
       error: undefined,
       errorInConfig: undefined,
-      errorModel: undefined,
       loading: true,
       commands: [],
       commandsError: undefined,
@@ -617,13 +619,7 @@ export function createStore(api: DuangApi) {
       const result = await api.openAgent(id);
       if (request !== navigation) return;
       if (!result.ok) {
-        publish({
-          loading: false,
-          states: { ...view.states, [id]: result.code },
-          error: result.message,
-          errorInConfig: result.inConfig,
-          errorModel: result.unknownModel,
-        });
+        publish({ loading: false, states: { ...view.states, [id]: result.code }, error: result.message, errorInConfig: result.inConfig });
         return;
       }
       publish({
@@ -650,6 +646,10 @@ export function createStore(api: DuangApi) {
       // navigation guard, rather than chained after this call — a `.then(open)` outside would land
       // on whichever agent the selection had moved to by the time the runtime finished starting.
       await open(session ?? revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
+      // Choosing another model is the way on, so the picker opens on the conversation that just opened, once it has:
+      // opening one sets the picker by whether that conversation has a model to run.
+      if (request === navigation)
+        publish(result.staleModel ? { staleDefault: { agentId: id, model: result.staleModel }, picker: true } : { staleDefault: undefined });
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
@@ -923,7 +923,7 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         settle();
         if (request !== navigation) return;
-        publish({ model, error: undefined, unavailable: undefined, states: { ...view.states, [id]: "ready" } });
+        publish({ model, error: undefined, unavailable: undefined, staleDefault: undefined, states: { ...view.states, [id]: "ready" } });
         // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
         // The runtime announced the change before that subscription listened again, so the model and
         // levels are read, not waited for.
@@ -964,18 +964,6 @@ export function createStore(api: DuangApi) {
         fail("The config was not replaced", error);
       } finally {
         resetting = false;
-      }
-    },
-    /** The default model duang keeps for the agent is one pi does not know: the agent opens on its own instead. */
-    async useOwnDefault() {
-      const id = view.agentId;
-      if (!id) return;
-      try {
-        const result = await api.clearAgentModel(id);
-        if (!result.ok) return fail("The default model was not dropped", result.error.message);
-        await selectAgent(id);
-      } catch (error) {
-        fail("The default model was not dropped", error);
       }
     },
     /** The agent's folder was moved: the person shows where it is, and the agent opens from there. */

@@ -1,5 +1,5 @@
 /** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Plug, Prohibit, Stop } from "@phosphor-icons/react";
 import { complete, completionQuery, matches, spelling } from "./commands.ts";
 import { Button } from "./ui.tsx";
@@ -86,6 +86,7 @@ function ModelPicker({
   thinking,
   needsModel,
   unavailable,
+  stale,
   onClose,
   onProviders,
 }: {
@@ -100,6 +101,8 @@ function ModelPicker({
   needsModel: boolean;
   /** The conversation's model, when a send was just refused because it cannot run: said at the top. */
   unavailable?: string;
+  /** The agent's default in duang, which this computer does not know any more: said at the top. */
+  stale?: string;
   onClose: () => void;
   /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
@@ -196,7 +199,11 @@ function ModelPicker({
         </div>
       ) : (
         <>
-          {unavailable && <Unavailable model={unavailable} models={models} onProviders={onProviders} />}
+          {unavailable ? (
+            <Unavailable model={unavailable} models={models} onProviders={onProviders} />
+          ) : (
+            stale && <Notice title={`${stale} is no longer available`} advice="It is this agent's default. Choose a model for it." />
+          )}
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <MagnifyingGlass size={15} className="shrink-0 text-muted" aria-hidden />
             <input
@@ -297,19 +304,28 @@ function Unavailable({ model, models, onProviders }: { model: string; models?: M
   if (!notice) return null;
   const { title, connect } = notice;
   return (
+    <Notice title={title} advice={`Choose another model to send your message${connect ? ", or connect it" : ""}.`}>
+      {connect && (
+        <Button kind="secondary" size={28} icon={<Plug size={12} />} onClick={onProviders}>
+          Connect {connect}
+        </Button>
+      )}
+    </Notice>
+  );
+}
+
+/** Why the picker opened by itself, at its top: what is wrong in a line, and what to do. */
+function Notice({ title, advice, children }: { title: string; advice: string; children?: ReactNode }) {
+  return (
     <div role="status" className="mx-1.5 mt-1.5 flex gap-2.5 rounded-card bg-surface-2 px-3 py-2.5 text-[13px]">
       <Prohibit size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
       <div className="min-w-0 space-y-1.5">
         <p className="leading-snug">
           <span className="font-semibold">{title}</span>
           <br />
-          <span className="text-muted">Choose another model to send your message{connect ? ", or connect it" : ""}.</span>
+          <span className="text-muted">{advice}</span>
         </p>
-        {connect && (
-          <Button kind="secondary" size={28} icon={<Plug size={12} />} onClick={onProviders}>
-            Connect {connect}
-          </Button>
-        )}
+        {children}
       </div>
     </div>
   );
@@ -540,6 +556,7 @@ export function Composer({
                 thinking={thinking}
                 needsModel={needsModel}
                 unavailable={stuck ? model : undefined}
+                stale={view.staleDefault && view.staleDefault.agentId === agentId ? view.staleDefault.model : undefined}
                 onClose={store.closePicker}
                 onProviders={() => {
                   store.closePicker();

@@ -1534,24 +1534,28 @@ if (root) {
       assert.equal(legacy.model, "openai-codex/gpt-5.5", "the default is the one the registry names");
       const legacySend = await evaluate("window.duang.send('legacy', crypto.randomUUID(), 'hello')");
       assert.equal(legacySend.ok === false && legacySend.error.code, "model_unavailable", "a send on it asks for another model");
-      // A default of duang's that pi does not know at all (its endpoint was removed from a models.json) stops the
-      // agent opening; the page offers the agent's own default, which opens it and leaves the registry without one.
+      // A default of duang's that pi does not know at all (its endpoint was removed from a models.json): the agent
+      // opens on its own model, and the picker opens saying the default is gone; the model chosen there replaces it.
       await writeFile(
         registry,
         JSON.stringify([...JSON.parse(savedRegistry), { id: "stale", name: "Stale", dir: join(root, "configured"), model: "local/gone", colour: 5 }]),
       );
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
-      await until(`!!document.querySelector('button[aria-label="Stale"]')`, "the agent with a stale default is listed");
+      await until(`!!document.querySelector('button[aria-label="Stale"]')`, "the agent with a gone default is listed");
       await evaluate(`document.querySelector('button[aria-label="Stale"]').click()`);
-      await until("document.body.innerText.includes('Use its own default')", "a default pi does not know offers the agent's own");
-      assert.match(await evaluate("document.querySelector('main').innerText"), /local\/gone/, "the page names the default it does not know");
-      await click("Use its own default");
-      await until("!document.body.innerText.includes('could not be loaded') && !!document.querySelector('textarea')", "the agent opens on its own default");
+      await until(
+        "document.querySelector('dialog[open]')?.innerText.includes('local/gone is no longer available')",
+        "the agent opens with the picker saying its default is gone",
+      );
+      assert.ok(!(await evaluate("document.body.innerText.includes('could not be loaded')")), "the agent is not broken");
+      await chooseModel("local/m1");
+      await until("!document.querySelector('dialog')", "choosing a model closes the picker");
+      await until(`!!document.querySelector('main button[title="Model for this agent: local/m1"]')`, "the conversation runs on it");
       assert.equal(
         JSON.parse(await readFile(registry, "utf8")).find((row) => row.id === "stale").model,
-        undefined,
-        "duang's default is gone from the registry, and only that",
+        "local/m1",
+        "the model chosen is the agent's default now",
       );
       await writeFile(registry, savedRegistry);
       win.webContents.reload();

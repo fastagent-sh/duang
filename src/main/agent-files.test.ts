@@ -27,8 +27,6 @@ test("registry serializes writes in one process, survives restart and deduplicat
     await assert.rejects(registry.rename(second.id, "gone"), /unknown agent/);
     const restarted = new AgentRegistry(file);
     assert.deepEqual(await restarted.list(), [{ ...first, name: "Reviewer", model: "provider/model" }]);
-    await restarted.setModel(first.id, undefined);
-    assert.deepEqual(await new AgentRegistry(file).list(), [{ ...first, name: "Reviewer" }], "no default is no key, not an empty one");
     assert.deepEqual(await readdir(join(root, "data")), ["agents.json"]);
     await restarted.remove(first.id);
     assert.deepEqual(await restarted.list(), []);
