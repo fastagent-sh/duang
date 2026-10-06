@@ -274,8 +274,8 @@ if (!process.versions.electron) {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(text)});
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
-      // Send replaces the voice button once the draft has text, on the render after the input event.
-      await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "Send appears for a draft");
+      // Send can be pressed once the draft has text, on the render after the input event.
+      await until("document.querySelector('button[aria-label=\"Send\"]:not([aria-disabled])') !== null", "Send is ready for a draft");
       await evaluate("document.querySelector('button[aria-label=\"Send\"]').click()");
     }
 
@@ -557,7 +557,7 @@ if (!process.versions.electron) {
       await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "return to active run");
       await evaluate("document.querySelector('button[aria-label=\"Stop the run\"]').click()");
       await until("document.body.innerText.includes('run stopped')", "stopping is a settled transcript outcome");
-      await until("document.querySelector('button[aria-label=\"Voice input\"]') !== null", "composer leaves running state");
+      await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "composer leaves running state");
 
       // A run that finishes while another conversation is on screen is the thing you came back for:
       // the sidebar keeps a filled mark and the dock carries the count until it is looked at.
@@ -1173,19 +1173,13 @@ if (!process.versions.electron) {
 
       // Whitespace is not a message, and the composer stops growing at eight lines.
       await type("   \n  ");
-      // Nothing to send, so the right-hand button is still the voice one: disabled and reachable,
-      // carrying its reason, and there is no Send to press.
+      // Nothing to send, so Send is disabled but reachable, carrying its reason.
       assert.deepEqual(
         await evaluate(`(() => {
-          const voice = document.querySelector('button[aria-label="Voice input"]');
-          return {
-            send: document.querySelector('button[aria-label="Send"]') !== null,
-            blocked: voice.getAttribute('aria-disabled'),
-            why: voice.title,
-            reachable: voice.disabled === false,
-          };
+          const send = document.querySelector('button[aria-label="Send"]');
+          return { blocked: send.getAttribute('aria-disabled'), why: send.title, reachable: send.disabled === false };
         })()`),
-        { send: false, blocked: "true", why: "Voice input is not available yet", reachable: true },
+        { blocked: "true", why: "Nothing to send yet", reachable: true },
       );
       await type(Array.from({ length: 12 }, (_, i) => `line ${i}`).join("\n"));
       assert.ok(
