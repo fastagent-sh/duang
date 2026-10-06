@@ -2079,10 +2079,43 @@ test("a send refused because the model cannot run opens the picker on it, and wr
   const asked = store.getSnapshot().unavailable;
   assert.equal(asked?.model, "anthropic/claude-sonnet-4-5");
   assert.equal(asked?.session, c.session);
+  assert.equal(store.getSnapshot().picker, true, "the picker opens on it");
   assert.equal(c.items.length, 0, "nothing happened in the conversation, so nothing is written there");
   assert.equal(c.draft, "Summarise the latest notes", "the message waits for the model to be chosen");
   // Choosing a model is the way on, and ends the request.
   await store.pickModel("provider/model");
   assert.equal(store.getSnapshot().unavailable, undefined);
+  store.dispose();
+});
+
+test("the picker opens for a conversation that needs a model, stays closed once closed, and opens when asked", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => ({ ok: true, sessions: [] });
+  await store.load();
+  assert.equal(store.getSnapshot().needsModel, true, "no model recorded and no default");
+  assert.equal(store.getSnapshot().picker, true, "a conversation that cannot start asks for its model");
+  store.closePicker();
+  store.setDraft("hello");
+  assert.equal(store.getSnapshot().picker, false, "closed by the person, it stays closed while nothing changes");
+  await store.newConversation();
+  assert.equal(store.getSnapshot().picker, true, "another conversation that needs a model asks again");
+  await store.pickModel("provider/model");
+  assert.equal(store.getSnapshot().needsModel, false);
+  assert.equal(store.getSnapshot().picker, false, "a chosen model closes it");
+  store.openPicker();
+  assert.equal(store.getSnapshot().picker, true, "a problem's Use another model, or a provider connected from it, opens it");
+  store.dispose();
+});
+
+test("the model cannot be changed while the conversation runs, or before its agent is ready", async () => {
+  const { api, store, emit } = harness();
+  api.listAgents = async () => [];
+  await store.load();
+  assert.equal(store.getSnapshot().modelBlocked, "Select an agent first");
+  api.listAgents = async () => [{ id: "a", name: "A", dir: "/a", colour: 0 }];
+  await store.load();
+  assert.equal(store.getSnapshot().modelBlocked, undefined);
+  emit(store.getSnapshot().conversation!, "run_started");
+  assert.equal(store.getSnapshot().modelBlocked, "Stop the turn to change the model or effort");
   store.dispose();
 });
