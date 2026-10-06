@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Opens a verified release pull request: bumps the version on a `chore/release-X.Y.Z` branch, runs the checks the
- * app has to pass, and opens the PR. It never merges, tags or creates the GitHub Release; publishing that Release is
- * what builds the app and attaches it (.github/workflows/release.yml).
+ * app has to pass, and opens the PR. It never merges, tags or creates the GitHub Release; pushing the tag is what
+ * builds the app and drafts the Release (.github/workflows/release.yml).
  */
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
@@ -128,12 +128,12 @@ async function main() {
     "",
     "### After merge",
     "",
-    `Publish the GitHub Release \`${tag}\` (CONTRIBUTING.md#releases). Its workflow builds the app and attaches the dmg.`,
+    `Tag the merge commit \`${tag}\` and push the tag (CONTRIBUTING.md#releases): its workflow builds the app and drafts the Release, which a maintainer then publishes.`,
   ].join("\n");
   const pr = capture("gh", ["pr", "create", "--base", "main", "--head", branch, "--assignee", "@me", "--title", `chore: release ${version}`, "--body", body]);
 
   console.log(`\nRelease PR created: ${pr}`);
-  console.log(`After a maintainer merges it, publish GitHub Release ${tag}.`);
+  console.log(`After a maintainer merges it, tag the merge commit ${tag} and push the tag (CONTRIBUTING.md#releases).`);
   console.log(`The release branch remains checked out at ${branch}.`);
 }
 

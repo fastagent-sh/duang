@@ -1,31 +1,34 @@
 name: Release
 
-# Builds the macOS app for a published GitHub Release and attaches the dmg and its SHA-256 to it. The release
-# environment is the manual gate (a maintainer approves the run); this job also checks that the tag is the
+# Builds the macOS app for a pushed `vX.Y.Z` tag and creates a draft GitHub Release with the dmg and its SHA-256
+# attached; a maintainer then publishes the draft. A Release is public only once its app is there, so the latest
+# release always has a dmg, and a failed build leaves no Release at all. The release environment is the manual gate
+# (a maintainer approves the run, deployments only from `v*` tags); the job also checks that the tag is the
 # package's version and points to a commit on main. Unsigned (ad-hoc) until there is an Apple Developer ID.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
 
 permissions:
   contents: read
 
 jobs:
   release:
-    name: Build and attach the app
+    name: Build the app and draft the release
     runs-on: macos-15
     timeout-minutes: 30
     environment: release
     permissions:
-      contents: write # upload the release's assets
+      contents: write # create the draft release and attach its assets
     defaults:
       run:
         shell: bash
     steps:
-      - name: Check out the release tag
+      # The commit the tag pointed to when it was pushed, not the tag as it is when a run is re-run.
+      - name: Check out the tagged commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -48,7 +51,7 @@ jobs:
 
       - name: Check that the tag is the package's version
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.ref_name }}
         run: node -e 'const want = "v" + require("./package.json").version; if (process.env.TAG !== want) { console.error("release tag " + process.env.TAG + " does not match " + want); process.exit(1) }'
 
       - name: Test
@@ -60,13 +63,13 @@ jobs:
       - name: Packaged app (outside the checkout, isolated fake model endpoint)
         run: node tests/packaged.mjs
 
-      - name: Attach the dmg and its SHA-256
+      - name: Create the draft release with the dmg and its SHA-256
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           dmg="duang-${TAG#v}-arm64.dmg"
           cd dist
           shasum -a 256 "$dmg" > "$dmg.sha256"
-          gh release upload "$TAG" "$dmg" "$dmg.sha256"
+          gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes "$dmg" "$dmg.sha256"

@@ -1,5 +1,5 @@
-# The macOS app: `npm run package` builds it into dist/, `npm run test:package` builds and checks it, and publishing a
-# GitHub Release attaches it (.github/workflows/release.yml; electron-builder itself never publishes). Unsigned until
+# The macOS app: `npm run package` builds it into dist/, `npm run test:package` builds and checks it, and pushing a
+# `vX.Y.Z` tag drafts a GitHub Release with it (.github/workflows/release.yml; electron-builder never publishes). Unsigned until
 # there is an Apple Developer ID, so a first open needs System Settings → Privacy & Security → Open Anyway.
 #
 # What ships in app.asar is package.json's `dependencies`: only what main imports at run time. The renderer's libraries
