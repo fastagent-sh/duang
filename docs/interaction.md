@@ -181,9 +181,9 @@ a tool's result, and is not called cut. A
 run this window joined midway (opened or reconnected while it ran) is not offered Retry when it fails while
 watched, since where it began is not in what this window heard; reopened, its history says.
 
-The composer is one row: an attach button, the field with the model chip inside its right end, and
-one round button that is the next action: voice while the draft is empty (whitespace is empty),
-Send once it has text, Stop while a run is live. Attach and voice are disabled and say why; neither is implemented.
+The composer is one row: the field with the model chip inside its right end, and one round button
+that is the next action: Send, disabled and saying why while the draft is empty (whitespace is
+empty); Stop while a run is live and nothing is typed; Steer while it is live and something is.
 The model chip moves under the text once the draft is more than one line. It sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
 the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
