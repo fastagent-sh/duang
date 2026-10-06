@@ -646,7 +646,11 @@ function stopThinking(items: Item[], at: number): Item[] {
 type ReadEvent = KnownSessionEvent | ServingErrorEvent;
 export const known = (event: SessionEvent) => event as ReadEvent;
 
-/** One live event applied to the list. Returns a new list; unknown event types change nothing. */
+/**
+ * One live event applied to the list. Returns a new list; unknown event types change nothing. Every item the event
+ * does not change stays the same object: the transcript skips redrawing such a line (`SettledMessage`), so a new
+ * object for an unchanged item redraws the whole conversation on every streamed word.
+ */
 export function apply(items: Item[], event: SessionEvent): Item[] {
   const e = known(event);
   switch (e.type) {
@@ -708,7 +712,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
     }
     case "run_settled": {
       items = items.map((item): Item => {
-        if (item.kind === "assistant" || item.kind === "thinking") return { ...item, open: false };
+        if ((item.kind === "assistant" || item.kind === "thinking") && item.open) return { ...item, open: false };
         if (item.kind === "tool" && item.status === "running")
           return { ...item, status: "interrupted", ended: event.timestamp };
         return item;
