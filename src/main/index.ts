@@ -8,7 +8,6 @@ import {
   MissingDirError,
   NoAgentError,
   openAgent,
-  refuse,
   registryFile,
   relocateAgent,
   resetAgentConfig,
@@ -26,7 +25,7 @@ import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from ".
 import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { subscriptions, type Listener } from "./follow.ts";
-import { send, sends } from "./send.ts";
+import { MODEL_UNAVAILABLE_CODE, refuse, send, sends } from "./send.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
 
@@ -240,7 +239,7 @@ function register(): void {
     const row = await requireAgent(id);
     // The picker offers this agent's runnable models, so a miss here means something changed underneath it.
     if (!(await modelsFor(row.dir)).some((offered) => offered.spec === model))
-      return refuse("model_unavailable", `${model} is not available to this agent — pick another.`);
+      return refuse(MODEL_UNAVAILABLE_CODE, `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
     if (result.ok) await sessions.rebindAgent(id);
     return result;
