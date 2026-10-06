@@ -8,13 +8,11 @@
  *
  *   npm run shots && open out/shots/app-dark.png
  */
-import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { isolated, withoutCredentials } from "./harness.mjs";
 
 const ANSWER = `Here is what the \`ListingResult\` component does, and the part worth changing.
 
@@ -61,21 +59,9 @@ stand on its own rather than depend on the check's output.`,
 
 const chunk = (text, size) => text.match(new RegExp(`[\\s\\S]{1,${size}}`, "g")) ?? [];
 
-if (!process.versions.electron) {
-  const root = mkdtempSync(join(tmpdir(), "duang-shot-"));
-  try {
-    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
-      stdio: "inherit",
-      env: { ...process.env, DUANG_SHOT_ROOT: root, HOME: root },
-      timeout: 120000,
-    });
-    process.exitCode = child.status ?? 1;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-} else {
+const root = await isolated(import.meta.url, { name: "shot", timeout: 120000 });
+if (root) {
   const { app, nativeTheme } = electron;
-  const root = process.env.DUANG_SHOT_ROOT;
   const workspace = join(root, "project");
   const second = join(root, "compass");
   const data = join(root, "user-data");
@@ -89,9 +75,7 @@ if (!process.versions.electron) {
     await mkdir(join(root, ".fastagent", ".secrets"), { recursive: true });
     await mkdir(join(data, "Shared Dictionary", "cache"), { recursive: true });
     process.env.HOME = root;
-    for (const name of Object.keys(process.env)) {
-      if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^AWS_|^GOOGLE_|^AZURE_|^PI_|PROXY$/i.test(name)) delete process.env[name];
-    }
+    withoutCredentials(process.env);
     // duang reads only its own credential file, in its user data.
     await writeFile(join(data, "auth.json"), JSON.stringify({ openai: { type: "api_key", key: "shot-key" } }));
     await writeFile(join(workspace, "fastagent", "fastagent.config.ts"), 'export default { model: "openai/gpt-4o-mini" };\n');

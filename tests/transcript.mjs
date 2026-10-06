@@ -8,33 +8,16 @@
  * composer's round button stops or steers it (docs/ui.md §8, `liveEnd`).
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { chunk, isolated, withoutCredentials, writeMockModels } from "./harness.mjs";
 
-if (!process.versions.electron) {
-  const root = mkdtempSync(join(tmpdir(), "duang-transcript-"));
-  try {
-    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
-      stdio: "inherit",
-      env: { ...process.env, DUANG_TRANSCRIPT_ROOT: root, HOME: root },
-      timeout: 120000,
-    });
-    process.exitCode = child.status ?? 1;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-} else {
+const root = await isolated(import.meta.url, { name: "transcript", timeout: 120000 });
+if (root) {
   const { app } = electron;
-  const root = process.env.DUANG_TRANSCRIPT_ROOT;
-  assert.ok(root, "Run with node tests/transcript.mjs so the fixture is isolated");
-  for (const name of Object.keys(process.env)) {
-    if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^PI_|PROXY$/i.test(name)) delete process.env[name];
-  }
+  withoutCredentials(process.env);
   const data = join(root, "user-data");
   const dir = join(root, "project");
   mkdirSync(data, { recursive: true });
@@ -54,8 +37,6 @@ if (!process.versions.electron) {
         return;
       }
       res.writeHead(200, { "content-type": "text/event-stream" });
-      const chunk = (delta, finish = null) =>
-        `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
       if (step.thinking) res.write(chunk({ role: "assistant", reasoning_content: step.thinking }));
       if (step.text) res.write(chunk({ role: "assistant", content: step.text }));
       if (step.hold) await step.hold;
@@ -72,10 +53,7 @@ if (!process.versions.electron) {
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  writeFileSync(
-    join(dir, "fastagent", "models.json"),
-    JSON.stringify({ providers: { mock: { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: "openai-completions", apiKey: "mock", models: [{ id: "mock", reasoning: true }] } } }),
-  );
+  writeMockModels(dir, server.address().port, { reasoning: true });
   writeFileSync(join(dir, "fastagent", "fastagent.config.ts"), 'export default { model: "mock/mock" };\n');
   // A second agent whose one conversation is already long: made by FastAgent itself, before duang starts.
   const long = join(root, "long");
