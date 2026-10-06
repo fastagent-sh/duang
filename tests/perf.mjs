@@ -9,17 +9,13 @@
  * the view stays still, switch back ~40 ms, scroll p95 ~18 ms, stream p50 ~17 ms.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { chunk, isolated, withoutCredentials, writeMockModels } from "./harness.mjs";
 
 const TURNS = Number(process.env.TURNS ?? 150);
-const chunk = (delta, finish = null) =>
-  `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
 const serve = (respond) => {
   const server = createServer((req, res) => {
     req.resume();
@@ -30,17 +26,14 @@ const serve = (respond) => {
   });
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
 };
-const writeModels = (dir, port) =>
-  writeFileSync(
-    join(dir, "fastagent", "models.json"),
-    JSON.stringify({ providers: { mock: { baseUrl: `http://127.0.0.1:${port}/v1`, api: "openai-completions", apiKey: "mock", models: [{ id: "mock", reasoning: true, contextWindow: 10000000 }] } } }),
-  );
-for (const name of Object.keys(process.env)) if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^PI_|PROXY$/i.test(name)) delete process.env[name];
+const writeModels = (dir, port) => writeMockModels(dir, port, { reasoning: true, contextWindow: 10000000 });
+withoutCredentials(process.env);
 
-if (!process.versions.electron) {
-  // The conversation, made by FastAgent.
-  const root = mkdtempSync(join(tmpdir(), "duang-perf-"));
-  try {
+const root = await isolated(import.meta.url, {
+  name: "perf",
+  timeout: 240000,
+  // The conversation, made by FastAgent before the window starts.
+  async prepare(root) {
     const project = join(root, "project");
     for (const sub of ["fastagent", "src", "test"]) mkdirSync(join(project, sub), { recursive: true });
     let call = 0;
@@ -72,14 +65,10 @@ if (!process.versions.electron) {
       for await (const event of agent.invoke({ session: "long" }, { text: `Turn ${n}: the build is failing again, find out why and fix it.` }))
         if (event.type === "failed") throw new Error(event.details);
     server.close();
-    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], { stdio: "inherit", env: { ...process.env, DUANG_PERF_ROOT: root, HOME: root }, timeout: 240000 });
-    process.exitCode = child.status ?? 1;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-} else {
+  },
+});
+if (root) {
   const { app } = electron;
-  const root = process.env.DUANG_PERF_ROOT;
   const project = join(root, "project");
   const other = join(root, "other");
   const data = join(root, "user-data");
