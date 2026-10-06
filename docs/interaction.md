@@ -3,7 +3,7 @@
 This is the behavior and failure contract. [Product design](design.md) owns the surfaces;
 [architecture](architecture.md) owns state and trust boundaries. The local behavior below shipped
 with Week 1 and subsequent UI work; later stages are **planned**, not implemented. See
-[acceptance status](../README.md#week-1-acceptance-status) for known runtime limitations.
+[known limitations](../README.md#known-limitations) for what the local client does not do yet.
 
 ## Shipped local workbench
 

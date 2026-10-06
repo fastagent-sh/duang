@@ -956,7 +956,7 @@ MANUAL PROXY                               (only while Manual is chosen)
 ## 13. Shipped Week 1 visual pass
 
 This list records the completed visual redesign; it is not the roadmap for the next product stages.
-See [README.md](../README.md#delivery-stages) for those acceptance gates.
+See [README.md](../README.md#roadmap) for those acceptance gates.
 
 1. **Tokens.** Both colour modes, the font stacks, the radius and spacing scales; swap
    `lucide-react` for `@phosphor-icons/react`. No structural change, no behaviour change.
