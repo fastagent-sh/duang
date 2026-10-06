@@ -880,12 +880,12 @@ export function createStore(api: DuangApi) {
   return {
     ...settings,
     getSnapshot: () => view,
-    /** Where this conversation was left, if it was left above the latest line. */
+    /** Where this conversation was left, if it was left above the latest line: its distance from the end. */
     scrollOf: (agentId: string, session: string) => scrolls.get(key(agentId, session)),
     /** `undefined`: at the latest line, which is where a conversation opens anyway. */
-    rememberScroll(agentId: string, session: string, top: number | undefined) {
-      if (top === undefined) scrolls.delete(key(agentId, session));
-      else scrolls.set(key(agentId, session), top);
+    rememberScroll(agentId: string, session: string, fromEnd: number | undefined) {
+      if (fromEnd === undefined) scrolls.delete(key(agentId, session));
+      else scrolls.set(key(agentId, session), fromEnd);
     },
     subscribe: (listener: () => void) => {
       listeners.add(listener);

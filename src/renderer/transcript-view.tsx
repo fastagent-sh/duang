@@ -174,10 +174,15 @@ export function Transcript({
   heard?: number;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
-  /** Where this conversation was left, read once when the view mounts; absent means the latest line. */
+  /**
+   * Where this conversation was left, read once when the view mounts; absent means the latest line. Measured from
+   * the end (`scrollHeight - scrollTop`), because a long conversation draws its older lines above what is on screen
+   * after it opens (`from`): a place measured from the top while they were still missing would point elsewhere once
+   * they are drawn.
+   */
   resume?: number;
-  /** Where the view rests now: a position above the latest line, or undefined while it follows. */
-  onRest: (top: number | undefined) => void;
+  /** Where the view rests now (from the end, as `resume`), or undefined while it follows the latest line. */
+  onRest: (fromEnd: number | undefined) => void;
   /** The conversation ends on a failed turn that can be sent again: the action sits under its failure. */
   onRetry?: () => void;
   /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
@@ -244,23 +249,24 @@ export function Transcript({
     const el = box.current;
     if (!el) return;
     if (restoring.current) {
-      if (el.scrollTop !== resume) el.scrollTop = resume!;
+      const place = el.scrollHeight - resume!;
+      if (el.scrollTop !== place) el.scrollTop = place;
       follow.current = false;
       setAway(true);
       return;
     }
     follow.current = atLatest(el);
     setAway(!follow.current);
-    onRest(follow.current ? undefined : el.scrollTop);
+    onRest(follow.current ? undefined : el.scrollHeight - el.scrollTop);
   };
   // Before the first paint, so the conversation is never seen at the bottom first.
   useLayoutEffect(() => {
-    if (resume !== undefined) box.current!.scrollTop = resume;
+    if (resume !== undefined) box.current!.scrollTop = box.current!.scrollHeight - resume;
     // A scroll event that has not fired yet cannot tell the place a view is leaving from, so it is read
     // here, while the element is still attached. A view still holding a place keeps what it was given.
     return () => {
       const el = box.current;
-      if (el && !restoring.current) onRest(atLatest(el) ? undefined : el.scrollTop);
+      if (el && !restoring.current) onRest(atLatest(el) ? undefined : el.scrollHeight - el.scrollTop);
     };
   }, []);
 
@@ -289,7 +295,8 @@ export function Transcript({
    * A long conversation opened at its latest line draws that end first and the rest above it in small batches while
    * the window is idle, so opening it is not one long freeze (150 turns took about a second). Each batch lands
    * above what is on screen, where Chromium's scroll anchoring keeps the view still. A view returning to a place
-   * it was left at draws everything at once: that place is measured from the top.
+   * it was left at draws everything at once: drawn from the end, it would first sit wherever the drawn part
+   * reaches and then move as the batches reach the place.
    */
   const [from, setFrom] = useState(() => (resume === undefined ? Math.max(0, shown.length - FIRST_LINES) : 0));
   useEffect(() => {
@@ -308,15 +315,14 @@ export function Transcript({
     if (!el) return;
     const observer = new ResizeObserver(check);
     observer.observe(el);
-    // Content also grows after it is laid out (fonts, code blocks), with no scroll event and no new item:
-    // a view that was at the latest line stays on it, and one holding a place keeps the place. "Was" is
-    // judged against the height before this growth, because the growth itself puts the end out of reach.
-    let height = 0;
+    // Content also grows after it is laid out (fonts, code blocks), and above the view while a long conversation's
+    // older lines are drawn, with no scroll event and no new item: a view that was at the latest line stays on it,
+    // and one holding a place keeps the place. "Was" is what the last scroll said (`follow`), not a reading taken
+    // now: growth above has already moved scrollTop by its height (scroll anchoring), so measuring now against
+    // the height before it calls a view the person scrolled up from "at the end" and pulls it back down.
     const grown = new ResizeObserver(() => {
-      const wasAtEnd = height - el.scrollTop - el.clientHeight < 40;
-      height = el.scrollHeight;
       if (restoring.current) check();
-      else if (wasAtEnd) {
+      else if (follow.current) {
         el.scrollTop = el.scrollHeight;
         check();
       }

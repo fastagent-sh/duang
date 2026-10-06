@@ -228,6 +228,66 @@ if (!process.versions.electron) {
     const { first, moved } = await evaluate("window.__long");
     assert.equal(first, false, "its latest turn is shown before its oldest is drawn");
     assert.ok(moved < 2, `the view stays at the latest line while older lines are drawn above it (it moved ${moved} px)`);
+    // While the older lines are still being drawn: a person scrolling up stays where they scrolled to (it is not
+    // pulled back to the latest line as the lines above arrive), and one who leaves from there comes back to the
+    // same place. Both act the moment the latest turn first shows, when drawing has just begun.
+    const atEnd = `(() => { const el = document.querySelector('[aria-label="Transcript"]'); el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event('scroll')); })()`;
+    const visit = async (name, ready) => {
+      await evaluate(`document.querySelector('aside button[aria-label="${name}"]').click()`);
+      await until(ready, `${name} shown`);
+    };
+    await evaluate(atEnd);
+    await visit("Live", `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Answered after a retry.')`);
+    await evaluate(`(() => {
+      window.__early = undefined;
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
+        observer.disconnect();
+        el.scrollTop -= 400;
+        el.dispatchEvent(new Event('scroll'));
+        const top = el.getBoundingClientRect().top + 60;
+        const row = [...el.querySelector('.column').children].find((r) => { const b = r.getBoundingClientRect(); return b.top <= top && b.bottom > top; });
+        window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+    await until(`document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn 1 of the long one')`, "the rest drawn while scrolled up");
+    await new Promise((r) => setTimeout(r, 300));
+    const early = await evaluate("window.__early");
+    assert.equal(early.drawnAll, false, "scrolled up while the older lines were still to be drawn");
+    const offsetOf = (text) =>
+      evaluate(`(() => { const el = document.querySelector('[aria-label="Transcript"]'); const row = [...el.querySelector('.column').children].find((r) => r.innerText === ${JSON.stringify(text)}); return row ? row.getBoundingClientRect().top - el.getBoundingClientRect().top : null; })()`);
+    const stayed = await offsetOf(early.text);
+    assert.ok(stayed !== null && Math.abs(stayed - early.offset) < 2, `a person who scrolled up is not pulled back as older lines arrive (row moved from ${early.offset} to ${stayed})`);
+
+    await evaluate(atEnd);
+    await visit("Live", `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Answered after a retry.')`);
+    await evaluate(`(() => {
+      window.__early = undefined;
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
+        observer.disconnect();
+        el.scrollTop -= 400;
+        el.dispatchEvent(new Event('scroll'));
+        const top = el.getBoundingClientRect().top + 60;
+        const row = [...el.querySelector('.column').children].find((r) => { const b = r.getBoundingClientRect(); return b.top <= top && b.bottom > top; });
+        window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
+        document.querySelector('aside button[aria-label="Live"]').click();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+    await until("window.__early !== undefined", "left the long conversation while it was being drawn");
+    await until(`document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Answered after a retry.')`, "away on Live");
+    await visit("Long", `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn 1 of the long one')`);
+    await new Promise((r) => setTimeout(r, 300));
+    const left = await evaluate("window.__early");
+    assert.equal(left.drawnAll, false, "left while the older lines were still to be drawn");
+    const back = await offsetOf(left.text);
+    assert.ok(back !== null && Math.abs(back - left.offset) < 2, `coming back finds the place it was left at (row at ${back}, left at ${left.offset})`);
     assert.equal(script.length, 0, "every scripted answer was asked for");
     console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line; a long conversation opens at its end and fills in above it.");
   }
