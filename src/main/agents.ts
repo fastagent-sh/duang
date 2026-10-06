@@ -25,6 +25,8 @@ export const renameAgent = (id: string, name: string) => registry.rename(id, nam
 
 type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;
+  /** duang's default for the agent, which pi does not know: the agent opened without it, on its own. */
+  staleDefault?: string;
 };
 /**
  * Admission is agent-scoped and asymmetric, which is why FastAgent's `inProcessLease` cannot serve
@@ -43,14 +45,6 @@ const sending = new Map<string, number>();
 const changing = new Map<string, Promise<void>>();
 
 export class NoAgentError extends Error {}
-/** The agent does not open because pi does not know the default model duang keeps for it (`model`). */
-export class UnknownDefaultError extends Error {
-  readonly model: string;
-  constructor(message: string, model: string) {
-    super(message);
-    this.model = model;
-  }
-}
 /**
  * The config each agent last failed to load in, as FastAgent named it: the only file a fresh config may
  * replace. Main keeps it rather than taking a path from the window.
@@ -82,10 +76,24 @@ async function build(row: AgentRow): Promise<Opened> {
     const message = error instanceof Error ? error.message : String(error);
     // FastAgent exposes this setup condition as prose, not an error code.
     if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
-    if (unknownDefault(message, row.model)) throw new UnknownDefaultError(message, row.model!);
     const config = failingConfig(message);
     if (config) failedConfigs.set(row.id, config);
     throw error;
+  }
+}
+
+/**
+ * Opening only: duang's default is a model pi does not know (its endpoint was removed from a models.json, say).
+ * The agent opens without it, on its config's model or none, and says which default it could not use, so the
+ * window asks for another rather than the agent failing to open where no model can be chosen. A model change
+ * builds with `build` itself, which refuses such a model instead.
+ */
+async function buildToOpen(row: AgentRow): Promise<Opened> {
+  try {
+    return await build(row);
+  } catch (error) {
+    if (!unknownDefault(error instanceof Error ? error.message : String(error), row.model)) throw error;
+    return { ...(await build({ ...row, model: undefined })), staleDefault: row.model };
   }
 }
 
@@ -99,7 +107,7 @@ export async function openAgent(row: AgentRow): Promise<Opened> {
   }
   const cached = opened.get(row.id);
   if (cached) return cached;
-  const promise = build(row);
+  const promise = buildToOpen(row);
   opened.set(row.id, promise);
   void promise.catch(() => {
     if (opened.get(row.id) === promise) opened.delete(row.id);
@@ -162,18 +170,6 @@ export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
   return change(id, async () => {
     await registry.relocate(id, dir);
     failedConfigs.delete(id);
-    opened.delete(id);
-    return { ok: true };
-  });
-}
-
-/**
- * Drops duang's default model for the agent, so it opens on its own (its config's, or none, when each new
- * conversation asks for one). Its conversations keep the models they recorded.
- */
-export function clearAgentModel(id: string): Promise<SessionResult> {
-  return change(id, async () => {
-    await registry.setModel(id, undefined);
     opened.delete(id);
     return { ok: true };
   });

@@ -44,7 +44,6 @@ function harness() {
     scaffoldAgent: async () => "/a/fastagent",
     relocateAgent: async () => undefined,
     resetAgentConfig: async () => ({ ok: true }),
-    clearAgentModel: async () => ({ ok: true }),
     listCommands: async () => [],
     revealAgent: async () => {},
     revealRegistry: async () => {},
@@ -602,33 +601,20 @@ test("a config that failed to load is offered afresh once, however often the but
   store.dispose();
 });
 
-test("an agent whose default model pi does not know opens on its own default once that is dropped", async () => {
+test("an agent whose default model pi does not know opens, with the picker open on it, until another is chosen", async () => {
   const { api, store } = harness();
-  let dropped = false;
-  api.openAgent = async () =>
-    dropped
-      ? { ok: true, sessions: [] }
-      : { ok: false, code: "broken", message: 'unknown model "local/gone" (provider "local" / id "gone" not in registry)', unknownModel: "local/gone" };
+  api.openAgent = async (id) =>
+    id === "a" ? { ok: true, sessions: [], model: "provider/model", staleDefault: "local/gone" } : { ok: true, sessions: [], model: "provider/model" };
   await store.load();
-  assert.equal(store.getSnapshot().pane, "broken");
-  assert.equal(store.getSnapshot().errorModel, "local/gone", "main says which default pi does not know");
-  const asked: string[] = [];
-  api.clearAgentModel = async (id) => {
-    asked.push(id);
-    dropped = true;
-    return { ok: true };
-  };
-  await store.useOwnDefault();
-  assert.deepEqual(asked, ["a"]);
-  assert.equal(store.getSnapshot().errorModel, undefined);
-  assert.equal(store.getSnapshot().states.a, "ready", "the agent opens on its own default");
-  // A refusal (it runs, or is changing) is said, and the agent is left as it was.
-  dropped = false;
+  assert.equal(store.getSnapshot().pane, "start", "the agent opens on its own model");
+  assert.deepEqual(store.getSnapshot().staleDefault, { agentId: "a", model: "local/gone" });
+  assert.equal(store.getSnapshot().picker, true, "a model is asked for, though the agent has one to run");
+  await store.selectAgent("b");
+  assert.equal(store.getSnapshot().staleDefault, undefined, "another agent's default is fine");
   await store.selectAgent("a");
-  api.clearAgentModel = async () => ({ ok: false, error: { code: "agent_changing", message: "Agent settings are changing; try again.", retryable: true } });
-  await store.useOwnDefault();
-  assert.equal(store.getSnapshot().failure?.title, "The default model was not dropped");
-  assert.equal(store.getSnapshot().pane, "broken");
+  assert.equal(store.getSnapshot().picker, true, "and asked again on coming back while it is still gone");
+  await store.pickModel("provider/model");
+  assert.equal(store.getSnapshot().staleDefault, undefined, "a chosen model is the default now");
   store.dispose();
 });
 
