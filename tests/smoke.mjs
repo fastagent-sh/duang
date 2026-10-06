@@ -1,31 +1,16 @@
 /** Real Electron + preload + FastAgent; only the model's HTTP response is faked. No credentials or network needed. */
 import assert from "node:assert/strict";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
-import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { isolated, withoutCredentials } from "./harness.mjs";
 
-// The parent removes the fixture only after Chromium has stopped writing its disk caches.
-if (!process.versions.electron) {
-  const root = mkdtempSync(join(tmpdir(), "duang-smoke-"));
-  try {
-    const child = spawnSync(electron, [fileURLToPath(import.meta.url)], {
-      stdio: "inherit",
-      env: { ...process.env, DUANG_SMOKE_ROOT: root, HOME: root },
-      timeout: 90000,
-    });
-    process.exitCode = child.status ?? 1;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-} else {
+const root = await isolated(import.meta.url, { name: "smoke", timeout: 90000 });
+if (root) {
   const { app, BrowserWindow, Menu } = electron;
   async function run() {
-    const root = process.env.DUANG_SMOKE_ROOT;
-    assert.ok(root, "Run with node tests/smoke.mjs so the fixture is isolated");
     const workspace = join(root, "project");
     const data = join(root, "user-data");
     mkdirSync(join(data, "Shared Dictionary", "cache"), { recursive: true });
@@ -39,9 +24,7 @@ if (!process.versions.electron) {
     ]);
     // Isolate all credential stores before FastAgent is imported. Never use the developer's subscription.
     process.env.HOME = root;
-    for (const name of Object.keys(process.env)) {
-      if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^AWS_|^GOOGLE_|^AZURE_|^PI_|PROXY$/i.test(name)) delete process.env[name];
-    }
+    withoutCredentials(process.env);
     const codex = { type: "oauth", access: "synthetic-codex", refresh: "synthetic-refresh", expires: Date.now() + 3600000 };
     const stored = {
       openai: { type: "api_key", key: "smoke-key" },
