@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { copyFile, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
-import { writeJsonAtomic } from "./json-file.ts";
+import { readJson, serially, writeJsonAtomic } from "./json-file.ts";
 
 export interface AgentRow {
   id: string;
@@ -25,62 +25,49 @@ const lowestFree = (rows: AgentRow[]): number => {
   return colour;
 };
 
+function registryRows(rows: unknown): AgentRow[] {
+  if (
+    !Array.isArray(rows) ||
+    rows.some(
+      (row) =>
+        !row ||
+        typeof row.id !== "string" ||
+        typeof row.name !== "string" ||
+        typeof row.dir !== "string" ||
+        (row.model !== undefined && typeof row.model !== "string") ||
+        !(Number.isInteger(row.colour) && row.colour >= 0),
+    ) ||
+    new Set(rows.map((row) => row.id)).size !== rows.length
+  )
+    throw new Error("invalid agent registry");
+  return rows;
+}
+
 /** The registry is not a cache: a read error must never turn into an empty file on the next write. */
 export class AgentRegistry {
-  private pending: Promise<unknown> = Promise.resolve();
+  private queue = serially();
   private file: string;
   constructor(file: string) {
     this.file = file;
   }
 
+  /** After the changes already asked for: a row just added is listed. */
   async list(): Promise<AgentRow[]> {
-    await this.pending;
+    await this.queue.idle();
     return this.read();
   }
 
-  private async read(): Promise<AgentRow[]> {
-    let text: string;
-    try {
-      text = await readFile(this.file, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
-    }
-    let rows: unknown;
-    try {
-      rows = JSON.parse(text);
-    } catch (error) {
-      // A bare SyntaxError names a column, not a file. The person has to know what to open.
-      throw new Error(`${this.file}: ${(error as Error).message}`, { cause: error });
-    }
-    if (
-      !Array.isArray(rows) ||
-      rows.some(
-        (row) =>
-          !row ||
-          typeof row.id !== "string" ||
-          typeof row.name !== "string" ||
-          typeof row.dir !== "string" ||
-          (row.model !== undefined && typeof row.model !== "string") ||
-          !(Number.isInteger(row.colour) && row.colour >= 0),
-      ) ||
-      new Set(rows.map((row) => row.id)).size !== rows.length
-    ) {
-      throw new Error(`${this.file}: invalid agent registry`);
-    }
-    return rows;
+  private read(): Promise<AgentRow[]> {
+    return readJson(this.file, [], registryRows);
   }
 
   private change<T>(edit: (rows: AgentRow[]) => T): Promise<T> {
-    const operation = this.pending.then(async () => {
+    return this.queue.run(async () => {
       const rows = await this.read();
       const result = edit(rows);
       await writeJsonAtomic(this.file, rows);
       return result;
     });
-    // The caller receives the error; subsequent operations still get a chance to retry.
-    this.pending = operation.catch(() => {});
-    return operation;
   }
 
   async add(dir: string): Promise<AgentRow> {
