@@ -1,6 +1,7 @@
 # The macOS app: `npm run package` builds it into dist/, `npm run test:package` builds and checks it, and pushing a
-# `vX.Y.Z` tag drafts a GitHub Release with it (.github/workflows/release.yml; electron-builder never publishes). Unsigned until
-# there is an Apple Developer ID, so a first open needs System Settings → Privacy & Security → Open Anyway.
+# `vX.Y.Z` tag drafts a GitHub Release with it (.github/workflows/release.yml; electron-builder never publishes).
+# Unsigned until there is an Apple Developer ID, so a first open needs System Settings → Privacy & Security → Open
+# Anyway.
 #
 # What ships in app.asar is package.json's `dependencies`: only what main imports at run time. The renderer's libraries
 # are bundled into out/renderer by Vite, so they are devDependencies. `hono` is a direct dependency because
