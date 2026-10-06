@@ -5,7 +5,15 @@ import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
 import { refuse } from "./send.ts";
-import { AgentRegistry, failingConfig, freshConfig, MissingDirError, requireFolder, type AgentRow } from "./agent-files.ts";
+import {
+  AgentRegistry,
+  failingConfig,
+  freshConfig,
+  MissingDirError,
+  requireFolder,
+  unknownDefault,
+  type AgentRow,
+} from "./agent-files.ts";
 
 export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
 /** Exported so a person whose registry cannot be parsed can be shown where it is. */
@@ -35,6 +43,14 @@ const sending = new Map<string, number>();
 const changing = new Map<string, Promise<void>>();
 
 export class NoAgentError extends Error {}
+/** The agent does not open because pi does not know the default model duang keeps for it (`model`). */
+export class UnknownDefaultError extends Error {
+  readonly model: string;
+  constructor(message: string, model: string) {
+    super(message);
+    this.model = model;
+  }
+}
 /**
  * The config each agent last failed to load in, as FastAgent named it: the only file a fresh config may
  * replace. Main keeps it rather than taking a path from the window.
@@ -66,6 +82,7 @@ async function build(row: AgentRow): Promise<Opened> {
     const message = error instanceof Error ? error.message : String(error);
     // FastAgent exposes this setup condition as prose, not an error code.
     if (/is not a fastagent agent/i.test(message)) throw new NoAgentError(message);
+    if (unknownDefault(message, row.model)) throw new UnknownDefaultError(message, row.model!);
     const config = failingConfig(message);
     if (config) failedConfigs.set(row.id, config);
     throw error;
@@ -145,6 +162,18 @@ export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
   return change(id, async () => {
     await registry.relocate(id, dir);
     failedConfigs.delete(id);
+    opened.delete(id);
+    return { ok: true };
+  });
+}
+
+/**
+ * Drops duang's default model for the agent, so it opens on its own (its config's, or none, when each new
+ * conversation asks for one). Its conversations keep the models they recorded.
+ */
+export function clearAgentModel(id: string): Promise<SessionResult> {
+  return change(id, async () => {
+    await registry.setModel(id, undefined);
     opened.delete(id);
     return { ok: true };
   });

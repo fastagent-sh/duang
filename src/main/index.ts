@@ -11,7 +11,9 @@ import {
   registryFile,
   relocateAgent,
   resetAgentConfig,
+  clearAgentModel,
   configFailed,
+  UnknownDefaultError,
   removeAgent,
   renameAgent,
   setAgentModel,
@@ -220,6 +222,7 @@ function register(): void {
     } catch (error) {
       const code = error instanceof NoAgentError ? "no_agent" : error instanceof MissingDirError ? "missing_dir" : "broken";
       const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof UnknownDefaultError) return { ok: false, code, message, unknownModel: error.model };
       return code === "broken" && configFailed(agentId) ? { ok: false, code, message, inConfig: true } : { ok: false, code, message };
     }
   });
@@ -232,6 +235,8 @@ function register(): void {
   });
   // The agent's config does not load: start a fresh one, keeping a copy of the old one. Main knows which file.
   ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await requireAgent(id)));
+  // The default duang keeps for the agent is a model pi does not know: the agent opens on its own instead.
+  ipcMain.handle("agent:clearModel", async (_e, id: string) => clearAgentModel((await requireAgent(id)).id));
   ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
     if (typeof model !== "string") throw new Error("Model must be a string");

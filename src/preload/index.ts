@@ -32,6 +32,8 @@ export type OpenResult =
       message: string;
       /** The failure is in the agent's config, or a file it imports: a fresh config gets past it. */
       inConfig?: true;
+      /** The default model duang keeps for the agent is one pi does not know: dropping it gets past it. */
+      unknownModel?: string;
     };
 
 /** One channel for every subscription of this window: each frame says which one it belongs to. */
@@ -64,6 +66,8 @@ const api = {
   relocateAgent: (agentId: string): Promise<SessionResult | undefined> => ipcRenderer.invoke("agent:relocate", agentId),
   /** Replaces the config the agent failed to load in with a fresh one; a copy of the old one stays beside it. */
   resetAgentConfig: (agentId: string): Promise<SessionResult> => ipcRenderer.invoke("agent:resetConfig", agentId),
+  /** Drops duang's default model for the agent, which then opens on its own. Refused while it runs or changes. */
+  clearAgentModel: (agentId: string): Promise<SessionResult> => ipcRenderer.invoke("agent:clearModel", agentId),
   /** Give a plain project an agent directory. Returns where it was created. */
   scaffoldAgent: (agentId: string): Promise<string> => ipcRenderer.invoke("agent:scaffold", agentId),
   /** The names this agent exposes — what the composer's `/` completion lists. */

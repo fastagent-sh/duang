@@ -55,7 +55,9 @@ export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: str
 export function BrokenAgent({
   message,
   inConfig,
+  unknownModel,
   onFreshConfig,
+  onOwnDefault,
   onRemove,
   onReveal,
   onRetry,
@@ -63,30 +65,47 @@ export function BrokenAgent({
   message: string;
   /** The error is in its config or a file the config imports: a fresh config is a way to start again. */
   inConfig?: boolean;
+  /** The default model duang keeps for it is one pi does not know: dropping it is a way to start again. */
+  unknownModel?: string;
   onFreshConfig: () => void;
+  onOwnDefault: () => void;
   onRemove: () => void;
   onReveal: () => void;
   onRetry: () => void;
 }) {
+  const fix = inConfig || unknownModel !== undefined;
   return (
     <Problem
       layout="page"
       tone="error"
       title="This agent could not be loaded"
       advice={
-        inConfig
-          ? "Its fastagent.config.ts, or a file it imports, does not load. Fix it and retry, or start a fresh config and choose a model again: duang keeps a copy of the old one beside it, as fastagent.config.ts.broken-<time>."
-          : "Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
+        unknownModel !== undefined ? (
+          <>
+            Its default model, <span className="font-mono text-[12.5px]">{unknownModel}</span>, is not one this
+            computer knows: the endpoint it came from may have been removed. Use the agent&apos;s own default instead
+            (its conversations keep their models), or add the model back and retry.
+          </>
+        ) : inConfig ? (
+          "Its fastagent.config.ts, or a file it imports, does not load. Fix it and retry, or start a fresh config and choose a model again: duang keeps a copy of the old one beside it, as fastagent.config.ts.broken-<time>."
+        ) : (
+          "Something in its definition stops it from starting. Fix it in the agent's folder, then retry; duang has changed nothing."
+        )
       }
       reason={message}
       actions={
         <>
+          {unknownModel !== undefined && (
+            <Button kind="primary" size={32} icon={<ArrowCounterClockwise size={14} />} onClick={onOwnDefault}>
+              Use its own default
+            </Button>
+          )}
           {inConfig && (
             <Button kind="primary" size={32} icon={<ArrowCounterClockwise size={14} />} onClick={onFreshConfig}>
               Start a fresh config
             </Button>
           )}
-          <Button kind={inConfig ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
+          <Button kind={fix ? "secondary" : "primary"} size={32} icon={<ArrowClockwise size={14} />} onClick={onRetry}>
             Retry
           </Button>
           <Button size={32} icon={<FolderOpen size={14} />} onClick={onReveal}>

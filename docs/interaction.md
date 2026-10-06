@@ -39,7 +39,10 @@ config for a mistake in it, in a file it imports, or a package it needs) offers 
 copy of the old file is kept beside it (`fastagent.config.ts.broken-20261003-144000`, which nothing loads, and
 never written over an earlier copy), a new `export default {};` takes its place, and the agent opens asking
 for a model. Main replaces only the config FastAgent said failed, inside the agent's folder; the window does
-not name the file. Any other failure offers Retry and Reveal in Finder. A
+not name the file. An agent whose default model in duang is one pi does not know (its endpoint was removed
+from a `models.json`, say) names that model and offers **Use its own default**: duang drops its default for the
+agent, which opens on its config's model, or with none, when each new conversation asks for one; its
+conversations keep the models they recorded. Any other failure offers Retry and Reveal in Finder. A
 broken agent shows its original failure with a way to retry, reveal or remove it; any agent's row menu
 has Reveal in Finder, and the header shows the agent's folder, a click on which opens it. Removal today deletes
 only the local registry row, not the directory or history ([#133](https://github.com/fastagent-sh/duang/issues/133)

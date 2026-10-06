@@ -113,11 +113,13 @@ export class AgentRegistry {
     });
   }
 
-  setModel(id: string, model: string): Promise<void> {
+  /** duang's default model for the agent; none leaves the agent's own (its config's), if it has one. */
+  setModel(id: string, model: string | undefined): Promise<void> {
     return this.change((rows) => {
       const row = rows.find((row) => row.id === id);
       if (!row) throw new Error(`unknown agent ${id}`);
-      row.model = model;
+      if (model === undefined) delete row.model;
+      else row.model = model;
     });
   }
 }
@@ -141,6 +143,15 @@ export async function requireFolder(dir: string): Promise<void> {
     if (code === "ENOENT" || code === "ENOTDIR") throw new MissingDirError((error as Error).message);
     throw error;
   }
+}
+
+/**
+ * Whether a load failed because pi does not know `model`, duang's default for the agent (an endpoint removed from a
+ * `models.json`, a model retired from pi's catalog), as FastAgent words it. Not a model in the agent's own config:
+ * that one is the config's to fix.
+ */
+export function unknownDefault(message: string, model: string | undefined): boolean {
+  return model !== undefined && message.includes(`unknown model "${model}"`);
 }
 
 /**
