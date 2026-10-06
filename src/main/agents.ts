@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credentials.ts";
-import { retired } from "./providers.ts";
 import { AgentRegistry, failingConfig, freshConfig, MissingDirError, requireFolder, type AgentRow } from "./agent-files.ts";
 
 export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
@@ -43,7 +42,9 @@ const failedConfigs = new Map<string, string>();
 
 /**
  * An agent opens with or without a default model: a conversation that records its own runs on it, and only a
- * new one with none asks for one. A default duang chose on a route it no longer runs is no default.
+ * new one with none asks for one. A default on a provider duang does not offer (`retired`) still opens: pi
+ * knows the model, the first send is refused as `model_unavailable` (`send.ts`), and the picker that opens on
+ * it sets another.
  */
 async function build(row: AgentRow): Promise<Opened> {
   // FastAgent says "is not a fastagent agent" for a directory that is not there too, and that one must not
@@ -56,7 +57,7 @@ async function build(row: AgentRow): Promise<Opened> {
     const assembly = await createPiAgentFromDir(row.dir, {
       sessionControl: true,
       authPath,
-      ...(row.model && !retired(row.model) ? { model: row.model } : {}),
+      ...(row.model ? { model: row.model } : {}),
     });
     if (!assembly.sessionControl) throw new Error(`${row.dir}: no session control`);
     return { ...assembly, control: assembly.sessionControl };
