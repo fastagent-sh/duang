@@ -24,11 +24,6 @@ Two consequences worth stating before the details. Anything that fragments the a
 (bubbles, cards per paragraph, decoration) fights fact 3 and fact 5. Anything that hides parallel
 work to keep the list tidy fights fact 4.
 
-Written after walking the Week 1 acceptance matrix, where every individual signal was truthful and
-the whole still read badly. The fixes for that are here, not in another round of patches
-([#41](https://github.com/fastagent-sh/duang/issues/41),
-[#42](https://github.com/fastagent-sh/duang/issues/42)).
-
 ## 1. Three principles
 
 **An agent is a contact; a conversation is a topic.** The default view is a roster of who you work
@@ -952,23 +947,3 @@ MANUAL PROXY                               (only while Manual is chosen)
   follows within a frame does not flash it. There is no Cancel: the row's header closes it.
 - Success closes the row and marks the provider in the list above with a `success` badge
   (`connected`, 4 s) or a `warning` one (`saved · key not checked`, 8 s), scrolled into view.
-
-## 13. Shipped Week 1 visual pass
-
-This list records the completed visual redesign; it is not the roadmap for the next product stages.
-See [README.md](../README.md#roadmap) for those acceptance gates.
-
-1. **Tokens.** Both colour modes, the font stacks, the radius and spacing scales; swap
-   `lucide-react` for `@phosphor-icons/react`. No structural change, no behaviour change.
-2. **Components.** Buttons (primary, secondary, ghost, danger; heights 28 and 32), badges, cards,
-   popovers, composer.
-3. **Status.** The single vocabulary, the three tiers, `stopped`, and presence at both levels — the
-   avatar's ring and face, and the conversation dot.
-4. **Sidebar.** Merge rail and list into one 240–320px column: agent rows, running and drafted
-   conversations always listed, the rest folded. This one changes navigation, so every smoke
-   assertion that locates a control by label has to be re-checked.
-5. **Transcript.** User bubbles, the agent's document column, tool cards, centred system events, the
-   steering rule, the streaming cursor.
-6. **Keyboard.** Roving tabindex, focusable transcript.
-
-Steps 1–3 and 5–6 do not change behaviour and can land with the existing tests. Step 4 does.
