@@ -351,7 +351,6 @@ export function Composer({
 }) {
   const { agentId, conversation: c, busy } = view;
   const agent = view.agents.find((row) => row.id === agentId);
-  const state = agentId ? view.states[agentId] : undefined;
   // What the conversation will RUN with, else the agent's own default. Nothing else may answer
   // this: a chip that names a model the turn will not use is the failure worth avoiding.
   const model = c?.state?.model ?? view.model;
@@ -360,21 +359,7 @@ export function Composer({
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
       ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
       : undefined;
-  /**
-   * This conversation will run on no model: it records none, and its agent has no default. As opposed to duang
-   * not knowing yet, which does not warn.
-   */
-  const needsModel = state === "ready" && !!c && !c.loading && !model;
-  const modelDisabled =
-    view.loading || (!!agentId && view.changingModel === agentId) || !!c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir";
-  /**
-   * Why the model and its effort cannot be changed right now, or false when they can. One chip holds both, and
-   * FastAgent refuses either change while a run holds the conversation (`session_busy`) rather than queueing it.
-   */
-  const modelReason =
-    (!agentId && "Select an agent first") ||
-    (busy && "Stop the turn to change the model or effort") ||
-    (modelDisabled && "This agent is not ready");
+  const { needsModel, modelBlocked, picker: picking } = view;
   const value = c?.draft ?? "";
   const disabled = !!view.blocked;
   /** Nothing to send: whitespace is not a message, so the right-hand button stays the voice one. */
@@ -425,20 +410,9 @@ export function Composer({
   useEffect(() => {
     if (stepped.current) list.current?.querySelector("[data-chosen]")?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
-  const [picking, setPicking] = useState(false);
-  // A conversation with no model cannot start: open the list rather than leave the person guessing.
-  useEffect(() => setPicking(needsModel), [agentId, c?.session, needsModel]);
-  // A send refused because this conversation's model cannot run: choosing another is the way on, so the
-  // list opens on it, saying why. The chip stays marked until a model is chosen.
+  // A send refused because this conversation's model cannot run: the picker says why, and the chip stays
+  // marked until a model is chosen.
   const stuck = !!c && view.unavailable?.session === c.session && view.unavailable.agentId === c.agentId && view.unavailable.model === model;
-  useEffect(() => {
-    if (stuck) setPicking(true);
-  }, [stuck, view.unavailable?.asked]);
-  // Back from connecting a provider that was started here: the picker comes up again, with the new
-  // provider's models in it, and nothing chosen for the person.
-  useEffect(() => {
-    if (view.pickerAsked !== undefined && store.takePickerRequest()) setPicking(true);
-  }, [view.pickerAsked, store]);
   // Every opening rereads the credential file, so a provider connected in Settings shows up.
   // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
@@ -552,9 +526,9 @@ export function Composer({
             <Button
               kind="ghost"
               size={28}
-              onClick={() => setPicking(!picking)}
+              onClick={picking ? store.closePicker : store.openPicker}
               // The chip truncates a long spec, so the tooltip carries the whole name in both states.
-              disabled={modelReason && model ? `${modelReason} (${model})` : modelReason}
+              disabled={modelBlocked && model ? `${modelBlocked} (${model})` : (modelBlocked ?? false)}
               title={model ? `Model for this agent: ${model}` : "Model for this agent"}
               // Tinted, so it reads as the button it is beside the field's own text.
               className={`max-w-full bg-hover ${(!model && needsModel) || stuck ? "text-warning" : ""}`}
@@ -574,7 +548,7 @@ export function Composer({
               )}
               <CaretDown size={12} className="shrink-0" />
             </Button>
-            {picking && agentId && !busy && !modelDisabled && (
+            {picking && !modelBlocked && (
               <ModelPicker
                 view={view}
                 store={store}
@@ -582,9 +556,9 @@ export function Composer({
                 thinking={thinking}
                 needsModel={needsModel}
                 unavailable={stuck ? model : undefined}
-                onClose={() => setPicking(false)}
+                onClose={store.closePicker}
                 onProviders={() => {
-                  setPicking(false);
+                  store.closePicker();
                   onProviders();
                 }}
               />
