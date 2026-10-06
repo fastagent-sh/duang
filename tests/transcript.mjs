@@ -293,11 +293,12 @@ if (!process.versions.electron) {
       assert.ok(now !== null && Math.abs(now - early.offset) < 2, `coming back finds the place it was left at (row at ${now}, left at ${early.offset})`);
     }
     // A first batch shorter than the window leaves the view at scrollTop 0 too: the view still ends at the latest
-    // line once everything is drawn. Zoomed out in a window as tall as the screen allows, it is tall enough.
+    // line once everything is drawn. The page is given a 4000 px tall viewport (the screen limits a real window):
+    // about the height of the first batch's 40 lines, under that of the whole conversation.
     await fromLive();
-    const bounds = win.getBounds();
-    win.setBounds({ ...bounds, height: 3000 });
-    win.webContents.setZoomFactor(0.25);
+    win.webContents.debugger.attach();
+    const [width] = win.getContentSize();
+    await win.webContents.debugger.sendCommand("Emulation.setDeviceMetricsOverride", { width, height: 4000, deviceScaleFactor: 1, mobile: false });
     await evaluate(`(() => {
       window.__short = undefined;
       const observer = new MutationObserver(() => {
@@ -313,8 +314,8 @@ if (!process.versions.electron) {
       const el = document.querySelector('[aria-label="Transcript"]');
       return { firstFit: window.__short, overflowed: el.scrollHeight > el.clientHeight, fromEnd: el.scrollHeight - el.scrollTop - el.clientHeight };
     })()`);
-    win.webContents.setZoomFactor(1);
-    win.setBounds(bounds);
+    await win.webContents.debugger.sendCommand("Emulation.clearDeviceMetricsOverride");
+    win.webContents.debugger.detach();
     assert.ok(short.firstFit && short.overflowed, `the first batch fits the window and the whole conversation does not (${JSON.stringify(short)})`);
     assert.ok(short.fromEnd < 2, `a first batch shorter than the window still ends at the latest line (${JSON.stringify(short)})`);
     assert.equal(script.length, 0, "every scripted answer was asked for");
