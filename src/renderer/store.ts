@@ -215,10 +215,20 @@ export interface View extends SettingsView {
   resend?: { text: string; toolsRan: boolean };
   /**
    * A send was refused because the conversation's model cannot run here (its provider is not connected, or
-   * it is not offered). The composer opens the picker on it, saying why; `asked` makes each refusal a new
-   * request. Cleared once a model is chosen, or the person goes to another conversation.
+   * it is not offered). The picker opens on it, saying why. Cleared once a model is chosen, or the person
+   * goes to another conversation.
    */
-  unavailable?: { agentId: string; session: string; model: string; asked: number };
+  unavailable?: { agentId: string; session: string; model: string };
+  /**
+   * The model picker is open. It belongs to the composer, but the reasons to open it come from everywhere: a
+   * conversation that needs a model, a refused send, a problem whose way on is another model, a provider
+   * connected from it in Settings (where the composer is not on screen).
+   */
+  picker: boolean;
+  /** The open conversation runs on no model: it records none, and its agent has no default. */
+  needsModel: boolean;
+  /** Why the conversation's model and effort cannot be changed now, or undefined when they can. */
+  modelBlocked?: string;
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
   /** Per agent with a turn in flight, the kind of work it is in (`phase`): its avatar's face follows it. */
@@ -277,6 +287,16 @@ function alertOf(view: View): Trouble | undefined {
   if (state === "broken" || state === "no_agent" || state === "missing_dir") return undefined;
   return { title: "This agent could not be opened", advice: "Try again; its folder and conversations are untouched.", reason: view.error };
 }
+function modelBlockedBy(view: View): string | undefined {
+  const { agentId, conversation: c } = view;
+  if (!agentId) return "Select an agent first";
+  // FastAgent refuses either change while a run holds the conversation (`session_busy`) rather than queueing it.
+  if (view.busy) return "Stop the turn to change the model or effort";
+  const state = view.states[agentId];
+  if (view.loading || view.changingModel === agentId || c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir")
+    return "This agent is not ready";
+  return undefined;
+}
 /** In the order the person should hear it: the nearest reason first, the agent's setup after. */
 function blockedBy(view: View): string | undefined {
   const c = view.conversation;
@@ -304,6 +324,8 @@ export function createStore(api: DuangApi) {
     loading: false,
     busy: false,
     pane: "no-agents",
+    picker: false,
+    needsModel: false,
     commands: [],
     avatar: "gaze",
     running: {},
@@ -323,6 +345,8 @@ export function createStore(api: DuangApi) {
    */
   const scrolls = new Map<string, Place>();
   let persisted = "";
+  /** The conversation and its need for a model the picker last followed (`publish`). */
+  let needsAsked: string | undefined;
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
   const lastOpened = new Map<string, string>(stored?.perAgent);
@@ -413,7 +437,19 @@ export function createStore(api: DuangApi) {
     view.pane = paneOf(view);
     view.alert = alertOf(view);
     view.blocked = blockedBy(view);
+    view.modelBlocked = modelBlockedBy(view);
     const open = view.conversation;
+    // As opposed to duang not knowing the model yet, which does not ask for one.
+    view.needsModel =
+      !!open && !open.loading && view.states[open.agentId] === "ready" && !(open.state?.model ?? view.model);
+    // A conversation that cannot start without a model opens the list rather than leave the person guessing;
+    // one that has a model (just chosen, or opened instead) closes it. Only on those changes: a list the
+    // person closed stays closed.
+    const asks = `${open?.agentId}/${open?.session}/${view.needsModel}`;
+    if (asks !== needsAsked) {
+      needsAsked = asks;
+      view.picker = view.needsModel;
+    }
     // Anything after the failure (a newer turn, a stop) leaves nothing to send again.
     const last = open?.items.at(-1);
     view.resend = !view.busy && !view.blocked && last?.kind === "note" ? last.resend : undefined;
@@ -601,7 +637,7 @@ export function createStore(api: DuangApi) {
           // The way on is choosing a model, so the picker opens on it and says why; nothing goes in the
           // transcript, because nothing happened in the conversation.
           restoreRejected();
-          publish({ unavailable: { agentId: c.agentId, session: c.session, model, asked: Date.now() } });
+          publish({ unavailable: { agentId: c.agentId, session: c.session, model }, picker: true });
           return;
         }
         if (
@@ -970,6 +1006,8 @@ export function createStore(api: DuangApi) {
       }
     },
     dismissFailure: () => publish({ failure: undefined }),
+    openPicker: () => publish({ picker: true }),
+    closePicker: () => publish({ picker: false }),
     /** A plan whose usage only its provider's page shows: main opens that page in the browser. */
     async openUsagePage(provider: string) {
       try {
