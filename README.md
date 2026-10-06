@@ -142,7 +142,8 @@ More: [architecture](docs/architecture.md) (processes, state ownership, network 
 
 ## Roadmap
 
-Each stage is an outcome that has to be shown working with real use, not a date. The first local
+Each stage is an outcome that has to be shown working with real use, not a date
+([how that is measured](docs/design.md#how-we-know-it-worked)). The first local
 milestone ([Week 1](https://github.com/fastagent-sh/duang/milestone/1)) is accepted; stage 1 is in
 progress; the rest are planned.
 

@@ -124,7 +124,7 @@ review is recommended for credential handling, IPC/security boundaries, persiste
 
 Repository settings allow squash merges only, use the PR title/body, delete merged branches, and
 allow updating a PR branch. Auto-merge and workflow approval of PRs are disabled. Do not force-push
-or delete `main`; require resolved review conversations and a green `Desktop checks` before merging.
+or delete `main`; require resolved review conversations and green `Desktop checks` and `CodeQL` before merging.
 
 `main` is protected server-side with the settings versioned in
 [.github/main-protection.json](.github/main-protection.json): `Desktop checks` and `CodeQL` must pass

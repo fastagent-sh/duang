@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   desktop-checks:
-    # Stable check name for future branch protection; no unsupported OS matrix yet.
+    # Stable check name: main's branch protection requires it (.github/main-protection.json); no OS matrix.
     name: Desktop checks
     # macOS is the only supported target, and the smoke step launches a real Electron window:
     # on a Linux runner that needs xvfb plus a disabled Chromium sandbox, which is neither the
