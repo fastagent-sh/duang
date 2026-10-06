@@ -195,6 +195,9 @@ export interface View extends SettingsView {
   /** Per agent, what its roster row quotes. */
   previews: Record<string, Preview>;
 }
+const key = (agentId: string, session: string) => `${agentId}/${session}`;
+/** A `key` back into its agent and session. */
+const unkey = (id: string): [string, string] => [id.slice(0, id.indexOf("/")), id.slice(id.indexOf("/") + 1)];
 /** [agentId, session] pairs into one list per agent. */
 const group = (pairs: [string, string][]): Record<string, string[]> => {
   const out: Record<string, string[]> = {};
@@ -261,6 +264,43 @@ function blockedBy(view: View): string | undefined {
 }
 
 /** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
+/**
+ * What the screens read that follows from the rest of the view and the conversations this window holds
+ * (`held`), their unsent text (`unsent`) and the outcomes nobody has looked at (`unseen`), each keyed by
+ * `key`. Derived on every publish and stored nowhere else.
+ */
+function derive(
+  view: View,
+  held: Conversation[],
+  unsent: Map<string, string>,
+  unseen: Map<string, "done" | "failed">,
+): View {
+  const running = held.filter(busy);
+  const open = view.conversation;
+  const derived: View = {
+    ...view,
+    busy: !!open && busy(open),
+    running: group(running.map((c) => [c.agentId, c.session])),
+    doing: Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).activity])),
+    unsent: group([...unsent].filter(([, text]) => text.trim()).map(([id]) => unkey(id))),
+    unseen: {},
+    // As opposed to duang not knowing the model yet, which does not ask for one.
+    needsModel: !!open && !open.loading && view.states[open.agentId] === "ready" && !(open.state?.model ?? view.model),
+  };
+  for (const [id, outcome] of unseen) {
+    const [agentId, session] = unkey(id);
+    (derived.unseen[agentId] ??= {})[session] = outcome;
+  }
+  derived.pane = paneOf(derived);
+  derived.alert = alertOf(derived);
+  derived.blocked = blockedBy(derived);
+  derived.modelBlocked = modelBlockedBy(derived);
+  // Anything after the failure (a newer turn, a stop) leaves nothing to send again.
+  const last = open?.items.at(-1);
+  derived.resend = !derived.busy && !derived.blocked && last?.kind === "note" ? last.resend : undefined;
+  return derived;
+}
+
 export function createStore(api: DuangApi) {
   let view: View = {
     agents: [],
@@ -328,7 +368,6 @@ export function createStore(api: DuangApi) {
    */
   const previews = new Map<string, Preview & { updatedAt?: number }>();
   let commandsFor: string | undefined;
-  const key = (agentId: string, session: string) => `${agentId}/${session}`;
   /**
    * The conversation an agent's row speaks for: the one on screen, else the one it was left on, else
    * its newest — the order `selectAgent` reopens it in, so the row quotes what a click would show.
@@ -359,46 +398,25 @@ export function createStore(api: DuangApi) {
     // so no ending path has to remember. A conversation nobody is looking at is retained only while
     // it can still produce something this view needs: its own backfill, or a turn in flight.
     for (const c of conversations.values()) if (!busy(c) && c !== view.conversation && !c.loading) close(c);
-    const running = [...conversations.values()].filter(busy);
-    view.busy = !!view.conversation && busy(view.conversation);
-    view.running = group(running.map((c) => [c.agentId, c.session]));
-    view.doing = Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).activity]));
     // A conversation the runtime has never heard of exists only while it is on screen. Without a row
     // of its own, walking away from unsent text is the same as discarding it. The open conversation
     // holds its own draft, so read both here: this is the single view of what is unsent.
     const unsent = new Map(drafts);
     if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
-    view.unseen = {};
-    for (const [id, outcome] of unseen) {
-      const agentId = id.slice(0, id.indexOf("/"));
-      (view.unseen[agentId] ??= {})[id.slice(id.indexOf("/") + 1)] = outcome;
-    }
-    const kept = [...unsent].filter(([, text]) => text.trim());
-    view.unsent = group(kept.map(([id]) => [id.slice(0, id.indexOf("/")), id.slice(id.indexOf("/") + 1)]));
-    const serialized = JSON.stringify(kept);
+    const serialized = JSON.stringify([...unsent].filter(([, text]) => text.trim()));
     if (serialized !== persisted) {
       persisted = serialized;
       writeStored(DRAFTS_KEY, serialized);
     }
-    view.pane = paneOf(view);
-    view.alert = alertOf(view);
-    view.blocked = blockedBy(view);
-    view.modelBlocked = modelBlockedBy(view);
-    const open = view.conversation;
-    // As opposed to duang not knowing the model yet, which does not ask for one.
-    view.needsModel =
-      !!open && !open.loading && view.states[open.agentId] === "ready" && !(open.state?.model ?? view.model);
+    view = derive(view, [...conversations.values()], unsent, unseen);
     // A conversation that cannot start without a model opens the list rather than leave the person guessing;
     // one that has a model (just chosen, or opened instead) closes it. Only on those changes: a list the
     // person closed stays closed.
-    const asks = `${open?.agentId}/${open?.session}/${view.needsModel}`;
+    const asks = `${view.conversation?.agentId}/${view.conversation?.session}/${view.needsModel}`;
     if (asks !== needsAsked) {
       needsAsked = asks;
       view.picker = view.needsModel;
     }
-    // Anything after the failure (a newer turn, a stop) leaves nothing to send again.
-    const last = open?.items.at(-1);
-    view.resend = !view.busy && !view.blocked && last?.kind === "note" ? last.resend : undefined;
     for (const listener of listeners) listener();
   };
   /**
