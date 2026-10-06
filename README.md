@@ -1,5 +1,11 @@
 # duang
 
+[![CI](https://github.com/fastagent-sh/duang/actions/workflows/ci.yml/badge.svg)](https://github.com/fastagent-sh/duang/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/fastagent-sh/duang/actions/workflows/codeql.yml/badge.svg)](https://github.com/fastagent-sh/duang/actions/workflows/codeql.yml)
+[![license](https://img.shields.io/github/license/fastagent-sh/duang.svg)](LICENSE)
+[![built on FastAgent](https://img.shields.io/badge/built%20on-FastAgent-0b7285.svg)](https://github.com/fastagent-sh/fastagent)
+![platform](https://img.shields.io/badge/platform-macOS%20(Apple%20silicon)-555.svg)
+
 **A native workbench for agents you make, use and share.**
 
 Create an agent, give it the folders it works on and the ones it should know, use it every day in
@@ -256,3 +262,9 @@ planned scope and order are described in [Delivery stages](#delivery-stages).
 Those repositories designed a collaboration platform (two planes, invite primitives, named hosts,
 build pipeline) before a single user existed. The domain thinking is preserved in git history and
 can be reintroduced one entity at a time, each paid for by an actual blocked user.
+
+## License
+
+[MIT](LICENSE). Bundled fonts are under the SIL Open Font License (`src/renderer/fonts/OFL-*.txt`);
+provider logos are LobeHub's, under their license (`src/renderer/provider-logos/LICENSE`); avatar
+styles are DiceBear's (CC0, except Bottts, free for personal and commercial use).

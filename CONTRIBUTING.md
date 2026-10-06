@@ -29,6 +29,10 @@ Verify locally before pushing. CI is confirmation, not the first debugging envir
 
 ## Issues and milestones
 
+Questions and ideas go to [Discussions](https://github.com/fastagent-sh/duang/discussions); issues are
+for bugs and concrete feature requests. Security reports never go in an issue: see
+[SECURITY.md](SECURITY.md).
+
 Use the Bug, Feature or Task form. The forms set the GitHub issue type and initial label. With
 push access, CLI-created issues must set them explicitly because `gh` does not consume YAML forms:
 
@@ -46,6 +50,9 @@ gh issue create --type Task --label chore --title 'task: <outcome>' --body '<sco
 - A PR's `Closes #N` closes the issue on merge, but does not copy its milestone or priority to the PR.
 
 ## Branch and PR loop
+
+Without push access, fork the repository and open the PR from a branch of your fork; the same
+branch names, checks and review apply.
 
 Branch prefixes follow FastAgent: `feature/` (`feat/` also accepted), `fix/`, `refactor/`, `docs/`,
 `chore/`, `ci/`, `test/`. Never push directly to `main`.
@@ -119,13 +126,10 @@ Repository settings allow squash merges only, use the PR title/body, delete merg
 allow updating a PR branch. Auto-merge and workflow approval of PRs are disabled. Do not force-push
 or delete `main`; require resolved review conversations and a green `Desktop checks` before merging.
 
-**Current enforcement limitation:** GitHub returns HTTP 403 for branch protection/rulesets on this
-private repository under the current plan. The PR/check/review rules above are maintainer policy,
-not server-enforced protection yet; [issue #17](https://github.com/fastagent-sh/duang/issues/17)
-tracks enabling it. Do not make the repository public or buy/enable paid features just to bypass
-this limitation. The intended protection settings are versioned in
-[.github/main-protection.json](.github/main-protection.json). Once the repository plan supports
-protection and `Desktop checks` exists, a repository admin can apply and verify them:
+`main` is protected server-side with the settings versioned in
+[.github/main-protection.json](.github/main-protection.json): `Desktop checks` and `CodeQL` must pass
+on a branch up to date with `main`, review conversations must be resolved, history stays linear,
+and the rules apply to admins too. After changing that file, a repository admin applies and verifies it:
 
 ```bash
 gh api --method PUT repos/fastagent-sh/duang/branches/main/protection \
@@ -151,9 +155,9 @@ git fetch --prune origin
   Keep `package.json` and the lockfile consistent.
 - Vulnerability alerts are enabled. Review alerts and fix dependencies manually as needed; do not
   assume automatic npm fixes or advisory/code scanning cover every dependency.
-- CodeQL is unavailable without this private repository's Advanced Security entitlement. CodeQL
-  and secret scanning have not been enabled, and no paid security feature was activated. Never
-  treat their absence as a clean security result.
+- CodeQL analyzes every PR, `main` and a weekly schedule (`.github/workflows/codeql.yml`). Secret
+  scanning with push protection is enabled. Neither replaces review of the boundaries in
+  [SECURITY.md](SECURITY.md); never treat a clean scan as a security result.
 - No release/publish workflow is configured. duang is an Electron application, not FastAgent's npm
   package; signing, notarization, updater distribution and cloud deployment need separate decisions.
 - Do not change visibility, collaborators, licensing or billing as part of ordinary code work.
