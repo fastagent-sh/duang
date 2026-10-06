@@ -13,7 +13,7 @@
  */
 export type Fix = "providers" | "network" | "model";
 
-export interface Explained {
+interface Explained {
   title: string;
   /** One sentence on what to do, when there is something besides reading the reason. */
   advice?: string;
