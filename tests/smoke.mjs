@@ -297,6 +297,11 @@ if (!process.versions.electron) {
       // page is told to behave as focused instead, as Playwright does for every Chromium page.
       win.webContents.debugger.attach();
       await win.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
+      // GitHub's macOS runners have the system's Reduce motion on, where every face keeps its pose by design;
+      // the checks of motion need it off, and reduced motion is checked on its own below (#142).
+      const motion = (value) =>
+        win.webContents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value }] });
+      await motion("no-preference");
       await until("document.body.innerText.includes('Create agent here')", "plain project setup");
       assert.ok(
         !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
@@ -524,6 +529,14 @@ if (!process.versions.electron) {
         frames.some((frame) => !frame.equals(frames[0])),
         `and the drawn face moves while it works: 8 identical frames of ${JSON.stringify(face)}, window ${win.isVisible() ? "visible" : "not visible"}${win.isFocused() ? ", focused" : ""}, ${JSON.stringify(seen)}`,
       );
+      // With reduced motion, nothing in the roster moves: the face keeps its pose and `working` its dot.
+      await motion("reduce");
+      assert.deepEqual(
+        await evaluate(`document.getAnimations().filter((a) => a.effect?.target?.closest?.('aside') && a.playState === 'running').map((a) => a.animationName)`),
+        [],
+        "reduced motion stops every animation in the roster",
+      );
+      await motion("no-preference");
       // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
       // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
       // machine delivers a real Escape inside that gap.
