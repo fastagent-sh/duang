@@ -184,7 +184,7 @@ export default function App() {
               onConnected={() => {
                 if (settings.reconnect) return setSettings(false);
                 if (!settings.fromPicker) return;
-                store.requestPicker();
+                store.openPicker();
                 setSettings(false);
               }}
               onMenu={duang.menu}
@@ -356,7 +356,7 @@ export default function App() {
                     onSettings={(where) =>
                       setSettings(where === "network" ? { network: true } : where === "providers" && provider ? { reconnect: provider } : {})
                     }
-                    onPickModel={store.requestPicker}
+                    onPickModel={store.openPicker}
                     provider={providerName}
                     onRetry={
                       view.resend
