@@ -128,13 +128,13 @@ if (!process.versions.electron) {
       inBlock: !!dot.closest("summary"),
     }))`);
   const transcript = () => evaluate(`document.querySelector('[aria-label="Transcript"]')?.innerText ?? ""`);
-  const button = () => evaluate(`document.querySelector('button[aria-label="Stop the run"], button[aria-label="Steer the run"], button[aria-label="Send"], button[aria-label="Voice input"]')?.getAttribute('aria-label')`);
+  const button = () => evaluate(`document.querySelector('button[aria-label="Stop the run"], button[aria-label="Steer the run"], button[aria-label="Send"]')?.getAttribute('aria-label')`);
   const type = (text) =>
     evaluate(`(() => { const i = document.querySelector('textarea'); i.focus(); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, ${JSON.stringify(text)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   async function send(text) {
     await until("!!document.querySelector('textarea') && !document.querySelector('textarea').disabled", "the composer is ready");
     await type(text);
-    await until("!!document.querySelector('button[aria-label=Send]')", "Send is offered");
+    await until("!!document.querySelector('button[aria-label=Send]:not([aria-disabled])')", "Send is offered");
     await evaluate("document.querySelector('button[aria-label=Send]').click()");
   }
   const idle = () => until(`!document.querySelector('button[aria-label="Stop the run"]') && !document.querySelector('[aria-label="Transcript"] .bounce')`, "the run ends", 30000);
