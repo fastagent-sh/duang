@@ -12,7 +12,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretRight, Check, Copy, Info, Prohibit, WarningCircle, X } from "@phosphor-icons/react";
 import { Button } from "./ui.tsx";
 
-export type ProblemTone = "error" | "warning" | "info";
+type ProblemTone = "error" | "warning" | "info";
 
 const ICON = {
   error: <WarningCircle size={15} />,
