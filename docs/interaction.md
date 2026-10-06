@@ -48,7 +48,8 @@ is refused while one of its conversations is running, including a turn still ope
 An agent with no default model opens like any other, on the conversation it was left on or its latest: a
 conversation runs on the model it records. Only a conversation that records none (a new one, or one whose
 model is no longer in the catalog) with no default to fall back on asks for one: the picker opens on it and
-the composer says "pick a model to start"; the model chosen there runs that conversation. A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
+the composer says "pick a model to start"; the model chosen there runs that conversation. Closed without a
+choice, the picker stays closed until another conversation is opened or the chip is pressed. A model change replaces the agent's runtime, and the open conversation does not notice: its subscription
 moves to the new runtime in main, so the transcript stays as it is (the same rows, the same scroll position)
 and only the chip and the effort track are read again. While the new model is set up, the composer says
 "changing the model…", not that a conversation is opening.

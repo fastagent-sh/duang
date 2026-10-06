@@ -1,21 +1,24 @@
 import { ABORTED_CODE, SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type Session, type SessionResult } from "@fastagent-sh/fastagent/session";
 
-const stoppedBeforeStart: SessionResult = {
+/**
+ * An expected refusal is an answer, not an exception: the person can act on it, and a thrown one
+ * would reach the renderer wrapped in Electron's `Error invoking remote method` prose.
+ */
+export const refuse = (code: string, message: string): SessionResult => ({
   ok: false,
-  error: { code: ABORTED_CODE, message: "Stopped before the run started", retryable: true },
-};
-
-/** Why a conversation's model cannot start a run here, in the person's words and with the way on. */
-export const MODEL_UNAVAILABLE_CODE = "model_unavailable";
-const unavailable = (model: string): SessionResult => ({
-  ok: false,
-  error: {
-    code: MODEL_UNAVAILABLE_CODE,
-    message: `${model} cannot run: its provider is not connected, or the model is not offered to it. Connect the provider, or choose another model for this conversation.`,
-    retryable: true,
-  },
+  error: { code, message, retryable: true },
 });
+
+const stoppedBeforeStart = refuse(ABORTED_CODE, "Stopped before the run started");
+
+/** Why a conversation's model cannot run here; the renderer opens the model picker on it. */
+export const MODEL_UNAVAILABLE_CODE = "model_unavailable";
+const unavailable = (model: string) =>
+  refuse(
+    MODEL_UNAVAILABLE_CODE,
+    `${model} cannot run: its provider is not connected, or the model is not offered to it. Connect the provider, or choose another model for this conversation.`,
+  );
 
 /**
  * The runtime, not a stale UI snapshot, decides whether this message starts or steers a turn. `stopped` is
@@ -75,11 +78,7 @@ export function sends() {
   };
   return {
     hold(key: string, run: (stopped: () => boolean) => Promise<SessionResult>): Promise<SessionResult> {
-      if (quitting)
-        return Promise.resolve({
-          ok: false,
-          error: { code: "quitting", message: "duang is quitting: the message was not sent", retryable: true },
-        });
+      if (quitting) return Promise.resolve(refuse("quitting", "duang is quitting: the message was not sent"));
       const ticket: Ticket = { stopped: false, finished: Promise.resolve() };
       const tickets = held.get(key) ?? new Set();
       held.set(key, tickets.add(ticket));

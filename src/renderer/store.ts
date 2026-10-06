@@ -1,53 +1,36 @@
-import {
-  NO_ACTIVE_RUN_CODE,
-  type AgentCommand,
-  type SessionEvent,
-  type SessionState,
-  type SessionSummary,
-} from "@fastagent-sh/fastagent/session";
+import { NO_ACTIVE_RUN_CODE, type AgentCommand, type SessionSummary } from "@fastagent-sh/fastagent/session";
 import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
+import { fromEntries, phase, previewOf, queueView, type Activity, type Place } from "./transcript.ts";
 import {
-  apply,
-  claim,
-  fromEntries,
-  known,
-  opensRun,
-  phase,
-  previewOf,
-  queueView,
-  wentOn,
-  type Activity,
-  type Item,
-  type Place,
-  type UserItem,
-} from "./transcript.ts";
+  accepted,
+  backfill,
+  busy,
+  createConversation,
+  lost,
+  receive,
+  sent,
+  unsent,
+  type Conversation,
+  type Settled,
+  type Trouble,
+} from "./conversation.ts";
 import { message } from "./message.ts";
 import type { Fix } from "./problems.ts";
-/** main's code for a send refused because the conversation's model cannot run here (`send.ts`). */
-const MODEL_UNAVAILABLE_CODE = "model_unavailable";
-/**
- * Events that report what the person did (a message queued or entered, a setting changed), not output from
- * the run: they do not end the model's silence.
- */
-const PERSON_SIDE = new Set(["queue_changed", "user_message", "state_changed"]);
-/** A conversation that loses its subscription again within this long of reconnecting by itself waits for the person. */
-const RECONNECT_GAP_MS = 30_000;
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
+/** main's code for a send refused because the conversation's model cannot run here (`send.ts`). */
+const MODEL_UNAVAILABLE_CODE = "model_unavailable";
+/** A conversation that loses its subscription again within this long of reconnecting by itself waits for the person. */
+const RECONNECT_GAP_MS = 30_000;
+
 export type AgentState = "ready" | "no_agent" | "missing_dir" | "broken";
-/** A problem said over the pane: what it means, what to do, and the original words. */
-export interface Trouble {
-  title: string;
-  advice?: string;
-  reason: string;
-}
 /**
  * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
  * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
  * of the wrong screen.
  * `start` is that page, for a new conversation.
  */
-export type Pane =
+type Pane =
   | "unreadable-registry"
   | "no-agents"
   | "broken"
@@ -113,43 +96,11 @@ function readSelection(): Selection | undefined {
 function writeStored(storageKey: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(storageKey, value);
-  } catch {
-    // A full or disabled store costs a click or a retyped line after the next restart, nothing else.
+  } catch (error) {
+    // A full or disabled store costs a click, or unsent text, after the next restart; the window goes on, and
+    // the log says why.
+    console.error(`duang: ${storageKey} was not saved:`, error);
   }
-}
-interface Conversation {
-  agentId: string;
-  session: string;
-  subscription: string;
-  items: Item[];
-  state?: SessionState;
-  draft: string;
-  loading: boolean;
-  /** This view could not open the conversation, or lost its subscription: said over it, with Reconnect. */
-  error?: Trouble;
-  /** Main ended this subscription on purpose. Nothing broke; this view just stopped listening. */
-  ended?: string;
-  sends: number;
-  events: SessionEvent[];
-  /**
-   * Messages sent from this window that have not entered the conversation yet, oldest first. They
-   * show below the live output until the runtime's `user_message` places them: a steer is read at the
-   * run's next turn boundary, so placing it at send time put it above output written without it.
-   */
-  waiting: UserItem[];
-  /** Of `waiting`, those whose send already returned: accepted, yet nothing has entered from them. */
-  returned: Set<UserItem>;
-  /** The current run already has a user message, so the next one joined it rather than opened it. */
-  runHasUser: boolean;
-  /** When this window saw the current run start; unknown for a run that was already going when it opened. */
-  started?: number;
-  /** When this window last heard anything of the conversation's run (or sent into it): how long it has been quiet. */
-  heard?: number;
-  /**
-   * The current run as this window heard it from its `run_started`: the last message that entered it and
-   * whether it started a tool. Absent for a run joined midway, whose history does not say where it began.
-   */
-  run?: { message?: string; toolsRan: boolean };
 }
 /**
  * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
@@ -215,10 +166,20 @@ export interface View extends SettingsView {
   resend?: { text: string; toolsRan: boolean };
   /**
    * A send was refused because the conversation's model cannot run here (its provider is not connected, or
-   * it is not offered). The composer opens the picker on it, saying why; `asked` makes each refusal a new
-   * request. Cleared once a model is chosen, or the person goes to another conversation.
+   * it is not offered). The picker opens on it, saying why. Cleared once a model is chosen, or the person
+   * goes to another conversation.
    */
-  unavailable?: { agentId: string; session: string; model: string; asked: number };
+  unavailable?: { agentId: string; session: string; model: string };
+  /**
+   * The model picker is open. It belongs to the composer, but the reasons to open it come from everywhere: a
+   * conversation that needs a model, a refused send, a problem whose way on is another model, a provider
+   * connected from it in Settings (where the composer is not on screen).
+   */
+  picker: boolean;
+  /** The open conversation runs on no model: it records none, and its agent has no default. */
+  needsModel: boolean;
+  /** Why the conversation's model and effort cannot be changed now, or undefined when they can. */
+  modelBlocked?: string;
   /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
   /** Per agent with a turn in flight, the kind of work it is in (`phase`): its avatar's face follows it. */
@@ -236,15 +197,15 @@ export interface View extends SettingsView {
   /** Per agent, what its roster row quotes. */
   previews: Record<string, Preview>;
 }
+const key = (agentId: string, session: string) => `${agentId}/${session}`;
+/** A `key` back into its agent and session. */
+const unkey = (id: string): [string, string] => [id.slice(0, id.indexOf("/")), id.slice(id.indexOf("/") + 1)];
 /** [agentId, session] pairs into one list per agent. */
 const group = (pairs: [string, string][]): Record<string, string[]> => {
   const out: Record<string, string[]> = {};
   for (const [agentId, session] of pairs) (out[agentId] ??= []).push(session);
   return out;
 };
-
-/** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
-const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
 
 /**
  * The pane, the alert above it and why the composer cannot send are one decision about the same facts,
@@ -277,6 +238,16 @@ function alertOf(view: View): Trouble | undefined {
   if (state === "broken" || state === "no_agent" || state === "missing_dir") return undefined;
   return { title: "This agent could not be opened", advice: "Try again; its folder and conversations are untouched.", reason: view.error };
 }
+function modelBlockedBy(view: View): string | undefined {
+  const { agentId, conversation: c } = view;
+  if (!agentId) return "Select an agent first";
+  // FastAgent refuses either change while a run holds the conversation (`session_busy`) rather than queueing it.
+  if (view.busy) return "Stop the turn to change the model or effort";
+  const state = view.states[agentId];
+  if (view.loading || view.changingModel === agentId || c?.loading || state === "broken" || state === "no_agent" || state === "missing_dir")
+    return "This agent is not ready";
+  return undefined;
+}
 /** In the order the person should hear it: the nearest reason first, the agent's setup after. */
 function blockedBy(view: View): string | undefined {
   const c = view.conversation;
@@ -295,6 +266,43 @@ function blockedBy(view: View): string | undefined {
 }
 
 /** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
+/**
+ * What the screens read that follows from the rest of the view and the conversations this window holds
+ * (`held`), their unsent text (`unsent`) and the outcomes nobody has looked at (`unseen`), each keyed by
+ * `key`. Derived on every publish and stored nowhere else.
+ */
+function derive(
+  view: View,
+  held: Conversation[],
+  unsent: Map<string, string>,
+  unseen: Map<string, "done" | "failed">,
+): View {
+  const running = held.filter(busy);
+  const open = view.conversation;
+  const derived: View = {
+    ...view,
+    busy: !!open && busy(open),
+    running: group(running.map((c) => [c.agentId, c.session])),
+    doing: Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).activity])),
+    unsent: group([...unsent].filter(([, text]) => text.trim()).map(([id]) => unkey(id))),
+    unseen: {},
+    // As opposed to duang not knowing the model yet, which does not ask for one.
+    needsModel: !!open && !open.loading && view.states[open.agentId] === "ready" && !(open.state?.model ?? view.model),
+  };
+  for (const [id, outcome] of unseen) {
+    const [agentId, session] = unkey(id);
+    (derived.unseen[agentId] ??= {})[session] = outcome;
+  }
+  derived.pane = paneOf(derived);
+  derived.alert = alertOf(derived);
+  derived.blocked = blockedBy(derived);
+  derived.modelBlocked = modelBlockedBy(derived);
+  // Anything after the failure (a newer turn, a stop) leaves nothing to send again.
+  const last = open?.items.at(-1);
+  derived.resend = !derived.busy && !derived.blocked && last?.kind === "note" ? last.resend : undefined;
+  return derived;
+}
+
 export function createStore(api: DuangApi) {
   let view: View = {
     agents: [],
@@ -304,6 +312,8 @@ export function createStore(api: DuangApi) {
     loading: false,
     busy: false,
     pane: "no-agents",
+    picker: false,
+    needsModel: false,
     commands: [],
     avatar: "gaze",
     running: {},
@@ -323,6 +333,8 @@ export function createStore(api: DuangApi) {
    */
   const scrolls = new Map<string, Place>();
   let persisted = "";
+  /** The conversation and its need for a model the picker last followed (`publish`). */
+  let needsAsked: string | undefined;
   /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
   const lastOpened = new Map<string, string>(stored?.perAgent);
@@ -358,7 +370,6 @@ export function createStore(api: DuangApi) {
    */
   const previews = new Map<string, Preview & { updatedAt?: number }>();
   let commandsFor: string | undefined;
-  const key = (agentId: string, session: string) => `${agentId}/${session}`;
   /**
    * The conversation an agent's row speaks for: the one on screen, else the one it was left on, else
    * its newest — the order `selectAgent` reopens it in, so the row quotes what a click would show.
@@ -389,34 +400,25 @@ export function createStore(api: DuangApi) {
     // so no ending path has to remember. A conversation nobody is looking at is retained only while
     // it can still produce something this view needs: its own backfill, or a turn in flight.
     for (const c of conversations.values()) if (!busy(c) && c !== view.conversation && !c.loading) close(c);
-    const running = [...conversations.values()].filter(busy);
-    view.busy = !!view.conversation && busy(view.conversation);
-    view.running = group(running.map((c) => [c.agentId, c.session]));
-    view.doing = Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).activity]));
     // A conversation the runtime has never heard of exists only while it is on screen. Without a row
     // of its own, walking away from unsent text is the same as discarding it. The open conversation
     // holds its own draft, so read both here: this is the single view of what is unsent.
     const unsent = new Map(drafts);
     if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
-    view.unseen = {};
-    for (const [id, outcome] of unseen) {
-      const agentId = id.slice(0, id.indexOf("/"));
-      (view.unseen[agentId] ??= {})[id.slice(id.indexOf("/") + 1)] = outcome;
-    }
-    const kept = [...unsent].filter(([, text]) => text.trim());
-    view.unsent = group(kept.map(([id]) => [id.slice(0, id.indexOf("/")), id.slice(id.indexOf("/") + 1)]));
-    const serialized = JSON.stringify(kept);
+    const serialized = JSON.stringify([...unsent].filter(([, text]) => text.trim()));
     if (serialized !== persisted) {
       persisted = serialized;
       writeStored(DRAFTS_KEY, serialized);
     }
-    view.pane = paneOf(view);
-    view.alert = alertOf(view);
-    view.blocked = blockedBy(view);
-    const open = view.conversation;
-    // Anything after the failure (a newer turn, a stop) leaves nothing to send again.
-    const last = open?.items.at(-1);
-    view.resend = !view.busy && !view.blocked && last?.kind === "note" ? last.resend : undefined;
+    view = derive(view, [...conversations.values()], unsent, unseen);
+    // A conversation that cannot start without a model opens the list rather than leave the person guessing;
+    // one that has a model (just chosen, or opened instead) closes it. Only on those changes: a list the
+    // person closed stays closed.
+    const asks = `${view.conversation?.agentId}/${view.conversation?.session}/${view.needsModel}`;
+    if (asks !== needsAsked) {
+      needsAsked = asks;
+      view.picker = view.needsModel;
+    }
     for (const listener of listeners) listener();
   };
   /**
@@ -474,7 +476,7 @@ export function createStore(api: DuangApi) {
       if (!result.ok)
         return settle({
           sessionsError: { ...view.sessionsError, [id]: result.message },
-          ...own(result.code === "failed" ? "broken" : result.code),
+          ...own(result.code),
         });
       const { [id]: _cleared, ...errors } = view.sessionsError;
       settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors, ...own("ready", result.model) });
@@ -532,34 +534,13 @@ export function createStore(api: DuangApi) {
       publish({ conversation: existing, error: undefined, unavailable: undefined });
       return;
     }
-    const c: Conversation = {
-      agentId,
-      session,
-      subscription: crypto.randomUUID(),
-      items: [],
-      draft: drafts.get(key(agentId, session)) ?? "",
-      loading: true,
-      sends: 0,
-      events: [],
-      waiting: [],
-      returned: new Set(),
-      runHasUser: false,
-    };
+    const c = createConversation(agentId, session, drafts.get(key(agentId, session)) ?? "");
     conversations.set(key(agentId, session), c);
     publish({ conversation: c, error: undefined, unavailable: undefined });
     try {
       const result = await api.openSession(agentId, session, c.subscription);
       if (conversations.get(key(agentId, session)) !== c) return;
-      c.items = fromEntries(result.entries.entries, result.entries.leafEntryId, result.state.status === "running");
-      c.state = result.state;
-      // Opened mid-run, the run's opening message is already in the history just read; its silence counts from now.
-      c.runHasUser = result.state.status === "running";
-      if (c.runHasUser) c.heard = Date.now();
-      c.loading = false;
-      // New sends are disabled until backfill finishes. An already-running local turn retains its
-      // subscription and view across navigation, so its deltas are never reconstructed from history.
-      for (const event of c.events) fold(c, event);
-      c.events = [];
+      for (const outcome of backfill(c, result, Date.now())) settled(c, outcome);
       publish();
     } catch (error) {
       if (conversations.get(key(agentId, session)) !== c) return;
@@ -575,20 +556,11 @@ export function createStore(api: DuangApi) {
 
   /** One message into the conversation, from the draft or from Retry. A refused one returns to the draft. */
   async function submit(c: Conversation, text: string) {
-    // Where it goes is the runtime's report, not this guess: it waits below the output until
-    // `user_message` places it, whether it opens a run or joins one.
-    const echo: UserItem = { kind: "user", text, at: Date.now(), opens: opensRun(c.state?.status, c.runHasUser) };
     // Notes from before this send are not this send's: a refusal said for an earlier message is said again.
     const before = c.items.length;
-    // A new run's silence counts from its message; a steer is the person, not the model, and leaves it be.
-    if (echo.opens) c.heard = Date.now();
-    c.waiting = [...c.waiting, echo];
+    const echo = sent(c, text, Date.now());
+    // Once it entered, what happens to it is the run's.
     const waiting = () => c.waiting.includes(echo);
-    /** Nothing entered from it, so the text is still the person's to send again. */
-    const restoreRejected = () => {
-      c.waiting = c.waiting.filter((item) => item !== echo);
-      c.draft = c.draft ? `${text}\n${c.draft}` : text;
-    };
     c.sends++;
     publish();
     try {
@@ -600,8 +572,8 @@ export function createStore(api: DuangApi) {
         if (result.error.code === MODEL_UNAVAILABLE_CODE && model) {
           // The way on is choosing a model, so the picker opens on it and says why; nothing goes in the
           // transcript, because nothing happened in the conversation.
-          restoreRejected();
-          publish({ unavailable: { agentId: c.agentId, session: c.session, model, asked: Date.now() } });
+          unsent(c, echo);
+          publish({ unavailable: { agentId: c.agentId, session: c.session, model }, picker: true });
           return;
         }
         if (
@@ -609,16 +581,11 @@ export function createStore(api: DuangApi) {
           !c.items.slice(before).some((item) => item.kind === "note" && item.text.includes(result.error.message))
         )
           note(c, { error: result.error.message, tone: "warning", title: "Not sent", advice: "Your message is back in the composer." });
-        restoreRejected();
-      } else if (waiting()) {
-        c.returned.add(echo);
-        // A run that already ended while the call returned has nothing left to place it with. A
-        // stream that ended cannot say whether it entered: Retry re-reads the history instead.
-        if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c);
-      }
+        unsent(c, echo);
+      } else if (waiting()) accepted(c, echo, Date.now());
     } catch (error) {
       note(c, { error, title: "The message could not be sent" });
-      if (waiting()) restoreRejected();
+      if (waiting()) unsent(c, echo);
     } finally {
       c.sends--;
       publish();
@@ -647,8 +614,7 @@ export function createStore(api: DuangApi) {
       const result = await api.openAgent(id);
       if (request !== navigation) return;
       if (!result.ok) {
-        const state: AgentState = result.code === "failed" ? "broken" : result.code;
-        publish({ loading: false, states: { ...view.states, [id]: state }, error: result.message, errorInConfig: result.inConfig });
+        publish({ loading: false, states: { ...view.states, [id]: result.code }, error: result.message, errorInConfig: result.inConfig });
         return;
       }
       publish({
@@ -712,106 +678,20 @@ export function createStore(api: DuangApi) {
   async function keepListed(c: Conversation) {
     if (!view.sessions[c.agentId]?.some((s) => s.session === c.session)) await listSessions(c.agentId);
   }
-  function fold(c: Conversation, event: SessionEvent) {
-    const state = c.state ?? { status: "idle", pending: { steering: [], followUp: [] } };
-    const e = known(event);
-    const run = c.run;
-    if (e.type === "run_started") {
-      c.runHasUser = false;
-      c.started = e.timestamp;
-      c.run = { toolsRan: false };
-      c.state = { ...state, status: "running", activeRunId: e.runId };
-    } else if (e.type === "run_settled") {
-      dropQueued(c, state.pending.steering);
-      c.started = undefined;
-      c.run = undefined;
-      c.state = { ...state, status: "idle", activeRunId: undefined, pending: { steering: [], followUp: [] } };
-      // A run that ends while you are reading something else is the thing you came back for. A run
-      // you stopped yourself is not news.
-      if (c !== view.conversation && e.data.status !== "aborted")
-        unseen.set(key(c.agentId, c.session), e.data.status === "completed" ? "done" : "failed");
-      void listSessions(c.agentId);
-    } else if (e.type === "user_message") {
-      enter(c, e.data.entryId, e.data.text, e.timestamp);
-    } else if (e.type === "tool_started") {
-      if (c.run) c.run.toolsRan = true;
-    } else if (e.type === "queue_changed") {
-      c.state = { ...state, pending: e.data };
-    } else if (e.type === "state_changed") {
-      c.state = { ...state, ...e.data };
-    }
-    c.items = apply(c.items, event);
-    // A run heard from its start that failed after taking a message offers that message again. One that
-    // failed before (no credential, say) already returned the text to the draft. A run joined midway does not
-    // know its start here; reopened, its history does.
-    const failure = c.items.at(-1);
-    if (e.type === "run_settled" && e.data.status === "failed" && run?.message !== undefined && failure?.kind === "note")
-      c.items = [...c.items.slice(0, -1), { ...failure, resend: { text: run.message, toolsRan: run.toolsRan } }];
-    if (event.type === "run_settled") ranNothing(c);
-  }
   /**
-   * The runtime placed a user message: it goes into the transcript here, at the moment it entered.
-   * An entry the history already holds (a backfill that overlapped the live stream) is not added
-   * twice. This window's own message keeps the words that were typed.
+   * A run that ends while you are reading something else is the thing you came back for. A run you stopped
+   * yourself is not news. Either way the conversation list moves.
    */
-  function enter(c: Conversation, entryId: string, text: string, at: number) {
-    const known = c.items.some((item) => item.kind === "user" && item.entryId === entryId);
-    const own = known ? undefined : claim(c.waiting, text);
-    if (own) {
-      c.waiting = c.waiting.filter((item) => item !== own);
-      c.returned.delete(own);
-    }
-    // A steer typed while pi waited out a retry enters as the next attempt starts: the wait is over.
-    if (!known) c.items = [...wentOn(c.items), { kind: "user", text: own?.text ?? text, at, steered: c.runHasUser, entryId }];
-    c.runHasUser = true;
-    // The message the run is answering now; a steer replaces the opening one. What was typed, if it was ours.
-    if (c.run) c.run.message = own?.text ?? text;
-  }
-  /**
-   * What the runtime still lists as queued when its run ends never entered the conversation and is
-   * dropped with the run. It returns to the draft rather than stay on screen as if delivered, and so
-   * does a message this window did not send: after a reload the runtime's queue is the only place a
-   * steer typed before it still exists, and nothing else would keep those words.
-   */
-  function dropQueued(c: Conversation, pending: string[]) {
-    const dropped = queueView(c.waiting, pending).flatMap(({ item, listed }) => (listed ? [item] : []));
-    if (!dropped.length) return;
-    c.waiting = c.waiting.filter((item) => !dropped.includes(item));
-    for (const item of dropped) c.returned.delete(item);
-    c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
-  }
-  /**
-   * An accepted message with no run left to enter: an extension command that did its work without
-   * sending anything into the conversation. It ran, so it neither returns to the draft nor vanishes.
-   */
-  function ranNothing(c: Conversation) {
-    const ran = c.waiting.filter((item) => c.returned.has(item));
-    if (!ran.length) return;
-    c.waiting = c.waiting.filter((item) => !c.returned.has(item));
-    c.returned.clear();
-    const at = Date.now();
-    c.items = [...c.items, ...ran.map((item): Item => ({ kind: "note", tone: "info", text: `ran ${item.text}`, at }))];
+  function settled(c: Conversation, outcome: Settled) {
+    if (c !== view.conversation && outcome !== "aborted")
+      unseen.set(key(c.agentId, c.session), outcome === "completed" ? "done" : "failed");
+    void listSessions(c.agentId);
   }
   const onFrame = (frame: SessionFrame) => {
     const c = conversations.get(key(frame.agentId, frame.session));
     if (!c || c.subscription !== frame.subscription) return;
     if (frame.ended) {
-      // Nothing will report the end of a run this view can no longer hear, so stop waiting for one.
-      // Retry re-opens and re-reads the runtime's real state.
-      if (c.state) c.state = { ...c.state, status: "idle", activeRunId: undefined };
-      // A tool's clock is a claim that it is still being watched. It stops where this view stopped
-      // hearing; how long the tool really ran is no longer knowable here.
-      const now = Date.now();
-      c.items = c.items.map((item) =>
-        item.kind === "tool" && item.status === "running" && item.ended === undefined ? { ...item, ended: now } : item,
-      );
-      if (frame.ended.why !== "failed") c.ended = frame.ended.reason;
-      else
-        c.error = {
-          title: "The live connection to this conversation was lost",
-          advice: "A run in it goes on in duang. Reconnect to see where it is now.",
-          reason: frame.ended.reason,
-        };
+      lost(c, frame.ended, Date.now());
       publish();
       // FastAgent's contract for a subscriber it let go (a backlog that overflowed, a runtime replaced): listen
       // again and read the history. The open conversation does that once by itself; one that ends again soon
@@ -830,9 +710,8 @@ export function createStore(api: DuangApi) {
       }
       return;
     }
-    if (!PERSON_SIDE.has(frame.event.type)) c.heard = Date.now();
-    if (c.loading) c.events.push(frame.event);
-    else fold(c, frame.event);
+    const outcome = receive(c, frame.event, Date.now());
+    if (outcome) settled(c, outcome);
     publish();
   };
   /**
@@ -902,9 +781,9 @@ export function createStore(api: DuangApi) {
      * where sessions live.
      *
      * A failure belongs to that agent, never to the transcript being read, so it is published
-     * against that agent and its row says it. It deliberately does not touch `states`: that drives
-     * the main panel, and a background read of the open agent would otherwise put the window into
-     * "this agent is broken" with no message to show for it.
+     * against that agent and its row says it. It never touches the open agent's `states`: that drives
+     * the main panel, and a background read would otherwise put the window into "this agent is broken"
+     * with no message to show for it. Another agent's state is kept, for its row to say.
      */
     listSessions,
     /** duang's label for the agent; the directory keeps its name. */
@@ -970,6 +849,8 @@ export function createStore(api: DuangApi) {
       }
     },
     dismissFailure: () => publish({ failure: undefined }),
+    openPicker: () => publish({ picker: true }),
+    closePicker: () => publish({ picker: false }),
     /** A plan whose usage only its provider's page shows: main opens that page in the browser. */
     async openUsagePage(provider: string) {
       try {
@@ -1024,7 +905,7 @@ export function createStore(api: DuangApi) {
       };
       publish({ changingModel: id });
       try {
-        const result = await api.setModel(id, model, c?.session);
+        const result = await api.setModel(id, model, c.session);
         if (!result.ok) {
           settle();
           // The model did not change, so nothing ran: this is a refusal, not a failure.

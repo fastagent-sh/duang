@@ -200,7 +200,7 @@ test("an unreadable agent list is its own pane; a failure adding an agent is sai
 
 test("a setup problem is its own pane, and its prose is not repeated above it", async () => {
   const { api, store } = harness();
-  api.openAgent = async () => ({ ok: false, code: "failed", message: "boom" });
+  api.openAgent = async () => ({ ok: false, code: "broken", message: "boom" });
   await store.load();
   assert.equal(store.getSnapshot().pane, "broken");
   assert.equal(store.getSnapshot().error, "boom", "the panel says it");
@@ -264,7 +264,7 @@ test("late agent and conversation reads cannot replace the current selection", a
   api.openAgent = async (id) => (id === "a" ? agent.promise : ready);
   const old = store.selectAgent("a");
   await store.selectAgent("b");
-  agent.resolve({ ok: false, code: "failed", message: "stale failure" });
+  agent.resolve({ ok: false, code: "broken", message: "stale failure" });
   await old;
   assert.equal(store.getSnapshot().agentId, "b");
   assert.equal(store.getSnapshot().error, undefined);
@@ -587,7 +587,7 @@ test("a subscriber the runtime let go listens again once by itself; any other en
 
 test("a config that failed to load is offered afresh once, however often the button is pressed", async () => {
   const { api, store } = harness();
-  api.openAgent = async () => ({ ok: false, code: "failed", message: "/p/fastagent/fastagent.config.ts: Expression expected", inConfig: true });
+  api.openAgent = async () => ({ ok: false, code: "broken", message: "/p/fastagent/fastagent.config.ts: Expression expected", inConfig: true });
   await store.load();
   assert.equal(store.getSnapshot().errorInConfig, true, "main says the failure is in the config");
   const reset = deferred<SessionResult>();
@@ -1042,14 +1042,14 @@ test("an agent whose list cannot be read says why, on its own row", async () => 
   await store.load();
   const openConversation = store.getSnapshot().conversation!;
   api.openAgent = async (id) =>
-    id === "b" ? { ok: false, code: "failed", message: "runtime would not start" } : ready;
+    id === "b" ? { ok: false, code: "broken", message: "runtime would not start" } : ready;
 
   await store.listSessions("b");
   assert.equal(store.getSnapshot().sessionsError["b"], "runtime would not start");
   assert.equal(store.getSnapshot().states.b, "broken", "another agent's row says its setup in words");
   // The open agent's state drives the main panel: a background re-read must not declare the
   // window broken with nothing to show for it.
-  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime would not start" });
+  api.openAgent = async () => ({ ok: false, code: "broken", message: "runtime would not start" });
   await store.listSessions("a");
   assert.equal(store.getSnapshot().states.a, "ready");
   assert.equal(
@@ -1410,7 +1410,7 @@ test("the open agent's list keeps the newest answer, and a failed re-read lands 
   await renamed;
   assert.equal(store.getSnapshot().sessions["a"]?.[0]?.name, "Newest", "the slower, older answer does not win");
 
-  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime gone" });
+  api.openAgent = async () => ({ ok: false, code: "broken", message: "runtime gone" });
   emit(c, "run_started");
   emit(c, "run_settled", { status: "completed" });
   await new Promise((resolve) => setImmediate(resolve));
@@ -1505,7 +1505,7 @@ test("a rename that cannot be read back, and one refused on a conversation nobod
 
   // The name is written, and re-reading the list fails: the row would otherwise keep the old label
   // with nothing said about it.
-  api.openAgent = async () => ({ ok: false, code: "failed", message: "runtime would not restart" });
+  api.openAgent = async () => ({ ok: false, code: "broken", message: "runtime would not restart" });
   await store.renameSession("a", "s1", "Named");
   assert.equal(store.getSnapshot().sessionsError["a"], "runtime would not restart");
 
@@ -2079,10 +2079,43 @@ test("a send refused because the model cannot run opens the picker on it, and wr
   const asked = store.getSnapshot().unavailable;
   assert.equal(asked?.model, "anthropic/claude-sonnet-4-5");
   assert.equal(asked?.session, c.session);
+  assert.equal(store.getSnapshot().picker, true, "the picker opens on it");
   assert.equal(c.items.length, 0, "nothing happened in the conversation, so nothing is written there");
   assert.equal(c.draft, "Summarise the latest notes", "the message waits for the model to be chosen");
   // Choosing a model is the way on, and ends the request.
   await store.pickModel("provider/model");
   assert.equal(store.getSnapshot().unavailable, undefined);
+  store.dispose();
+});
+
+test("the picker opens for a conversation that needs a model, stays closed once closed, and opens when asked", async () => {
+  const { api, store } = harness();
+  api.openAgent = async () => ({ ok: true, sessions: [] });
+  await store.load();
+  assert.equal(store.getSnapshot().needsModel, true, "no model recorded and no default");
+  assert.equal(store.getSnapshot().picker, true, "a conversation that cannot start asks for its model");
+  store.closePicker();
+  store.setDraft("hello");
+  assert.equal(store.getSnapshot().picker, false, "closed by the person, it stays closed while nothing changes");
+  await store.newConversation();
+  assert.equal(store.getSnapshot().picker, true, "another conversation that needs a model asks again");
+  await store.pickModel("provider/model");
+  assert.equal(store.getSnapshot().needsModel, false);
+  assert.equal(store.getSnapshot().picker, false, "a chosen model closes it");
+  store.openPicker();
+  assert.equal(store.getSnapshot().picker, true, "a problem's Use another model, or a provider connected from it, opens it");
+  store.dispose();
+});
+
+test("the model cannot be changed while the conversation runs, or before its agent is ready", async () => {
+  const { api, store, emit } = harness();
+  api.listAgents = async () => [];
+  await store.load();
+  assert.equal(store.getSnapshot().modelBlocked, "Select an agent first");
+  api.listAgents = async () => [{ id: "a", name: "A", dir: "/a", colour: 0 }];
+  await store.load();
+  assert.equal(store.getSnapshot().modelBlocked, undefined);
+  emit(store.getSnapshot().conversation!, "run_started");
+  assert.equal(store.getSnapshot().modelBlocked, "Stop the turn to change the model or effort");
   store.dispose();
 });
