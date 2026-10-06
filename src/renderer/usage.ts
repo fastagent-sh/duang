@@ -1,16 +1,18 @@
 /** How the header says how much is left: plan windows and the context window. Pure, so it is testable. */
 import type { UsageWindow } from "../preload/index.ts";
+import { clock } from "./sessions.ts";
 
 const DAY_MS = 24 * 3600 * 1000;
-const pad = (n: number) => String(n).padStart(2, "0");
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/** "14:29" inside a day's window, "Fri 03:59" for a longer one: the reset is always within one week. */
+/**
+ * The clock time inside a day's window, with the weekday for a longer one (the reset is always within one week),
+ * written as the transcript writes its times.
+ */
 export function resetLabel(window: UsageWindow): string | undefined {
   if (window.resetsAt === undefined) return undefined;
-  const d = new Date(window.resetsAt);
-  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return window.windowSeconds * 1000 < DAY_MS ? time : `${DAYS[d.getDay()]} ${time}`;
+  const time = clock(window.resetsAt);
+  if (window.windowSeconds * 1000 < DAY_MS) return time;
+  return `${new Date(window.resetsAt).toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
 /**
