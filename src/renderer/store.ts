@@ -30,7 +30,7 @@ export type AgentState = "ready" | "no_agent" | "missing_dir" | "broken";
  * of the wrong screen.
  * `start` is that page, for a new conversation.
  */
-export type Pane =
+type Pane =
   | "unreadable-registry"
   | "no-agents"
   | "broken"
@@ -476,7 +476,7 @@ export function createStore(api: DuangApi) {
       if (!result.ok)
         return settle({
           sessionsError: { ...view.sessionsError, [id]: result.message },
-          ...own(result.code === "failed" ? "broken" : result.code),
+          ...own(result.code),
         });
       const { [id]: _cleared, ...errors } = view.sessionsError;
       settle({ sessions: { ...view.sessions, [id]: result.sessions }, sessionsError: errors, ...own("ready", result.model) });
@@ -614,8 +614,7 @@ export function createStore(api: DuangApi) {
       const result = await api.openAgent(id);
       if (request !== navigation) return;
       if (!result.ok) {
-        const state: AgentState = result.code === "failed" ? "broken" : result.code;
-        publish({ loading: false, states: { ...view.states, [id]: state }, error: result.message, errorInConfig: result.inConfig });
+        publish({ loading: false, states: { ...view.states, [id]: result.code }, error: result.message, errorInConfig: result.inConfig });
         return;
       }
       publish({
@@ -782,9 +781,9 @@ export function createStore(api: DuangApi) {
      * where sessions live.
      *
      * A failure belongs to that agent, never to the transcript being read, so it is published
-     * against that agent and its row says it. It deliberately does not touch `states`: that drives
-     * the main panel, and a background read of the open agent would otherwise put the window into
-     * "this agent is broken" with no message to show for it.
+     * against that agent and its row says it. It never touches the open agent's `states`: that drives
+     * the main panel, and a background read would otherwise put the window into "this agent is broken"
+     * with no message to show for it. Another agent's state is kept, for its row to say.
      */
     listSessions,
     /** duang's label for the agent; the directory keeps its name. */
@@ -906,7 +905,7 @@ export function createStore(api: DuangApi) {
       };
       publish({ changingModel: id });
       try {
-        const result = await api.setModel(id, model, c?.session);
+        const result = await api.setModel(id, model, c.session);
         if (!result.ok) {
           settle();
           // The model did not change, so nothing ran: this is a refusal, not a failure.
