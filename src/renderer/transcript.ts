@@ -410,7 +410,10 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   const items: Item[] = [];
   /** A failed answer whose run has not been seen to go on: its note, and the error it gives. */
   let failure: { index: number; message: string } | undefined;
-  /** Where the work no answer has concluded yet begins: what a retry could repeat. */
+  /**
+   * Where the work no answer has concluded yet begins: what a retry could repeat. History does not say where
+   * a run began, so this stands in for it; the live view counts from `run_started` instead (`conversation.ts`).
+   */
   let unconcluded = 0;
   /** Where the turn stands after the last conversation entry: answered, or cut partway. */
   let open = false;

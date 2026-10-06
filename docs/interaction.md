@@ -171,7 +171,10 @@ the message and then failed) offers Retry under the failure while nothing runs: 
 as a new turn, leaving the failure and whatever the failed run did in the transcript. A failure that is a ChatGPT plan's usage limit (`subscription_sharing_usage_limit_exceeded`) also offers View usage, which opens that page. A run that was steered is
 retried with its last message, the one it was answering; the earlier ones already entered the conversation.
 When the failed run had used tools no answer concluded (a steered run's included), Retry first asks, because
-the agent may repeat that work. Nothing is retried without that click, and a stopped run is not offered again.
+the agent may repeat that work. Watched live, the question counts every tool since the run started; read
+back, only those after the last answer or tool batch that ended the work, since history does not record
+where a run began. They differ only when a steer carried a run past such an answer: live asks, read back
+does not. Live errs toward asking. Nothing is retried without that click, and a stopped run is not offered again.
 Read back from history, the message is the one the runtime recorded, so a slash command is resent expanded. A conversation that is not running but whose history stops partway through a turn (on the message, on a
 tool's result, or on calls that never ran) was cut with nothing recorded, because duang or the machine
 stopped mid-run: it says *This run was cut short* and offers Retry the same way. An agent's row
