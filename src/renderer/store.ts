@@ -96,8 +96,10 @@ function readSelection(): Selection | undefined {
 function writeStored(storageKey: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(storageKey, value);
-  } catch {
-    // A full or disabled store costs a click or a retyped line after the next restart, nothing else.
+  } catch (error) {
+    // A full or disabled store costs a click, or unsent text, after the next restart; the window goes on, and
+    // the log says why.
+    console.error(`duang: ${storageKey} was not saved:`, error);
   }
 }
 /**
