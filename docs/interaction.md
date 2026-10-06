@@ -185,11 +185,12 @@ the input method. `⌘N` or the sidebar's New conversation action starts a conve
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it (the round button is Stop while the field is empty and Steer once it holds text; Esc always stops); the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow
 navigation, and the transcript is focusable. While a run waits on the model and nothing has come from it for 30 seconds (a steer of the person's own does not count), its status line adds `no output for 45s`: a thinking model can be that quiet and be fine, so it is said plainly, and a running tool, which has its own clock, does not add it. A tool call reopened from history shows its arguments, as it did live. A long conversation opened at its latest line shows that end at once and draws the rest above it over the next
-moments, while the view stays where it is; one returning to a place it was left at is drawn whole first. Scrolling up suspends tail-follow; a control returns
+moments, while the view stays where it is; one returning to a place it was left at draws from that place the same way. Scrolling up suspends tail-follow; a control returns
 to the latest turn. A conversation is opened at its latest turn, or, when it was left scrolled up, where it was
-left, through Settings or another agent and back (for the window's life, not across launches; a card that was
-expanded comes back folded, so the place is the same distance from the top, not the same line). The place is held
-while the layout settles and until the person scrolls. While the history of a conversation the runtime already
+left, through Settings or another agent and back (for the window's life, not across launches). The place is the line
+at the top of the view, at the same height in it: lines drawn above it and output the run added while the person
+was away do not move it, and a card that was expanded comes back folded (a place inside one returns to its top).
+The place is held while the layout settles and while output goes on arriving, until the person scrolls. While the history of a conversation the runtime already
 has is being read (and while an agent opens, until it is known to have none), the pane is empty with the composer in
 place: the new-conversation page is for a conversation nobody has spoken in, and is not shown for the moment
 before the real one arrives. A view that was at the latest turn stays there while its

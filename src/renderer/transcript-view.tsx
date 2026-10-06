@@ -40,6 +40,7 @@ import {
   toolText,
   type Item,
   type Line,
+  type Place,
   type Work,
 } from "./transcript.ts";
 import type { SessionState } from "@fastagent-sh/fastagent/session";
@@ -145,6 +146,26 @@ const linesEnd = (el: HTMLElement) => el.firstElementChild!.getBoundingClientRec
 /** How far the view's top is from the end of the lines: a place that lines drawn above it do not move. */
 const fromEnd = (el: HTMLElement) => linesEnd(el) - el.scrollTop;
 
+const drawnLines = (el: HTMLElement) => [...el.firstElementChild!.children].filter((row): row is HTMLElement => row instanceof HTMLElement && row.dataset.line !== undefined);
+const top = (row: Element, el: HTMLElement) => row.getBoundingClientRect().top - el.getBoundingClientRect().top;
+/** The first line reaching into the view, and where its top is. Undefined when no line is drawn. */
+function placeOf(el: HTMLElement): Place | undefined {
+  const row = drawnLines(el).find((row) => row.getBoundingClientRect().bottom > el.getBoundingClientRect().top);
+  return row && { line: Number(row.dataset.line), offset: top(row, el) };
+}
+/**
+ * Scrolls so the place's line is where it was. A line no longer drawn there (a retry note the status line now
+ * stands in for) gives way to the next one, at its top; with none after it either (a place past the lines, which
+ * only grow), the view stays where it is. An expanded card comes back folded: a place further into
+ * it than its folded height is put at its top, not past it.
+ */
+function scrollToPlace(el: HTMLElement, place: Place) {
+  const row = drawnLines(el).find((row) => Number(row.dataset.line) >= place.line);
+  if (!row) return;
+  const offset = Number(row.dataset.line) === place.line && -place.offset < row.offsetHeight ? place.offset : 0;
+  el.scrollTop += top(row, el) - offset;
+}
+
 /** Within a line or two of the end: where a conversation opens, and what "following" means. */
 const atLatest = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 40;
 
@@ -180,16 +201,10 @@ export function Transcript({
   heard?: number;
   /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
   bottomGap: number;
-  /**
-   * Where this conversation was left, read once when the view mounts; absent means the latest line. Measured from
-   * the end of the conversation's lines (`fromEnd`), because a long conversation draws its older lines above what is
-   * on screen after it opens (`from`): a place measured from the top while they were still missing would point
-   * elsewhere once they are drawn. Not from the end of the scroll area, whose space under the lines follows the
-   * composer's height and changes as the view mounts.
-   */
-  resume?: number;
-  /** Where the view rests now (from the end, as `resume`), or undefined while it follows the latest line. */
-  onRest: (fromEnd: number | undefined) => void;
+  /** Where this conversation was left, read once when the view mounts; absent means the latest line. */
+  resume?: Place;
+  /** Where the view rests now, or undefined while it follows the latest line. */
+  onRest: (place: Place | undefined) => void;
   /** The conversation ends on a failed turn that can be sent again: the action sits under its failure. */
   onRetry?: () => void;
   /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
@@ -256,24 +271,23 @@ export function Transcript({
     const el = box.current;
     if (!el) return;
     if (restoring.current) {
-      const place = linesEnd(el) - resume!;
-      if (el.scrollTop !== place) el.scrollTop = place;
+      scrollToPlace(el, resume!);
       follow.current = false;
       setAway(true);
       return;
     }
     follow.current = atLatest(el);
     setAway(!follow.current);
-    onRest(follow.current ? undefined : fromEnd(el));
+    onRest(follow.current ? undefined : placeOf(el));
   };
   // Before the first paint, so the conversation is never seen at the bottom first.
   useLayoutEffect(() => {
-    if (resume !== undefined) box.current!.scrollTop = linesEnd(box.current!) - resume;
+    if (resume !== undefined) scrollToPlace(box.current!, resume);
     // A scroll event that has not fired yet cannot tell the place a view is leaving from, so it is read
     // here, while the element is still attached. A view still holding a place keeps what it was given.
     return () => {
       const el = box.current;
-      if (el && !restoring.current) onRest(atLatest(el) ? undefined : fromEnd(el));
+      if (el && !restoring.current) onRest(atLatest(el) ? undefined : placeOf(el));
     };
   }, []);
 
@@ -305,11 +319,10 @@ export function Transcript({
    * Chromium's scroll anchoring would do that too, except at `scrollTop` 0 (a first batch shorter than the window,
    * or a person who scrolled to the top of what is drawn), where it pushes the view to the oldest line. The batch
    * is committed synchronously (`flushSync`) so no scroll can come between reading the place and restoring it.
-   * A view returning to a place
-   * it was left at draws everything at once: drawn from the end, it would first sit wherever the drawn part
-   * reaches and then move as the batches reach the place.
+   * A view returning to a place it was left at draws from that place's line, or from the last 40 when it is
+   * nearer the end, and the rest above it the same way.
    */
-  const [from, setFrom] = useState(() => (resume === undefined ? Math.max(0, shown.length - FIRST_LINES) : 0));
+  const [from, setFrom] = useState(() => Math.min(resume?.line ?? Infinity, Math.max(0, shown.length - FIRST_LINES)));
   useEffect(() => {
     if (from === 0) return;
     const id = requestIdleCallback(
@@ -410,7 +423,7 @@ export function Transcript({
           index < from || line === end.hidden ? null : line.kind === "day" ? (
             // Reading yesterday's run is the normal case here; without this the whole conversation
             // reads as one sitting.
-            <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
+            <div key={index} data-line={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
               <span className="h-px flex-1 bg-stroke" />
               {dayLabel(line.at)}
               <span className="h-px flex-1 bg-stroke" />
@@ -418,7 +431,7 @@ export function Transcript({
           ) : (
             // `enter` runs once, when the element is created — a streaming answer re-renders into
             // the same node, so the rise does not restart on every token.
-            <div key={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
+            <div key={index} data-line={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
                 <SettledWork work={line} live={line === end.block ? live : undefined} />
               ) : (

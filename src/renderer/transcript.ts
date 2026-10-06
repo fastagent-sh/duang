@@ -170,6 +170,13 @@ export function queueView(waiting: UserItem[], pending: string[]): { item: UserI
 export type Line = Item | { kind: "day"; at: number };
 
 /**
+ * Where a conversation was left above its latest line: the line at the top of the view (its index among the drawn
+ * lines) and how far its top is from the view's top. Lines drawn above it later (a long conversation's older lines)
+ * and lines added under it (a run going on while the person is away) move neither.
+ */
+export type Place = { line: number; offset: number };
+
+/**
  * Items with the day boundaries between them. Pure, and separate from rendering, because "when did
  * this stop being the same day" is the only interesting part.
  */

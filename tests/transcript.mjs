@@ -318,6 +318,93 @@ if (!process.versions.electron) {
     win.webContents.debugger.detach();
     assert.ok(short.firstFit && short.overflowed, `the first batch fits the window and the whole conversation does not (${JSON.stringify(short)})`);
     assert.ok(short.fromEnd < 2, `a first batch shorter than the window still ends at the latest line (${JSON.stringify(short)})`);
+    // A run that goes on while the person is away, scrolled up in it: coming back finds the same line where it was,
+    // and output that goes on arriving after that does not move it either (the place is held until they scroll).
+    const more = deferred();
+    const rest = Array.from({ length: 30 }, (_, n) => `More output ${n + 1}.`).join("\n\n");
+    script.push({ text: "Working on it.", tools: [waitsFor("d")] }, { text: "Part one.", hold: more.promise, rest: `\n\n${rest}` });
+    await send("keep going");
+    await until(`/running/.test(document.querySelector('[aria-label="Transcript"]').innerText)`, "the long conversation's run is working");
+    const reading = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      el.scrollTop -= 600;
+      el.dispatchEvent(new Event('scroll'));
+      const top = el.getBoundingClientRect().top + 60;
+      const row = [...el.querySelector('.column').children].find((r) => r.getBoundingClientRect().bottom > top);
+      return { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top };
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+    await until(shown("Answered after a retry."), "away on Live");
+    writeFileSync(join(long, "gate-d"), "");
+    for (let t = 0; t < 400 && script.length > 0; t++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(script.length, 0, "the run went on to its answer while the person was away");
+    await new Promise((r) => setTimeout(r, 500));
+    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+    await until(shown("Part one."), "back on the long conversation, with what was written while away");
+    await new Promise((r) => setTimeout(r, 300));
+    const returned = await offsetOf(reading.text);
+    assert.ok(returned !== null && Math.abs(returned - reading.offset) < 2, `coming back to a run that went on finds the same line (row at ${returned}, left at ${reading.offset})`);
+    more.resolve();
+    await until(shown("More output 30."), "the rest of the answer arrives");
+    await new Promise((r) => setTimeout(r, 300));
+    const held = await offsetOf(reading.text);
+    assert.ok(held !== null && Math.abs(held - reading.offset) < 2, `output arriving under a returned place does not move it (row at ${held}, left at ${reading.offset})`);
+    await idle();
+    // A place far above the last lines is drawn from its own line on return, the lines above it after: it is
+    // where it was, and stays there while they are drawn.
+    const far = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      el.scrollTop = 900;
+      el.dispatchEvent(new Event('scroll'));
+      const top = el.getBoundingClientRect().top + 60;
+      const row = [...el.querySelector('.column').children].find((r) => r.getBoundingClientRect().bottom > top);
+      return { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top };
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+    await until(shown("Answered after a retry."), "away on Live");
+    await evaluate(`(() => {
+      window.__far = undefined;
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector('[aria-label="Transcript"]');
+        if (!el || !el.innerText.includes(${JSON.stringify(far.text)})) return;
+        observer.disconnect();
+        window.__far = el.innerText.includes('Turn 1 of the long one');
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await openLong();
+    assert.equal(await evaluate("window.__far"), false, "a place far up is drawn before the lines above it");
+    const farBack = await offsetOf(far.text);
+    assert.ok(farBack !== null && Math.abs(farBack - far.offset) < 2, `a place far above the last lines is found again (row at ${farBack}, left at ${far.offset})`);
+    // A place inside a card that was expanded: the card comes back folded, shorter than how far into it the place
+    // was, so the place returns to the card's top rather than past it.
+    const cardRow = `[...document.querySelectorAll('[aria-label="Transcript"] .column > [data-line]')].findLast((r) => r.querySelector('details'))`;
+    const folded = await evaluate(`${cardRow}.offsetHeight`);
+    // The step's row, then the call in it: each opens what it holds.
+    await evaluate(`${cardRow}.querySelector('details').open = true`);
+    await until(`${cardRow}.querySelectorAll('details').length > 1`, "the step's calls are shown");
+    await evaluate(`${cardRow}.querySelectorAll('details')[1].open = true`);
+    await new Promise((r) => setTimeout(r, 200));
+    const card = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      const row = ${cardRow};
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      const into = Math.round((${folded} + row.offsetHeight) / 2);
+      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top + into;
+      el.dispatchEvent(new Event('scroll'));
+      return { line: row.dataset.line, into, folded: ${folded}, open: row.offsetHeight };
+    })()`);
+    assert.ok(card.into > card.folded && card.into < card.open, `the place is inside the open card and past its folded height (${JSON.stringify(card)})`);
+    await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
+    await until(shown("Answered after a retry."), "away on Live");
+    await openLong();
+    const cardTop = await evaluate(`(() => {
+      const el = document.querySelector('[aria-label="Transcript"]');
+      return el.querySelector('[data-line="${card.line}"]').getBoundingClientRect().top - el.getBoundingClientRect().top;
+    })()`);
+    assert.ok(Math.abs(cardTop) < 2, `a place inside a card that comes back folded returns to its top (card at ${cardTop})`);
     assert.equal(script.length, 0, "every scripted answer was asked for");
     console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line; a long conversation opens at its end and fills in above it.");
   }
