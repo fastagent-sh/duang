@@ -182,7 +182,7 @@ if (root) {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, '读一下这个文件, 跑一次 i18n 检查, 然后解释 ListingResult 的核心部分');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
-    await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "Send appears for a draft");
+    await until("document.querySelector('button[aria-label=\"Send\"]:not([aria-disabled])') !== null", "Send is ready for a draft");
     await evaluate(`document.querySelector('button[aria-label="Send"]').click()`);
     await until("document.body.innerText.includes('sectionsGenerated')", "the answer");
     await until("document.querySelector('pre code span') !== null", "highlighting");
