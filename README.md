@@ -16,9 +16,8 @@ FastAgent session, read from the agent's own runtime rather than copied into a s
   <img src="docs/screenshots/reading-light.png" alt="duang: two agents in the sidebar, and a conversation with a code block, a table and mixed English and Chinese text" width="860">
 </p>
 
-> **Status: early.** duang runs agents on your Mac only (Apple silicon), and there is no signed release
-> yet: you build the app from source. Online agents, giving someone an agent and hosting are
-> [planned](#roadmap), not built.
+> **Status: early.** duang runs agents on your Mac only (Apple silicon), and its releases are not signed
+> yet. Online agents, giving someone an agent and hosting are [planned](#roadmap), not built.
 
 ## Why
 
@@ -72,18 +71,20 @@ follow the system; seven avatar styles; the sidebar and transcript work from the
 
 ## Install
 
-Requirements: macOS on Apple silicon, Node 24 and npm.
+Requirements: macOS on Apple silicon.
 
-```bash
-git clone https://github.com/fastagent-sh/duang.git
-cd duang
-npm ci
-npm run package     # builds dist/duang-<version>-arm64.dmg
-```
+1. Download `duang-<version>-arm64.dmg` from the
+   [latest release](https://github.com/fastagent-sh/duang/releases/latest), open it and drag duang to
+   Applications.
+2. The app is not signed with an Apple Developer ID or notarized yet, so macOS refuses the first open
+   ("Apple could not verify…"). Click **Done**, then open System Settings → Privacy & Security, find
+   duang near the bottom, click **Open Anyway** and confirm. macOS remembers the choice.
 
-Open the dmg and drag duang to Applications. The app is not signed with an Apple Developer ID yet, so
-macOS refuses the first open: right-click duang → **Open**, or System Settings → Privacy & Security →
-**Open Anyway**. To update, pull, run `npm run package` again and replace the app.
+Each release lists the dmg's SHA-256 (`shasum -a 256 duang-<version>-arm64.dmg` to compare). To update,
+download the new release and replace the app; there are no automatic updates until the app is signed.
+
+**From source** (Node 24 and npm): `git clone https://github.com/fastagent-sh/duang.git`, then
+`npm ci && npm run package` builds the same dmg into `dist/`.
 
 ## Getting started
 
@@ -124,7 +125,7 @@ More: [architecture](docs/architecture.md) (processes, state ownership, network 
 
 ## Known limitations
 
-- macOS on Apple silicon only, and unsigned.
+- macOS on Apple silicon only; not signed or notarized, and no automatic updates.
 - An agent is added from a directory: today a `fastagent/` directory inside a project, which works on
   the project around it. Creating agents with the folders they work on waits for FastAgent's
   agent-directory release ([#133](https://github.com/fastagent-sh/duang/issues/133)).

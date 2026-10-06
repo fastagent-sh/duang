@@ -146,10 +146,54 @@ git branch -d <merged-branch>
 git fetch --prune origin
 ```
 
-## Dependencies, Actions and releases
+## Releases
+
+A release is the macOS app (`duang-X.Y.Z-arm64.dmg`) attached to a GitHub Release `vX.Y.Z`. Start from a
+clean, up-to-date `main` with an authenticated GitHub CLI:
+
+```bash
+npm run release:patch   # or release:minor / release:major / node scripts/release.mjs X.Y.Z
+```
+
+The script refuses to start from anything but a clean `main` identical to `origin/main`, or for a version
+whose branch or tag exists. It bumps `package.json` and the lockfile on `chore/release-X.Y.Z`, runs
+`npm test`, `npm run test:package`, `node tests/smoke.mjs` and `node tests/transcript.mjs`, and opens the
+PR. It never merges, tags or creates the Release. After a maintainer squash-merges the PR, a repository
+admin tags that merge commit (check `git log -1` is `chore: release X.Y.Z (#N)`):
+
+```bash
+git switch main && git pull --ff-only
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The tag starts `.github/workflows/release.yml` in the protected `release` environment, which waits for a
+maintainer's approval. It builds the commit the tag pointed to when pushed (a re-run builds the same one),
+checks that the tag is the package's version and on `main`, runs the unit tests, builds the dmg, runs the
+packaged app outside the checkout, and creates a **draft** Release `vX.Y.Z` with generated notes, the dmg
+and its SHA-256. Read the draft, then publish it:
+
+```bash
+gh release edit vX.Y.Z --draft=false
+```
+
+A Release becomes public, and the one README's install link points to, only with its app attached. A
+failed run creates no Release: re-run it when the cause was the runner, and release a new version when
+it was the code. A run that failed after creating the draft leaves it; delete the draft before
+re-running. The "Protect release tags" ruleset lets only repository admins create `v*` tags and refuses
+updating, moving or deleting them to everyone else; admins can bypass it but do not: a broken release is
+followed by a new version, never re-tagged. Generated notes group merged PRs by their type label
+(`.github/release.yml`).
+
+The app is ad-hoc signed, not with an Apple Developer ID, and not notarized, so macOS refuses its first
+open; README.md says how to open it. Signing, notarization and automatic updates wait for a Developer
+ID: macOS only updates a signed app in place.
+
+## Dependencies and Actions
 
 - Actions are SHA-pinned. Default `GITHUB_TOKEN` permissions are read-only; the metadata-only
-  labeler alone gets PR-write permission and must never check out or execute PR code.
+  labeler alone gets PR-write permission and must never check out or execute PR code. The release
+  workflow alone gets `contents: write`, to attach the release's assets, behind its environment's
+  approval.
 - Dependabot checks GitHub Actions weekly. npm/FastAgent version updates remain ordinary reviewed
   PRs; FastAgent is pinned to an exact version and bumped with the change that consumes it.
   Keep `package.json` and the lockfile consistent.
@@ -158,8 +202,6 @@ git fetch --prune origin
 - CodeQL analyzes every PR, `main` and a weekly schedule (`.github/workflows/codeql.yml`). Secret
   scanning with push protection is enabled. Neither replaces review of the boundaries in
   [SECURITY.md](SECURITY.md); never treat a clean scan as a security result.
-- No release/publish workflow is configured. duang is an Electron application, not FastAgent's npm
-  package; signing, notarization, updater distribution and cloud deployment need separate decisions.
 - Do not change visibility, collaborators, licensing or billing as part of ordinary code work.
 
 Keep durable guidance here, in `AGENTS.md`, or in `docs/`. Do not commit temporary plans, handoffs,

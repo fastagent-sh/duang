@@ -1,0 +1,11 @@
+# Groups GitHub's generated release notes by the type label each PR gets from its branch prefix (.github/labeler.yml).
+changelog:
+  exclude:
+    labels: [dependencies, github_actions]
+  categories:
+    - title: Features
+      labels: [enhancement]
+    - title: Fixes
+      labels: [bug]
+    - title: Other changes
+      labels: ['*']

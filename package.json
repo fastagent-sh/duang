@@ -32,9 +32,12 @@
     "test:smoke": "npm run build && node tests/smoke.mjs && node tests/transcript.mjs",
     "test:live": "npm run build && node tests/live.mjs",
     "shots": "npm run build && node tests/shot.mjs",
-    "package": "npm run build && electron-builder --mac",
+    "package": "npm run build && electron-builder --mac --publish never",
     "test:package": "npm run package && node tests/packaged.mjs",
-    "test:perf": "npm run build && node tests/perf.mjs"
+    "test:perf": "npm run build && node tests/perf.mjs",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
   },
   "dependencies": {
     "@fastagent-sh/fastagent": "0.24.4",
