@@ -135,6 +135,10 @@ function gap(previous: string | undefined, kind: string): string {
 /** An answer ends its turn unless the run goes on to work after it; only then does it get a footer. */
 const ends = (next: Line | Work | undefined, busy: boolean) => (next ? next.kind !== "work" : !busy);
 
+/** How much of a long conversation is drawn when it opens, and then per idle moment until it is all there. */
+const FIRST_LINES = 40;
+const LINES_PER_BATCH = 15;
+
 /** Within a line or two of the end: where a conversation opens, and what "following" means. */
 const atLatest = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 40;
 
@@ -281,6 +285,18 @@ export function Transcript({
    * Without this, opening a conversation floated its whole backlog in at once.
    */
   const history = useRef(shown.length);
+  /**
+   * A long conversation opened at its latest line draws that end first and the rest above it in small batches while
+   * the window is idle, so opening it is not one long freeze (150 turns took about a second). Each batch lands
+   * above what is on screen, where Chromium's scroll anchoring keeps the view still. A view returning to a place
+   * it was left at draws everything at once: that place is measured from the top.
+   */
+  const [from, setFrom] = useState(() => (resume === undefined ? Math.max(0, shown.length - FIRST_LINES) : 0));
+  useEffect(() => {
+    if (from === 0) return;
+    const id = requestIdleCallback(() => setFrom((at) => Math.max(0, at - LINES_PER_BATCH)), { timeout: 100 });
+    return () => cancelIdleCallback(id);
+  }, [from]);
 
   useEffect(() => {
     const el = box.current;
@@ -354,7 +370,7 @@ export function Transcript({
     >
       <div className="column">
         {shown.map((line, index, all) =>
-          line === end.hidden ? null : line.kind === "day" ? (
+          index < from || line === end.hidden ? null : line.kind === "day" ? (
             // Reading yesterday's run is the normal case here; without this the whole conversation
             // reads as one sitting.
             <div key={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">

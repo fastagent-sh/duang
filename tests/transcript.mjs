@@ -8,7 +8,7 @@
  * composer's round button stops or steers it (docs/ui.md §8, `liveEnd`).
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -77,7 +77,28 @@ if (!process.versions.electron) {
     JSON.stringify({ providers: { mock: { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: "openai-completions", apiKey: "mock", models: [{ id: "mock", reasoning: true }] } } }),
   );
   writeFileSync(join(dir, "fastagent", "fastagent.config.ts"), 'export default { model: "mock/mock" };\n');
-  writeFileSync(join(data, "agents.json"), JSON.stringify([{ id: "t", name: "Live", dir, colour: 3 }]));
+  // A second agent whose one conversation is already long: made by FastAgent itself, before duang starts.
+  const long = join(root, "long");
+  mkdirSync(join(long, "fastagent"), { recursive: true });
+  writeFileSync(join(long, "fastagent", "models.json"), readFileSync(join(dir, "fastagent", "models.json")));
+  writeFileSync(join(long, "fastagent", "fastagent.config.ts"), 'export default { model: "mock/mock" };\n');
+  const LONG_TURNS = 40;
+  {
+    const { createPiAgentFromDir } = await import("@fastagent-sh/fastagent/pi");
+    const { agent } = await createPiAgentFromDir(long, { sessionControl: true, authPath: join(data, "long-auth.json") });
+    for (let n = 1; n <= LONG_TURNS; n++) {
+      script.push({ text: `Answer ${n}.` });
+      for await (const event of agent.invoke({ session: "long" }, { text: `Turn ${n} of the long one` }))
+        if (event.type === "failed") throw new Error(event.details);
+    }
+  }
+  writeFileSync(
+    join(data, "agents.json"),
+    JSON.stringify([
+      { id: "t", name: "Live", dir, colour: 3 },
+      { id: "l", name: "Long", dir: long, colour: 5 },
+    ]),
+  );
 
   /**
    * A command that runs until the scenario lets it finish; it runs in the project, where the gate is made. It
@@ -188,8 +209,27 @@ if (!process.versions.electron) {
     await idle();
     assert.match(await transcript(), /retried once: the provider had a problem/);
     assert.doesNotMatch(await transcript(), /retrying/, "no wait is left claimed");
+    // A long conversation opens at its latest line at once, and its older lines are drawn above it while the view
+    // stays where it is. Watched on every change to the page, so how fast the batches come does not matter.
+    await evaluate(`(() => {
+      const transcript = () => document.querySelector('[aria-label="Transcript"]');
+      const has = (n) => transcript()?.innerText.includes('Turn ' + n + ' of the long one');
+      window.__long = { first: undefined, moved: 0 };
+      new MutationObserver(() => {
+        const el = transcript();
+        if (!el || !has(${LONG_TURNS})) return;
+        if (window.__long.first === undefined) window.__long.first = has(1);
+        window.__long.moved = Math.max(window.__long.moved, Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight));
+      }).observe(document.body, { childList: true, subtree: true });
+    })()`);
+    await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
+    await until(`document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn 1 of the long one')`, "all of the long conversation drawn in the end");
+    await new Promise((r) => setTimeout(r, 300));
+    const { first, moved } = await evaluate("window.__long");
+    assert.equal(first, false, "its latest turn is shown before its oldest is drawn");
+    assert.ok(moved < 2, `the view stays at the latest line while older lines are drawn above it (it moved ${moved} px)`);
     assert.equal(script.length, 0, "every scripted answer was asked for");
-    console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line.");
+    console.log("Transcript live end passed: calls, a lone call, a thought, an answer and a retry each one line; a long conversation opens at its end and fills in above it.");
   }
 
   const timeout = setTimeout(() => {

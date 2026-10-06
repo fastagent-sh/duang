@@ -5,7 +5,8 @@
  *
  * Timing depends on the machine, so this is not in CI: run `npm run test:perf` before and after a change to how the
  * transcript renders, and compare. It fails only on what is plainly wrong: a stream that cannot hold 30 frames a second.
- * Numbers on an M-series Mac, 150 turns (903 entries, 1 MB): open ~1.2 s, scroll p95 ~18 ms, stream p50 ~17 ms.
+ * Numbers on an M-series Mac, 150 turns (903 entries, 1 MB): open ~0.15 s with the rest drawn ~2 s later while
+ * the view stays still, switch back ~40 ms, scroll p95 ~18 ms, stream p50 ~17 ms.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -118,7 +119,14 @@ if (!process.versions.electron) {
     for (let t = 0; t < 200 && !win; t++) await sleep(50);
     win.setSize(1280, 820);
     await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+    await evaluate(`window.__long = []; new PerformanceObserver((list) => { for (const e of list.getEntries()) window.__long.push(e.duration); }).observe({ type: "longtask" }); 1`);
     const opened = await until(loaded, "the long conversation opens");
+    // The rest is drawn above in batches: the view must not move while it is, and no batch may freeze it.
+    const anchor = `(() => { const el = document.querySelector('[aria-label="Transcript"]'); return el.scrollHeight - el.scrollTop - el.clientHeight; })()`;
+    const before = await evaluate(anchor);
+    const complete = await until(`document.querySelector('[aria-label="Transcript"]').innerText.includes('Turn 1:')`, "the whole conversation drawn");
+    const after = await evaluate(anchor);
+    const longest = await evaluate("Math.max(0, ...window.__long)");
     const nodes = await evaluate("document.querySelectorAll('*').length");
     await evaluate(`document.querySelector('aside button[aria-label="Other"]').click()`);
     await until("document.body.innerText.includes('What should we work on')", "another agent");
@@ -127,7 +135,8 @@ if (!process.versions.electron) {
     await evaluate(`document.querySelector('aside button[aria-label="Long"]').click()`);
     await until(loaded, "back to the long conversation");
     const back = Date.now() - start;
-    await sleep(800);
+    await until(`document.querySelector('[aria-label="Transcript"]').innerText.includes('Turn 1:')`, "all of it drawn again");
+    await sleep(300);
     const height = await evaluate(`document.querySelector('[aria-label="Transcript"]').scrollHeight`);
     const scrolling = evaluate(`new Promise((resolve) => { const el = document.querySelector('[aria-label="Transcript"]'); el.scrollTop = el.scrollHeight; const step = () => { el.scrollTop -= 120; if (el.scrollTop > 0) requestAnimationFrame(step); else resolve(); }; requestAnimationFrame(step); })`);
     const scroll = await frames(Math.min(20000, (height / 120) * 18));
@@ -141,12 +150,13 @@ if (!process.versions.electron) {
     await until(`!document.querySelector('button[aria-label="Stop the run"]')`, "the turn ends");
     const heap = await evaluate("performance.memory.usedJSHeapSize");
     console.log(`Long conversation, ${TURNS} turns, ${nodes} DOM nodes:`);
-    console.log(`  open at launch  ${opened} ms`);
+    console.log(`  open at launch  ${opened} ms; all of it drawn ${complete} ms later, the view moved ${Math.abs(after - before)} px, longest task ${longest.toFixed(0)} ms`);
     console.log(`  switch back     ${back} ms`);
     console.log(`  scroll ${Math.round(height)} px: ${describe(scroll)}`);
     console.log(`  stream a long answer: ${describe(stream)}`);
     console.log(`  JS heap after   ${(heap / 1048576).toFixed(0)} MB`);
     assert.ok(quantile(stream, 0.5) < 33, `a new turn streams at under 30 frames a second in a ${TURNS}-turn conversation`);
+    assert.ok(Math.abs(after - before) < 2, `the view stays at the latest line while the older lines are drawn (moved ${after - before} px)`);
   }
   run()
     .catch((error) => {
