@@ -661,3 +661,25 @@ test("the live end of a run is one line: the step itself when it is the newest l
   assert.deepEqual(end([user, running("a")], true, true), { status: true, block: undefined, hidden: undefined, quietOnly: false, above: "user" });
 });
 
+test("an event leaves every item it does not change the same object, so the transcript redraws only that line", () => {
+  const user: Item = { kind: "user", text: "go", at: 0 };
+  const thought: Item = { kind: "thinking", text: "hm", open: false, started: 0, at: 1 };
+  const said: Item = { kind: "assistant", text: "Earlier answer", open: false, at: 2 };
+  const done = tool("bash", { command: "ls" }, { id: "done" });
+  const running = tool("bash", { command: "sleep 9" }, { id: "running", status: "running" });
+  const before = [user, thought, said, done, running];
+  const same = (after: Item[], changed: Item[]) =>
+    before.forEach((item) => !changed.includes(item) && assert.ok(after.includes(item), `${item.kind} ${(item as { id?: string }).id ?? ""} kept`));
+  // A streamed word: only the new answer is new.
+  same(apply(before, { type: "message_delta", timestamp: 3, runId: "r", data: { channel: "text", delta: "Next" } }), []);
+  // A running call's progress or end: only that call.
+  same(apply(before, event("tool_progress", { id: "running", partialResult: "1" })), [running]);
+  same(apply(before, event("tool_finished", { id: "running", isError: false, content: "ok" })), [running]);
+  // The run's end: only what was still open or running, never a settled answer, so a long conversation is not
+  // redrawn whole every time a run ends.
+  const open: Item = { kind: "assistant", text: "Streaming", open: true, at: 3 };
+  const settled = apply([...before, open], event("run_settled", { status: "completed" }));
+  same(settled, [running]);
+  assert.ok(!settled.includes(open), "the open answer closes");
+});
+
