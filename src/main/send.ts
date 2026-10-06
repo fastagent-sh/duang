@@ -1,10 +1,7 @@
 import { ABORTED_CODE, SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type Session, type SessionResult } from "@fastagent-sh/fastagent/session";
 
-/**
- * An expected refusal is an answer, not an exception: the person can act on it, and a thrown one
- * would reach the renderer wrapped in Electron's `Error invoking remote method` prose.
- */
+// A thrown refusal would reach the renderer wrapped in Electron's `Error invoking remote method`.
 export const refuse = (code: string, message: string): SessionResult => ({
   ok: false,
   error: { code, message, retryable: true },
@@ -12,7 +9,6 @@ export const refuse = (code: string, message: string): SessionResult => ({
 
 const stoppedBeforeStart = refuse(ABORTED_CODE, "Stopped before the run started");
 
-/** Why a conversation's model cannot run here; the renderer opens the model picker on it. */
 export const MODEL_UNAVAILABLE_CODE = "model_unavailable";
 const unavailable = (model: string) =>
   refuse(
@@ -20,15 +16,8 @@ const unavailable = (model: string) =>
     `${model} cannot run: its provider is not connected, or the model is not offered to it. Connect the provider, or choose another model for this conversation.`,
   );
 
-/**
- * The runtime, not a stale UI snapshot, decides whether this message starts or steers a turn. `stopped` is
- * asked right before each call that hands the message to the runtime: a Stop that came first means none is made.
- *
- * `offered` is whether the picker would offer a model to this agent (its credentials authenticate it, and it
- * is not on a retired route). A run starts only on such a model, so a conversation whose provider was
- * disconnected, or recorded on a route duang no longer runs, is refused before anything is recorded, in
- * duang's words, rather than failing inside the engine with its CLI's advice.
- */
+// `stopped` is checked right before each hand-off, so a Stop that came first makes no call. A run starts only
+// on a model the picker would offer; anything else is refused before anything is recorded.
 export async function send(
   agent: Agent,
   session: Session,
@@ -60,15 +49,10 @@ export async function send(
   return { ok: true };
 }
 
-/**
- * The sends of each conversation, from the moment main receives one until it returns. Before a send reaches
- * the runtime (the proxy is resolved and the agent opened first) there is no run for a Stop to abort, so the
- * Stop is recorded here and the send gives up instead of starting a run nobody wants.
- */
+// Before a send reaches the runtime there is no run to abort, so a Stop is recorded here and the send gives up.
 export function sends() {
   type Ticket = { stopped: boolean; finished: Promise<unknown> };
   const held = new Map<string, Set<Ticket>>();
-  /** Set by `stopAll`: the app is quitting, and a run started now would only be cut. */
   let quitting = false;
   const stop = async (key: string, abort: () => Promise<SessionResult>): Promise<SessionResult> => {
     const tickets = held.get(key);
@@ -89,16 +73,8 @@ export function sends() {
       ticket.finished = finished.catch(() => {});
       return finished;
     },
-    /** Whether any send is in main's hands: a turn that quitting would cut. */
     busy: () => held.size > 0,
-    /**
-     * Quitting: every conversation with a send in flight is stopped as Stop would, and this waits for those
-     * sends to return, which is when each run has settled and written how it ended, or until `within` ms pass
-     * (a tool that cannot be cancelled may hold its run). Says whether all of them returned in time.
-     *
-     * The limit starts before the aborts and does not wait for them: pi's abort itself waits for its run to
-     * go idle, so an abort can take as long as the run it stops.
-     */
+    // The limit starts before the aborts: pi's abort waits for its run to go idle, so it can take as long as the run.
     async stopAll(abort: (key: string) => Promise<SessionResult>, within: number): Promise<boolean> {
       // The window stays open while this waits: a message sent meanwhile is refused, not started and cut.
       quitting = true;
@@ -117,10 +93,6 @@ export function sends() {
       clearTimeout(timer);
       return done;
     },
-    /**
-     * Stop for one conversation: every send of `key` still held is marked first, then the run is aborted. No
-     * run yet, with a send on its way to start one, is a stop that worked: that send now gives up.
-     */
     stop,
   };
 }

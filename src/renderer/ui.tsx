@@ -1,31 +1,8 @@
-/**
- * The control vocabulary: docs/ui.md §6b, §7 and §9 as code, so a button's kind is chosen rather
- * than spelled out in class names at each call site.
- *
- * Nothing here takes a class that a call site then has to fight. Tailwind utilities all have the
- * same specificity and the later rule in the generated sheet wins, regardless of the order they are
- * written in `class`, so anything a call site might want to change — the text size, whether danger
- * is loud or quiet — is decided by a prop here instead.
- */
+// Tailwind's later rule wins regardless of class order, so anything a call site might change is a prop here.
 import { Component, type ButtonHTMLAttributes, type ErrorInfo, type ReactNode, type Ref } from "react";
 
-/**
- * Four kinds, three sizes, and no fourth option: 28 and 32 are rectangles; 40 is the round icon
- * button of the composer and the header, and only an icon fits it.
- *
- * `primary` at most once per screen — the one thing to do here. `secondary` outlines an alternative,
- * `ghost` is an action inside a row or a header, `danger` deletes or removes and is quiet until the
- * pointer is on it, because these sit on screen all day. `loud` fills a kind instead of tinting it,
- * and exists for the one control that must be found instantly: Stop.
- *
- * Size decides the text size too (28 → 11px, otherwise 12px): a call site that passes its own would be
- * overridden by this one anyway.
- *
- * A disabled control is a question nobody answered, so `disabled` takes the answer: pass the reason
- * and the button dims and carries it. It stays focusable and says so with `aria-disabled` rather
- * than the native attribute, because a natively disabled button cannot be reached by keyboard, and
- * a reason nobody can reach is not a reason (WAI-ARIA APG). Activation is dropped here instead.
- */
+// `aria-disabled`, not `disabled`: a natively disabled button cannot be focused, so its reason could not be
+// reached (WAI-ARIA APG). Activation is dropped here instead.
 export function Button({
   kind = "secondary",
   size = 32,
@@ -39,7 +16,6 @@ export function Button({
   ref,
   ...rest
 }: {
-  /** Forwarded so a roving tabindex can focus the control it has moved to (§11). */
   ref?: Ref<HTMLButtonElement>;
   kind?: "primary" | "secondary" | "ghost" | "danger";
   size?: 28 | 32 | 40;
@@ -48,8 +24,7 @@ export function Button({
   disabled?: string | false;
   children?: ReactNode;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "disabled" | "children">) {
-  // Resting look and hover look are separate because a disabled button keeps its shape — it is the
-  // same control, dimmed — but must not light up under the pointer.
+  // A disabled button keeps its resting look but must not light up under the pointer.
   const kinds = {
     primary: ["bg-accent-fill text-fill-fg", "hover:bg-accent-fill/85"],
     secondary: ["border border-stroke", "hover:bg-hover"],
@@ -80,11 +55,6 @@ export function Button({
   );
 }
 
-/**
- * A filled pill, Telegram's unread mark: the one thing in the roster that has to be seen from
- * across the room. A tinted word is missed: this is louder on purpose and
- * exists only for outcomes nobody has looked at yet (§9). A lone count stays round, as Telegram's does.
- */
 export function Pill({ tone, children }: { tone: "accent" | "danger"; children: ReactNode }) {
   const fills = { accent: "bg-accent-fill text-fill-fg", danger: "bg-danger-fill text-fill-fg" };
   return (
@@ -114,13 +84,6 @@ const words: Record<Tone, string> = {
   muted: "text-muted",
 };
 
-/**
- * A state, said in a colour and in words at once — never colour alone (§11). The mark is a dot
- * unless an icon carries more, and `pulse` is for a state that is still happening.
- *
- * A badge shrinks like any other text. Beside something that must stay readable — a long command in
- * a tool row — the call site pins it with `shrink-0`.
- */
 export function Badge({
   tone,
   icon,
@@ -133,7 +96,6 @@ export function Badge({
   icon?: ReactNode;
   pulse?: boolean;
   className?: string;
-  /** The longer story on hover, such as the original error behind a short word. */
   title?: string;
   children: ReactNode;
 }) {
@@ -145,11 +107,7 @@ export function Badge({
   );
 }
 
-/**
- * What a drawing error leaves behind: the error in words, with the way out, instead of a blank window.
- * React unmounts everything above a component that throws while rendering unless something catches it.
- * `reset` changes when the place it guards changes (another conversation), which clears the error.
- */
+// `reset` changes with the place it guards (another conversation), which clears the error.
 export class Boundary extends Component<
   { reset?: unknown; children: ReactNode; fallback: (error: Error) => ReactNode },
   { error?: Error; reset?: unknown }

@@ -1,8 +1,6 @@
 name: CodeQL
 
-# Advanced setup (replaces GitHub's default setup): default setup does not
-# trigger on pull requests from forks, and fork PRs are the norm for this OSS
-# repo. A regular workflow's pull_request event runs for forks too.
+# Advanced setup: GitHub's default setup does not trigger on pull requests from forks.
 on:
   pull_request:
   push:
@@ -41,8 +39,7 @@ jobs:
         with:
           category: '/language:${{ matrix.language }}'
 
-  # Stable-named aggregate gate (same pattern as CI's "Desktop checks"): branch
-  # protection requires the "CodeQL" context, independent of the language matrix.
+  # Stable aggregate gate: branch protection requires the "CodeQL" context, whatever the language matrix.
   codeql-gate:
     name: CodeQL
     needs: analyze

@@ -1,13 +1,7 @@
-/**
- * One conversation as this window holds it: what the runtime said (its history, then its live events) and the
- * messages this window sent that have not entered yet. The store decides which conversations are held and talks
- * to main; this module decides how one changes. Changed in place: the store tells a conversation that was closed
- * or reopened from the current one by identity.
- */
+// Changed in place: the store tells a closed or reopened conversation from the current one by identity.
 import type { SessionEntries, SessionEvent, SessionState } from "@fastagent-sh/fastagent/session";
 import { apply, claim, fromEntries, known, opensRun, queueView, wentOn, type Item, type UserItem } from "./transcript.ts";
 
-/** A problem said over the pane: what it means, what to do, and the original words. */
 export interface Trouble {
   title: string;
   advice?: string;
@@ -22,41 +16,22 @@ export interface Conversation {
   state?: SessionState;
   draft: string;
   loading: boolean;
-  /** This view could not open the conversation, or lost its subscription: said over it, with Reconnect. */
   error?: Trouble;
-  /** Main ended this subscription on purpose. Nothing broke; this view just stopped listening. */
   ended?: string;
   sends: number;
-  /** Live events that arrived while the history was being read, applied once it is. */
   events: SessionEvent[];
-  /**
-   * Messages sent from this window that have not entered the conversation yet, oldest first. They
-   * show below the live output until the runtime's `user_message` places them: a steer is read at the
-   * run's next turn boundary, so placing it at send time put it above output written without it.
-   */
+  // Shown below the live output until `user_message` places them: a steer is read at the next turn boundary.
   waiting: UserItem[];
-  /** Of `waiting`, those whose send already returned: accepted, yet nothing has entered from them. */
   returned: Set<UserItem>;
-  /** The current run already has a user message, so the next one joined it rather than opened it. */
   runHasUser: boolean;
-  /** When this window saw the current run start; unknown for a run that was already going when it opened. */
   started?: number;
-  /** When this window last heard anything of the conversation's run (or sent into it): how long it has been quiet. */
   heard?: number;
-  /**
-   * The current run as this window heard it from its `run_started`: the last message that entered it and
-   * whether it started a tool. Absent for a run joined midway, whose history does not say where it began.
-   */
   run?: { message?: string; toolsRan: boolean };
 }
 
-/** How a run this window heard end ended. */
 export type Settled = "completed" | "failed" | "aborted";
 
-/**
- * Events that report what the person did (a message queued or entered, a setting changed), not output from
- * the run: they do not end the model's silence.
- */
+// What the person did, not run output: these do not end the model's silence.
 const PERSON_SIDE = new Set(["queue_changed", "user_message", "state_changed"]);
 
 export function createConversation(agentId: string, session: string, draft: string): Conversation {
@@ -75,15 +50,9 @@ export function createConversation(agentId: string, session: string, draft: stri
   };
 }
 
-/** Two facts decide it: what we have in flight locally, and what the runtime says it is doing. */
 export const busy = (c: Conversation) => c.sends > 0 || c.state?.status === "running" || c.state?.status === "compacting";
 
-/**
- * The history read when the conversation opened, then the live events that arrived while it was read.
- * Sends are refused until this lands. An already-running local turn retains its subscription and view
- * across navigation, so its deltas are never reconstructed from history. Returns how the runs those
- * events ended did.
- */
+// A running local turn keeps its subscription across navigation, so its deltas never come from history.
 export function backfill(c: Conversation, opened: { entries: SessionEntries; state: SessionState }, now: number): Settled[] {
   const { entries, state } = opened;
   c.items = fromEntries(entries.entries, entries.leafEntryId, state.status === "running");
@@ -97,7 +66,6 @@ export function backfill(c: Conversation, opened: { entries: SessionEntries; sta
   return settled;
 }
 
-/** One live event. Returns how the run ended, when the event is its end. */
 export function receive(c: Conversation, event: SessionEvent, now: number): Settled | undefined {
   if (!PERSON_SIDE.has(event.type)) c.heard = now;
   if (c.loading) {
@@ -131,12 +99,8 @@ function fold(c: Conversation, event: SessionEvent, now: number): Settled | unde
     c.state = { ...state, ...e.data };
   }
   c.items = apply(c.items, event);
-  // A run heard from its start that failed after taking a message offers that message again. One that
-  // failed before (no credential, say) already returned the text to the draft. A run joined midway does not
-  // know its start here; reopened, its history does. `toolsRan` counts every tool since `run_started`, while
-  // `fromEntries` reads back only those after the last answer that ended the work: a steer that carried the
-  // run past such an answer asks here and not after a reopen. Live knows where the run began and history
-  // does not, so the difference is kept on the side that asks (docs/interaction.md).
+  // A run heard from its start that failed after taking a message offers it again. `toolsRan` counts every tool
+  // since `run_started`; history cannot, so live and reopened answers may differ (docs/interaction.md).
   const failure = c.items.at(-1);
   if (e.type === "run_settled" && e.data.status === "failed" && run?.message !== undefined && failure?.kind === "note")
     c.items = [...c.items.slice(0, -1), { ...failure, resend: { text: run.message, toolsRan: run.toolsRan } }];
@@ -145,11 +109,7 @@ function fold(c: Conversation, event: SessionEvent, now: number): Settled | unde
   return e.data.status;
 }
 
-/**
- * The runtime placed a user message: it goes into the transcript here, at the moment it entered.
- * An entry the history already holds (a backfill that overlapped the live stream) is not added
- * twice. This window's own message keeps the words that were typed.
- */
+// An entry the history already holds (backfill overlapping the live stream) is not added twice.
 function enter(c: Conversation, entryId: string, text: string, at: number) {
   const known = c.items.some((item) => item.kind === "user" && item.entryId === entryId);
   const own = known ? undefined : claim(c.waiting, text);
@@ -164,12 +124,8 @@ function enter(c: Conversation, entryId: string, text: string, at: number) {
   if (c.run) c.run.message = own?.text ?? text;
 }
 
-/**
- * What the runtime still lists as queued when its run ends never entered the conversation and is
- * dropped with the run. It returns to the draft rather than stay on screen as if delivered, and so
- * does a message this window did not send: after a reload the runtime's queue is the only place a
- * steer typed before it still exists, and nothing else would keep those words.
- */
+// What is still queued when the run ends never entered; it returns to the draft. After a reload the runtime's
+// queue is the only place such a steer still exists, so this includes messages this window did not send.
 function dropQueued(c: Conversation, pending: string[]) {
   const dropped = queueView(c.waiting, pending).flatMap(({ item, listed }) => (listed ? [item] : []));
   if (!dropped.length) return;
@@ -178,10 +134,7 @@ function dropQueued(c: Conversation, pending: string[]) {
   c.draft = [...dropped.map((item) => item.text), c.draft].filter(Boolean).join("\n");
 }
 
-/**
- * An accepted message with no run left to enter: an extension command that did its work without
- * sending anything into the conversation. It ran, so it neither returns to the draft nor vanishes.
- */
+// An extension command that did its work without sending anything: it ran, so it neither returns nor vanishes.
 function ranNothing(c: Conversation, now: number) {
   const ran = c.waiting.filter((item) => c.returned.has(item));
   if (!ran.length) return;
@@ -190,10 +143,7 @@ function ranNothing(c: Conversation, now: number) {
   c.items = [...c.items, ...ran.map((item): Item => ({ kind: "note", tone: "info", text: `ran ${item.text}`, at: now }))];
 }
 
-/**
- * A message sent from here, before main answers. Where it goes is the runtime's report, not this guess: it
- * waits below the output until `user_message` places it, whether it opens a run or joins one.
- */
+// Where it goes is the runtime's report: it waits below the output until `user_message` places it.
 export function sent(c: Conversation, text: string, now: number): UserItem {
   const echo: UserItem = { kind: "user", text, at: now, opens: opensRun(c.state?.status, c.runHasUser) };
   // A new run's silence counts from its message; a steer is the person, not the model, and leaves it be.
@@ -202,22 +152,17 @@ export function sent(c: Conversation, text: string, now: number): UserItem {
   return echo;
 }
 
-/** Main refused it and nothing entered from it, so the text is the person's to send again. */
 export function unsent(c: Conversation, echo: UserItem): void {
   c.waiting = c.waiting.filter((item) => item !== echo);
   c.draft = c.draft ? `${echo.text}\n${c.draft}` : echo.text;
 }
 
-/**
- * Main accepted it. A run that already ended while the call returned has nothing left to place it with.
- * A stream that ended cannot say whether it entered: Retry re-reads the history instead.
- */
+// A stream that ended cannot say whether it entered: Retry re-reads the history.
 export function accepted(c: Conversation, echo: UserItem, now: number): void {
   c.returned.add(echo);
   if (c.state?.status !== "running" && !c.ended && !c.error) ranNothing(c, now);
 }
 
-/** This view stopped hearing the conversation: main let it go, ended it, or listening failed. */
 export function lost(c: Conversation, ending: { reason: string; why: "let_go" | "ended" | "failed" }, now: number): void {
   // Nothing will report the end of a run this view can no longer hear, so stop waiting for one.
   // Retry re-opens and re-reads the runtime's real state.

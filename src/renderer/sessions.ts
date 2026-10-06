@@ -1,21 +1,16 @@
-/** The conversation list the sidebar draws. Pure, because the one interesting case is invisible. */
 import type { SessionSummary } from "@fastagent-sh/fastagent/session";
 
 export interface Row {
   session: string;
   label: string;
   updatedAt?: number;
-  /** Minted here and not yet known to the runtime: a session exists once a turn lands in it. */
+  // Minted here; a session exists once a turn lands in it.
   fresh?: boolean;
-  /** A turn is in flight in this conversation. The sidebar's answer to "which one is working". */
   running?: boolean;
-  /** Unsent text is waiting here. Listed for the same reason a running one is: it is not finished. */
   draft?: boolean;
-  /** An outcome that landed while the person was elsewhere, and has not been looked at yet. */
   unseen?: "done" | "failed";
 }
 
-/** A timestamp as a list row wants it: coarse on purpose, because an exact clock time is noise here. */
 export function ago(ts: number, now: number = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - ts) / 1000));
   if (seconds < 60) return "just now";
@@ -27,10 +22,9 @@ export function ago(ts: number, now: number = Date.now()): string {
   return days < 7 ? `${days}d ago` : new Date(ts).toLocaleDateString();
 }
 
-/** Clock time. `numeric` hours, not `2-digit`: a 12-hour locale renders "01:08 AM" for the second one. */
+// `numeric`, not `2-digit`: a 12-hour locale renders "01:08 AM".
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-/** A list row's time, the way Telegram's list gives it: the clock today, the weekday this week, a date before. */
 export function stamp(ts: number, now: number = Date.now()): string {
   const at = new Date(ts);
   if (at.toDateString() === new Date(now).toDateString()) return clock(ts);

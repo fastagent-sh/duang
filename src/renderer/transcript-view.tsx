@@ -1,4 +1,3 @@
-/** A conversation as it reads: messages, thinking, tool calls and system lines, in order. */
 import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -51,14 +50,7 @@ import { Badge, Button, type Tone } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
 import type { Fix } from "./problems.ts";
 
-/**
- * The live end of a run: what it is doing now, in words, and how long the run has taken. It stays for
- * the whole run rather than filling silences, so the bottom of a working transcript always answers
- * "is it alive, and what is it on". The dot bounces (duang is the sound of one) and the word sweeps;
- * the clock is the run's, counted from when this window saw it start, so a run reopened halfway shows
- * none rather than a wrong one. Where the newest line is the step itself, this is drawn in it (`WorkBlock`'s
- * `live`), so what the run is on is said once.
- */
+// The clock counts from when this window saw the run start, so a run reopened halfway shows none, not a wrong one.
 export function RunStatus({
   items,
   status,
@@ -70,11 +62,8 @@ export function RunStatus({
   items: Item[];
   status: SessionState["status"] | undefined;
   started?: number;
-  /** When this window last heard from the run: a model quiet for long is said, so it does not look stuck. */
   heard?: number;
-  /** An answer being written is its own sign of life: the status is drawn only once the answer stops coming. */
   quietOnly?: boolean;
-  /** The space above it, which depends on the line it follows. */
   className?: string;
 }) {
   const { word, detail, activity } = phase(items, status);
@@ -95,16 +84,9 @@ export function RunStatus({
   );
 }
 
-/**
- * How long without a word from the model before the status says so. A thinking model can be quiet this long
- * and be fine, so it is said plainly, not as a failure; a provider that hangs is not cut off here either.
- */
+// A thinking model can be quiet this long and be fine: said plainly, not as a failure.
 const QUIET_MS = 30_000;
 
-/**
- * How long a live tool has run, ticking each second while it runs; nothing for one read back from history.
- * `after`: nothing until that much has passed.
- */
 function useElapsed(started: number | undefined, ended: number | undefined, after = 0): string | undefined {
   const [now, setNow] = useState(Date.now());
   const live = started !== undefined && ended === undefined;
@@ -118,15 +100,8 @@ function useElapsed(started: number | undefined, ended: number | undefined, afte
   return ms < after ? undefined : duration(ms, live);
 }
 
-/**
- * The space above a line, decided by the pair rather than by one constant (§8).
- *
- * A single gap for everything is what made a run of tool calls read as a sparse list: `bash`,
- * `thinking`, `bash` are single lines of one activity, and 24 between them is the space a paragraph
- * gets. They close up to 8. The agent's own words and its work are one flow, so a step between them
- * is 12 — at 24 each tool line floated in a blank band of its own. Only a change of speaker earns
- * the full step: 32 above what someone sent, 24 below it.
- */
+// The space above a line depends on the pair (§8): asides close up to 8, words and work 12, a change of
+// speaker 32 above what someone sent and 24 below.
 const ASIDE = new Set(["tool", "thinking", "note", "work", "status"]);
 
 function gap(previous: string | undefined, kind: string): string {
@@ -136,34 +111,24 @@ function gap(previous: string | undefined, kind: string): string {
   return ASIDE.has(kind) && ASIDE.has(previous) ? "pt-2" : "pt-3";
 }
 
-/** An answer ends its turn unless the run goes on to work after it; only then does it get a footer. */
 const ends = (next: Line | Work | undefined, busy: boolean) => (next ? next.kind !== "work" : !busy);
 
-/** How much of a long conversation is drawn when it opens, and then per idle moment until it is all there. */
 const FIRST_LINES = 40;
 const LINES_PER_BATCH = 15;
 
-/** Where the conversation's lines end, in the scroll area's own coordinates (the space under them excluded). */
 const linesEnd = (el: HTMLElement) => el.firstElementChild!.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop;
-/** How far the view's top is from the end of the lines: a place that lines drawn above it do not move. */
+// Lines drawn above the view do not move this.
 const fromEnd = (el: HTMLElement) => linesEnd(el) - el.scrollTop;
 
 const drawnLines = (el: HTMLElement) => [...el.firstElementChild!.children].filter((row): row is HTMLElement => row instanceof HTMLElement && row.dataset.line !== undefined);
 const top = (row: Element, el: HTMLElement) => row.getBoundingClientRect().top - el.getBoundingClientRect().top;
-/** A drawn line by its index in this view, and how far its top is from the view's top. */
 type Spot = { line: number; offset: number };
-/** The first line reaching into the view, and where its top is. Undefined when no line is drawn. */
 function spotOf(el: HTMLElement): Spot | undefined {
   const row = drawnLines(el).find((row) => row.getBoundingClientRect().bottom > el.getBoundingClientRect().top);
   return row && { line: Number(row.dataset.line), offset: top(row, el) };
 }
-/**
- * Scrolls so the place's line is where it was. A line no longer drawn there gives way to the next one, at its top:
- * a retry note the status line now stands in for, or a line only this window showed, gone once the conversation is
- * read back from history. Past the last line (the end of the last turn was such a line) it is the last one; no
- * window test makes a line of this window's own vanish, so that case is covered by `lineOf`'s test only. An
- * expanded card comes back folded: a place further into it than its folded height is put at its top, not past it.
- */
+// A line no longer drawn gives way to the next. An expanded card comes back folded, so a place past its
+// folded height goes to its top.
 function scrollToSpot(el: HTMLElement, place: Spot) {
   const rows = drawnLines(el);
   const row = rows.find((row) => Number(row.dataset.line) >= place.line) ?? rows.at(-1);
@@ -172,7 +137,6 @@ function scrollToSpot(el: HTMLElement, place: Spot) {
   el.scrollTop += top(row, el) - offset;
 }
 
-/** Within a line or two of the end: where a conversation opens, and what "following" means. */
 const atLatest = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 40;
 
 export function Transcript({
@@ -192,34 +156,20 @@ export function Transcript({
   provider,
 }: {
   items: Item[];
-  /**
-   * Messages that have not entered the conversation yet, below the output until the runtime places
-   * them. `listed`: the runtime reports it as queued; otherwise it is still on its way there.
-   * `opens`: it opens the run on screen, so it reads above that run's working mark; a steer waits
-   * below the output it did not shape.
-   */
+  // `opens`: it opens the run on screen, so it reads above that run's working mark.
   waiting: { item: Item; listed: boolean; opens: boolean }[];
   busy: boolean;
-  /** What the runtime says the conversation is doing, and when this window saw its run start. */
   status: SessionState["status"] | undefined;
   started?: number;
-  /** When this window last heard from the run, for the status line's silence. */
   heard?: number;
-  /** How far the floating composer reaches up: the transcript scrolls under it, so it ends above it. */
+  // The transcript scrolls under the floating composer, so it ends above it.
   bottomGap: number;
-  /** Where this conversation was left, read once when the view mounts; absent means the latest line. */
   resume?: Place;
-  /** Where the view rests now, or undefined while it follows the latest line. */
   onRest: (place: Place | undefined) => void;
-  /** The conversation ends on a failed turn that can be sent again: the action sits under its failure. */
   onRetry?: () => void;
-  /** Opens a provider's usage page: offered under a failure that is that plan's usage limit. */
   onUsage: (provider: string) => void;
-  /** Opens Settings where a problem's way on is: this conversation's provider's sign-in, or the network. */
   onSettings: (where: "providers" | "network") => void;
-  /** Opens the model picker, for a problem another model gets round. */
   onPickModel: () => void;
-  /** The provider this conversation runs on, by the name the person knows it by. */
   provider?: string;
 }) {
   // The ways on belong to the latest problem only, and only while nothing runs: an earlier one is history.
@@ -261,30 +211,19 @@ export function Transcript({
     const spot = spotOf(el);
     return spot && placeAt(current.current, spot.line, spot.offset);
   };
-  /** Where the view returns to, read once: none when it was left at the latest line, or its message is gone. */
   const [back] = useState((): Spot | undefined => {
     const line = resume && lineOf(shown, resume);
     return line === undefined ? undefined : { line, offset: resume!.offset };
   });
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(back === undefined);
-  /**
-   * A view that returns to where it was left holds that place while its layout settles (a remounted
-   * conversation grows for a moment as its fonts and code blocks arrive, and reading "near the bottom"
-   * from the short first layout would forget the place), until the person scrolls.
-   */
+  // Holds the place while layout settles (fonts and code blocks grow a remounted conversation), until the person scrolls.
   const restoring = useRef(back !== undefined);
   const scrolled = () => {
     restoring.current = false;
   };
-  // Scrolling up during a long run stops the tail following, and the only way back was to scroll:
-  // the control appears exactly while that is true.
   const [away, setAway] = useState(false);
-  /**
-   * One place that decides it, because scrolling is not the only way the answer changes: resizing
-   * the window, or output growing past the viewport, makes a transcript scrollable without any
-   * scroll event to notice it.
-   */
+  // Resizing or output growing past the viewport changes the answer without a scroll event.
   const check = () => {
     const el = box.current;
     if (!el) return;
@@ -301,8 +240,7 @@ export function Transcript({
   // Before the first paint, so the conversation is never seen at the bottom first.
   useLayoutEffect(() => {
     if (back !== undefined) scrollToSpot(box.current!, back);
-    // A scroll event that has not fired yet cannot tell the place a view is leaving from, so it is read
-    // here, while the element is still attached. A view still holding a place keeps what it was given.
+    // A scroll event that has not fired yet cannot tell the place, so it is read here, while still attached.
     return () => {
       const el = box.current;
       if (el && !restoring.current) onRest(atLatest(el) ? undefined : placeOf(el));
@@ -322,23 +260,11 @@ export function Transcript({
   const live = (
     <RunStatus items={items} status={status} started={started} heard={heard} quietOnly={end.quietOnly} className={gap(end.above, "status")} />
   );
-  /**
-   * `enter` is for what arrives, and history has not arrived — it was already there. This component
-   * remounts for every conversation it shows (keyed by subscription), and it mounts with the history
-   * already loaded, so the rows on screen at mount are the old ones and everything past them is new.
-   * Without this, opening a conversation floated its whole backlog in at once.
-   */
+  // The view remounts per conversation with history loaded: rows present at mount are not new, so they do not `enter`.
   const history = useRef(shown.length);
-  /**
-   * A long conversation opened at its latest line draws that end first and the rest above it in small batches while
-   * the window is idle, so opening it is not one long freeze (150 turns took about a second). Each batch lands
-   * above what is on screen, and the view is put back at the same distance from the end before it is painted:
-   * Chromium's scroll anchoring would do that too, except at `scrollTop` 0 (a first batch shorter than the window,
-   * or a person who scrolled to the top of what is drawn), where it pushes the view to the oldest line. The batch
-   * is committed synchronously (`flushSync`) so no scroll can come between reading the place and restoring it.
-   * A view returning to a place it was left at draws from that place's line, or from the last 40 when it is
-   * nearer the end, and the rest above it the same way.
-   */
+  // Long conversations draw the end first and older lines above in idle batches (150 turns froze about a second).
+  // Each batch restores the distance from the end itself: Chromium's scroll anchoring fails at `scrollTop` 0.
+  // `flushSync` keeps any scroll from coming between reading the place and restoring it.
   const [from, setFrom] = useState(() => Math.min(back?.line ?? Infinity, Math.max(0, shown.length - FIRST_LINES)));
   useEffect(() => {
     if (from === 0) return;
@@ -354,11 +280,7 @@ export function Transcript({
     );
     return () => cancelIdleCallback(id);
   }, [from]);
-  /**
-   * The growth a batch causes is above the view, which has been put back already: the growth observer below must
-   * not read it as content added under a view at its end. The observer runs after the frame's layout, later than
-   * the batch.
-   */
+  // The observer runs after the batch, which already put the view back: it must not read that growth as new content.
   const drewAbove = useRef(false);
 
   useEffect(() => {
@@ -371,11 +293,8 @@ export function Transcript({
     if (!el) return;
     const observer = new ResizeObserver(check);
     observer.observe(el);
-    // Content also grows after it is laid out (fonts, code blocks), with no scroll event and no new item:
-    // a view that was at the latest line stays on it, and one holding a place keeps the place. "Was" is
-    // judged against the height before this growth, because the growth itself puts the end out of reach.
-    // Growth from a batch drawn above is not judged at all: the view was put back, moving scrollTop by its height, so
-    // against the old height a view the person scrolled up from would read as at the end and be pulled down.
+    // Content grows after layout (fonts, code blocks) with no scroll event: a view at the end stays there, one holding
+    // a place keeps it. Judged against the height before this growth; growth from a batch above is skipped.
     let height = 0;
     const grown = new ResizeObserver(() => {
       const wasAtEnd = height - el.scrollTop - el.clientHeight < 40;
@@ -405,8 +324,7 @@ export function Transcript({
             const el = box.current;
             if (!el) return;
             scrolled();
-            // Not smooth: every frame of an animated scroll fires `scroll`, and until the last one
-            // the transcript is not at the bottom, so the button it came from flickers back.
+            // Not smooth: each frame fires `scroll` short of the bottom, so the button flickers back.
             el.scrollTop = el.scrollHeight;
             check();
           }}
@@ -419,35 +337,30 @@ export function Transcript({
       )}
     <div
       ref={box}
-      // A focusable region, so the transcript can be read and scrolled from the keyboard (§11).
-      // Chromium gives a scroll container the arrow keys once it has focus; naming it is ours.
+      // Focusable, so the transcript can be scrolled from the keyboard (§11).
       tabIndex={0}
       role="region"
       aria-label="Transcript"
       onScroll={check}
-      // What the person does to move it, as opposed to the scroll events that layout and restoring cause.
+      // Person-driven only, unlike scroll events from layout and restoring.
       onWheel={scrolled}
       onKeyDown={scrolled}
       onPointerDown={scrolled}
       onTouchStart={scrolled}
-      // pt clears the floating header; the first message starts below it, not behind it. The
-      // scrollbar's track is reserved on both sides, so the column centres where the composer does.
+      // The scrollbar gutter is reserved on both sides so the column centres where the composer does.
       className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 [scrollbar-gutter:stable_both-edges]"
       style={{ paddingBottom: bottomGap }}
     >
       <div className="column">
         {shown.map((line, index, all) =>
           index < from || line === end.hidden ? null : line.kind === "day" ? (
-            // Reading yesterday's run is the normal case here; without this the whole conversation
-            // reads as one sitting.
             <div key={index} data-line={index} className="flex items-center gap-3 py-4 text-[11px] text-muted">
               <span className="h-px flex-1 bg-stroke" />
               {dayLabel(line.at)}
               <span className="h-px flex-1 bg-stroke" />
             </div>
           ) : (
-            // `enter` runs once, when the element is created — a streaming answer re-renders into
-            // the same node, so the rise does not restart on every token.
+            // `enter` runs once per element; a streaming answer re-renders the same node.
             <div key={index} data-line={index} className={`${index >= history.current ? "enter" : ""} ${gap(all[index - 1]?.kind, line.kind)}`}>
               {line.kind === "work" ? (
                 <SettledWork work={line} live={line === end.block ? live : undefined} />
@@ -466,12 +379,8 @@ export function Transcript({
   );
 }
 
-/**
- * A line that did not change is not drawn again. A streamed word replaces only the newest item (`apply` keeps every
- * other item the same object), and without this every word redrew the whole conversation, every answer's
- * markdown parsed again: a 150-turn conversation streamed at about 8 frames a second. A work block is rebuilt by
- * `group` on each render, so it is the same when it holds the same items.
- */
+// Without this every streamed word re-parsed every answer's markdown: 150 turns streamed at about 8 fps.
+// `group` rebuilds work blocks each render, so compare their items.
 const SettledMessage = memo(Message);
 const SettledWork = memo(
   WorkBlock,
@@ -481,21 +390,15 @@ const SettledWork = memo(
     before.work.items.every((item, index) => item === after.work.items[index]),
 );
 
-/**
- * Only `code` is overridden. Streamdown's own `pre` is what marks a child as a fenced block, so
- * replacing it turns every code block into an inline span.
- */
+// Only `code`: Streamdown's own `pre` marks fenced blocks, and replacing it makes every block inline.
 const markdownComponents = { code: MarkdownCode };
 
-/** Copy is an action worth offering; downloading a table to a file is not, in a chat transcript. */
 const markdownControls = { table: { download: false } };
 
-/** Streamdown draws its table controls in Lucide; the code block's copy button is Phosphor, and the two sat side by side in different hands. */
+// Streamdown's table controls are Lucide; match the code block's Phosphor icons.
 const markdownIcons = { CopyIcon: Copy, CheckIcon: Check, Maximize2Icon: ArrowsOut, XIcon: X };
 
-/**
- * Streamdown caps a table at 300px and scrolls the rest inside it: a scroll region in a scrolling
- * transcript steals the wheel and hides how much is there (the same reason tool output folds). */
+// Streamdown caps tables at 300px with an inner scroll, which steals the wheel; 0 removes the cap.
 const TABLE_FULL_HEIGHT = 0;
 
 export function Message({
@@ -505,16 +408,12 @@ export function Message({
   actions,
 }: {
   item: Item;
-  /** The ways on, for the latest problem in the conversation. */
   actions?: ReactNode;
   waiting?: "queued" | "sending";
-  /** False for words the run goes on to work after: a time and a copy button between steps are noise. */
   ends?: boolean;
 }) {
   switch (item.kind) {
     case "user":
-      // Short, sparse, and the thing you look for when scrolling back — so it gets the one shape in
-      // the transcript that is small and instantly recognisable.
       return (
         <div className="flex flex-col items-end gap-1">
           <div
@@ -524,8 +423,6 @@ export function Message({
           >
             {item.text}
           </div>
-          {/* After the fact nothing else distinguishes a message that joined a run from one that
-              started it (§8). */}
           <div className="flex items-center gap-2 text-[11px] text-muted">
             {waiting ? (
               <span>{waiting}</span>
@@ -542,9 +439,7 @@ export function Message({
       return (
         <div className="group/msg">
           <div className="md">
-            {/* The cursor is appended to the text rather than to the container: Streamdown emits
-                block elements, so a sibling span would start its own line instead of trailing the
-                last word. Token arrival is the animation (§8, §10). */}
+            {/* Appended to the text: Streamdown emits blocks, so a sibling span would start its own line. */}
             <Streamdown components={markdownComponents} controls={markdownControls} icons={markdownIcons} tableMaxHeight={TABLE_FULL_HEIGHT}>
               {item.open ? `${item.text}▍` : item.text}
             </Streamdown>
@@ -553,8 +448,6 @@ export function Message({
         </div>
       );
     case "thinking": {
-      // Collapsed, a bare "thinking" says nothing about what happened. How long it took and the
-      // line it is on are the two facts worth reading without expanding (docs/ui.md §8).
       const seconds = Math.round((item.at - item.started) / 1000);
       const trail = thinkingLine(item.text, item.open);
       return (
@@ -575,12 +468,9 @@ export function Message({
       );
     }
     case "note":
-      // A problem the person may act on is a card where it happened (§9b); a fact about the session (a
-      // stop, a retry, a command that ran) is one centred quiet line, in the app's own face.
       if (item.title)
         return <Problem tone={item.tone} title={item.title} advice={item.advice} reason={item.reason} actions={actions} />;
       return (
-        // A retry's line keeps the provider's words in full on hover; what it says is their meaning.
         <div title={item.reason} className="flex items-center justify-center gap-1.5 text-[12px] text-muted">
           <Info size={12} className="shrink-0" />
           <span className="min-w-0 break-words">{item.text}</span>
@@ -591,17 +481,12 @@ export function Message({
   }
 }
 
-/**
- * What an agent's answer ends with: when it landed, and a way to take it somewhere else. Nothing
- * else — a rating has nowhere to go, and branching and editing are not features here.
- */
 function Footer({ text, at }: { text: string; at: number }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState<string>();
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
-    // h-5, not the button's 28: the row is a line of metadata, and the hover target may overhang it.
     <div className="mt-1.5 flex h-5 items-center gap-1 text-[11px] text-muted">
       <span className="tabular-nums">{clock(at)}</span>
       {failed && <span className="text-danger">could not copy: {failed}</span>}
@@ -613,8 +498,7 @@ function Footer({ text, at }: { text: string; at: number }) {
         icon={copied ? <Check size={13} /> : <Copy size={13} />}
         className={`transition-opacity ${failed ? "" : "opacity-0"} group-hover/msg:opacity-100 focus-visible:opacity-100`}
         onClick={() => {
-          // Refused clipboards happen — an unfocused window, another process holding it. Saying
-          // nothing leaves a button that looks broken, so the failure takes the button's own label.
+          // Clipboards get refused (unfocused window, another process); the failure takes the button's label.
           navigator.clipboard.writeText(text).then(
             () => {
               setCopied(true);
@@ -633,18 +517,9 @@ function Footer({ text, at }: { text: string; at: number }) {
 
 const isLone = (line: Line | Work | undefined) => line?.kind === "work" && line.items.length === 1;
 
-/**
- * A stretch of tool calls and thinking as one line that says what kind of work it was, opening into
- * the calls themselves, where a call that failed still says so. It stays closed while it grows: the
- * live status says what the run is on. When its calls are what the run is on now, it is the live status
- * (`live`), rather than a line above another saying the same thing.
- *
- * A lone call is a one-item block drawn as the call alone (open, summary hidden), so that when the
- * next call folds it into a block it is still the same element. A card opened while it stood alone
- * keeps the block open once it folds, rather than vanishing from under the person reading it.
- */
+// Stays closed while it grows: the live status says what the run is on. A card opened while the call stood
+// alone keeps the block open once it folds.
 export function WorkBlock({ work, live }: { work: Work; live?: ReactNode }) {
-  // A lone call or thought is drawn as itself; while it is the step the run is on, as the live line.
   const lone = isLone(work) && !live;
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDetailsElement>(null);
@@ -680,7 +555,6 @@ export function WorkBlock({ work, live }: { work: Work; live?: ReactNode }) {
   );
 }
 
-/** The icon says what kind of work it is before the command is read. */
 const toolIcons: Record<string, typeof Terminal> = {
   bash: Terminal,
   read: FileText,
@@ -692,13 +566,7 @@ const toolIcons: Record<string, typeof Terminal> = {
   fetch: Globe,
 };
 
-/**
- * One vocabulary, and a stop is never reported as a failure — see docs/ui.md §9.
- *
- * A tool that simply worked says nothing: the third tier of §9 is "nothing to do, show nothing",
- * and a trace where nine cards in ten wear a green `done` is exactly how the one that failed gets
- * lost. Absence is unambiguous here because every other outcome, including still running, is named.
- */
+// A tool that worked shows nothing (§9): with every other outcome named, absence is unambiguous.
 function toolState(item: Extract<Item, { kind: "tool" }>): { word: string; tone: Tone } | undefined {
   if (item.status === "interrupted") return { word: "stopped", tone: "muted" };
   if (item.isError) return { word: "failed", tone: "danger" };
@@ -711,25 +579,15 @@ export function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   const state = toolState(item);
   const elapsed = useElapsed(item.started, item.ended);
   const Icon = toolIcons[item.name] ?? Terminal;
-  // The icon carries the state too: a failed call is red before the badge beside it is read.
   const mark = item.isError ? "text-danger" : item.status === "running" ? "text-accent" : "text-muted";
   return (
-    // Closed, a tool call is a line of the document, not an object on top of it: no fill, no border,
-    // nothing but the row it occupies. Boxing it either way was the mistake — full width it was a grey
-    // slab, shrunk to its text it looked like a button sitting in the middle of prose. The surface
-    // arrives only when there is output to hold, which is the one moment a card is doing work.
-    //
-    // The negative margin lets the hover highlight breathe past the text without moving the text:
-    // the command stays on the document's left edge, aligned with the paragraphs above it.
+    // The negative margin lets the hover highlight extend past the text while the command keeps the left edge.
     <details className="group -mx-2.5 rounded-card open:bg-surface open:ring-1 open:ring-stroke">
       <summary className="cursor-default select-none flex items-center gap-2 rounded-card px-2.5 h-7 text-[12px] hover:bg-hover group-open:rounded-b-none">
         <CaretRight size={11} className="shrink-0 text-muted transition-transform group-open:rotate-90" />
         <Icon size={14} className={`shrink-0 ${mark}`} />
-        {/* The tool's own name in front of its argument: `bash` and `read` are different work, and
-            a bare path does not say which one ran. */}
         <span className="shrink-0 text-muted">{item.name}</span>
         <span className="font-mono truncate">{summary}</span>
-        {/* The state belongs next to the command it describes, not at the far edge of the row. */}
         {state && (
           <Badge tone={state.tone} pulse={item.status === "running"} className="shrink-0">
             {state.word}
@@ -745,11 +603,6 @@ export function Tool({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   );
 }
 
-/**
- * Arguments as a label and a value, not the JSON the wire carried. `{"pattern":"foo","glob":"*.ts"}`
- * asks the reader to parse punctuation to find two facts; the braces and quotes are ours to drop.
- * The one argument already spelled out in the header is not repeated.
- */
 function Args({ args, summary }: { args: unknown; summary: string }) {
   if (args === undefined || args === null) return null;
   if (typeof args !== "object") return <pre className="font-mono whitespace-pre-wrap break-all">{stringify(args)}</pre>;
@@ -767,7 +620,6 @@ function Args({ args, summary }: { args: unknown; summary: string }) {
   );
 }
 
-/** One argument's value, folded like output is: a `write` carries the whole file it writes. */
 function Value({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const head = foldHead(text);
@@ -787,12 +639,6 @@ function Value({ text }: { text: string }) {
   );
 }
 
-/**
- * What the tool printed. Long output folds rather than growing its own scrollbar: a scroll region
- * inside a scrolling transcript steals the wheel from the page it sits in, and hides how much is
- * there. The fold is `foldHead`'s: twelve lines or about as many characters (§8) — enough to see
- * whether it is the output you wanted.
- */
 function Output({ text, isError }: { text: string; isError?: boolean }) {
   const [open, setOpen] = useState(false);
   const head = foldHead(text);
@@ -800,8 +646,7 @@ function Output({ text, isError }: { text: string; isError?: boolean }) {
   const hidden = head === undefined ? 0 : text.split("\n").length - head.split("\n").length;
   return (
     <div>
-      {/* The error rule is on the text, not on this wrapper: the footer below has to reach both
-          edges of the card, and a padded, bordered parent would stop it at the red line. */}
+      {/* The error rule is on the text: the footer below must reach both edges of the card. */}
       <pre
         className={`font-mono whitespace-pre-wrap break-all leading-relaxed ${
           isError ? "border-l-2 border-danger pl-2.5 text-danger" : ""
@@ -810,11 +655,7 @@ function Output({ text, isError }: { text: string; isError?: boolean }) {
         {head !== undefined && !open ? head : text}
       </pre>
       {head !== undefined && (
-        // The card's own footer, not a link floating under the text: it spans the card, sits on a
-        // hairline, and lands on the card's bottom corners. The negative margins reach out of the
-        // padded body it is nested in, so its width is the body's plus both of them: `w-full` alone
-        // pins it to the body and the margins only shift it left, and a button's automatic width
-        // shrinks to its label rather than filling the line the way a div's would.
+        // Negative margins reach out of the padded body; a button's auto width would shrink to its label.
         <button
           type="button"
           className="focus-inset -mx-2.5 -mb-2.5 mt-2 flex h-7 w-[calc(100%+1.25rem)] items-center justify-center gap-1.5 rounded-b-card border-t border-stroke text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"

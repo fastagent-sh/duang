@@ -31,14 +31,10 @@ import type { SessionFrame } from "../preload/index.ts";
 
 const settings = new SettingsFile(join(app.getPath("userData"), "settings.json"));
 
-/**
- * Settings asked for with no window open. A new window's listener registers after React's first
- * effects, which can be after `did-finish-load`, and a message sent to no listener is dropped — so
- * the request waits here until the renderer asks for it.
- */
+// A new window's listener can register after `did-finish-load`, and a message to no listener is dropped,
+// so the request waits until the renderer asks.
 let settingsPending = false;
 
-/** Settings is a place in the window, so the menu item asks the renderer to go there. */
 function openSettings(): void {
   const existing = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (existing) {
@@ -50,11 +46,7 @@ function openSettings(): void {
   createWindow();
 }
 
-/**
- * macOS keeps app-level Settings in the App menu under ⌘, (HIG, The menu bar). Replacing Electron's
- * default menu replaces all of it, so the standard File, Edit, View and Window menus are rebuilt from
- * their roles — without Edit, ⌘C and ⌘V stop working in every text field.
- */
+// Replacing Electron's default menu replaces all of it; without the Edit roles ⌘C and ⌘V stop working.
 function setApplicationMenu(): void {
   if (process.platform !== "darwin") return;
   Menu.setApplicationMenu(
@@ -89,13 +81,9 @@ function createWindow(): BrowserWindow {
     minWidth: 800,
     minHeight: 540,
     titleBarStyle: "hiddenInset",
-    // Roughly macOS's own inset, a little tighter to the top than centring them in the sidebar's
-    // header row would put them: with the panel starting 8 below the window edge, centring reads as
-    // a gap above the buttons rather than as alignment.
+    // Tighter to the top than centring: with the panel 8 below the edge, centring reads as a gap above.
     trafficLightPosition: { x: 18, y: 18 },
-    // No vibrancy: every surface in this window is opaque (docs/ui.md §4), so a transparent window
-    // over a native material had nothing to show through it and only cost a translucent first
-    // paint. The background matches the canvas the renderer paints, so launching does not flash.
+    // No vibrancy: every surface is opaque. Matching the renderer's canvas avoids a flash at launch.
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#1b1b1d" : "#fcfcfc",
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.mjs"),
@@ -122,28 +110,20 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-/**
- * The window's page. `fresh` opens it on a new conversation instead of the one it was left on (the
- * renderer reads `#fresh` once and drops it), for a window that crashed drawing that conversation.
- */
+// `fresh` opens on a new conversation, for a window that crashed drawing the last one.
 function load(win: BrowserWindow, fresh = false): void {
   if (process.env.ELECTRON_RENDERER_URL)
     void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}${fresh ? "#fresh" : ""}`);
   else void win.loadFile(join(import.meta.dirname, "../renderer/index.html"), fresh ? { hash: "fresh" } : {});
 }
 
-/** Crashes inside this span count toward the same loop: past `CRASH_LIMIT` of them, reloading is asked first. */
 const CRASH_SPAN_MS = 60_000;
 const CRASH_LIMIT = 2;
 /** For the app, not one window: a window closed and opened again from the Dock starts no new count. */
 const crashes: number[] = [];
 
-/**
- * A renderer that crashes, or is killed, leaves the window blank with nothing to press. Its runs live here
- * and keep going, so the window is reloaded, which reopens what it showed. One that keeps crashing likely
- * draws something that crashes it again, and reloading would open that again: the person is asked, with
- * the reason, and the way on opens the window on a new conversation instead of the one it was showing.
- */
+// A crashed renderer leaves a blank window while its runs go on here, so reload. One that keeps crashing
+// likely redraws what crashed it: ask first, and open on a new conversation.
 function reloadWhenGone(win: BrowserWindow): void {
   win.webContents.on("render-process-gone", (_event, details) => {
     if (details.reason === "clean-exit") return;
@@ -169,11 +149,8 @@ function reloadWhenGone(win: BrowserWindow): void {
   });
 }
 
-/**
- * These throw on purpose: a renderer asking about an agent that is not in the registry, or naming an
- * unaddressable session, is a bug in this app, not a choice the person can revisit. Refusals the
- * person CAN act on are returned as values instead — see `refuse`.
- */
+// These throw: an unknown agent or unaddressable session is a bug in this app. Refusals a person can act on
+// are values (`refuse`).
 async function requireAgent(agentId: string): Promise<AgentRow> {
   const row = (await listAgents()).find((a) => a.id === agentId);
   if (!row) throw new Error(`unknown agent ${agentId}`);
@@ -184,20 +161,17 @@ function requireSession(session: string): void {
   if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
 }
 
-/** A conversation on its agent's current runtime, after checking both ids as above. */
 async function sessionOf(agentId: string, session: string) {
   requireSession(session);
   return (await openAgent(await requireAgent(agentId))).control.sessions.get(session);
 }
 
-/** The one sign-in in progress, and the window it belongs to. */
 let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
 
-/** Sends in main's hands, per conversation: a Stop before the run exists is answered here. */
+// A Stop that arrives before the run exists is answered here.
 const inFlight = sends();
 
 const sessions = subscriptions(sessionOf);
-/** A window as its subscriptions post to it: a window that has gone hears nothing. */
 const listener = (sender: WebContents): Listener<SessionEvent> => ({
   id: sender.id,
   post: (frame: SessionFrame) => {
@@ -223,21 +197,18 @@ function register(): void {
       return code === "broken" && configFailed(agentId) ? { ok: false, code, message, inConfig: true } : { ok: false, code, message };
     }
   });
-  // The folder was moved: the person shows where it is now.
   ipcMain.handle("agent:relocate", async (_e, id: string) => {
     const row = await requireAgent(id);
     const picked = await dialog.showOpenDialog({ properties: ["openDirectory"], message: `Where is "${row.name}" now?` });
     if (picked.canceled || !picked.filePaths[0]) return undefined;
     return relocateAgent(row.id, picked.filePaths[0]);
   });
-  // The agent's config does not load: start a fresh one, keeping a copy of the old one. Main knows which file.
   ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await requireAgent(id)));
   ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
     if (typeof model !== "string") throw new Error("Model must be a string");
     if (session !== undefined) requireSession(session);
     const row = await requireAgent(id);
-    // The picker offers this agent's runnable models, so a miss here means something changed underneath it.
     if (!(await modelsFor(row.dir)).some((offered) => offered.spec === model))
       return refuse(MODEL_UNAVAILABLE_CODE, `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
@@ -247,7 +218,6 @@ function register(): void {
   ipcMain.handle("session:state", async (_e, id: string, session: string) => (await sessionOf(id, session)).state());
   ipcMain.handle("session:setThinking", async (_e, id: string, session: string, level: string) => {
     if (typeof level !== "string") throw new Error("Thinking level must be a string");
-    // FastAgent checks the level against what this conversation's model supports, and refuses while it runs.
     return (await sessionOf(id, session)).update({ thinkingLevel: level });
   });
   ipcMain.handle("agent:remove", async (_e, id: string) => {
@@ -264,9 +234,8 @@ function register(): void {
   );
   ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
-  // Read on every open of the page, and at start for the roster: a file fixed by hand shows up without a
-  // restart, and a broken one is reported rather than shown as the defaults. The route is its own call:
-  // it waits on Chromium's answer (a PAC script can be slow), which the roster must not.
+  // Read on every open, so a file fixed by hand shows without a restart. The route is its own call: a PAC
+  // script can be slow, and the roster must not wait on it.
   ipcMain.handle("settings:get", () => settings.read());
   ipcMain.handle("network:route", () => describeRoute());
   ipcMain.handle("settings:setAvatar", (_e, value: unknown) => settings.change({ avatar: avatar(value) }));
@@ -286,12 +255,9 @@ function register(): void {
   ipcMain.handle("network:test", () => testConnection());
   ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
   ipcMain.handle("models:refresh", async (_e, id: string) => refreshModels((await requireAgent(id)).dir));
-  // Model providers, in duang's own credential file. `empty` is never written: it is where a provider's
-  // environment variable is read with no stored credential in front of it. In this user's own data,
-  // not a shared temporary directory where anyone could put a file at that path.
+  // `empty` is never written: reading it shows what env variables alone provide. In userData, not a shared tmp dir.
   const empty = join(app.getPath("userData"), "no-credentials.json");
   ipcMain.handle("providers:list", () => listProviders(authPath, empty));
-  // Before anything is connected the file does not exist yet; its folder is the place to show.
   ipcMain.handle("providers:reveal", () =>
     existsSync(authPath) ? shell.showItemInFolder(authPath) : shell.openPath(dirname(authPath)),
   );
@@ -303,7 +269,6 @@ function register(): void {
   ipcMain.handle("providers:login", async (e, provider: string, method: LoginMethod): Promise<LoginOutcome> => {
     if (typeof provider !== "string" || (method !== "oauth" && method !== "api_key"))
       throw new Error("A sign-in names a provider and oauth or api_key");
-    // One flow at a time: a second callback server, or a second masked field, would be ambiguous.
     if (signIn) return { ok: false, error: "Another sign-in is in progress." };
     const flow = startLogin({
       provider,
@@ -338,23 +303,16 @@ function register(): void {
     if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
     return providerUsage(provider, authPath);
   });
-  // A plan whose usage only its provider's page shows: main opens its own address for that provider.
   ipcMain.handle("usage:open", (_e, provider: string) => {
     if (typeof provider !== "string") throw new Error("Provider must be a string");
     return shell.openExternal(usagePage(provider));
   });
-  // The dock is where "something happened while you were away" belongs: the sidebar can only say it
-  // while duang is the window you are looking at.
   ipcMain.handle("app:unseen", (_e, count: number) => {
     if (!Number.isInteger(count) || count < 0) throw new Error(`Unseen count must be a non-negative integer: ${count}`);
     app.setBadgeCount(count);
   });
 
-  /**
-   * A row's context menu, which is macOS's own place for Rename: a native menu, so it looks like the
-   * system's and not like one of our popovers. Chromium raises `contextmenu` for Shift+F10 and the
-   * Menu key too, so this is the keyboard path as well.
-   */
+  // Native, so Rename looks like the system's. Chromium also raises `contextmenu` for Shift+F10 and the Menu key.
   ipcMain.handle("menu:popup", async (event, items: { id: string; label: string }[]) => {
     if (!Array.isArray(items) || items.some((item) => typeof item?.id !== "string" || typeof item.label !== "string"))
       throw new Error("Menu items must be { id, label } strings");
@@ -366,13 +324,11 @@ function register(): void {
   });
   ipcMain.handle("session:rename", async (_e, id: string, session: string, name: string) => {
     if (typeof name !== "string" || !name.trim()) throw new Error("A conversation name cannot be empty");
-    // FastAgent owns the label: `update({ name })` is what `sessions.list()` then reports.
     return (await sessionOf(id, session)).update({ name: name.trim() });
   });
   // A refused delete must leave the live subscription intact.
   ipcMain.handle("session:delete", async (_e, id: string, session: string) => (await sessionOf(id, session)).delete());
   ipcMain.handle("session:close", (e, subscription: string) => sessions.close(e.sender.id, subscription));
-  // History without a subscription: what a roster row quotes from a conversation nobody has open.
   ipcMain.handle("session:entries", async (_e, id: string, session: string) => (await sessionOf(id, session)).entries());
   ipcMain.handle("session:open", async (e, id: string, session: string, subscription: string) => {
     requireSession(session);
@@ -386,7 +342,6 @@ function register(): void {
     return inFlight.hold(`${id}/${session}`, async (stopped) => {
       // The agent's commands spawn during this run; they get the route as it is now.
       await syncCommandProxy();
-      // One credential file serves every runtime, and a run starts only on a model the picker would offer.
       const row = await requireAgent(id);
       const offered = async (model: string) => (await modelsFor(row.dir)).some((m) => m.spec === model);
       return withAgentRun(row, ({ agent, control }) => send(agent, control.sessions.get(session), text, stopped, offered));
@@ -398,15 +353,13 @@ function register(): void {
   });
 }
 
-// One duang per data directory: the installed app and `npm run dev` share it (Electron's userData), and two of them
-// would write one agent registry with no lock between processes, and refresh one OAuth login twice. The second one
-// shows the first and leaves.
+// One duang per userData (the app and `npm run dev` share it): two would write one registry with no lock and
+// refresh one OAuth login twice.
 if (!app.requestSingleInstanceLock()) {
   console.error(`duang is already running with ${app.getPath("userData")}; showing that one instead.`);
   app.exit(0);
 } else
   app.on("second-instance", () => {
-    // On macOS duang keeps running with its last window closed: then there is nothing to show but a new one.
     const [window] = BrowserWindow.getAllWindows();
     if (!window) return void createWindow();
     if (window.isMinimized()) window.restore();
@@ -420,8 +373,7 @@ void app
     try {
       saved = await settings.read();
     } catch (error) {
-      // The network still needs a route, and guessing someone's manual proxy is worse than the
-      // system's. Said out loud, and again on the Settings page until the file is fixed.
+      // Guessing a manual proxy is worse than the system's; said here and on Settings until the file is fixed.
       dialog.showErrorBox(
         "duang could not read its settings",
         `${(error as Error).message}\n\nThe network follows the system proxy until the file is fixed or removed.`,
@@ -444,15 +396,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-/**
- * Closing a window leaves runs alone — they live here, not in the renderer. Quitting ends them, and
- * nothing resumes them afterwards, so it is the one moment worth interrupting. Quit anyway stops each
- * run as Stop does and waits, briefly, for it to settle: a run cut by the process ending records no
- * outcome at all, while a stopped one records that it was stopped.
- *
- * The native modal is not answered by the smoke test, which would hang on it; the stop-and-wait is
- * `sends().stopAll`, tested on its own.
- */
+// Quitting ends runs and nothing resumes them, so ask. Quit anyway stops them as Stop does and waits briefly:
+// a stopped run records its outcome, a cut one records nothing.
 const QUIT_WAIT_MS = 5000;
 let quitting = false;
 app.on("before-quit", (event) => {

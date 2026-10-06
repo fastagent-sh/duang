@@ -1,4 +1,3 @@
-/** Real Electron + preload + FastAgent; only the model's HTTP response is faked. No credentials or network needed. */
 import assert from "node:assert/strict";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
@@ -33,10 +32,8 @@ if (root) {
     };
     // duang's own file, in its user data. Everything below reads and writes only this one.
     const selectedAuth = join(data, "auth.json");
-    // Stores duang must never read: the CLI's global store, pi's, a stray one, and the file
-    // `FASTAGENT_AUTH_PATH` names, which the CLI honours and duang no longer does. Holding only
-    // `openai-codex` (or a wrong key) makes a wrong pick visible: the `anthropic/...` assertions below
-    // cannot pass from these files.
+    // Stores duang must never read. They hold only `openai-codex` (or a wrong key), so the `anthropic/...`
+    // assertions below cannot pass from them.
     const { GLOBAL_AUTH_PATH } = await import("@fastagent-sh/fastagent/pi");
     const decoy = JSON.stringify({ "openai-codex": codex });
     process.env.FASTAGENT_AUTH_PATH = join(root, "custom-auth.json");
@@ -88,13 +85,10 @@ if (root) {
 
     let requests = 0;
     let hold = false;
-    /** When set, the model's request is refused, as a revoked key would be. */
     let reject = false;
-    /** When set, the model's answer waits for this: a run that finishes while you are elsewhere. */
     let gate;
     let anthropicRequests = 0;
     let usageRequests = 0;
-    /** When set, the connection check gets no answer, as through a proxy nobody listens on. */
     let refuseCheck = false;
     const deepseekKeys = [];
     globalThis.fetch = async (url, options = {}) => {
@@ -245,7 +239,6 @@ if (root) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
     }
-    /** The open agent's conversations are in the header's list, which a test opens the way a person does. */
     const listOpen = "!!document.querySelector('#conversations:popover-open')";
     async function showConversations() {
       if (!(await evaluate(listOpen))) await evaluate(`document.querySelector('main > header button[title="Conversations"]').click()`);
@@ -274,14 +267,11 @@ if (root) {
       });
       await import("../out/main/index.js");
       await loaded;
-      // The keyboard and focus checks need the page to have focus: without it Chromium moves
-      // `activeElement` but fires no focus event, and the roster's "last reached" row never updates.
-      // Stealing OS focus is not reliable on macOS 14 and later while another app is in use, so the
-      // page is told to behave as focused instead, as Playwright does for every Chromium page.
+      // Focus emulation, as Playwright does: without page focus Chromium fires no focus events, and stealing OS
+      // focus is unreliable on macOS 14+.
       win.webContents.debugger.attach();
       await win.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
-      // GitHub's macOS runners have the system's Reduce motion on, where every face keeps its pose by design;
-      // the checks of motion need it off, and reduced motion is checked on its own below (#142).
+      // GitHub's macOS runners have Reduce motion on; reduced motion is checked on its own below (#142).
       const motion = (value) =>
         win.webContents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value }] });
       await motion("no-preference");
@@ -290,8 +280,7 @@ if (root) {
         !(await evaluate("document.body.innerText")).includes("is not a fastagent agent"),
         "the scaffold offer must not be contradicted by the runtime's `run fastagent init` error",
       );
-      // The chrome's Latin is SF, not PingFang's: a stack that leads with names Chromium does not resolve
-      // falls through to PingFang, whose hyphen is 0.6em wide against SF's 0.43.
+      // A stack leading with names Chromium does not resolve falls through to PingFang (hyphen 0.6em vs SF's 0.43).
       assert.ok(
         await evaluate(`(() => {
           const ruler = document.createElement('canvas').getContext('2d');
@@ -328,14 +317,12 @@ if (root) {
         "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')",
         "stream settles",
       );
-      // The answer's Latin is in the bundled face, not the fallback: Chromium silently skipped it once
-      // when the Latin and Chinese faces declared different weights (index.css).
+      // Chromium once skipped the Latin face when the Latin and Chinese faces declared different weights.
       await until(
         "[...document.fonts].some((f) => f.family === 'Prose' && f.unicodeRange.startsWith('U+0-FF') && f.style === 'normal' && f.status === 'loaded')",
         "the answer's Latin face loads",
       );
-      // Bold italic must be a face of its own: with only a 400 italic declared, `***x***` matched it and
-      // lost its weight (index.css).
+      // With only a 400 italic declared, `***x***` matched it and lost its weight.
       assert.deepEqual(
         await evaluate(`(async () => {
           const pick = async (text) =>
@@ -345,8 +332,7 @@ if (root) {
         [["600 italic"], ["600 italic"]],
         "bold italic has its own Latin and Chinese faces",
       );
-      // A tool that worked says nothing (§9, third tier): the card is finished when its result is
-      // in and the running badge is gone.
+      // A tool that worked says nothing (§9): done means the result is in and the running badge gone.
       await until(
         `(() => {
           const card = document.querySelector('details details');
@@ -354,24 +340,20 @@ if (root) {
         })()`,
         "tool trace finishes",
       );
-      // A card reaches 10px past its column on each side; the disclosure's content slot clips the height
-      // for the growing, and must not clip the width, or the card's right ring and corners are cut off.
+      // A card reaches 10px past its column; the disclosure must clip height only.
       assert.equal(
         await evaluate("getComputedStyle(document.querySelector('details'), '::details-content').overflowX"),
         "visible",
         "a disclosure clips its height, not its width",
       );
-      // The composer's field and discs and the header are drawn with a `ring-1` hairline; a drop shadow of
-      // their own that set `box-shadow` (the ring is one) would replace it, leaving white on white in
-      // light mode.
+      // A drop shadow set as `box-shadow` would replace the `ring-1` hairline.
       assert.deepEqual(
         await evaluate(`['.composer-card', '.conversation-header'].map((selector) => /0px 0px 0px 1px/.test(getComputedStyle(document.querySelector(selector)).boxShadow))`),
         [true, true],
         "the composer and the header keep their hairline",
       );
       assert.equal(requests, 2, "a real read tool ran between two model requests");
-      // The header floats over the transcript, as Telegram's does: text scrolls beneath it, the
-      // transcript's own top padding starts the first turn below it, and it lets the wheel through.
+      // The header floats: text scrolls beneath it and it lets the wheel through.
       assert.ok(
         await evaluate(`(() => {
           const header = document.querySelector('main > header').getBoundingClientRect();
@@ -487,20 +469,15 @@ if (root) {
       );
       assert.match(await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').title"), /\nWorking$/);
       assert.match(await evaluate("document.querySelector('aside').innerText"), /working/, "state is readable, not hovered");
-      // Its avatar is drawn (Gaze, the default) and wears a working face: a still ring, and eyes or body moving
-      // with the work. The eyes are <defs> drawn through <use>, so this reads the animation on the original,
-      // which the drawn copies inherit; a selector that misses them leaves the face frozen with no error.
+      // The eyes are <defs> drawn through <use>; a selector that misses the copies freezes the face with no error.
       const smokeAvatar = `document.querySelector('button[aria-label="Smoke"] .avatar')`;
       await until(`!!${smokeAvatar}?.querySelector('svg .dbga-eye')`, "the default avatars are drawn");
       await until(`['thinking', 'tool', 'answering'].includes(${smokeAvatar}.dataset.face)`, "a working agent wears a working face");
       assert.ok(await evaluate(`${smokeAvatar}.classList.contains('ring-2')`), "and the presence ring");
-      // Read from the pixels, not from computed styles: those are the original's, which can be right while
-      // the drawn copies stand still (a descendant selector reaches the one and not the other).
+      // Pixels, not computed styles: those are the original's, which can be right while the copies stand still.
       const face = await evaluate(`(() => { const r = ${smokeAvatar}.getBoundingClientRect(); return { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()`);
       const frames = [];
-      // What each frame was taken of, said if they never differ: whether reduced motion is in force (it stops every
-      // face by design, and an emulation that did not take was #142 on CI's runners), the face it wore, the
-      // animations running on the avatar, and where it was by then.
+      // Said if frames never differ: reduced motion (#142 on CI), the face, its animations and its position.
       const seen = [];
       for (let i = 0; i < 8; i++) {
         frames.push((await win.webContents.capturePage(face)).toBitmap());
@@ -527,9 +504,7 @@ if (root) {
         "reduced motion stops every animation in the roster",
       );
       await motion("no-preference");
-      // Escape on the open list closes the list; it is not also a Stop. Not even in the same task
-      // that opened it, before React has heard the popover's asynchronous `toggle` event: a slow
-      // machine delivers a real Escape inside that gap.
+      // Not a Stop either, even in the task that opened the list, before React heard the popover's `toggle`.
       await evaluate(`(() => {
         document.querySelector('main > header button[title="Conversations"]').click();
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
@@ -562,8 +537,7 @@ if (root) {
       await until("document.body.innerText.includes('run stopped')", "stopping is a settled transcript outcome");
       await until("document.querySelector('button[aria-label=\"Send\"]') !== null", "composer leaves running state");
 
-      // A run that finishes while another conversation is on screen is the thing you came back for:
-      // the sidebar keeps a filled mark and the dock carries the count until it is looked at.
+      // A run finishing elsewhere leaves a filled mark in the sidebar and a dock count until looked at.
       hold = false;
       let release;
       gate = new Promise((resolve) => {
@@ -632,8 +606,7 @@ if (root) {
       assert.ok(models.some((model) => model.spec === "local/m1"), "the agent's own models.json endpoint is pickable");
       assert.ok(!(await evaluate("window.duang.listModels('smoke')")).some((model) => model.spec === "local/m1"), "another agent's endpoint is not");
       const historical = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
-      // Replacing the runtime is main's business: the open conversation is not reloaded, its scroll stays, and
-      // it is not told anything broke. The answer below proves its subscription listens on the new runtime.
+      // Replacing the runtime is main's business: no reload, the scroll stays, nothing said broke.
       await evaluate(`window.__transcript = document.querySelector('[aria-label="Transcript"]'); window.__scroll = window.__transcript.scrollTop;`);
       await click("openai/gpt-4o-mini");
       await until("document.querySelector('dialog[open]') !== null", "cross-provider model picker");
@@ -663,8 +636,7 @@ if (root) {
       await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').click()`);
       await until(`${chip}.textContent.includes('High')`, "the chip names the level the runtime reports");
       await until(`document.querySelector('dialog [role=radio][aria-label="High"]').getAttribute('aria-checked') === 'true'`, "and so does the track");
-      // Choosing is explicit: each choice is a durable entry in the conversation's record, so the arrow
-      // keys move the focus along the track and write nothing, and Enter chooses.
+      // Each choice is a durable entry: arrows move focus and write nothing, Enter chooses.
       const thinkingSession = await evaluate("window.duang.openAgent('configured').then(r => r.sessions[0].session)");
       const levelChanges = () =>
         evaluate(`window.duang.readSession('configured', ${JSON.stringify(thinkingSession)}).then((r) => r.entries.filter((e) => e.kind === 'thinking_level_change').length)`);
@@ -686,9 +658,7 @@ if (root) {
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("document.querySelector('dialog') === null", "Escape closes the picker");
-      // The header's edge is the context, always: whichever of the plan's windows or the context is
-      // fuller would take the slot, and its label would change with it: the plan's 7d is at 18% here, above the
-      // context's 10%, and must still not be what the slot says. The plan waits in the hover table.
+      // The header's edge is the context, always, even when a plan window is fuller (7d at 18% vs 10% here).
       await until("/context[\\s\\S]*10%/.test(document.querySelector('header').innerText)", "the header shows the conversation's context");
       // The table is hidden by opacity (so a keyboard can reach a link in it), which innerText does not see.
       const table = "getComputedStyle(document.querySelector('header [aria-label=Usage] .popover').parentElement).opacity";
@@ -696,8 +666,7 @@ if (root) {
       assert.match(await evaluate("document.querySelector('header [aria-label=Usage]').textContent"), /5h[\s\S]*4%[\s\S]*7d[\s\S]*18%/, "the hover table lists every window");
       assert.equal(usageRequests, 1, "the run ending inside the gap reuses the answer instead of asking again");
 
-      // The edge is there before there is a context to report: a new conversation says `–`, and the plan's
-      // windows are still one hover away (the table does not hang off the context reading).
+      // A new conversation says `–`, and the plan's windows are still one hover away.
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
       await until("document.body.innerText.includes('What should we work on?')", "a new conversation");
       await until(
@@ -705,8 +674,7 @@ if (root) {
         "the plan's windows are one hover away in a conversation with no context yet",
       );
       assert.match(await evaluate("document.querySelector('header').innerText"), /context\s*–/, "and the context says it is not known yet");
-      // Effort set before the first message: the runtime keeps the conversation, and the list keeps it once it
-      // is left, as a new conversation rather than its id.
+      // Effort set before the first message: the runtime keeps the conversation and the list shows it.
       const newRows = "[...document.querySelectorAll('#conversations button')].filter((b) => b.textContent.includes('New conversation')).length";
       await showConversations();
       const rowsBefore = await evaluate(newRows);
@@ -723,15 +691,11 @@ if (root) {
       await showConversations();
       await until(`${newRows} === ${rowsBefore} + 1`, "the conversation left after setting its effort is still listed, as New conversation");
       await evaluate("document.getElementById('conversations').hidePopover()");
-      // Back to the conversation the rest of this run goes on in.
       await showConversations();
       await evaluate(`[...document.querySelectorAll('#conversations button')].find((b) => b.textContent.includes('Use the configured model')).click()`);
       await until("document.querySelector('main').innerText.includes('Anthropic smoke answer')", "back in the conversation with its history");
 
-      // Change only the agent default, then reopen Anthropic history through a fresh renderer.
-      // The read issued alongside the change must wait for the new runtime instead of reporting a
-      // broken agent. Whether it lands inside the window is main's to schedule, so assert only the
-      // outcome; the forced-window verification is described in the PR.
+      // A read issued alongside the change must wait for the new runtime, not report a broken agent.
       assert.deepEqual(await evaluate("window.duang.setModel('configured', 'local/m1')"), { ok: true }, "setModel accepts it");
       assert.equal((await evaluate("window.duang.setModel('configured', 'local/nope')")).error.code, "model_unavailable");
       const racing = await evaluate(`(async () => {
@@ -751,9 +715,7 @@ if (root) {
       win.webContents.reload();
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "reload initial agent");
-      // A renderer that crashes leaves no blank window: main reloads it, and it reopens what it showed. One
-      // that keeps crashing is not reloaded onto the same conversation in a loop: the third time in a minute it
-      // asks, and the way on opens a new conversation instead.
+      // A crashed renderer is reloaded onto what it showed; the third crash in a minute asks, and opens a new conversation.
       const asked = [];
       const showMessageBox = electron.dialog.showMessageBox;
       electron.dialog.showMessageBox = async (_window, options) => {
@@ -828,9 +790,7 @@ if (root) {
       );
       await type("/d");
       await until("document.body.innerText.includes('A skill the completion list should offer')", "list reopens");
-      // ArrowUp from the first wraps to the last, which the list has to scroll to: a cursor on a row
-      // cut in half by the list's edge is a cursor nobody can read.
-      // The cursor is on the row asked for (React has rendered the key) and that row is fully in view.
+      // ArrowUp from the first wraps to the last, which must be scrolled fully into view.
       const chosenInView = (which) => `(() => {
         const rows = [...document.querySelectorAll('.composer .popover button')];
         const chosen = document.querySelector('.composer .popover [data-chosen]');
@@ -841,8 +801,7 @@ if (root) {
       })()`;
       await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
       await until(chosenInView(-1), "the last row is chosen and scrolled fully into view");
-      // A pointer resting on the list is not moving: the row the scroll puts under it is reported as entered,
-      // and must not take the cursor from the keys. A pointer that moves does.
+      // A resting pointer the list scrolls under must not take the cursor from the keys; a moving one does.
       await evaluate(`document.querySelector('.composer .popover button').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`);
       await new Promise((resolve) => setTimeout(resolve, 100));
       assert.ok(await evaluate(chosenInView(-1)), "a row entered by a resting pointer does not take the cursor");
@@ -863,8 +822,7 @@ if (root) {
       // An agent with no skills must say so; silence here reads as a broken composer.
       await evaluate("document.querySelector('button[aria-label=\"Smoke\"]').click()");
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "back to the scaffolded agent");
-      // The roster lists agents, and each row quotes the newest output of the conversation it would
-      // open: Configured's is read from its history while Smoke's transcript is being read.
+      // Each row quotes the newest output of the conversation it would open.
       await until(
         "document.getElementById('status-configured')?.innerText.includes('Anthropic smoke answer')",
         "another agent's row quotes its conversation's newest output",
@@ -886,8 +844,7 @@ if (root) {
       // A registered directory that no longer exists breaks only its own agent, and stays removable.
       await evaluate("document.querySelector('button[aria-label=\"Gone\"]').click()");
       await until("document.body.innerText.includes('moved-away')", "the missing directory is named");
-      // Removal is offered by the panel that explains the problem, not by the sidebar row, so look
-      // for the button rather than for the word anywhere on screen.
+      // Removal is offered by the panel, not the sidebar row.
       await until(
         "[...document.querySelectorAll('main button')].some((b) => b.textContent.trim() === 'Remove from duang')",
         "a directory that no longer exists stays removable from the panel that explains it",
@@ -932,9 +889,7 @@ if (root) {
       })()`);
       await until("document.querySelector('dialog').innerText.includes('Nothing matches')", "no filter matches");
 
-      // A refresh asks pi.dev, which a test must never reach: under PI_OFFLINE (set for this one press; the
-      // app shares this process) FastAgent refuses it by name. The person sees that, in its own words, and the
-      // list and the button stay usable.
+      // Tests must never reach pi.dev: under PI_OFFLINE FastAgent refuses the refresh by name, and the list stays usable.
       process.env.PI_OFFLINE = "1";
       await evaluate(`document.querySelector('dialog button[aria-label="Refresh models"]').click()`);
       await until(
@@ -967,8 +922,7 @@ if (root) {
         "Settings, outside the roster, is its own tab stop",
       );
 
-      // A real Tab, from the control before the list: the point of a roving tabindex is that Tab
-      // can enter the roster at all.
+      // A real Tab: the point of a roving tabindex is that Tab can enter the roster at all.
       await evaluate("document.querySelector('aside button[aria-label=\"Add agent directory\"]').focus()");
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Tab" });
       win.webContents.sendInputEvent({ type: "char", keyCode: "Tab" });
@@ -977,8 +931,7 @@ if (root) {
         "document.activeElement.closest('aside [aria-label=Agents]') !== null",
         "Tab enters the roster from outside it",
       );
-      // The list clips what sticks out of it, and a focus ring sticks out by its width plus its offset: the
-      // first and last rows keep their ring only if the list pads by at least that, top and bottom.
+      // The list clips, so it must pad by the focus ring's width plus offset.
       assert.deepEqual(
         await evaluate(`(() => {
           const list = document.querySelector('aside [aria-label=Agents]');
@@ -991,8 +944,7 @@ if (root) {
         "the roster leaves room for its focus ring above the first row and below the last",
       );
 
-      // Keys go one at a time: two in the same tick would be read against state React has not
-      // re-rendered yet, which is not how anyone types.
+      // One key at a time: two in one tick would read state React has not re-rendered.
       const press = (key) =>
         evaluate(
           `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
@@ -1005,8 +957,7 @@ if (root) {
       await press("Home");
       await until("document.activeElement.getAttribute('aria-label') === 'Smoke'", "Home reaches the first");
 
-      // Naming a conversation. The menu that carries Rename is native, so the test drives what the
-      // menu would: a double click on the row, which is the other way in.
+      // The Rename menu is native, so drive the other way in: a double click on the row.
       await showConversations();
       await evaluate(`(() => {
         const row = [...document.querySelectorAll('#conversations button[data-session]')].find((b) =>
@@ -1035,8 +986,7 @@ if (root) {
       // and gone again after it takes you back.
       const backToLatest = "document.querySelector('button[aria-label=\"Back to the latest\"]')";
       assert.equal(await evaluate(`${backToLatest} === null`), true, "nothing to offer while at the bottom");
-      // The smoke conversation is short, so make the window small enough for it to overflow — the
-      // control only means anything when there is something to scroll past.
+      // Small enough for the short conversation to overflow.
       const size = win.getSize();
       win.setSize(800, 540);
       await until(
@@ -1047,8 +997,7 @@ if (root) {
         `(() => { const el = document.querySelector('[aria-label="Transcript"]'); return el.scrollHeight > el.clientHeight + 40; })()`,
         "the transcript can scroll",
       );
-      // Each poll re-issues the scroll: the tail-following effect can pull the view back in the same
-      // frame, and a test that scrolls once is testing that race instead of the control.
+      // Re-issued each poll: the tail-following effect can pull the view back in the same frame.
       const atTop = `(() => {
         const el = document.querySelector('[aria-label="Transcript"]');
         el.scrollTop = 0;
@@ -1059,8 +1008,7 @@ if (root) {
         el.scrollTop = el.scrollHeight;
         return ${backToLatest} === null;
       })()`;
-      // A resize can make a transcript scrollable with no scroll event to notice it, so settle at
-      // the bottom first: the control has to be absent there before it means anything above.
+      // A resize makes it scrollable with no scroll event, so settle at the bottom first.
       await until(atBottom, "still nothing to offer at the bottom of a small window");
       await until(atTop, "scrolling up offers the way back");
       await evaluate(`${backToLatest}.click()`);
@@ -1073,9 +1021,7 @@ if (root) {
         "the transcript is at the bottom again",
       );
 
-      // Moving to a conversation that has history never shows the new-conversation page on the way: the
-      // pane is empty while the history is read, not the screen for a conversation nobody has spoken in. A
-      // mutation observer sees every state the DOM passes through, which polling would miss.
+      // A mutation observer sees every state the DOM passes through, which polling would miss.
       const watchForStartScreen = () =>
         evaluate(`(() => {
           window.__startScreen = false;
@@ -1095,9 +1041,7 @@ if (root) {
         await evaluate("window.__watch.disconnect()");
       };
 
-      // Where a conversation was left is where it comes back to: a click on the conversation already open
-      // rebuilds nothing, and Settings or another agent and back restores the place being read (the view is
-      // rebuilt by both). The content grows for a moment after a rebuild, so each is polled.
+      // The place being read survives a click on the open conversation, Settings, and another agent and back.
       const reading = `document.querySelector('[aria-label="Transcript"]')`;
       const nearly = (want) => `${reading} !== null && Math.abs(${reading}.scrollTop - ${want}) <= 2 && ${backToLatest} !== null`;
       const scrollAway = async () => {
@@ -1134,8 +1078,7 @@ if (root) {
       // At the latest line it stays there, rather than landing short of it while the content grows.
       await evaluate(`${reading}.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }))`);
       await until(atBottom, "back at the latest line");
-      // Left in the same task as the scroll to the latest line, before its scroll event has fired: what the
-      // view reports as it goes is what is remembered, not the last event it happened to hear.
+      // Left before the scroll event fired: what the view reports as it goes is what is remembered.
       await scrollAway();
       await evaluate(`(() => {
         const el = ${reading};
@@ -1148,8 +1091,7 @@ if (root) {
         `(() => { const el = ${reading}; return el && el.scrollHeight - el.scrollTop - el.clientHeight < 4 && ${backToLatest} === null; })()`,
         "a conversation left at its latest line comes back at it, once the content has grown",
       );
-      // Content that grows on its own (a code block highlighted late) keeps a view that follows the latest line
-      // on it: nothing scrolls and no item arrives, so only watching the content's size can notice.
+      // Late growth (a code block highlighted late) keeps a following view at the latest line.
       await evaluate(`(() => { const pad = document.createElement('div'); pad.id = 'grow-probe'; pad.style.height = '400px'; ${reading}.firstElementChild.append(pad); })()`);
       await until(
         `(() => { const el = ${reading}; return el.scrollHeight - el.scrollTop - el.clientHeight < 4; })()`,
@@ -1158,10 +1100,7 @@ if (root) {
       await evaluate(`document.getElementById('grow-probe').remove()`);
       win.setSize(size[0], size[1]);
 
-      // The row's actions control follows its own focus: the row keeps focus after a click, which
-      // would keep the control on screen. Reaching the actions by keyboard is the context menu's
-      // job (Shift+F10) and Delete's, not the tab order's. Opacity is read after the transition
-      // settles, not during it.
+      // The row keeps focus after a click, so the control follows its own focus. Read after the transition settles.
       await showConversations();
       const actionsOpacity = `(() => {
         const actions = [...document.querySelectorAll('#conversations button[title="Conversation actions"]')][0];
@@ -1210,9 +1149,7 @@ if (root) {
         "⌘N focuses the new conversation's composer",
       );
 
-      // Settings open beside the sidebar; Off and Manual are saved and applied at once; a test names
-      // the route; an invalid URL is refused with its reason; an unreadable file is reported, not
-      // shown as the defaults; Escape leaves.
+      // Off and Manual apply at once; an invalid URL is refused with its reason; an unreadable file is reported.
       const settingsFile = join(data, "settings.json");
       const fill = (label, value) =>
         evaluate(`(() => {
@@ -1257,8 +1194,7 @@ if (root) {
       refuseCheck = true;
       await click("Use this proxy");
       await until("document.querySelector('[data-source=manual] .font-mono')?.textContent === 'http://127.0.0.1:9'", "Manual applies");
-      // Nothing answers there: the row says so with the cause's code, which main sends as its own field,
-      // and the whole sentence is the hover.
+      // The cause's code is its own field from main; the whole sentence is the hover.
       await until("/unreachable \\(ECONNREFUSED\\)/.test(document.querySelector('[data-source=manual]').textContent)", "an unanswered check is unreachable, with its code");
       assert.match(
         await evaluate("document.querySelector('[data-source=manual] .text-danger').title"),
@@ -1330,7 +1266,6 @@ if (root) {
       await writeFile(settingsFile, "{broken");
       await evaluate(`document.querySelector('button[aria-label="Close settings"]').click()`);
       await until("!document.querySelector('#network-heading')", "the close control leaves Settings");
-      // The sidebar's own way in, at its foot.
       await click("Settings");
       await until("document.body.innerText.includes('settings.json') && document.body.innerText.includes('Reveal in Finder')", "an unreadable settings file is reported");
       assert.ok(!(await evaluate("!!document.querySelector('#network-heading')")), "a broken file is not shown as the defaults");
@@ -1341,8 +1276,7 @@ if (root) {
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
       await until("!document.querySelector('#network-heading') && document.querySelector('textarea')", "Escape leaves Settings");
 
-      // Model providers: what duang's file holds, then a key connected in its row (rejected once,
-      // fixed in place, accepted) and disconnected. Everything lands in duang's file only.
+      // A key connected in its row (rejected once, fixed, accepted) and disconnected; only duang's file changes.
       const escape = () => {
         win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
         win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
@@ -1363,7 +1297,6 @@ if (root) {
         await evaluate(`[...document.querySelectorAll('dialog button')].find((b) => b.textContent.trim() === 'Connect a provider').click()`);
         await until(providersListed, "Connect a provider opens Settings");
       };
-      /** A closed row in the Add card, found by search, opened, and its API key way chosen. */
       const pickKey = async (id, query) => {
         await evaluate(`(() => {
           const input = document.querySelector('input[aria-label="Filter providers"]');
@@ -1389,7 +1322,6 @@ if (root) {
         await until(`${connectedRow("deepseek")}?.innerText.includes('connected')`, what);
         assert.equal(await evaluate("!!document.querySelector('#provider-key')"), false, "the row it came from closed");
       };
-      /** The next native menu chooses `label`, through main's own handler: what a click on it would do. */
       const chooseFromMenu = (label) => {
         const build = Menu.buildFromTemplate;
         Menu.buildFromTemplate = (template) => {
@@ -1415,8 +1347,7 @@ if (root) {
       );
       assert.equal(await evaluate("!!document.querySelector('dialog')"), false, "Settings reached from the sidebar opens no dialog");
 
-      // A reload leaves nobody to answer the sign-in main is running: it must end with the page, or
-      // every later connect in this window is refused as "Another sign-in is in progress".
+      // A reload leaves nobody to answer the sign-in: it must end, or every later connect is refused.
       await pickKey("deepseek", "deep");
       const reloadedForSignIn = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       win.webContents.reload();
@@ -1424,15 +1355,12 @@ if (root) {
       await until("!!document.querySelector('textarea')", "the reloaded window");
       await openSettings();
       await pickKey("deepseek", "deep");
-      // ⌘N leaves Settings: the sign-in must end with it, so the next visit offers the row closed
-      // instead of a flow nobody could see.
+      // ⌘N leaves Settings: the sign-in ends with it.
       await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, cancelable: true }))`);
       await until("!document.querySelector('#providers-heading')", "⌘N leaves Settings");
       await openSettings();
       await pickKey("deepseek", "deep");
-      // Straight to another row while one runs: it switches, ending the first, and never locks the
-      // page. (The race with main's one-at-a-time rule is the store's test: a cancelled key prompt
-      // ends here long before the next way can be chosen.)
+      // Another row while one runs switches, ending the first; the race with main is the store's test.
       await pickKey("xai", "xai");
       assert.equal(
         await evaluate(`[...document.querySelectorAll('#provider-key')].map((input) => input.closest('[data-provider]').dataset.provider).join()`),
@@ -1460,8 +1388,7 @@ if (root) {
       escape();
       await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
 
-      // Reached from the picker and left another way (Escape): opening Settings afterwards is plain,
-      // with no trip back to the picker after connecting.
+      // Reached from the picker but left by Escape: no trip back to the picker after connecting.
       await fromPicker();
       escape();
       await until("!document.querySelector('#providers-heading')", "Escape leaves Settings");
@@ -1486,8 +1413,7 @@ if (root) {
       // What the empty picker needed is put back, beside the provider it just connected.
       await writeFile(selectedAuth, JSON.stringify({ ...stored, ...JSON.parse(await readFile(selectedAuth, "utf8")) }));
 
-      // A route duang cannot take (SOCKS4, from a PAC file) is shown, not fatal: a send still goes
-      // out, agent commands just get no proxy, and the page says both. Choosing again recovers.
+      // A SOCKS4 PAC route is shown, not fatal: a send still goes out, agent commands get no proxy.
       await electron.session.defaultSession.setProxy({
         mode: "pac_script",
         pacScript: `data:application/x-ns-proxy-autoconfig,${encodeURIComponent('function FindProxyForURL() { return "SOCKS 127.0.0.1:1080"; }')}`,
@@ -1523,8 +1449,7 @@ if (root) {
       await click("Retry");
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "Retry recovers the registry");
       assert.equal(await readFile(registry, "utf8"), savedRegistry, "a failed read never rewrites the registry");
-      // A default on pi's retired ChatGPT route still opens the agent; a send on it is refused before anything
-      // is recorded, with the code that opens the picker on it.
+      // A default on the retired ChatGPT route opens; a send on it is refused with the code that opens the picker.
       await writeFile(
         registry,
         JSON.stringify([...JSON.parse(savedRegistry), { id: "legacy", name: "Legacy", dir: join(root, "configured"), model: "openai-codex/gpt-5.5", colour: 4 }]),
@@ -1534,8 +1459,7 @@ if (root) {
       assert.equal(legacy.model, "openai-codex/gpt-5.5", "the default is the one the registry names");
       const legacySend = await evaluate("window.duang.send('legacy', crypto.randomUUID(), 'hello')");
       assert.equal(legacySend.ok === false && legacySend.error.code, "model_unavailable", "a send on it asks for another model");
-      // A default of duang's that pi does not know at all (its endpoint was removed from a models.json): the agent
-      // opens on its own model, and the picker opens saying the default is gone; the model chosen there replaces it.
+      // A default pi does not know: the agent opens on its own model and the picker says the default is gone.
       await writeFile(
         registry,
         JSON.stringify([...JSON.parse(savedRegistry), { id: "stale", name: "Stale", dir: join(root, "configured"), model: "local/gone", colour: 5 }]),
@@ -1562,9 +1486,7 @@ if (root) {
       await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
       await until("document.querySelector('main').innerText.includes('Smoke answer')", "back on the agent the checks below use");
 
-      // The header names the agent and, under it, where the agent lives: a long name stays inside the header
-      // with the whole of it as a tooltip, and the folder is a button that opens it. The conversation's title
-      // is not there: renaming the conversation changes the list, not the header.
+      // A long name stays inside the header with a tooltip; the conversation's title is not there.
       const longName = "An agent with a deliberately long descriptive name for this workspace";
       await evaluate(`document.querySelector('button[aria-label="Smoke"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
       await until("document.querySelector('aside input[aria-label=\"Agent name\"]')", "agent rename opens");
@@ -1606,9 +1528,7 @@ if (root) {
       await until(`document.querySelector('#conversations')?.innerText.includes(${JSON.stringify(topic)})`, "the conversation is renamed in the list");
       assert.ok(!(await evaluate(headerName)).text.includes(topic), "and the header does not print its title");
 
-      // Both routes to an agent's folder open the folder of the agent they are on, not the open one's: the
-      // header's button is the open agent, and a row's menu is the row's, wherever the selection is. The
-      // shell and the native menu are stubbed here, which is as far as a test reaches.
+      // Both routes open the folder of the agent they are on, not the open one's. Shell and menu are stubbed.
       const revealed = [];
       const showItemInFolder = electron.shell.showItemInFolder;
       const popup = electron.Menu.prototype.popup;
@@ -1629,8 +1549,7 @@ if (root) {
         electron.Menu.prototype.popup = popup;
       }
 
-      // Between two conversations that both have history, from the list. The second is made here, last, so the
-      // rows the earlier steps count on are untouched.
+      // Made last, so the rows earlier steps count on are untouched.
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on?') && !document.querySelector('textarea').disabled", "a new conversation");
       await message("A second conversation, with a history of its own.");
@@ -1659,8 +1578,7 @@ if (root) {
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
 
-      // ⌘, with every window closed opens one already on Settings: the request waits in main for
-      // the new renderer's listener instead of being sent before it exists.
+      // ⌘, with every window closed: the request waits in main for the new renderer's listener.
       const closed = new Promise((resolve) => win.once("closed", resolve));
       win.close();
       await closed;

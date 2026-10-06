@@ -1,17 +1,5 @@
-/**
- * An agent's avatar colour. The registry gives each agent a number, once, and keeps it (so renaming an
- * agent does not recolour it, and two agents do not share a colour until there are more agents than
- * colours); this maps that number onto the palette.
- *
- * Sixteen bright colours, picked by a search for the widest spread that keeps dark initials readable:
- * the closest pair is 0.093 apart in OKLab, where about 0.02 is the least anyone notices and 0.1 is
- * "different colours". Brightness and white initials cannot go together: white falls under 3:1 above a
- * lightness of about 0.64, while dark initials on the same colour are above 5:1, so these wear dark ones.
- * Each entry is `[lightness, chroma, hue]` at the gradient's middle; the gradient runs 0.09 lighter to 0.09
- * darker and 12° round the hue. The middle must hold the initials at 4.5:1, the darkest stop at 3:1, and every stop
- * must be inside sRGB (`avatar-colours.test.ts` holds all of that, so a colour added later cannot repeat
- * one already here). Chroma is capped at 0.17 so the roster stays calm beside the rest of the palette.
- */
+// Sixteen colours with the widest OKLab spread (closest pair 0.093) that keeps dark initials readable: white
+// falls under 3:1 above lightness ~0.64. `avatar-colours.test.ts` holds contrast and gamut for every stop.
 export const PALETTE = [
   [0.74, 0.098, 4], // rose
   [0.66, 0.155, 40], // coral
@@ -31,16 +19,11 @@ export const PALETTE = [
   [0.66, 0.168, 352], // raspberry
 ] as const satisfies readonly (readonly [number, number, number])[];
 
-/** The initials' colour: near-black, on every colour of the palette. */
 export const INK = "oklch(0.22 0.01 285)";
 
-/** How far the gradient reaches either way from an entry's lightness, and how it turns. */
 export const GRADIENT = { lightness: 0.09, chroma: 0.92, hue: 12 } as const;
 
-/**
- * Walked five at a time, so agents numbered one after another (0, 1, 2…) land on colours a third of the
- * wheel apart. Five and sixteen share no factor, so every colour is reached.
- */
+// Five and sixteen share no factor, so consecutive agents land far apart and every colour is reached.
 const STEP = 5;
 
 const entry = (colour: number) => PALETTE[(colour * STEP) % PALETTE.length]!;
@@ -49,11 +32,11 @@ export function avatarGradient(colour: number): string {
   const [l, c, h] = entry(colour);
   const top = `oklch(${(l + GRADIENT.lightness).toFixed(3)} ${c} ${h})`;
   const bottom = `oklch(${(l - GRADIENT.lightness).toFixed(3)} ${+(c * GRADIENT.chroma).toFixed(3)} ${h + GRADIENT.hue})`;
-  // The gradient is Telegram's, and it is most of why their avatars look alive rather than printed.
+  // The gradient is Telegram's.
   return `linear-gradient(145deg, ${top}, ${bottom})`;
 }
 
-/** OKLCH to linear sRGB (Ottosson), unclamped: a value outside 0..1 means the colour is outside the gamut. */
+// Unclamped: a value outside 0..1 means the colour is outside the gamut.
 export function linearSrgb([l, c, h]: readonly [number, number, number]): readonly [number, number, number] {
   const a = c * Math.cos((h * Math.PI) / 180);
   const b = c * Math.sin((h * Math.PI) / 180);
@@ -67,7 +50,7 @@ export function linearSrgb([l, c, h]: readonly [number, number, number]): readon
   ];
 }
 
-/** An agent's colour as one solid `#rrggbb`, for an avatar drawn in a single fill (DiceBear takes hex only). */
+// DiceBear takes hex only.
 export function avatarHex(colour: number): string {
   const encode = (v: number) => {
     const clamped = Math.min(1, Math.max(0, v));

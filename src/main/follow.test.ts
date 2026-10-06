@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { follow, subscriptions, type Frame } from "./follow.ts";
 
-/** A runtime's event stream that a test drives by hand, and that records being closed. */
 function source(name: string) {
   const queue: (IteratorResult<string> | Error)[] = [];
   let wake: (() => void) | undefined;
@@ -147,7 +146,6 @@ test("a stream that finishes on its own is an expected end, one that throws is a
   assert.deepEqual(second.ended, [["Error: socket reset", "failed"]]);
 });
 
-/** The table, over conversations named `agent/session`, each a hand-driven source; windows record what they hear. */
 function table() {
   const opened = new Map<string, ReturnType<typeof source>>();
   const gates = new Map<string, Promise<void>>();

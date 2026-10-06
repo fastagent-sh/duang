@@ -56,6 +56,12 @@ Electron/Chromium behavior; avoid speculative layers. Separate refactoring from 
 Add the smallest regression that exposes the failure, including proving protective checks can fail
 when their protection is removed.
 
+Write very few comments. Readers, including AI agents, understand code from its names and
+structure; make those clear instead. Comment only what the code cannot show: a non-obvious reason,
+an external constraint, or a workaround and its cause, in one or two lines. No comments or
+docstrings that restate the code, narrate steps, label sections or record history. Delete such
+comments in lines you change.
+
 FastAgent is an exact npm version in `package.json` and the lockfile, never a local checkout or a
 moving branch; `CONTRIBUTING.md` says how it is bumped.
 

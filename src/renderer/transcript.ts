@@ -1,4 +1,3 @@
-/** Fold session entries and live events into what the transcript shows. Pure, so it is testable. */
 import type {
   AnswerOutcome,
   KnownSessionEvent,
@@ -9,26 +8,13 @@ import type {
 } from "@fastagent-sh/fastagent/session";
 import { explainRunFailure, recognise, type Fix } from "./problems.ts";
 
-/**
- * When it happened. Required on every item, because both the day separators and the time under a
- * message read it — the transcript is a record, and a record without times reads as one moment.
- * Required rather than optional so a future producer that forgets it fails to compile, instead of
- * silently dropping a day boundary.
- */
+// Required, not optional: day separators and message times read it, and a producer that forgets it must not compile.
 type At = { at: number };
 
 export type Item = At &
-  /**
-   * `steered`: it joined a run that already had a user message. `entryId`: the runtime's record of it,
-   * from history or from `user_message`, so a backfill and a live event are one bubble. `opens`: while
-   * it waits, it was sent with no run to join (see {@link opensRun}).
-   */
   ({ kind: "user"; text: string; steered?: boolean; entryId?: string; opens?: boolean }
   | { kind: "assistant"; text: string; open: boolean }
-  /**
-   * `started` is kept because `at` is restamped when the block settles, and "thought for 8s" is
-   * measured from the first token — after the restamp there is nothing left to measure from.
-   */
+  // `started` survives the restamp of `at` on settling; "thought for 8s" counts from the first token.
   | { kind: "thinking"; text: string; open: boolean; started: number }
   | {
       kind: "tool";
@@ -38,24 +24,12 @@ export type Item = At &
       result?: unknown;
       isError?: boolean;
       status: "running" | "done" | "interrupted";
-      /**
-       * When it ran, from the live events only. History carries when the call was announced and when
-       * its result was written, which is not how long the tool ran, so a reopened call shows no time.
-       */
+      // Live only: history carries when the call was announced and its result written, not how long it ran.
       started?: number;
       ended?: number;
     }
-  /**
-   * A fact about the session rather than something anyone said. One with a `title` is a problem the
-   * person may have to act on, drawn as a card: what it means (`title`, `advice`), the original
-   * `reason` verbatim, and the way on. One without is a quiet line (`text`): stopping a run or a
-   * retry is not an error, and colouring it like one was the transcript telling the person they broke
-   * something. `text` is the one-line form a roster row quotes.
-   *
-   * `resend`: the failure of a run that had taken a message, the one Retry sends again, and whether that
-   * run had started a tool (sending it again may repeat that work). `limit`: a plan's usage limit, and
-   * the provider whose usage page says more. `fix`: where in duang the way on is.
-   */
+  // With a `title`: a problem drawn as a card. Without: a quiet line; a stop or retry is not an error.
+  // `resend`: Retry's message, and whether that run had started a tool (sending again may repeat it).
   | {
       kind: "note";
       tone: "info" | "warning" | "error";
@@ -66,9 +40,7 @@ export type Item = At &
       fix?: Fix;
       resend?: { text: string; toolsRan: boolean };
       limit?: string;
-      /** pi trying the answer again by itself: how many times so far. Consecutive ones are one line. */
       retry?: number;
-      /** A retry still waiting, live: of how many pi will make. Absent once the run went on from it. */
       of?: number;
     });
 
@@ -76,10 +48,7 @@ type RetryNote = Extract<Item, { kind: "note" }> & { retry: number };
 const isRetry = (item: Item | undefined): item is RetryNote => item?.kind === "note" && !!item.retry;
 const retriedText = (count: number, reason: string) => `retried ${count === 1 ? "once" : `${count} times`}: ${retryReason(reason)}`;
 
-/**
- * A retry the run went on from (an answer, a thought, a call, or a steer the next attempt took in came after it)
- * is said in the past, as it reads back from history: `retrying 2/3` would claim a wait that is over.
- */
+// A retry the run went on from reads in the past tense: `retrying 2/3` would claim a wait that is over.
 export function wentOn(items: Item[]): Item[] {
   const index = items.findLastIndex((item) => isRetry(item) && item.of !== undefined);
   if (index < 0) return items;
@@ -87,16 +56,12 @@ export function wentOn(items: Item[]): Item[] {
   return items.with(index, { ...note, text: retriedText(note.retry, note.reason ?? "") });
 }
 
-/**
- * A retry's reason in a quiet line: what it means when that is recognised, else the reason's own first line.
- * Never a failure's ending ("the run stopped"): a retrying run goes on. The words in full stay on the line.
- */
+// Never a failure's ending: a retrying run goes on.
 const retryReason = (reason: string) => {
   const title = recognise(reason)?.title;
   return title ? title.charAt(0).toLowerCase() + title.slice(1) : reason.split("\n")[0]!;
 };
 
-/** A run's failure, as the card says it: what it means, the reason verbatim, and a plan limit's page. */
 function failed(reason: string) {
   // OpenAI's documented code for a ChatGPT plan's limit, which pi passes on in the run's error.
   if (reason.includes("subscription_sharing_usage_limit_exceeded"))
@@ -110,10 +75,7 @@ function failed(reason: string) {
   return { ...explainRunFailure(reason), reason };
 }
 
-/**
- * A day as a separator says it. Crossing the calendar year is what earns the year, not a number of
- * days: read in January, a December conversation dated `Dec 25` looks like this year's.
- */
+// Crossing the calendar year earns the year: read in January, `Dec 25` looks like this year's.
 export function dayLabel(at: number, now: number = Date.now()): string {
   const date = new Date(at);
   const midnight = new Date(now);
@@ -127,34 +89,19 @@ export function dayLabel(at: number, now: number = Date.now()): string {
 
 export type UserItem = Extract<Item, { kind: "user" }>;
 
-/**
- * Which of this window's own waiting messages a text from the runtime is: the oldest with that text,
- * else the oldest slash command, because the runtime reports a command expanded (or, for an extension
- * command, the message it sent). Anything else is a message from another client or from before a reload.
- * ponytail: text is the only key. A message from elsewhere queued ahead of one of our commands takes
- * the command's place; a client-supplied prompt id upstream is the fix if several clients steer at once.
- */
+// Else the oldest slash command: the runtime reports a command expanded.
+// ponytail: text is the only key; a client-supplied prompt id upstream is the fix if several clients steer at once.
 export function claim(waiting: UserItem[], text: string): UserItem | undefined {
   return waiting.find((item) => item.text === text) ?? waiting.find((item) => item.text.startsWith("/"));
 }
 
-/**
- * Whether a message sent now opens a run rather than joins one, decided when it is sent: nothing is
- * running, or the run on screen has not placed its user message yet. A message sent during a
- * compaction does not open the compaction, which it did not ask for; it opens the run after it,
- * while a `/compact` sent from idle opens the compaction itself.
- */
+// A message sent during a compaction opens the run after it, not the compaction it did not ask for.
 export function opensRun(status: SessionState["status"] | undefined, runHasUser: boolean): boolean {
   if (status === "compacting") return false;
   return status !== "running" || !runHasUser;
 }
 
-/**
- * The bubbles below the live output: the runtime's queue first, in its order, each shown as this
- * window's own message when it is one; then messages sent from here that the runtime has not listed
- * yet. `listed` is what the runtime reports as queued; the rest are still on their way. `opens`: it
- * reads above the run's working mark rather than below it, since that work is what it asked for.
- */
+// `opens`: reads above the run's working mark, since that work is what it asked for.
 export function queueView(waiting: UserItem[], pending: string[]): { item: UserItem; listed: boolean; opens: boolean }[] {
   let left = waiting;
   const listed = pending.map((text) => {
@@ -166,19 +113,12 @@ export function queueView(waiting: UserItem[], pending: string[]): { item: UserI
   return [...listed, ...left.map((item) => ({ item, listed: false, opens: item.opens === true }))];
 }
 
-/** A day boundary in the reading flow: without it, yesterday's run reads as if it just happened. */
 export type Line = Item | { kind: "day"; at: number };
 
-/**
- * Where a conversation was left above its latest line: the line at the top of the view and how far its top is from
- * the view's top. The line is counted from the person's message that opened its turn (`turn`, the runtime's entry
- * id; absent before the first message), because a conversation left idle is read back from history on return and
- * loses the lines only this window showed (a "Not sent" note, `ran /cmd`): counted from the start, every line after
- * one of those would come back one off. Lines drawn above it later and lines added under it move neither.
- */
+// Counted from the turn's opening message: a conversation read back from history loses lines only this window
+// showed ("Not sent", `ran /cmd`), so counting from the start would come back off by those.
 export type Place = { turn?: string; row: number; offset: number };
 
-/** The place of the line at `index`, `offset` from the view's top. */
 export function placeAt(shown: (Line | Work)[], index: number, offset: number): Place {
   for (let at = index; at >= 0; at--) {
     const line = shown[at]!;
@@ -187,17 +127,12 @@ export function placeAt(shown: (Line | Work)[], index: number, offset: number): 
   return { row: index, offset };
 }
 
-/** The index of the line a place names, or undefined when its message is no longer in the conversation. */
 export function lineOf(shown: (Line | Work)[], place: Place): number | undefined {
   if (place.turn === undefined) return place.row;
   const at = shown.findIndex((line) => line.kind === "user" && line.entryId === place.turn);
   return at === -1 ? undefined : at + place.row;
 }
 
-/**
- * Items with the day boundaries between them. Pure, and separate from rendering, because "when did
- * this stop being the same day" is the only interesting part.
- */
 export function lines(items: Item[]): Line[] {
   const out: Line[] = [];
   let day: string | undefined;
@@ -213,19 +148,10 @@ export function lines(items: Item[]): Line[] {
 type Tool = Extract<Item, { kind: "tool" }>;
 type Thinking = Extract<Item, { kind: "thinking" }>;
 
-/**
- * A stretch of work between two things worth reading: every tool call and thinking block in a row.
- * One line per call made a reading session of twenty files twenty lines tall, and none of them said
- * anything the person needed; what they need is what kind of work it was.
- */
 export type Work = { kind: "work"; items: (Tool | Thinking)[] };
 
-/**
- * Consecutive asides as one {@link Work} block each, a lone one included: a call that stands alone
- * now is the first of a block once the next call arrives, and it must stay the same element on
- * screen when that happens, or the card someone is reading closes under them. The view draws a
- * one-item block as the item alone.
- */
+// A lone call is a block too, so it stays the same element when the next call joins it and an open card
+// does not close under the reader.
 export function group(lines: Line[]): (Line | Work)[] {
   const out: (Line | Work)[] = [];
   for (const line of lines) {
@@ -237,18 +163,7 @@ export function group(lines: Line[]): (Line | Work)[] {
   return out;
 }
 
-/**
- * How the live end of a run is drawn: one line saying what the run is doing. Where the newest line already is
- * that step, it is that line, never one above another saying the same:
- *
- * - calls running, or a thought being written: that block carries the status itself (`block`);
- * - a retry pi is waiting out: the status says it, and the waiting line is not drawn (`hidden`);
- * - an answer being written: its own sign of life, so the status is drawn only once it stops coming
- *   (`quietOnly`);
- * - otherwise, or with a sent message waiting to open the next turn, the status line stands on its own.
- *
- * `above` is the kind of the line the status follows, for the space between them: the last line drawn.
- */
+// The status is drawn in the newest line when that line is the step itself, never beside a line saying the same.
 export function liveEnd(
   shown: (Line | Work)[],
   busy: boolean,
@@ -271,10 +186,6 @@ export function liveEnd(
   };
 }
 
-/**
- * Tools by the kind of work they do: how a running one is described, and how a finished stretch counts
- * them. Anything else is named by its own name.
- */
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const WORK = [
   { tools: ["read"], doing: "reading", did: (n: number) => `read ${plural(n, "file")}`, distinct: true },
@@ -284,16 +195,8 @@ const WORK = [
   { tools: ["fetch"], doing: "fetching", did: (n: number) => `fetched ${plural(n, "page")}` },
 ];
 
-/**
- * A work block in one line: `read 9 files, ran 6 commands`. A call that failed is not counted apart:
- * the agent reads its own failures and carries on, so it asks nothing of the person, and the run's
- * outcome is what says whether the work as a whole failed. A call that never finished is (`, 1
- * stopped`): the agent never read a result and the run did not go on, and reopened from history
- * nothing else says the run was cut short. Files are counted once however often they were read, live
- * and reopened alike (history keeps each call's arguments); a call with no path counts once each.
- * Only finished calls are counted as done: one still running is `2 running`, and the live status below
- * says what it is, so the block never claims in the past tense what is still happening.
- */
+// A failed call is not counted apart: the agent reads its own failures. A call that never finished is
+// (`1 stopped`): reopened from history, nothing else says the run was cut.
 export function summarize(items: Work["items"]): string {
   const all = items.filter((item): item is Tool => item.kind === "tool");
   const tools = all.filter((tool) => tool.status !== "running");
@@ -316,13 +219,8 @@ export function summarize(items: Work["items"]): string {
   return parts.join(", ") || "thought";
 }
 
-/**
- * The line a thinking block is on: its last one, which is what it is thinking now. While it streams, its last
- * line is usually still being written and reads as a fragment (`- The tot`), so a streaming block shows its
- * last complete line instead, and before it has one, the words written so far without the one being written.
- * A script written without spaces (Chinese, Japanese) has no word to leave out: its text so far is shown. A
- * spaced script's first word alone may still be half-written (`Th`), so it shows nothing yet.
- */
+// A streaming block's last line is usually a fragment, so show its last complete line. Unspaced scripts
+// (Chinese, Japanese) show the text so far; a spaced script's lone first word may be half-written.
 export function thinkingLine(text: string, streaming = false): string {
   const last = (lines: string) => lines.trim().split("\n").at(-1) ?? "";
   if (!streaming || text.endsWith("\n")) return last(text);
@@ -334,14 +232,8 @@ export function thinkingLine(text: string, streaming = false): string {
   return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(words) ? words : "";
 }
 
-/** What kind of work a live run is in, for what follows it without reading its words (the avatar's face). */
 export type Activity = "thinking" | "tool" | "answering";
 
-/**
- * What a live run is doing right now, in words, from what the transcript already holds: the tool that
- * is running and its argument, the line the model is thinking, or the answer being written. Before the
- * runtime reports the run, it is still starting, which is thinking, as compacting is.
- */
 export function phase(
   items: Item[],
   status: SessionState["status"] | undefined,
@@ -367,31 +259,10 @@ export function phase(
   return { word: "thinking", detail: thought, activity: "thinking" };
 }
 
-/**
- * History: the three kinds the contract guarantees, in the shape FastAgent's adapter writes them.
- *
- * A tool call and its result arrive apart: the call is announced inside the assistant entry's
- * `toolCalls` (id, name and the arguments `tool_started` carried live), and the result is its own `tool`
- * entry pointing back with `toolCallId`. Rendering them as one row is this function's whole job; anything
- * engine-specific is skipped, as the contract allows.
- *
- * An answer that did not end normally says how (`outcome`), and gets the note a watcher saw live: a
- * failed or stopped answer that ended its run is `run failed: …` or `run stopped`, and a failed one
- * offers its run's message again (`resend`). A failed answer the run went on from (pi's own retry) is
- * only a retry, and in a conversation still `running` the last failure is a retry still waiting.
- *
- * A conversation that is not running but stops partway through a turn (on the person's message, on a
- * tool's result, or on calls that never ran) had its run cut with nothing recorded: duang or the machine
- * stopped mid-run. It says so, and offers that turn's message again, like a failure.
- *
- * A run its last tool batch ended on purpose (pi's `terminate`) stops on a tool's result too, and is not cut:
- * every call answering that answer carries `terminate`, which is FastAgent's reading of it.
- *
- * `running`: a run is going now. A compaction is not one: FastAgent admits it only at a boundary, so a turn
- * cut before it is still cut. A call with no result is interrupted in a finished conversation, but the calls
- * after the last user message are the active run's, still executing. They get no `started`: when they began
- * is not in the history, so they show no clock.
- */
+// A tool call and its result arrive apart (`toolCalls` in the answer, then a `tool` entry by `toolCallId`).
+// A conversation not running that stops mid-turn was cut with nothing recorded, unless every call carries
+// `terminate` (pi ended the run on purpose). Calls after the last user message of a running conversation are
+// still executing; history has no start time for them.
 export function fromEntries(entries: SessionEntry[], leafEntryId?: string, running = false): Item[] {
   if (leafEntryId) {
     const byId = new Map(entries.map((entry) => [entry.id, entry]));
@@ -408,21 +279,11 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
     entries = path.reverse();
   }
   const items: Item[] = [];
-  /** A failed answer whose run has not been seen to go on: its note, and the error it gives. */
   let failure: { index: number; message: string } | undefined;
-  /**
-   * Where the work no answer has concluded yet begins: what a retry could repeat. History does not say where
-   * a run began, so this stands in for it; the live view counts from `run_started` instead (`conversation.ts`).
-   */
+  // History does not say where a run began; the live view counts from `run_started` instead.
   let unconcluded = 0;
-  /** Where the turn stands after the last conversation entry: answered, or cut partway. */
   let open = false;
-  /** The calls of the latest answer, and whether each one's result asked to end the run. */
   let batch = new Map<string, boolean>();
-  /**
-   * A failure the run did not go on from is its ending, which says how it ended: the line counting the
-   * retries before it goes. Where the failure now is.
-   */
   const concluded = (index: number) => {
     const before = items[index - 1];
     if (before?.kind !== "note" || !before.retry) return index;
@@ -467,7 +328,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       items.push({ kind: "user", text: data.text ?? "", at, entryId: entry.id });
     } else if (entry.kind === "assistant") {
       retried();
-      // The reasoning the answer recorded, as it streamed live. How long it took is not recorded.
+      // How long it took is not recorded.
       if (data.thinking) items.push({ kind: "thinking", text: data.thinking, open: false, started: at, at });
       if (data.text) items.push({ kind: "assistant", text: data.text, open: false, at });
       for (const call of data.toolCalls ?? []) {
@@ -497,8 +358,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
           ...failed(message),
         });
       }
-      // An answer that called no tool ends its work: a later failure cannot repeat what came before it. One
-      // that did waits for its calls' results and the answer after them; one with an outcome said how it ended.
+      // An answer with no tool call ends its work: a later failure cannot repeat what came before it.
       if (!outcome && !data.toolCalls?.length) unconcluded = items.length;
       open = !outcome && !!data.toolCalls?.length;
       batch = new Map((data.toolCalls ?? []).map((call) => [call.id ?? "", false]));
@@ -517,7 +377,7 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
       if (index < 0) items.push(result);
       else items[index] = result;
       if (data.terminate && batch.has(result.id)) batch.set(result.id, true);
-      // Every call of the answer asked to end the run: it ended here, on purpose, and its work is done.
+      // Every call asked to end the run: it ended here on purpose.
       const ended = batch.size > 0 && [...batch.values()].every(Boolean);
       open = !ended;
       if (ended) unconcluded = items.length;
@@ -546,21 +406,13 @@ export function fromEntries(entries: SessionEntry[], leafEntryId?: string, runni
   );
 }
 
-/** An answer that reached the model's output limit, from history or live: it is not all there. */
 const TRUNCATED = "answer cut off at the model's output limit";
 
-/**
- * What a tool printed, out of the envelope it arrived in. A result reaches us as MCP-shaped content
- * (`{ content: [{ type: "text", text }] }`, sometimes nested once more), and dumping that verbatim
- * shows the person the protocol instead of the output — quoted, escaped, and three braces deep.
- *
- * Text parts only. Anything else — an image part, a shape we have not seen — keeps its JSON rather than
- * being silently dropped, because a result nobody can see is worse than an ugly one.
- */
+// Results arrive MCP-shaped (`{ content: [{ type: "text", text }] }`). Anything but text parts keeps its JSON:
+// a result nobody can see is worse than an ugly one.
 export function toolText(result: unknown): string {
   let value = result;
-  // Depth-limited instead of recursive: the envelope is one or two deep, and a cycle here would
-  // hang the renderer.
+  // Depth-limited: the envelope is one or two deep, and a cycle would hang the renderer.
   for (let depth = 0; depth < 3; depth++) {
     if (typeof value === "string") return value;
     if (Array.isArray(value)) {
@@ -580,22 +432,13 @@ export function toolText(result: unknown): string {
   return stringify(result);
 }
 
-/**
- * The head a long tool payload folds to, or `undefined` when it fits. Lines and characters both
- * count: a minified JSON body or a one-line log has one line and no ceiling, and wrapped with
- * `break-all` it would fill the transcript. 1500 characters is about twelve full lines of the
- * reading column, so the two limits fold at roughly the same height.
- */
+// Characters count too: minified JSON has one line and no ceiling. 1500 characters is about twelve lines.
 export function foldHead(text: string): string | undefined {
   const head = text.split("\n").slice(0, 12).join("\n").slice(0, 1_500);
   return head.length < text.length ? head : undefined;
 }
 
-/**
- * How long a tool ran, in pi's words for it: tenths under a minute, then minutes and hours. A running
- * clock ticks once a second, so it gets whole seconds: tenths that only move with the second would
- * claim a precision it does not have.
- */
+// A running clock ticks once a second, so tenths would claim a precision it does not have.
 export function duration(ms: number, running = false): string {
   const seconds = ms / 1000;
   if (seconds < 60) return running ? `${Math.floor(seconds)}s` : `${seconds.toFixed(1)}s`;
@@ -605,12 +448,10 @@ export function duration(ms: number, running = false): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${total % 60}s`;
 }
 
-/** Tool payloads are JSON, except when the runtime already handed us a string. */
 export function stringify(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
-/** A tool call's most telling argument — the path, command or query, not the whole object. */
 export function firstArg(args: unknown): string {
   if (typeof args === "string") return args;
   if (!args || typeof args !== "object") return "";
@@ -622,13 +463,8 @@ export function firstArg(args: unknown): string {
   return text.length <= 72 ? text : `${text.slice(0, 71)}…`;
 }
 
-/**
- * What a roster row quotes: the newest thing said or done in a conversation, as plain text. Thinking
- * still going is what the agent is doing now, so it quotes the line it is on; settled, thinking is not
- * output and is passed over, like an answer with no text yet. While calls run, the newest still running
- * is quoted, not one started after it that already finished (`ls` beside a running `sleep`). Markdown
- * loses only the marks that would show up as noise in two lines of plain text.
- */
+// Settled thinking is not output and is passed over. While calls run, the newest still running is quoted,
+// not a later one already finished (`ls` beside a running `sleep`).
 export function previewOf(items: Item[]): { text: string; at: number } | undefined {
   const running = items.findLastIndex((item) => item.kind === "tool" && item.status === "running");
   for (let i = items.length - 1; i >= 0; i--) {
@@ -657,28 +493,16 @@ export function previewOf(items: Item[]): { text: string; at: number } | undefin
   return undefined;
 }
 
-/**
- * Thinking ends when the model starts doing something else — answering or calling a tool — not
- * when the whole message settles. The message can go on for minutes after its thinking stopped, and
- * the block's `at` is what `thinking · Ns` is measured to.
- */
+// Thinking ends when the model does something else, not when the message settles minutes later.
 function stopThinking(items: Item[], at: number): Item[] {
   return items.map((item) => (item.kind === "thinking" && item.open ? { ...item, open: false, at } : item));
 }
 
-/**
- * The events this app reads, by the contract's own types. The one cast is here: a stream of
- * `SessionEvent` is narrowed by its `type`, so a field the contract renames fails to compile rather
- * than reading as `undefined` at run time. Types outside the union reach `default` untouched.
- */
+// The one cast: narrowed by `type`, so a field the contract renames fails to compile.
 type ReadEvent = KnownSessionEvent | ServingErrorEvent;
 export const known = (event: SessionEvent) => event as ReadEvent;
 
-/**
- * One live event applied to the list. Returns a new list; unknown event types change nothing. Every item the event
- * does not change stays the same object: the transcript skips redrawing such a line (`SettledMessage`), so a new
- * object for an unchanged item redraws the whole conversation on every streamed word.
- */
+// Unchanged items stay the same object: `SettledMessage` skips them, or every streamed word redraws everything.
 export function apply(items: Item[], event: SessionEvent): Item[] {
   const e = known(event);
   switch (e.type) {
@@ -698,11 +522,8 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       return [...stopThinking(items, event.timestamp), { kind: "assistant", text: delta, open: true, at: event.timestamp }];
     }
     case "message_finished": {
-      // Stamped on settling, not on the first delta: an answer that streamed for five minutes would
-      // otherwise show one time live and another after a reopen, where history carries the time
-      // FastAgent wrote the entry. Only what is still open settles here — restamping an item that
-      // already settled moves the time under an older answer, and stretches `thinking · Ns` to
-      // the end of every later message.
+      // Stamped on settling, matching the time history carries. Only open items: restamping a settled one moves
+      // an older answer's time and stretches `thinking · Ns`.
       const settled = items.map((item) =>
         (item.kind === "assistant" || item.kind === "thinking") && item.open
           ? { ...item, open: false, at: event.timestamp }
@@ -750,9 +571,7 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
       if (lastLine?.kind === "note" && lastLine.retry) items = items.slice(0, -1);
       if (e.data.status === "completed") return items;
       const stopped = e.data.status === "aborted";
-      // An aborted run carries the abort machinery's own words ("This operation was aborted",
-      // "Request aborted"). The person pressed Stop; that is the whole explanation. Only a FAILED
-      // run has a reason they could not already know, so only that one keeps its message.
+      // A stopped run carries the abort machinery's words; the person pressed Stop, so only a failure keeps its message.
       const error = stopped ? undefined : e.data.error;
       return [
         ...items,
@@ -760,17 +579,14 @@ export function apply(items: Item[], event: SessionEvent): Item[] {
           kind: "note",
           at: event.timestamp,
           tone: stopped ? "info" : "error",
-          // One vocabulary (§9): a run the person ended is `stopped`, never the abort machinery's
-          // `aborted`, and never `failed` — that word blames the run for their decision.
+          // A run the person ended is `stopped`, never `aborted` or `failed` (§9).
           text: `run ${stopped ? "stopped" : e.data.status}${error?.message ? `: ${error.message}` : ""}`,
           ...(stopped ? {} : failed(error?.message ?? "")),
         },
       ];
     }
     case "retry_scheduled":
-      // The run goes on: pi tries again by itself, so this is a quiet line, not a failure. If the retries give
-      // up, the run's own ending says so.
-      // One line that moves on with each attempt, rather than one per attempt.
+      // pi tries again by itself: a quiet line that moves on with each attempt, not a failure.
       return [
         ...(items.at(-1)?.kind === "note" && (items.at(-1) as { retry?: number }).retry ? items.slice(0, -1) : items),
         {

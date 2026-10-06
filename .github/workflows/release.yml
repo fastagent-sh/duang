@@ -1,10 +1,7 @@
 name: Release
 
-# Builds the macOS app for a pushed `vX.Y.Z` tag and creates a draft GitHub Release with the dmg and its SHA-256
-# attached; a maintainer then publishes the draft. A Release is public only once its app is there, so the latest
-# release always has a dmg, and a failed build leaves no Release at all. The release environment is the manual gate
-# (a maintainer approves the run, deployments only from `v*` tags); the job also checks that the tag is the
-# package's version and points to a commit on main. Unsigned (ad-hoc) until there is an Apple Developer ID.
+# A failed build leaves no Release, so the latest always has a dmg. The release environment is the manual gate;
+# the job checks the tag is the package's version on a commit on main.
 on:
   push:
     tags: ['v*']

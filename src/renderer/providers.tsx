@@ -1,12 +1,4 @@
-/**
- * Settings → Model providers: what serves each provider now, and connecting one in place — a row
- * opens where it is, shows the ways in, then the sign-in itself (docs/ui.md §12b, docs/interaction.md
- * "Connecting model providers"). No dialog: the page stays the context, and what is connected stays
- * in view while something new is added.
- *
- * The sign-in is drawn by what it asks for — a browser, a device code, a key, a choice — never by
- * per-provider screens, and every name in it is pi's or FastAgent's own.
- */
+// No dialog: the page stays the context. The sign-in is drawn by what it asks for, never per provider.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretDown, CaretRight, Check, Copy, DotsThree, Globe, Key, MagnifyingGlass, X } from "@phosphor-icons/react";
 import type { DuangApi, ProviderRow } from "../preload/index.ts";
@@ -18,14 +10,9 @@ import { Badge, Button } from "./ui.tsx";
 
 type Way = ProviderRow["ways"][number];
 
-/** Offered first, in this order: the providers most people connect. The rest wait under "More". */
 const COMMON = ["anthropic", "openai", "github-copilot", "google", "xai", "deepseek", "openrouter"];
 
-/**
- * A provider is marked by its own logo on a neutral tile: names alone blur together (OpenAI, Azure
- * OpenAI, OpenRouter). The logos are LobeHub's static SVGs, vendored with their license
- * (provider-logos/LICENSE) for the providers pi offers.
- */
+// LobeHub's static SVGs, vendored with their license (provider-logos/LICENSE).
 const svgs = import.meta.glob<string>("./provider-logos/*.svg", { eager: true, query: "?raw", import: "default" });
 const LOGOS: Record<string, string> = {
   "amazon-bedrock": "bedrock-color", "ant-ling": "antgroup-color", anthropic: "anthropic",
@@ -45,7 +32,6 @@ const LOGOS: Record<string, string> = {
 function ProviderMark({ provider, size = 32 }: { provider: ProviderRow; size?: number }) {
   const svg = svgs[`./provider-logos/${LOGOS[provider.id]}.svg`];
   const tile = "grid shrink-0 place-items-center rounded-card bg-bg text-text ring-1 ring-stroke";
-  // Without a logo, the same tile holds the name's initials, so every row keeps one shape.
   if (!svg)
     return (
       <span aria-hidden className={`${tile} font-semibold text-muted`} style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}>
@@ -65,7 +51,6 @@ function ProviderMark({ provider, size = 32 }: { provider: ProviderRow; size?: n
 
 const methodName = (method: Way["method"]) => (method === "oauth" ? "subscription login" : "API key");
 
-/** What serves it now, in the person's words: "Claude Pro/Max", "API key", "from GEMINI_API_KEY". */
 function sources(provider: ProviderRow): string {
   const held =
     provider.stored === "oauth"
@@ -76,18 +61,15 @@ function sources(provider: ProviderRow): string {
   return [...held, ...(provider.ambient ? [`from ${provider.ambient}`] : [])].join(" · ");
 }
 
-/** "Anthropic (Claude Pro/Max)" → "Claude Pro/Max": the plan, once the provider is already named. */
 function plan(way: Way | undefined): string | undefined {
   return way ? /\(([^)]+)\)\s*$/.exec(way.label)?.[1] ?? undefined : undefined;
 }
 
-/** A way's own name, never the provider's again: the plan, "Subscription", "Sign in" or "API key". */
 function wayTitle(way: Way): string {
   if (way.method === "api_key") return "API key";
   return plan(way) ?? (way.subscription ? "Subscription" : "Sign in");
 }
 
-/** A way's promise, short enough for one line beside its name. */
 function wayBlurb(way: Way): string {
   if (way.method === "api_key") return "Pay as you go";
   return way.subscription ? "Sign in with your plan" : "Sign in in your browser";
@@ -104,13 +86,10 @@ export function ProvidersSection({
   view: View;
   store: Store;
   onMenu: DuangApi["menu"];
-  /** Reached from the picker's "Connect a provider": the list of what can be added comes into view. */
   focusAdd?: boolean;
-  /** Reached from a problem with this provider's sign-in: its row opens on the ways to connect it again. */
   reconnect?: string;
   onConnected: () => void;
 }) {
-  /** The one row that is open, in either card. */
   const [open, setOpen] = useState<string>();
   const [confirming, setConfirming] = useState<string>();
   const [landed, setLanded] = useState<{ id: string; unchecked: boolean }>();
@@ -126,7 +105,6 @@ export function ProvidersSection({
       if (store.getSnapshot().signIn) void store.closeSignIn();
     };
   }, [store]);
-  // A subscription's plan windows, on its row: the place you would look to decide which plan to use.
   // Main keeps one answer per login for a few minutes, so opening Settings does not poll.
   const subscriptions = (view.providers ?? []).filter((p) => p.stored === "oauth").map((p) => p.id).join();
   useEffect(() => {
@@ -140,7 +118,6 @@ export function ProvidersSection({
     show(reconnect);
     requestAnimationFrame(() => document.querySelector(`[data-provider="${reconnect}"]`)?.scrollIntoView({ block: "center" }));
   }, [reconnect, view.providers !== undefined]);
-  // A connection lands in the list above, briefly marked, and the row it came from closes.
   useEffect(() => {
     if (!signIn?.outcome?.ok) return;
     setLanded({ id: signIn.provider.id, unchecked: signIn.outcome.verified === "unknown" });
@@ -161,10 +138,7 @@ export function ProvidersSection({
     return () => clearTimeout(timer);
   }, [landed]);
 
-  /**
-   * One row open at a time, and closing a row ends what it was doing: a running sign-in is cancelled,
-   * a finished one cleared. Opening another row closes this one, so nothing is ever locked.
-   */
+  // Closing a row ends what it was doing, and opening another closes it, so nothing is ever locked.
   const show = (id?: string) => {
     if (store.getSnapshot().signIn) void store.closeSignIn();
     setConfirming(undefined);
@@ -253,7 +227,7 @@ export function ProvidersSection({
                 key={provider.id}
                 {...rowProps(provider)}
                 detail={sources(provider)}
-                // Opened only by its menu: a connected row's own click would be one misclick from a reconnect.
+                // A connected row's own click would be one misclick from a reconnect.
                 header={{
                   trailing: (
                     <>
@@ -283,7 +257,6 @@ export function ProvidersSection({
 
       <div ref={addCard}>
         <Group id="providers-add-heading" title="Add a provider">
-          {/* Search heads the list: it covers every provider, not only the ones under "More". */}
           <label className={`${row} flex items-center gap-3 px-4 py-2`}>
             <span className="grid w-8 place-items-center text-muted">
               <MagnifyingGlass size={14} />
@@ -311,7 +284,6 @@ export function ProvidersSection({
           ))}
           {found && found.length === 0 && <p className={`${row} px-4 py-3 text-muted`}>Nothing matches “{filter}”.</p>}
           {more && !found && rest.map((provider) => <ProviderItem key={provider.id} {...rowProps(provider)} detail={offers(provider)} />)}
-          {/* Always the last row: what it adds appears above it, so it never sits inside the list. */}
           {!found && rest.length > 0 && (
             <button
               type="button"
@@ -332,15 +304,10 @@ export function ProvidersSection({
   );
 }
 
-/** What a provider offers, before it is connected: its plan's name, and whether a key works. */
 function offers(provider: ProviderRow): string {
   return provider.ways.map(wayTitle).join(" · ");
 }
 
-/**
- * One provider: a row that opens in place. Open, it shows the ways in and then the sign-in, inside the
- * same card, so the list around it stays where it was.
- */
 function ProviderItem({
   provider,
   store,
@@ -358,7 +325,6 @@ function ProviderItem({
   header?: { trailing: ReactNode; togglable: false };
   onToggle: () => void;
 }) {
-  // While it runs, the row says what it is doing rather than what it offers.
   const signingIn = signIn && !signIn.outcome ? plan(signIn.way) : undefined;
   const doing =
     signIn && !signIn.outcome
@@ -379,7 +345,7 @@ function ProviderItem({
   );
   return (
     <div data-provider={provider.id} className={`${row} ${open ? "bg-hover" : ""}`}>
-      {/* Open, every row closes by its header, which is also how a sign-in is cancelled: no second Cancel. */}
+      {/* Open, a row closes by its header, which also cancels a sign-in: no second Cancel. */}
       {header && !open ? (
         <div className="flex items-center gap-3 px-4 py-2.5">
           {title}
@@ -409,7 +375,6 @@ function ProviderItem({
   );
 }
 
-/** The ways in, side by side: a plan you already pay for, or a key. */
 function Ways({ provider, onChoose }: { provider: ProviderRow; onChoose: (way: Way) => void }) {
   return (
     <div className="space-y-2">
@@ -432,14 +397,13 @@ function Ways({ provider, onChoose }: { provider: ProviderRow; onChoose: (way: W
         ))}
       </div>
       {provider.stored && (
-        // One credential per provider in the file: say so before it happens.
+        // One credential per provider in the file.
         <p className="text-[12px] text-muted">Connecting replaces the {methodName(provider.stored)} saved now.</p>
       )}
     </div>
   );
 }
 
-/** A disconnect, confirmed in the row it removes, with how far it reaches. */
 function ConfirmDisconnect({ provider, onCancel, onConfirm }: { provider: ProviderRow; onCancel: () => void; onConfirm: () => void }) {
   const reach = provider.ambient
     ? `Requests will continue with ${provider.ambient}.`
@@ -461,7 +425,6 @@ function ConfirmDisconnect({ provider, onCancel, onConfirm }: { provider: Provid
   );
 }
 
-/** What the flow says beside a step, with the pages it points to (Vertex's ADC guide, AWS's chain). */
 function FlowInfo({ info, store, className = "" }: { info: NonNullable<SignIn["info"]>; store: Store; className?: string }) {
   return (
     <div className={`space-y-1 text-[12px] text-muted ${className}`}>
@@ -475,7 +438,6 @@ function FlowInfo({ info, store, className = "" }: { info: NonNullable<SignIn["i
   );
 }
 
-/** Shown for a moment after a copy: the control confirms, nothing else moves. */
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -495,14 +457,8 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-/**
- * A running or failed sign-in. Success leaves the row (see above).
- *
- * The flow's own words (`progress`, `info`, a sign-in page's `instructions`) are written for a
- * terminal: "verifying the key with deepseek/deepseek-v4-pro…". So the states the row can tell
- * apart are said in its own words, and the flow's text is kept only where it is the reason for
- * something or points somewhere (docs/ui.md §9).
- */
+// The flow's own words are written for a terminal; the row says its states in its own words and keeps the
+// flow's text only where it is a reason or a link (docs/ui.md §9).
 function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
   const { url, device, info, prompt, outcome, provider } = signIn;
   if (outcome && !outcome.ok)
@@ -538,7 +494,7 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
               Browser on another device?
             </summary>
             <div className="mt-2 space-y-2">
-              {/* The flow says this twice, in two phrasings, both for a terminal. Once, in ours. */}
+              {/* The flow says this twice, for a terminal. Once, in ours. */}
               <p className="text-muted">Finish signing in there, then paste the address the browser ends on, or the code it shows.</p>
               <Answer key={prompt.id} prompt={prompt.prompt} store={store} action="Continue" label="Address or code" labelHidden placeholder="Address or code" />
             </div>
@@ -558,7 +514,6 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
           <div role="alert" className="space-y-1">
             <Status tone="danger" title={`${provider.name} didn't accept this key`} detail="Check it and paste it again." />
             {info && (
-              // The provider's own words, kept whole but folded: they are the reason, not the message.
               <details className="group pl-6 text-[12px]">
                 <summary className="flex cursor-pointer select-none items-center gap-1 text-muted marker:content-none hover:text-text">
                   <CaretRight size={11} className="transition-transform group-open:rotate-90" />
@@ -582,8 +537,7 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
       </div>
     );
 
-  // Between steps: before the first, or after an answer while the flow asks the provider for the next
-  // (a device code, a sign-in link). Usually gone before it could be read, hence the delay.
+  // Usually gone before it could be read, hence the delay.
   return (
     <div className="after-a-moment">
       <Status tone="waiting" title={`Connecting to ${provider.name}…`} />
@@ -591,10 +545,6 @@ function Flow({ signIn, store }: { signIn: SignIn; store: Store }) {
   );
 }
 
-/**
- * One line of state, with its detail under it: the mark sits in a column of its own so the detail lines
- * up with the words, not with the mark.
- */
 function Status({ tone, title, detail }: { tone: "waiting" | "danger"; title: string; detail?: string }) {
   return (
     <div role={tone === "danger" ? undefined : "status"} className="grid grid-cols-[16px_1fr] items-baseline gap-x-2">
@@ -646,11 +596,7 @@ function DeviceCode({ device, store }: { device: NonNullable<SignIn["device"]>; 
 const fieldClass =
   "h-7 min-w-0 flex-1 rounded-card bg-surface px-2.5 outline-none ring-1 ring-stroke placeholder:font-sans placeholder:text-muted focus:ring-accent/60 disabled:opacity-60";
 
-/**
- * The key, shown as typed so a paste can be checked by eye. One field for the whole exchange: it
- * keeps the key while it is checked and, when the provider refuses it, selects it for fixing or
- * replacing. It lives only as long as the row's sign-in; drafts never see it.
- */
+// Shown as typed so a paste can be checked. Lives only as long as the sign-in; drafts never see it.
 function KeyField({ promptId, store, label }: { promptId?: string; store: Store; label: string }) {
   const [value, setValue] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -691,10 +637,6 @@ function KeyField({ promptId, store, label }: { promptId?: string; store: Store;
   );
 }
 
-/**
- * A question the flow asks: a key, a code, a line of text, or a choice. The store refuses a blank key;
- * a blank answer to anything else is sent as the flow asked (GitHub Copilot's "blank for github.com").
- */
 function Answer({
   prompt,
   store,
@@ -706,9 +648,7 @@ function Answer({
   prompt: NonNullable<SignIn["prompt"]>["prompt"];
   store: Store;
   action: string;
-  /** Ours, when the flow's own words are written for a terminal. */
   label?: string;
-  /** When the words around the field already say what it is for: kept for screen readers only. */
   labelHidden?: boolean;
   placeholder?: string;
 }) {
@@ -762,7 +702,6 @@ function Answer({
           onChange={(event) => setValue(event.target.value)}
           aria-label={text}
           placeholder={placeholder ?? prompt.placeholder}
-          // Typed values are keys, codes and addresses, read character by character; hints are prose.
           className={`${fieldClass} font-mono text-[12.5px]`}
         />
         <Button kind="primary" size={28} onClick={submit}>

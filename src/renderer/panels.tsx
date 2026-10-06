@@ -1,8 +1,3 @@
-/**
- * What the content area shows when there is no conversation to read: setup states, problems that stop an
- * agent from opening, and a fresh start. Each says what it means for the person and offers the way on
- * (docs/ui.md §9b).
- */
 import { ArrowClockwise, FolderOpen, FolderSimplePlus, ArrowCounterClockwise, Plus, X } from "@phosphor-icons/react";
 import { Button } from "./ui.tsx";
 import { Page, Problem } from "./problem.tsx";
@@ -24,11 +19,7 @@ export function NoAgents({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-/**
- * duang cannot read its agent list. It must not repair the file: the broken one may be the only record of
- * which directories are agents. So the recovery is the person's (open it, fix or move it, retry), and the
- * app's job is to make both actions reachable, with the reason it could not read it.
- */
+// Never repair the file: the broken one may be the only record of which directories are agents.
 export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: string; onReveal: () => void; onRetry: () => void }) {
   return (
     <Problem
@@ -51,7 +42,6 @@ export function UnreadableRegistry({ reason, onReveal, onRetry }: { reason?: str
   );
 }
 
-/** The agent's definition does not load: its own error says where, and the folder is where to fix it. */
 export function BrokenAgent({
   message,
   inConfig,
@@ -61,7 +51,6 @@ export function BrokenAgent({
   onRetry,
 }: {
   message: string;
-  /** The error is in its config or a file the config imports: a fresh config is a way to start again. */
   inConfig?: boolean;
   onFreshConfig: () => void;
   onRemove: () => void;
@@ -101,10 +90,7 @@ export function BrokenAgent({
   );
 }
 
-/**
- * The folder the agent was added from is not there: moved, deleted, or on a drive that is not mounted.
- * Locating it points the same agent at where it is now; Retry covers a drive coming back.
- */
+// Retry covers a drive coming back.
 export function MissingFolder({
   dir,
   onLocate,
@@ -145,7 +131,6 @@ export function MissingFolder({
   );
 }
 
-/** A plain project: it can hold an agent, it just does not yet. Say exactly what gets written. */
 export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate: () => void; onRemove: () => void }) {
   return (
     <Page
@@ -182,10 +167,6 @@ export function NeedsAgent({ dir, onCreate, onRemove }: { dir: string; onCreate:
   );
 }
 
-/**
- * The opening screen of a conversation nobody has spoken in yet: the question in the empty page, and the
- * composer where it stays once the conversation starts, at the bottom, so the first message does not move it.
- */
 export function NewConversation() {
   return (
     <div className="flex-1 min-h-0 grid place-items-center px-6">

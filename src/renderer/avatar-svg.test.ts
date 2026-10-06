@@ -28,8 +28,7 @@ test("an avatar is drawn once, follows the agent rather than its name, and never
   const drawing = (svg: string) => svg.replace(/-[0-9a-f]{6}(?=["#)])/g, "");
   assert.equal(drawing(renamed), drawing(avatarSvg("moods", agent)), "a rename keeps the face");
   const ids = (svg: string) => new Set([...svg.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
-  // The case that matters: one agent on the page twice with two faces (the roster's "done", the header's
-  // own). Without unique ids, the second <use> draws the first one's eyes.
+  // One agent twice with two faces: without unique ids the second <use> draws the first one's eyes.
   const a = ids(avatarSvg("gaze", agent));
   const b = ids(avatarSvg("gaze", { ...agent, face: "done" }));
   assert.ok(a.size > 0 && [...a].every((id) => !b.has(id)), "one agent's two faces cannot draw each other's parts");

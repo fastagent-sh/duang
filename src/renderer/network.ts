@@ -1,5 +1,3 @@
-/** The manual proxy form, as data: pure so it runs under `node --test`. */
-
 export const KINDS = [
   { scheme: "http", label: "HTTP" },
   { scheme: "https", label: "HTTPS" },
@@ -7,7 +5,6 @@ export const KINDS = [
 ] as const;
 export type Scheme = (typeof KINDS)[number]["scheme"];
 
-/** Server and port as a proxy URL, or the reason they are not one yet. */
 export function manualUrl(scheme: Scheme, server: string, port: string): { url: string } | { error: string } {
   const host = server.trim();
   if (!host) return { error: "Server is required" };
@@ -18,11 +15,7 @@ export function manualUrl(scheme: Scheme, server: string, port: string): { url: 
 }
 
 
-/**
- * A saved manual proxy back into the form's fields. Read from the string, not through `URL`: the
- * WHATWG parser reports a scheme's default port as "" (`http://proxy.corp:80`), and main always
- * saves the port explicitly so it can be shown again. Anything else was not written by main.
- */
+// Not through `URL`: it reports a scheme's default port as "", and main always saves the port.
 export function manualFields(url: string): { scheme: Scheme; server: string; port: string } {
   const match = /^(https?|socks5):\/\/(.+):(\d+)$/.exec(url);
   if (!match) throw new Error(`Saved proxy is not scheme://host:port: ${url}`);

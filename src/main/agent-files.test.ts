@@ -78,7 +78,6 @@ test("invalid or unreadable registry fails visibly and is never replaced with an
     const registry = new AgentRegistry(file);
     for (const corrupt of ["{broken", "{}", '[{"id":"a","name":5,"dir":"/tmp"}]']) {
       await writeFile(file, corrupt);
-      // Whatever is wrong, the message must name the file the person has to open.
       await assert.rejects(registry.list(), (error: Error) => error.message.startsWith(`${file}: `));
       await assert.rejects(registry.add(root));
       assert.equal(await readFile(file, "utf8"), corrupt);
@@ -193,7 +192,6 @@ test("a load that failed in the config is told apart by FastAgent's own words", 
     return { message: error, config: join(dir, "fastagent", "fastagent.config.ts") };
   };
   try {
-    // Each of these is gotten past by a fresh config, wherever the mistake is.
     const cases: Record<string, Record<string, string>> = {
       syntax: { "fastagent.config.ts": "export default {\n  model: ,\n};\n" },
       key: { "fastagent.config.ts": "export default { modle: 'x' };\n" },

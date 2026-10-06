@@ -1,10 +1,4 @@
-/**
- * Where the window was and how big it was. Navigation memory, like the selected agent — losing it
- * costs one drag, so it is written best effort and an unreadable file is simply a first run.
- *
- * The default is sized for the design's reading column: a 320 sidebar plus a 920 column with its
- * padding, so a fresh install opens at the width the transcript was drawn for.
- */
+// Best effort: losing it costs one drag. The default fits the 320 sidebar plus the 920 reading column.
 import { app, screen, type BrowserWindow, type Rectangle } from "electron";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -34,7 +28,6 @@ export function savedBounds(): Partial<Rectangle> {
   }
 }
 
-/** Saves on the moves and resizes that settle, not on every frame of a drag. */
 export function rememberBounds(win: BrowserWindow): void {
   let timer: NodeJS.Timeout | undefined;
   const save = () => {

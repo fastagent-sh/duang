@@ -33,8 +33,7 @@ test("deltas accumulate into one message and close on finish", () => {
   items = apply(items, event("message_delta", { channel: "text", delta: "llo" }));
   assert.deepEqual(items, [{ kind: "assistant", text: "Hello", open: true, at: 0 }]);
 
-  // Settling restamps it: the time under an answer is when it landed, which is also the time
-  // history will carry for it.
+  // Settling restamps it to when it landed, the time history will carry.
   items = apply(items, { type: "message_finished", timestamp: 90, data: {} } as never);
   assert.deepEqual(items, [{ kind: "assistant", text: "Hello", open: false, at: 90 }]);
   items = apply(items, event("message_delta", { channel: "text", delta: "next" }));
@@ -450,8 +449,7 @@ test("history says how an answer ended, as a watcher saw it live, and offers a f
   const failed = (id: string, message: string) => entry(id, "assistant", { text: "", outcome: { status: "failed", error: { message } } });
   const notes = (items: Item[]) => items.flatMap((item) => (item.kind === "note" ? [[item.tone, item.text]] : []));
 
-  // pi retried twice, then gave up: only the last failure is the run's, it is offered again, and the line
-  // counting the retries goes with it.
+  // pi retried twice, then gave up: only the last failure is the run's, and the retry line goes.
   const gaveUp = fromEntries([
     entry("1", "user", { text: "summarise it" }),
     failed("2", "Connection error."),
@@ -677,8 +675,7 @@ test("an event leaves every item it does not change the same object, so the tran
   // A running call's progress or end: only that call.
   same(apply(before, event("tool_progress", { id: "running", partialResult: "1" })), [running]);
   same(apply(before, event("tool_finished", { id: "running", isError: false, content: "ok" })), [running]);
-  // The run's end: only what was still open or running, never a settled answer, so a long conversation is not
-  // redrawn whole every time a run ends.
+  // The run's end touches only what was still open, so a long conversation is not redrawn whole.
   const open: Item = { kind: "assistant", text: "Streaming", open: true, at: 3 };
   const settled = apply([...before, open], event("run_settled", { status: "completed" }));
   same(settled, [running]);

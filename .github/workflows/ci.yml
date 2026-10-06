@@ -18,9 +18,7 @@ jobs:
   desktop-checks:
     # Stable check name: main's branch protection requires it (.github/main-protection.json); no OS matrix.
     name: Desktop checks
-    # macOS is the only supported target, and the smoke step launches a real Electron window:
-    # on a Linux runner that needs xvfb plus a disabled Chromium sandbox, which is neither the
-    # platform we ship nor a configuration worth asserting against. Packaging is the job below.
+    # The smoke step launches a real Electron window; a Linux runner would need xvfb and no sandbox, which we do not ship.
     runs-on: macos-15
     timeout-minutes: 20
     defaults:

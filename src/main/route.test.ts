@@ -45,7 +45,6 @@ test("commands get one proxy with loopback direct, in both spellings, or nothing
 const listen = (server: Server) =>
   new Promise<number>((resolve) => server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port)));
 
-/** A minimal forward proxy: CONNECT tunnels and absolute-form requests, counted. */
 function proxyServer() {
   let used = 0;
   const server = createServer((req, res) => {
@@ -98,7 +97,6 @@ test("each request follows the route resolved for it, and a dead proxy is an err
     pac = `PROXY 127.0.0.1:${deadPort}`;
     await assert.rejects(fetch(url, { dispatcher }), (error: Error & { cause?: { code?: string } }) => {
       assert.equal(error.cause?.code, "ECONNREFUSED");
-      // The connection check's report of this same failure: the route in words, the code on its own.
       const report = unreachable("example.test", `http://127.0.0.1:${deadPort}`, error);
       assert.equal(report.code, "ECONNREFUSED");
       assert.match(report.error, new RegExp(`^example\\.test via http://127\\.0\\.0\\.1:${deadPort}: ECONNREFUSED: `));

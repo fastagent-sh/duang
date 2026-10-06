@@ -1,11 +1,4 @@
-/**
- * Model providers for duang's own credential file: what can be connected, what is, and one sign-in at
- * a time. FastAgent's `login` runs each provider's flow; this module relays its questions to the
- * window and its answers back, and never hands the window a credential.
- *
- * No Electron import, so it runs under `node --test`: the caller supplies the file and a way to open a
- * URL in the system browser.
- */
+// No Electron import, so it runs under `node --test`. The window never receives a credential.
 import { existsSync } from "node:fs";
 import {
   createPiModels,
@@ -22,23 +15,14 @@ export type { LoginMethod };
 
 export interface ProviderRow {
   id: string;
-  /** pi's own name for the provider; duang adds none. */
   name: string;
-  /** How it can be connected, each by FastAgent's own label ("Anthropic (Claude Pro/Max)"). */
   ways: { method: LoginMethod; label: string; subscription: boolean }[];
-  /** What duang's file holds for it. */
   stored?: LoginMethod;
-  /** A credential from outside the file that also serves it: an env var name, `~/.aws/credentials`. */
   ambient?: string;
 }
 
-/**
- * Providers pi keeps only for old logins, which duang does not offer: `openai-codex` is ChatGPT's
- * subscription through chatgpt.com, which pi replaced with Sign in with ChatGPT on `openai` itself. Not
- * listed to connect, its models are not offered, and nothing runs on them.
- */
+// pi keeps `openai-codex` only for old logins; Sign in with ChatGPT on `openai` replaced it.
 const RETIRED = new Set(["openai-codex"]);
-/** Whether a provider, or a model spec's provider, is one duang no longer runs. */
 export const retired = (providerOrSpec: string) => RETIRED.has(providerOrSpec.split("/")[0]!);
 
 /** A corrupt or unreadable file is an error, never "nothing connected". */
@@ -46,14 +30,9 @@ const loud = (message: string) => {
   throw new Error(message);
 };
 
-/**
- * Every provider pi can sign in to, with what serves it now. `ambient` is read over an empty store,
- * because a credential in the file hides an environment variable for the same provider, and the
- * person disconnecting must be told the variable will keep answering. `empty` must not exist; it is
- * only read.
- */
+// `ambient` is read over an empty store: a stored credential hides an env variable that keeps answering
+// after a disconnect.
 export async function listProviders(authPath: string, empty: string): Promise<ProviderRow[]> {
-  // A file there would be read as the ambient sources, and name ones that do not exist.
   if (existsSync(empty)) throw new Error(`${empty} must not exist: duang reads it as "no stored credentials". Remove it.`);
   const held = new Map(
     (await fastagentCredentialStore(authPath, { warn: loud }).list()).map((info) => [info.providerId, info.type]),
@@ -85,10 +64,9 @@ export async function disconnect(authPath: string, provider: string): Promise<vo
   await fastagentCredentialStore(authPath, { warn: loud }).delete(provider);
 }
 
-/** Per variant, so each prompt keeps its own fields (`options`, `placeholder`) once the signal is gone. */
+// Distributes over the union so each variant keeps its own fields.
 type WithoutSignal<T> = T extends unknown ? Omit<T, "signal"> : never;
 
-/** What the window is shown: a question to answer, one withdrawn, or something to display. */
 export type LoginStep =
   | { type: "prompt"; id: string; prompt: WithoutSignal<AuthPrompt> }
   | { type: "dismiss"; id: string }
@@ -99,10 +77,7 @@ export type LoginOutcome =
   | { ok: false; cancelled: true }
   | { ok: false; cancelled?: never; error: string };
 
-/**
- * Only `https:`, or `http:` to this machine (an OAuth callback server): a flow's URL is opened in the
- * system browser, and nothing else may reach `shell.openExternal` through it.
- */
+// Only `https:`, or `http:` to loopback (an OAuth callback): nothing else may reach `shell.openExternal`.
 export function openable(url: string): boolean {
   try {
     const { protocol, hostname } = new URL(url);
@@ -112,16 +87,11 @@ export function openable(url: string): boolean {
   }
 }
 
-/**
- * One sign-in: relays prompts to `send`, resolves them from `answer`, and ends on `cancel`. A URL can
- * be reopened only if this flow reported it. `run` is FastAgent's `login`, replaceable in tests.
- */
 export function startLogin(options: {
   provider: string;
   method: LoginMethod;
   authPath: string;
   send: (step: LoginStep) => void;
-  /** Opens the system browser; rejects when it cannot (no default browser, `xdg-open` failing). */
   open: (url: string) => Promise<void>;
   run?: typeof login;
 }) {
@@ -184,14 +154,12 @@ export function startLogin(options: {
 
   return {
     result,
-    /** The window's answer to prompt `id`. One that is not pending was withdrawn meanwhile. */
     answer(id: string, value: string) {
       pending.get(id)?.(value);
     },
     cancel() {
       abort.abort();
     },
-    /** Opens a URL this flow reported, again. Rejects when the browser cannot be opened. */
     async reopen(url: string) {
       if (!reported.has(url)) throw new Error("Not a URL this sign-in reported");
       await open(url);

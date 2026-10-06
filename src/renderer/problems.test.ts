@@ -21,7 +21,6 @@ test("a run's failure is explained from its own markers, and an unknown one gets
   assert.deepEqual(explainRunFailure("the engine settled the run without ending an assistant message"), {
     title: "The run stopped with an error",
   });
-  // A number that is not a status is not read as one.
   assert.equal(title("read 401 lines and then failed"), "The run stopped with an error");
 });
 

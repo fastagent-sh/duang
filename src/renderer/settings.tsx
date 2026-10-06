@@ -1,12 +1,3 @@
-/**
- * duang's own preferences, in the content area so the sidebar — and whatever is running in it — stays
- * in view. One group today: the network route. Model providers join when in-app sign-in exists
- * (fastagent#602); an empty group would promise something that is not there.
- *
- * Drawn the way Telegram draws its settings (docs/ui.md §12b): a small-caps heading over an inset
- * card, rows divided by hairlines that start where the text does, the choice marked by a trailing
- * check, and the connection's state written on the chosen row instead of behind a button.
- */
 import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import { ArrowClockwise, Check, X } from "@phosphor-icons/react";
 import type { AvatarStyle, DuangApi, Network, Route } from "../preload/index.ts";
@@ -19,10 +10,6 @@ import { KINDS, manualFields, manualUrl, type Scheme } from "./network.ts";
 
 const MAC = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
 
-/**
- * The store reads, saves and checks; this page holds only the form being filled in and what is wrong
- * with it.
- */
 export function Settings({
   view,
   store,
@@ -36,9 +23,7 @@ export function Settings({
   view: View;
   store: Store;
   connectOnOpen?: boolean;
-  /** A provider to sign in to again, from a problem that its sign-in was not accepted: its row opens. */
   reconnect?: string;
-  /** From a problem reaching a provider: the proxy settings are what to look at, so they are in view. */
   network?: boolean;
   onConnected: () => void;
   onMenu: DuangApi["menu"];
@@ -54,7 +39,6 @@ export function Settings({
     if (network && saved) document.getElementById("network-heading")?.scrollIntoView({ block: "start" });
   }, [network, !!saved]);
 
-  // A file whose manual proxy main did not write is reported like any other unreadable file.
   const load = async () => {
     const settings = await store.loadSettings();
     if (!settings) return;
@@ -66,10 +50,8 @@ export function Settings({
       setPort(fields.port);
     }
   };
-  // Before the first paint: the read starts by clearing what the last visit left, and in an ordinary
-  // effect the page would show that for a frame, then "Loading…", then the answer.
+  // Layout effect: the read first clears the last visit's state, which would otherwise flash for a frame.
   useLayoutEffect(() => {
-    // Once per opening: a file fixed by hand shows up the next time the page opens, or on Retry.
     void load();
   }, []);
 
@@ -174,7 +156,7 @@ export function Settings({
                     <p role="alert" className="flex-1 text-[12px] text-danger">
                       {problem}
                     </p>
-                    {/* A hidden submit keeps Enter working in either field; Button forces type="button". */}
+                    {/* Keeps Enter working in either field; Button forces type="button". */}
                     <button type="submit" hidden />
                     <Button kind="primary" onClick={saveManual}>
                       Use this proxy
@@ -201,7 +183,6 @@ export function Settings({
   );
 }
 
-/** Each style, in the order offered, with a line on what it draws. The first is the default. */
 const STYLES: Record<AvatarStyle, { label: string; note: string }> = {
   gaze: { label: "Gaze", note: "Shapes with eyes that follow the work" },
   moods: { label: "Moods", note: "Round faces" },
@@ -211,10 +192,8 @@ const STYLES: Record<AvatarStyle, { label: string; note: string }> = {
   initialFace: { label: "Initial face", note: "A face wearing the name's first letter" },
   initials: { label: "Initials", note: "The name's first two letters" },
 };
-/** The same four in every preview, so the styles are compared on the same agents. */
 const SAMPLES = ["research", "ops-bot", "writer", "旅行助手"];
 
-/** How agents' avatars are drawn. Each choice shows itself, which a name alone could not. */
 function Appearance({ view, store }: { view: View; store: Store }) {
   const [problem, setProblem] = useState<string>();
   return (
@@ -248,7 +227,6 @@ function Appearance({ view, store }: { view: View; store: Store }) {
   );
 }
 
-/** A small-caps heading over an inset card. */
 export function Group({ id, title, children }: { id?: string; title?: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="space-y-1.5">
@@ -262,14 +240,10 @@ export function Group({ id, title, children }: { id?: string; title?: string; ch
   );
 }
 
-/** Rows are divided by a hairline that starts where the text does, as in Telegram's lists. */
 export const row =
   "relative before:absolute before:left-4 before:right-0 before:top-0 before:h-px before:bg-stroke first:before:hidden";
 
-/**
- * One tab stop per group, on the checked row, and the arrows move the choice — the radio group's
- * keyboard contract, and the same single-stop rule the sidebar's roster follows (§11).
- */
+// The radio group's keyboard contract (§11): one tab stop on the checked row, arrows move the choice.
 function RadioGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
@@ -357,7 +331,6 @@ function Field({
   );
 }
 
-/** The chosen row's second line: where requests go, and whether they get there. */
 function Status({ route, check, onRefresh }: { route: Route; check?: Connection; onRefresh: () => void }) {
   const result = !check
     ? null
@@ -365,8 +338,6 @@ function Status({ route, check, onRefresh }: { route: Route; check?: Connection;
       ? <span>checking…</span>
       : "error" in check
         ? (
-            // The row already says which route; the cause's code is what fits beside it, and the
-            // whole sentence is one hover away.
             <span className="text-danger" title={check.error}>
               unreachable{check.code ? ` (${check.code})` : ""}
             </span>
@@ -380,8 +351,7 @@ function Status({ route, check, onRefresh }: { route: Route; check?: Connection;
           unsupported proxy route
         </span>
       ) : (
-        // The chosen row already says where the route comes from, so only the one surprise names it:
-        // a terminal launch's variable wins over the system until duang is opened the ordinary way.
+        // Only the surprise is named: a terminal launch's variable wins over the system until a normal launch.
         <span className="font-mono">
           {route.proxy ?? "Direct"}
           {route.source === "environment" && (

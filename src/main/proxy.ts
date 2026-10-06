@@ -1,53 +1,32 @@
-/**
- * One network route for everything main sends — model calls, sign-in token exchanges, plan usage —
- * owned by Chromium's proxy configuration.
- *
- * Node's `fetch` ignores the system proxy, and a proxy read once at startup misses a VPN client
- * switched on later, PAC rules and the system bypass list. So the global dispatcher asks
- * `session.resolveProxy` for every request (route.ts), and the Network setting only changes what
- * Chromium is configured with: the system's settings, a fixed proxy, or none.
- */
+// Node's fetch ignores the system proxy and a startup snapshot misses VPNs and PAC changes, so every request
+// asks Chromium (route.ts); the Network setting only configures Chromium.
 import { session } from "electron";
 import { setGlobalDispatcher } from "undici";
 import { commandProxyEnv, hasCredentials, RoutedDispatcher, tryRoute, unreachable } from "./route.ts";
 import type { Network } from "./settings.ts";
 
-/** Model traffic is what the route display is about. */
 const MODEL_HOST = "https://api.anthropic.com";
-/** Agent commands mostly fetch code and packages; this is the host their one proxy is chosen for. */
 const COMMAND_HOST = "https://github.com";
 const TEST_TIMEOUT_MS = 10_000;
 
-/**
- * Proxy variables present when duang was launched from a terminal: an explicit route someone
- * exported, so Automatic uses it (and cannot follow system changes until a relaunch), and duang never
- * rewrites those variables for agent commands.
- */
+// A proxy exported in the launching terminal is used by Automatic and never rewritten for agent commands.
 const LAUNCH_VARIABLES = ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"];
 const launchVariable = LAUNCH_VARIABLES.find((name) => process.env[name]);
 const launchUrl = launchVariable ? process.env[launchVariable] : undefined;
 const presentAtLaunch = new Set(Object.keys(process.env));
-/**
- * A launch proxy with credentials cannot be used: the route Chromium hands back has lost them. Said
- * plainly, on the page and on every request, rather than as the proxy's bare 407.
- */
+// Chromium's route answer drops a launch proxy's credentials: say so rather than show a bare 407.
 const launchCredentials =
   launchUrl && hasCredentials(launchUrl)
     ? `${launchVariable} carries a user name and password, and duang cannot authenticate to a proxy yet. Relaunch without them, or choose Manual with a proxy that needs none, or Off.`
     : undefined;
-/** Automatic is using the launch proxy, and that proxy needs credentials duang cannot send. */
 const launchUnusable = () => current.mode === "automatic" && launchCredentials !== undefined;
 
 export type Source = "system" | "environment" | "manual" | "off";
 export interface Route {
-  /** The proxy model requests use now, or undefined for a direct connection. */
   proxy?: string;
   source: Source;
-  /** The launch variable Automatic is using, when it is. */
   variable?: string;
-  /** Why the model host's route cannot be used (an unsupported PAC answer); requests fail with it. */
   error?: string;
-  /** Why agent commands got no proxy variables, when they did not. */
   commandError?: string;
 }
 
@@ -83,7 +62,6 @@ export async function applyNetwork(network: Network): Promise<void> {
   await syncCommandProxy();
 }
 
-/** Never throws for an unusable route: it is something to show, and the settings file is not at fault. */
 export async function describeRoute(): Promise<Route> {
   const route = launchUnusable()
     ? { error: launchCredentials! }
@@ -97,16 +75,11 @@ export async function describeRoute(): Promise<Route> {
   };
 }
 
-/**
- * Agent tools spawn with a copy of main's environment taken at each spawn, so this is re-run before
- * every send. Variables the launch environment had are the person's and are left alone.
- */
+// Agent tools copy main's environment at each spawn, so this runs before every send.
 export async function syncCommandProxy(): Promise<void> {
   if (launchUrl) return;
   const route = tryRoute(await session.defaultSession.resolveProxy(COMMAND_HOST));
-  // An answer the variables cannot express (a SOCKS4 PAC entry) costs the commands their proxy —
-  // no variables at all, never a stale one — not the app its start or a send. The page and the log
-  // say so.
+  // A route the variables cannot express costs the commands their proxy (never a stale one), not the send.
   commandError = "error" in route ? `Agent commands get no proxy: ${route.error}` : undefined;
   if (commandError) console.error(`[duang] ${commandError}`);
   const proxy = "error" in route ? undefined : route.proxy;
@@ -117,13 +90,8 @@ export async function syncCommandProxy(): Promise<void> {
   }
 }
 
-/**
- * One check of the model route: any HTTP answer, timed, means it works. Not getting one is an answer too,
- * in a sentence naming the route, and with the cause's code (`ECONNREFUSED`) when it has one.
- */
 export type ConnectionCheck = { status: number; ms: number; route: Route } | { error: string; code?: string };
 
-/** One request over the same route a model call takes. */
 export async function testConnection(): Promise<ConnectionCheck> {
   const route = await describeRoute();
   if (route.error) return { error: `${new URL(MODEL_HOST).host}: ${route.error}` };

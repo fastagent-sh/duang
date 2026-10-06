@@ -37,8 +37,7 @@ test("a list stamp is the clock today, the weekday this week, and a date before 
   const lateYesterday = new Date(2026, 0, 19, 23, 0, 0).getTime();
   assert.equal(stamp(lateYesterday, now), new Date(lateYesterday).toLocaleDateString([], { weekday: "short" }));
   assert.equal(stamp(now - 5 * day, now), new Date(now - 5 * day).toLocaleDateString([], { weekday: "short" }));
-  // A week back would repeat today's weekday, so it is a date: a month and a day, not a string of numbers
-  // whose order depends on who reads it, and the year only when it is not this one.
+  // A week back is a date, with the year only when it is not this one.
   const sameYear = new Date(2026, 0, 5, 9, 0, 0).getTime();
   assert.equal(stamp(sameYear, now), new Date(sameYear).toLocaleDateString([], { month: "short", day: "numeric" }));
   assert.doesNotMatch(stamp(sameYear, now), /2026/);
