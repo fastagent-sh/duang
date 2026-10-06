@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractAll } from "@electron/asar";
+import { chunk, withoutCredentials, writeMockModels } from "./harness.mjs";
 
 const built = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "mac-arm64", "duang.app");
 assert.ok(existsSync(built), `${built} does not exist: run npm run package first`);
@@ -66,8 +67,6 @@ const server = createServer((req, res) => {
   req.on("end", () => {
     calls++;
     res.writeHead(200, { "content-type": "text/event-stream" });
-    const chunk = (delta, finish = null) =>
-      `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
     if (calls === 1) {
       res.write(chunk({ role: "assistant", content: "Checking.", tool_calls: [{ index: 0, id: "c1", type: "function", function: { name: "bash", arguments: JSON.stringify({ command: "echo installed > proof.txt" }) } }] }));
       res.write(chunk({}, "tool_calls"));
@@ -81,8 +80,7 @@ const server = createServer((req, res) => {
 
 const children = [];
 function launch(app, data) {
-  const env = { ...process.env, HOME: root };
-  for (const name of Object.keys(env)) if (/API_KEY|TOKEN|SECRET|^FASTAGENT_|^PI_|PROXY$/i.test(name)) delete env[name];
+  const env = withoutCredentials({ ...process.env, HOME: root });
   const child = spawn(app, [`--user-data-dir=${data}`, "--remote-debugging-port=0"], { env, stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", (chunk) => (output += chunk));
@@ -108,10 +106,7 @@ async function run() {
   const project = join(root, "project");
   mkdirSync(data, { recursive: true });
   mkdirSync(join(project, "fastagent"), { recursive: true });
-  writeFileSync(
-    join(project, "fastagent", "models.json"),
-    JSON.stringify({ providers: { mock: { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: "openai-completions", apiKey: "mock", models: [{ id: "mock" }] } } }),
-  );
+  writeMockModels(project, server.address().port);
   // A type import, as FastAgent's own scaffold writes: the config is TypeScript, loaded by the app's runtime.
   writeFileSync(
     join(project, "fastagent", "fastagent.config.ts"),
