@@ -16,7 +16,7 @@ sheet at `#gallery` shows every control (§6b). [design.md](design.md) owns prod
 4. **Work runs in the background, in parallel, for a long time.** You come back to it as often as you
    watch it, and you need to see which of several conversations is alive.
 5. **The transcript is the work record.** Later read-only details may show local files and an
-   owner's routines, but do not duplicate the runtime's conversation history.
+   owner's schedules, but do not duplicate the runtime's conversation history.
 
 Anything that fragments the agent's output (bubbles, cards per paragraph, decoration) fights facts 3
 and 5. Anything that hides parallel work to keep a list tidy fights fact 4.

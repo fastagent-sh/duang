@@ -139,7 +139,7 @@ More: [architecture](docs/architecture.md) (processes, state ownership, network 
   Anthropic does not document; Sign in with ChatGPT links to its usage page instead.
 - A command name typed by hand that the agent does not know goes to the model as plain text.
 - Attachments and voice input are not implemented.
-- duang does not run an agent's routines or channels, and has no online agents or sharing yet.
+- duang does not run an agent's schedules or channels, and has no online agents or sharing yet.
 
 ## Roadmap
 
@@ -153,10 +153,10 @@ progress; the rest are planned.
 2. **Give someone the Agent.** They get their own copy, connect their own credentials and keep their
    own conversations. No secrets, runtime state or machine-only paths travel with it.
 3. **Online contacts.** Connect your own protected, already-running agent, including one that runs
-   routines while your laptop is closed; then invite someone else to it, each visitor seeing only
+   schedules while your laptop is closed; then invite someone else to it, each visitor seeing only
    their own conversations, revocably.
 4. **Optional hosting.** Publish, update and stop an agent without operating a server, with
-   scheduled routines that actually run while the laptop is off.
+   schedules that actually run while the laptop is off.
 5. **Groups and discovery,** only if existing chat channels and direct invitations prove not enough.
 
 The words follow FastAgent's agent model ([fastagent#684](https://github.com/fastagent-sh/fastagent/issues/684)):

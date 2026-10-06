@@ -4,7 +4,7 @@
 
 A native local-first workbench for FastAgent agents: create one with the contexts it works on and
 knows, use it locally, give someone their own copy of the Agent, connect to your own or an invited
-online instance, or optionally host it with duang cloud for continuous routines. Agents are contacts;
+online instance, or optionally host it with duang cloud for scheduled work. Agents are contacts;
 conversations and history belong to each FastAgent instance, not a duang transcript store. Only the
 Week 1 local path is implemented.
 
@@ -36,8 +36,8 @@ verification of existing code, not a rewrite. Resolve conflicting product polici
 - No real credentials, private sessions or project contents in commits, CI or shared artifacts.
   Local real-provider and OAuth checks are fine; report them separately from mocked results.
 - Follow the outcome-gated stages in `README.md`: local daily workbench, someone's own copy of an
-  Agent, protected online contacts (including the owner's private routine work), optional hosting,
-  then groups or discovery only if needed. Do not present planned screens or routine outcomes as
+  Agent, protected online contacts (including the owner's private scheduled work), optional hosting,
+  then groups or discovery only if needed. Do not present planned screens or schedule outcomes as
   shipped.
 - A copy of an Agent never carries secrets or runtime state (`.secrets/`, `.state/`). Remote invites require a host-side protected
   access boundary and per-visitor conversation isolation; never expose a raw FastAgent endpoint

@@ -13,7 +13,7 @@ Electron renderer ── typed preload ── Electron main ── local FastAge
                                          └── planned HTTP/SSE ── protected endpoint
                                                                   │
                                          owned self-host or optional duang cloud FastAgent
-                                         (its own sessions, routines and channel adapters)
+                                         (its own sessions, schedules and channel adapters)
 ```
 
 The renderer has `contextIsolation` on and no Node integration. It never gets arbitrary filesystem,
@@ -29,7 +29,7 @@ it need not proxy every conversation or own a transcript.
 public `connectAgent` and `connectSessionControl`, subject to the endpoint's `capabilities()`.
 Local turns use `agent.invoke`; observing, steering, stopping and reading history use the bound
 session control. The locked FastAgent version's remote contract (authentication, invoke paths,
-routines) is what a remote client builds on; bump the version with the feature that needs a newer one.
+schedules) is what a remote client builds on; bump the version with the feature that needs a newer one.
 
 **The preload exposes typed, named operations**, not a stringly-typed gateway. It exposes only
 the operations the local UI uses. Main forwards `events()` on one IPC channel with an agent,
@@ -151,7 +151,7 @@ FastAgent has no built-in control token (0.23), so a shared host brings its own 
 `FASTAGENT_CONTROL_TOKEN` of earlier versions is not a design to build on. A raw instance-wide
 `SessionControl.sessions.list()` enumerates everyone's sessions, so a shared host must scope reads,
 writes and events to the visitor's own sessions without storing a second transcript. Owner-only
-routines, Agent updates and hosting controls must not be exposed through a visitor invite.
+schedules, Agent updates and hosting controls must not be exposed through a visitor invite.
 The concrete host-side access boundary needs a tested design at stage 3, not a client-only filter.
 
 Each location owns its own session store: local history stays local, online history stays with its
@@ -161,28 +161,36 @@ them by location and reject late events from superseded subscriptions. Main owns
 subscriptions and forwards events with their origin identifiers. A disconnect leaves execution status unknown until the runtime is consulted; never
 reissue accepted work merely to restore a stream.
 
-## Online execution and routines
+## Online execution and schedules
 
 **Planned.** Stage 3 connects to an already-running, protected instance owned by the user. Stage 4 offers a
 hosted alternative: publish a reviewed Agent snapshot (with its contexts as their types allow), set required model/channel secrets on
 the host, provision durable runtime state, and provide update and stop controls. The desktop can
-close without stopping online turns or routines. Owner-hosted agents do not depend on our hosting
+close without stopping online turns or scheduled work. Owner-hosted agents do not depend on our hosting
 service; duang cloud needs only hosting and access metadata, not a centralized chat store.
 Do not claim a specific Fly topology, sign-in provider or price before verifying the hosting path.
 
-A clock must remain available while the owner's laptop is off. On Fly, the safe first configuration
-for a cron routine is a resident machine; the current upstream plan keeps one running when required.
-A sleeping machine cannot wake itself for its own cron. FastAgent provides `GET /routines`
-(names, cron and timezone, not outcomes) and `POST /run` (run by name), but `POST /run` is **not** a
-clock or a slot-claim protocol. A future external scheduler needs demonstrated delivery,
-authorization, deduplication and honest failure/skip reporting before reducing residency. Some
-routines may need residency for reasons other than cron. Bump and verify the locked version with the
-feature that consumes a newer contract.
+Timed work is a **schedule**, from FastAgent's release after 0.24.4
+([#145](https://github.com/fastagent-sh/duang/issues/145)): `schedules/<name>.md` in the Agent's directory,
+`cron` and `tz` in its frontmatter and the prompt as its body. It is data, so duang can write one without
+TypeScript. Nothing runs a schedule by name: work started on demand is `POST /invoke`, and a prompt template
+is sent as `/<name>`. Every fire continues one session, `schedule:<name>`, so what a schedule did is that
+session's history, read like any other conversation. A fire skipped because the previous one still ran is
+not in it: the host records it as `skipped` in the schedule's fire history. There is no remote route that lists an instance's schedules: in process, a serve's
+`AgentService.schedules` lists what it loaded, and the CLI has `fastagent schedules list`. If duang needs the
+list remotely, ask FastAgent for it rather than infer it from files.
 
-If a host cannot provide a recent routine outcome through the runtime's sessions, claim records or
-host telemetry, show "outcome unavailable" rather than infer success from `GET /routines`. A
-successful send or run admission is not a successful outcome. Never auto-replay a routine whose
-work may already have happened. These are data-integrity constraints, not an enterprise audit UI.
+A clock must remain available while the owner's laptop is off. A schedule is the agent's own clock and keeps
+a Fly or Railway machine resident; a sleeping machine cannot wake itself for its own cron. Scaling to zero
+means a clock outside the instance calling `POST /invoke` with the prompt template *in place of* the schedule,
+never beside it (both would fire into `schedule:<name>`). That route is anonymous with full tools, so it needs
+a gateway in front, and the outside clock needs demonstrated delivery, authorization, deduplication and
+honest failure/skip reporting before it replaces residency.
+
+If a host cannot provide a recent outcome through the schedule's session, claim records or host telemetry,
+show "outcome unavailable" rather than infer success from a declaration. A successful send or invoke
+admission is not a successful outcome. Never auto-replay scheduled work that may already have happened.
+These are data-integrity constraints, not an enterprise audit UI.
 
 ## State ownership
 
@@ -196,7 +204,7 @@ work may already have happened. These are data-integrity constraints, not an ent
 | Model and channel credentials | duang's own `userData/auth.json` for local agents; each remote runtime's credential store or host secrets | Never copy an OAuth login between stores or into a hosted instance. |
 | Custom model endpoints duang adds (planned) | open: see [design](design.md) (`~/.fastagent/models.json` is shared with the CLI) | Local to this machine; not part of a copy of an Agent or a hosted instance. |
 | App preferences | `userData/settings.json` | Network mode and avatar style; never credentials. |
-| Routine declaration and execution | the Agent's harness + running host and clock | Display only verified schedule and outcomes. |
+| Schedule declaration and execution | the Agent's `schedules/` + the running host and clock; outcomes in each `schedule:<name>` session | Display only verified schedules and outcomes. |
 | Drafts and attention markers | the client | Drafts persist locally; markers are presentation state. |
 
 No universal message database, enterprise membership/approval/audit system, web workbench, social
