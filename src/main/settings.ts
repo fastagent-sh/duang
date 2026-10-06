@@ -3,8 +3,7 @@
  * bounds: a manual proxy someone typed must not silently turn into "automatic", so a file that
  * cannot be read or parsed is an error, and only a missing file is a first run.
  */
-import { readFile } from "node:fs/promises";
-import { writeJsonAtomic } from "./json-file.ts";
+import { readJson, serially, writeJsonAtomic } from "./json-file.ts";
 
 export type Network = { mode: "automatic" } | { mode: "manual"; url: string } | { mode: "off" };
 /** How agents' avatars are drawn (the renderer's `avatar.tsx`); the first is the default. */
@@ -47,37 +46,26 @@ export function avatar(value: unknown): AvatarStyle {
   throw new Error(`Unknown avatar style: ${JSON.stringify(value)}`);
 }
 
-async function readSettings(file: string): Promise<Settings> {
-  let text: string;
-  try {
-    text = await readFile(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return DEFAULTS;
-    throw error;
-  }
-  try {
-    const parsed = JSON.parse(text) as { network?: unknown; avatar?: unknown };
-    // A setting the file does not name was never chosen: it is the default, not an error.
-    return {
-      network: parsed.network === undefined ? DEFAULTS.network : network(parsed.network),
-      avatar: parsed.avatar === undefined ? DEFAULTS.avatar : avatar(parsed.avatar),
-    };
-  } catch (error) {
-    // The person has to know which file to open, not which column of it.
-    throw new Error(`${file}: ${(error as Error).message}`, { cause: error });
-  }
+function settings(value: unknown): Settings {
+  const parsed = value as { network?: unknown; avatar?: unknown };
+  // A setting the file does not name was never chosen: it is the default, not an error.
+  return {
+    network: parsed.network === undefined ? DEFAULTS.network : network(parsed.network),
+    avatar: parsed.avatar === undefined ? DEFAULTS.avatar : avatar(parsed.avatar),
+  };
 }
 
 /** The settings file, and the one queue every change to it goes through. */
 export class SettingsFile {
-  private pending: Promise<unknown> = Promise.resolve();
+  private queue = serially();
   readonly path: string;
   constructor(path: string) {
     this.path = path;
   }
 
+  /** The file as it is now, without waiting for a change in progress (and the route it applies). */
   read(): Promise<Settings> {
-    return readSettings(this.path);
+    return readJson(this.path, DEFAULTS, settings);
   }
 
   /**
@@ -87,12 +75,9 @@ export class SettingsFile {
    * written: two quick network choices end with the file, Chromium and the answer all on the second.
    */
   change<T>(patch: Partial<Settings>, then?: () => Promise<T>): Promise<T | undefined> {
-    const run = this.pending.then(async () => {
+    return this.queue.run(async () => {
       await writeJsonAtomic(this.path, { ...(await this.read()), ...patch });
       return then?.();
     });
-    // The caller gets the failure; the next change still runs.
-    this.pending = run.catch(() => {});
-    return run;
   }
 }
