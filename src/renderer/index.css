@@ -413,7 +413,8 @@ details[open]::details-content {
   .enter,
   .pop,
   .bounce,
-  .shimmer {
+  .shimmer,
+  .animate-pulse {
     animation: none;
   }
   /* Every face keeps its pose (eyes closed, looking down, happy) and loses its movement. */
