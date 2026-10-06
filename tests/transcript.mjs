@@ -244,11 +244,15 @@ if (!process.versions.electron) {
         const el = document.querySelector('[aria-label="Transcript"]');
         if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
         observer.disconnect();
+        // Two frames later, as a person would: the view has mounted and settled at its end (its first layout ends
+        // there), older lines still to come.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
         el.scrollTop -= 400;
         el.dispatchEvent(new Event('scroll'));
         const top = el.getBoundingClientRect().top + 60;
         const row = [...el.querySelector('.column').children].find((r) => { const b = r.getBoundingClientRect(); return b.top <= top && b.bottom > top; });
         window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
+        }));
       });
       observer.observe(document.body, { childList: true, subtree: true });
     })()`);
@@ -270,12 +274,16 @@ if (!process.versions.electron) {
         const el = document.querySelector('[aria-label="Transcript"]');
         if (!el || !el.innerText.includes('Turn ${LONG_TURNS} of the long one') || window.__early) return;
         observer.disconnect();
+        // Two frames later, as a person would: the view has mounted and settled at its end (its first layout ends
+        // there), older lines still to come.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
         el.scrollTop -= 400;
         el.dispatchEvent(new Event('scroll'));
         const top = el.getBoundingClientRect().top + 60;
         const row = [...el.querySelector('.column').children].find((r) => { const b = r.getBoundingClientRect(); return b.top <= top && b.bottom > top; });
         window.__early = { text: row.innerText, offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top, drawnAll: el.innerText.includes('Turn 1 of the long one') };
         document.querySelector('aside button[aria-label="Live"]').click();
+        }));
       });
       observer.observe(document.body, { childList: true, subtree: true });
     })()`);
