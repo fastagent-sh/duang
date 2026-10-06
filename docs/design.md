@@ -97,9 +97,9 @@ straight into it. The list is FastAgent's `loginOptions()`, grouped by provider 
 pi names each provider; duang adds no names or groupings of its own (`OpenAI` offers both Sign in
 with ChatGPT and an API key). The one exception is a provider pi keeps only for old logins:
 `openai-codex`, ChatGPT through chatgpt.com, which pi replaced with Sign in with ChatGPT on `openai`.
-duang does not offer it to connect, lists none of its models, and nothing runs on it: an agent whose
-default is on it asks for a model, and a conversation recorded on it refuses a send until another model
-is chosen. A login for it already in duang's file is left there, unused. Common providers come first
+duang does not offer it to connect, lists none of its models, and nothing runs on it: a send on it, from
+an agent default or a conversation's own record, is refused and opens the picker until another model is
+chosen. A login for it already in duang's file is left there, unused. Common providers come first
 and the list can be filtered, since pi offers about forty.
 
 A *Connected* list shows each provider with every source that authenticates it, Reconnect and
