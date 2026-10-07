@@ -52,43 +52,47 @@ export async function send(
 // Before a send reaches the runtime there is no run to abort, so a Stop is recorded here and the send gives up.
 export function sends() {
   type Ticket = { stopped: boolean; finished: Promise<unknown> };
-  const held = new Map<string, Set<Ticket>>();
+  type Held = { agentId: string; session: string; tickets: Set<Ticket> };
+  const held = new Map<string, Held>();
+  const keyOf = (agentId: string, session: string) => `${agentId}/${session}`;
   let quitting = false;
-  const stop = async (key: string, abort: () => Promise<SessionResult>): Promise<SessionResult> => {
-    const tickets = held.get(key);
+  const stop = async (agentId: string, session: string, abort: () => Promise<SessionResult>): Promise<SessionResult> => {
+    const tickets = held.get(keyOf(agentId, session))?.tickets;
     for (const ticket of tickets ?? []) ticket.stopped = true;
     const result = await abort();
     return !result.ok && result.error.code === NO_ACTIVE_RUN_CODE && tickets?.size ? { ok: true } : result;
   };
   return {
-    hold(key: string, run: (stopped: () => boolean) => Promise<SessionResult>): Promise<SessionResult> {
+    hold(agentId: string, session: string, run: (stopped: () => boolean) => Promise<SessionResult>): Promise<SessionResult> {
       if (quitting) return Promise.resolve(refuse("quitting", "duang is quitting: the message was not sent"));
+      const key = keyOf(agentId, session);
       const ticket: Ticket = { stopped: false, finished: Promise.resolve() };
-      const tickets = held.get(key) ?? new Set();
-      held.set(key, tickets.add(ticket));
+      const entry = held.get(key) ?? { agentId, session, tickets: new Set() };
+      held.set(key, entry);
+      entry.tickets.add(ticket);
       const finished = run(() => ticket.stopped).finally(() => {
-        tickets.delete(ticket);
-        if (tickets.size === 0 && held.get(key) === tickets) held.delete(key);
+        entry.tickets.delete(ticket);
+        if (entry.tickets.size === 0 && held.get(key) === entry) held.delete(key);
       });
       ticket.finished = finished.catch(() => {});
       return finished;
     },
     busy: () => held.size > 0,
     // The limit starts before the aborts: pi's abort waits for its run to go idle, so it can take as long as the run.
-    async stopAll(abort: (key: string) => Promise<SessionResult>, within: number): Promise<boolean> {
+    async stopAll(abort: (agentId: string, session: string) => Promise<SessionResult>, within: number): Promise<boolean> {
       // The window stays open while this waits: a message sent meanwhile is refused, not started and cut.
       quitting = true;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), within)));
-      const finished = [...held.values()].flatMap((tickets) => [...tickets].map((ticket) => ticket.finished));
+      const finished = [...held.values()].flatMap(({ tickets }) => [...tickets].map((ticket) => ticket.finished));
       // A conversation that cannot be stopped must not keep the app from quitting; it is said, not hidden.
-      for (const key of held.keys())
-        stop(key, () => abort(key)).then(
-          (result) => {
-            if (!result.ok) console.error(`duang: ${key} could not be stopped before quitting:`, result.error.message);
-          },
-          (error: unknown) => console.error(`duang: ${key} could not be stopped before quitting:`, error),
-        );
+      for (const { agentId, session } of held.values()) {
+        const failed = (reason: unknown) =>
+          console.error(`duang: ${keyOf(agentId, session)} could not be stopped before quitting:`, reason);
+        stop(agentId, session, () => abort(agentId, session)).then((result) => {
+          if (!result.ok) failed(result.error.message);
+        }, failed);
+      }
       const done = await Promise.race([Promise.all(finished).then(() => true), timeout]);
       clearTimeout(timer);
       return done;

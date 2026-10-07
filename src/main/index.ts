@@ -339,7 +339,7 @@ function register(): void {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
     // Held before the first await: a Stop sent right after this message must find it.
-    return inFlight.hold(`${id}/${session}`, async (stopped) => {
+    return inFlight.hold(id, session, async (stopped) => {
       // The agent's commands spawn during this run; they get the route as it is now.
       await syncCommandProxy();
       const row = await requireAgent(id);
@@ -349,7 +349,7 @@ function register(): void {
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
     requireSession(session);
-    return inFlight.stop(`${id}/${session}`, async () => (await sessionOf(id, session)).abort());
+    return inFlight.stop(id, session, async () => (await sessionOf(id, session)).abort());
   });
 }
 
@@ -416,10 +416,7 @@ app.on("before-quit", (event) => {
   // Quitting again while this waits quits at once.
   quitting = true;
   void inFlight
-    .stopAll(async (key) => {
-      const slash = key.indexOf("/");
-      return (await sessionOf(key.slice(0, slash), key.slice(slash + 1))).abort();
-    }, QUIT_WAIT_MS)
+    .stopAll(async (agentId, session) => (await sessionOf(agentId, session)).abort(), QUIT_WAIT_MS)
     .then((settled) => {
       if (!settled) console.error(`duang: a stopped run had not settled after ${QUIT_WAIT_MS} ms; quitting cuts it`);
       app.quit();

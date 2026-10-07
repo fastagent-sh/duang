@@ -67,29 +67,29 @@ test("a Stop before a send reaches the runtime keeps it from starting a run; one
   } as unknown as Agent;
   const noRun = async () => refusal("no_active_run");
   const held = sends();
-  assert.equal((await held.stop("a/s", noRun)).ok, false, "with nothing on its way, no run is no stop");
+  assert.equal((await held.stop("a", "s", noRun)).ok, false, "with nothing on its way, no run is no stop");
 
   // Main is still resolving the proxy and opening the agent when the Stop arrives.
   let opened!: () => void;
   const opening = new Promise<void>((resolve) => (opened = resolve));
-  const early = held.hold("a/s", async (stopped) => {
+  const early = held.hold("a", "s", async (stopped) => {
     await opening;
     return send(agent, bound, "hello", stopped, async () => true);
   });
-  assert.equal((await held.stop("b/s", noRun)).ok, false, "another conversation's send is not this one's");
-  assert.equal((await held.stop("a/s", noRun)).ok, true);
+  assert.equal((await held.stop("b", "s", noRun)).ok, false, "another conversation's send is not this one's");
+  assert.equal((await held.stop("a", "s", noRun)).ok, true);
   opened();
   const result = await early;
   assert.deepEqual(calls, [], "nothing reached the runtime");
   assert.equal(!result.ok && result.error.code, "aborted");
 
   // Once the message is the runtime's, stopping is the run's abort, and its answer is the run's.
-  const late = await held.hold("a/s", (stopped) => send(agent, bound, "again", stopped, async () => true));
+  const late = await held.hold("a", "s", (stopped) => send(agent, bound, "again", stopped, async () => true));
   assert.deepEqual(calls, ["invoke"]);
   assert.equal(late.ok, true);
   const failed = refusal("run_command_failed");
-  assert.equal(await held.stop("a/s", async () => failed), failed, "any other answer is passed on");
-  assert.equal((await held.stop("a/s", noRun)).ok, false, "a finished send is released");
+  assert.equal(await held.stop("a", "s", async () => failed), failed, "any other answer is passed on");
+  assert.equal((await held.stop("a", "s", noRun)).ok, false, "a finished send is released");
 });
 
 test("a run starts only on a model the picker would offer; a steer joins the run already going", async () => {
@@ -123,15 +123,15 @@ test("quitting stops every send in flight and waits for each run to settle, but 
   const held = sends();
   assert.equal(held.busy(), false);
   const settle = new Map<string, () => void>();
-  const run = (key: string) =>
-    held.hold(key, () => new Promise<SessionResult>((resolve) => settle.set(key, () => resolve(refusal("aborted")))));
-  const a = run("agent/a");
-  const b = run("agent/b");
+  const run = (session: string) =>
+    held.hold("agent", session, () => new Promise<SessionResult>((resolve) => settle.set(session, () => resolve(refusal("aborted")))));
+  const a = run("a");
+  const b = run("b");
   assert.equal(held.busy(), true);
   const aborted: string[] = [];
-  const settled = await held.stopAll(async (key) => {
-    aborted.push(key);
-    setTimeout(() => settle.get(key)!(), 5);
+  const settled = await held.stopAll(async (agentId, session) => {
+    aborted.push(`${agentId}/${session}`);
+    setTimeout(() => settle.get(session)!(), 5);
     return ok;
   }, 1000);
   assert.equal(settled, true, "both runs settled before the limit");
@@ -141,7 +141,7 @@ test("quitting stops every send in flight and waits for each run to settle, but 
 
   // Once quitting began, a message sent while it waits is refused before it reaches the runtime.
   let started = false;
-  const meanwhile = await held.hold("agent/c", async () => {
+  const meanwhile = await held.hold("agent", "c", async () => {
     started = true;
     return ok;
   });
@@ -152,18 +152,18 @@ test("quitting stops every send in flight and waits for each run to settle, but 
   // A run that never settles and one whose abort fails: neither keeps quitting waiting past the limit.
   const stuckHeld = sends();
   const stuckSettle = new Map<string, () => void>();
-  const stuckRun = (key: string) =>
-    stuckHeld.hold(key, () => new Promise<SessionResult>((resolve) => stuckSettle.set(key, () => resolve(refusal("aborted")))));
-  void stuckRun("agent/stuck");
-  const broken = stuckRun("agent/broken");
+  const stuckRun = (session: string) =>
+    stuckHeld.hold("agent", session, () => new Promise<SessionResult>((resolve) => stuckSettle.set(session, () => resolve(refusal("aborted")))));
+  void stuckRun("stuck");
+  const broken = stuckRun("broken");
   const began = Date.now();
   // pi's abort waits for the run to go idle, so the stuck run's abort never returns either.
-  const late = await stuckHeld.stopAll((key) => {
-    if (key === "agent/broken") return Promise.reject(new Error("the agent was removed"));
+  const late = await stuckHeld.stopAll((_agentId, session) => {
+    if (session === "broken") return Promise.reject(new Error("the agent was removed"));
     return new Promise<SessionResult>(() => {});
   }, 50);
   assert.equal(late, false);
   assert.ok(Date.now() - began < 1000);
-  stuckSettle.get("agent/broken")!();
+  stuckSettle.get("broken")!();
   await broken;
 });
