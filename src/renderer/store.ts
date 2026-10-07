@@ -1,4 +1,6 @@
+import { ABORTED_CODE } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type AgentCommand, type SessionSummary } from "@fastagent-sh/fastagent/session";
+import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
 import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
 import { fromEntries, phase, previewOf, queueView, type Activity, type Place } from "./transcript.ts";
 import {
@@ -18,7 +20,6 @@ import { message } from "./message.ts";
 import type { Fix } from "./problems.ts";
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
-const MODEL_UNAVAILABLE_CODE = "model_unavailable";
 // A subscription lost again this soon after reconnecting by itself waits for the person.
 const RECONNECT_GAP_MS = 30_000;
 
@@ -445,7 +446,7 @@ export function createStore(api: DuangApi) {
           return;
         }
         if (
-          result.error.code !== "aborted" &&
+          result.error.code !== ABORTED_CODE &&
           !c.items.slice(before).some((item) => item.kind === "note" && item.text.includes(result.error.message))
         )
           note(c, { error: result.error.message, tone: "warning", title: "Not sent", advice: "Your message is back in the composer." });

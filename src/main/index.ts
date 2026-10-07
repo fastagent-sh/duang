@@ -25,7 +25,8 @@ import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from ".
 import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { subscriptions, type Listener } from "./follow.ts";
-import { MODEL_UNAVAILABLE_CODE, refuse, send, sends } from "./send.ts";
+import { refuse, send, sends } from "./send.ts";
+import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
 

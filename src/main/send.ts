@@ -1,5 +1,6 @@
 import { ABORTED_CODE, SESSION_BUSY_CODE, type Agent } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type Session, type SessionResult } from "@fastagent-sh/fastagent/session";
+import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
 
 // A thrown refusal would reach the renderer wrapped in Electron's `Error invoking remote method`.
 export const refuse = (code: string, message: string): SessionResult => ({
@@ -9,7 +10,6 @@ export const refuse = (code: string, message: string): SessionResult => ({
 
 const stoppedBeforeStart = refuse(ABORTED_CODE, "Stopped before the run started");
 
-export const MODEL_UNAVAILABLE_CODE = "model_unavailable";
 const unavailable = (model: string) =>
   refuse(
     MODEL_UNAVAILABLE_CODE,
