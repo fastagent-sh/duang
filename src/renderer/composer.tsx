@@ -7,7 +7,7 @@ import { home } from "./paths.ts";
 import { tokens } from "./usage.ts";
 import { Problem } from "./problem.tsx";
 import { unavailableNotice } from "./problems.ts";
-import { pickerModels } from "./catalog.ts";
+import { modelIdOf, pickerModels, providerOf } from "./catalog.ts";
 import type { Models } from "../preload/index.ts";
 
 const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
@@ -117,7 +117,7 @@ function ModelPicker({
   const hidden = matching.length - shown.length;
   const groups = new Map<string, Models>();
   for (const model of shown) {
-    const provider = model.spec.slice(0, model.spec.indexOf("/"));
+    const provider = providerOf(model.spec);
     groups.set(provider, [...(groups.get(provider) ?? []), model]);
   }
 
@@ -241,7 +241,7 @@ function ModelPicker({
                       spec === current ? "bg-hover" : ""
                     }`}
                   >
-                    <span className="min-w-0 flex-1 truncate">{name ?? spec.slice(spec.indexOf("/") + 1)}</span>
+                    <span className="min-w-0 flex-1 truncate">{name ?? modelIdOf(spec)}</span>
                     {contextWindow !== undefined && <span className="shrink-0 text-[12px] text-muted tabular-nums">{tokens(contextWindow)}</span>}
                     {spec === current && <Check size={15} aria-hidden />}
                   </button>
@@ -477,8 +477,8 @@ export function Composer({
               {model ? (
                 // `openai/` and `azure-openai-responses/` offer the same ids and are paid for differently.
                 <span className="min-w-0 truncate text-[13px]">
-                  <span className="text-muted">{model.slice(0, model.indexOf("/") + 1)}</span>
-                  <span className="text-text">{model.slice(model.indexOf("/") + 1)}</span>
+                  <span className="text-muted">{providerOf(model)}/</span>
+                  <span className="text-text">{modelIdOf(model)}</span>
                 </span>
               ) : (
                 <span className="truncate">{needsModel ? "pick a model" : "reading model…"}</span>

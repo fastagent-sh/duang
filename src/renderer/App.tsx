@@ -3,6 +3,7 @@ import type { DuangApi } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 import { rows } from "./sessions.ts";
 import { queueView } from "./transcript.ts";
+import { providerOf } from "./catalog.ts";
 import { BrokenAgent, MissingFolder, NeedsAgent, NewConversation, NoAgents, UnreadableRegistry } from "./panels.tsx";
 import { Problem } from "./problem.tsx";
 import { ArrowClockwise } from "@phosphor-icons/react";
@@ -113,7 +114,8 @@ export default function App() {
   // A new conversation's composer sits where its transcript's will, so the first send does not move it.
   const reading = pane === "settling" || pane === "transcript" || pane === "start";
   // The conversation's own model's provider, which may differ from the agent default.
-  const provider = (c?.state?.model ?? view.model)?.split("/")[0];
+  const model = c?.state?.model ?? view.model;
+  const provider = model && providerOf(model);
   useEffect(() => {
     if (provider) void store.loadUsage(provider);
   }, [provider, busy, c?.session, store]);

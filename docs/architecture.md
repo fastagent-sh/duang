@@ -109,7 +109,10 @@ the system bypass list beyond loopback do not reach child processes: a private-r
 host reached by a command goes through the proxy. Launch-environment variables are left untouched.
 
 **Runtime replacement is agent-scoped.** Changing a default model prepares a new assembly and
-updates the selected session before committing the registry choice. Admission is guarded across
+updates the selected session before committing the registry choice. A session's `update({ model })` alone
+cannot replace this: an assembly accepts only the models it knew when it was built
+(`capabilities().allowedModels`), so a model added to a `models.json` or by a refresh afterwards is refused as
+`unknown model` until the assembly is rebuilt (checked against FastAgent 0.24.4). Admission is guarded across
 all conversations, including turns still opening their runtime: no model replacement or removal
 while a send is in flight. The exclusion is asymmetric — a send arriving during a change is
 refused, because running it would use a model the person never saw, while a read waits for the
@@ -122,7 +125,7 @@ authoritative state lives in the runtime and is re-read (`state()`, `entries()`)
 derived from our own writes.
 
 **The client persists almost nothing** — `userData/agents.json`: currently each agent's id, name,
-directory and optional model override. Reads validate the file; only a missing file means an empty
+directory, avatar colour and optional model override. Reads validate the file; only a missing file means an empty
 registry. Writes serialize read/modify/rename, so concurrent changes do not lose rows and a failed
 write never publishes an in-memory success. Conversations remain the runtime's files. The renderer
 persists drafts and selection in localStorage (a drafts value it cannot read is moved to

@@ -18,14 +18,16 @@ import {
   withAgentRun,
   type AgentRow,
 } from "./agents.ts";
-import { authPath, modelsFor, refreshModels } from "./credentials.ts";
+import { authPath } from "./credential-file.ts";
+import { modelsFor, refreshModels } from "./models.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
 import { forgetUsage, providerUsage, usagePage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
 import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
 import { subscriptions, type Listener } from "./follow.ts";
-import { MODEL_UNAVAILABLE_CODE, refuse, send, sends } from "./send.ts";
+import { refuse, send, sends } from "./send.ts";
+import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
 import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
 import type { SessionFrame } from "../preload/index.ts";
 
@@ -339,7 +341,7 @@ function register(): void {
     requireSession(session);
     if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
     // Held before the first await: a Stop sent right after this message must find it.
-    return inFlight.hold(`${id}/${session}`, async (stopped) => {
+    return inFlight.hold(id, session, async (stopped) => {
       // The agent's commands spawn during this run; they get the route as it is now.
       await syncCommandProxy();
       const row = await requireAgent(id);
@@ -349,7 +351,7 @@ function register(): void {
   });
   ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
     requireSession(session);
-    return inFlight.stop(`${id}/${session}`, async () => (await sessionOf(id, session)).abort());
+    return inFlight.stop(id, session, async () => (await sessionOf(id, session)).abort());
   });
 }
 
@@ -416,10 +418,7 @@ app.on("before-quit", (event) => {
   // Quitting again while this waits quits at once.
   quitting = true;
   void inFlight
-    .stopAll(async (key) => {
-      const slash = key.indexOf("/");
-      return (await sessionOf(key.slice(0, slash), key.slice(slash + 1))).abort();
-    }, QUIT_WAIT_MS)
+    .stopAll(async (agentId, session) => (await sessionOf(agentId, session)).abort(), QUIT_WAIT_MS)
     .then((settled) => {
       if (!settled) console.error(`duang: a stopped run had not settled after ${QUIT_WAIT_MS} ms; quitting cuts it`);
       app.quit();
