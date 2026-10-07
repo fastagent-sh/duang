@@ -1,13 +1,5 @@
-/**
- * How a long conversation performs in the real window: opening it, scrolling it, and a new turn streaming into it.
- * The conversation is made by FastAgent itself against a local fake model (TURNS turns, each a thought, three bash
- * calls with a few KB of output and a long markdown answer), so its history is the shape a real one has.
- *
- * Timing depends on the machine, so this is not in CI: run `npm run test:perf` before and after a change to how the
- * transcript renders, and compare. It fails only on what is plainly wrong: a stream that cannot hold 30 frames a second.
- * Numbers on an M-series Mac, 150 turns (903 entries, 1 MB): open ~0.15 s with the rest drawn ~2 s later while
- * the view stays still, switch back ~40 ms, scroll p95 ~18 ms, stream p50 ~17 ms.
- */
+// Not in CI: timing depends on the machine. Run before and after a transcript rendering change and compare.
+// M-series, 150 turns: open ~0.15 s, switch back ~40 ms, scroll p95 ~18 ms, stream p50 ~17 ms.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -32,7 +24,6 @@ withoutCredentials(process.env);
 const root = await isolated(import.meta.url, {
   name: "perf",
   timeout: 240000,
-  // The conversation, made by FastAgent before the window starts.
   async prepare(root) {
     const project = join(root, "project");
     for (const sub of ["fastagent", "src", "test"]) mkdirSync(join(project, sub), { recursive: true });

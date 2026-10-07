@@ -1,13 +1,5 @@
-/**
- * An agent's avatar: a circle's worth of face, because an agent is a contact and the roster reads as one
- * (§12). Three layers, kept apart (docs/ui.md §3):
- * - identity, the drawing and its colour, from the agent's id and the registry's colour number: the same
- *   agent looks the same everywhere and in every state; a rename keeps the colour, and the drawing too in
- *   every style but Initials and Initial face, which draw the name;
- * - face, the eyes and how the avatar moves, which follow what the agent is doing (`face.ts`, index.css);
- * - presence, a still ring while it works.
- * The words beside it say all of this as well; an avatar is never the only signal.
- */
+// Identity (drawing and colour, from id) never changes; the face follows what the agent does. The words
+// beside it say the same: an avatar is never the only signal.
 import { createContext, useContext, type CSSProperties } from "react";
 import type { AvatarStyle } from "../preload/index.ts";
 import { avatarGradient, INK } from "./avatar-colours.ts";
@@ -15,7 +7,6 @@ import { avatarSvg } from "./avatar-svg.ts";
 import { WORKING, type Face } from "./face.ts";
 import { initials } from "./initials.ts";
 
-/** How avatars are drawn, from Settings; provided once, so a change redraws every avatar at once. */
 export const AvatarStyleContext = createContext<AvatarStyle>("gaze");
 
 export function Avatar({
@@ -31,7 +22,6 @@ export function Avatar({
   colour: number;
   size?: number;
   face?: Face;
-  /** Drawn in this style whatever Settings says: the Settings page's own previews. */
   style?: AvatarStyle;
 }) {
   const chosen = useContext(AvatarStyleContext);

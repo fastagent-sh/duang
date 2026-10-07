@@ -1,12 +1,5 @@
-/**
- * The live end of a run, in the real window: Electron + preload + FastAgent + pi, with only the model faked by a
- * local OpenAI-compatible endpoint in the agent's own models.json. Each step holds the run where it is checked
- * (a tool waits for a file, the model's stream waits for a promise) rather than sleeping and hoping. No
- * credentials or network needed.
- *
- * What it guards: while a run is live the transcript ends in one line saying what the run is doing, and the
- * composer's round button stops or steers it (docs/ui.md §8, `liveEnd`).
- */
+// The live end of a run in the real window, only the model faked. Each step holds the run where it is checked
+// (a tool waits for a file, the stream for a promise) rather than sleeping.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -24,7 +17,6 @@ if (root) {
   mkdirSync(join(dir, "fastagent"), { recursive: true });
   app.setPath("userData", data);
 
-  /** The model's next answers, in order. An answer may stop partway until `hold` resolves. */
   const script = [];
   const server = createServer((req, res) => {
     req.resume();
@@ -78,11 +70,7 @@ if (root) {
     ]),
   );
 
-  /**
-   * A command that runs until the scenario lets it finish; it runs in the project, where the gate is made. It
-   * gives up by itself after a minute, so a run killed before its gate is made (a timeout, or the parent ending
-   * Electron) leaves no shell looping on a fixture that is gone.
-   */
+  // Gives up after a minute, so a run killed before its gate leaves no shell looping.
   const waitsFor = (name) => `for i in $(seq 600); do [ -e gate-${name} ] && exit 0; sleep 0.1; done; exit 1`;
   const release = (name) => writeFileSync(join(dir, `gate-${name}`), "");
   const deferred = () => {
@@ -99,7 +87,6 @@ if (root) {
       if (await evaluate(expression).catch(() => false)) return;
     throw new Error(`Timed out: ${what}\n${await evaluate("document.querySelector('main')?.innerText").catch(() => "")}`);
   }
-  /** Every live line in the transcript: the bouncing dot and the text of the row it is in. */
   const live = () =>
     evaluate(`[...document.querySelectorAll('[aria-label="Transcript"] .bounce')].map((dot) => ({
       text: dot.parentElement.innerText.replace(/\\s+/g, " ").trim(),
@@ -116,7 +103,6 @@ if (root) {
     await evaluate("document.querySelector('button[aria-label=Send]').click()");
   }
   const idle = () => until(`!document.querySelector('button[aria-label="Stop the run"]') && !document.querySelector('[aria-label="Transcript"] .bounce')`, "the run ends", 30000);
-  /** One live line, where it is expected and saying what is expected. */
   async function oneLine(what, { inBlock, says }) {
     const lines = await live();
     assert.equal(lines.length, 1, `${what}: one live line, not ${JSON.stringify(lines)}`);
@@ -187,8 +173,7 @@ if (root) {
     await idle();
     assert.match(await transcript(), /retried once: the provider had a problem/);
     assert.doesNotMatch(await transcript(), /retrying/, "no wait is left claimed");
-    // A long conversation opens at its latest line at once, and its older lines are drawn above it while the view
-    // stays where it is. Watched on every change to the page, so how fast the batches come does not matter.
+    // Watched on every DOM change, so the batch timing does not matter.
     await evaluate(`(() => {
       const transcript = () => document.querySelector('[aria-label="Transcript"]');
       const has = (n) => transcript()?.innerText.includes('Turn ' + n + ' of the long one');
@@ -206,10 +191,8 @@ if (root) {
     const { first, moved } = await evaluate("window.__long");
     assert.equal(first, false, "its latest turn is shown before its oldest is drawn");
     assert.ok(moved < 2, `the view stays at the latest line while older lines are drawn above it (it moved ${moved} px)`);
-    // While the older lines are still being drawn: a person scrolling up stays where they scrolled to (it is not
-    // pulled back to the latest line as the lines above arrive, nor pushed down to the oldest at the top of what
-    // is drawn), and one who leaves from there comes back to the same place.
-    // A wheel event first: a view returned to a place holds it until the person scrolls.
+    // Scrolling up while older lines draw: not pulled to the latest line nor pushed to the oldest, and leaving
+    // returns to the same place. A wheel event first: a returned view holds its place until the person scrolls.
     const atEnd = `(() => { const el = document.querySelector('[aria-label="Transcript"]'); el.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true })); el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event('scroll')); })()`;
     const shown = (text) => `document.querySelector('[aria-label="Transcript"]')?.innerText.includes(${JSON.stringify(text)})`;
     const offsetOf = (text) =>
@@ -224,11 +207,6 @@ if (root) {
       await evaluate(`document.querySelector('aside button[aria-label="Live"]').click()`);
       await until(shown("Answered after a retry."), "Live shown");
     };
-    /**
-     * Opens the long conversation and, two frames after its latest turn first shows (once the view has mounted at
-     * its end, as a person would act), runs `scroll` and records the first row reaching into the view. With `leave`,
-     * it then switches to Live from there.
-     */
     const scrollWhileDrawing = async (scroll, { leave = false } = {}) => {
       await fromLive();
       await evaluate(`(() => {
@@ -270,9 +248,8 @@ if (root) {
       const { early, now } = await scrollWhileDrawing("el.scrollTop -= 400", { leave: true });
       assert.ok(now !== null && Math.abs(now - early.offset) < 2, `coming back finds the place it was left at (row at ${now}, left at ${early.offset})`);
     }
-    // A first batch shorter than the window leaves the view at scrollTop 0 too: the view still ends at the latest
-    // line once everything is drawn. The page is given a 4000 px tall viewport (the screen limits a real window):
-    // about the height of the first batch's 40 lines, under that of the whole conversation.
+    // A first batch shorter than the window leaves scrollTop 0 too. A 4000 px viewport (a real window is
+    // screen-limited) is about the first 40 lines' height.
     await fromLive();
     win.webContents.debugger.attach();
     const [width] = win.getContentSize();
@@ -296,8 +273,7 @@ if (root) {
     win.webContents.debugger.detach();
     assert.ok(short.firstFit && short.overflowed, `the first batch fits the window and the whole conversation does not (${JSON.stringify(short)})`);
     assert.ok(short.fromEnd < 2, `a first batch shorter than the window still ends at the latest line (${JSON.stringify(short)})`);
-    // A run that goes on while the person is away, scrolled up in it: coming back finds the same line where it was,
-    // and output that goes on arriving after that does not move it either (the place is held until they scroll).
+    // Away while the run goes on: the same line comes back, and later output does not move it.
     const more = deferred();
     const rest = Array.from({ length: 30 }, (_, n) => `More output ${n + 1}.`).join("\n\n");
     script.push({ text: "Working on it.", tools: [waitsFor("d")] }, { text: "Part one.", hold: more.promise, rest: `\n\n${rest}` });
@@ -360,7 +336,6 @@ if (root) {
     // was, so the place returns to the card's top rather than past it.
     const cardRow = `[...document.querySelectorAll('[aria-label="Transcript"] .column > [data-line]')].findLast((r) => r.querySelector('details'))`;
     const folded = await evaluate(`${cardRow}.offsetHeight`);
-    // The step's row, then the call in it: each opens what it holds.
     await evaluate(`${cardRow}.querySelector('details').open = true`);
     await until(`${cardRow}.querySelectorAll('details').length > 1`, "the step's calls are shown");
     await evaluate(`${cardRow}.querySelectorAll('details')[1].open = true`);

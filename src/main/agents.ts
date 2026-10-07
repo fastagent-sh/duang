@@ -1,4 +1,3 @@
-/** Local runtime lifetime and the registry are agent-scoped, not tied to the visible conversation. */
 import { app } from "electron";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
@@ -16,7 +15,6 @@ import {
 } from "./agent-files.ts";
 
 export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
-/** Exported so a person whose registry cannot be parsed can be shown where it is. */
 export const registryFile = join(app.getPath("userData"), "agents.json");
 const registry = new AgentRegistry(registryFile);
 export const listAgents = () => registry.list();
@@ -25,43 +23,22 @@ export const renameAgent = (id: string, name: string) => registry.rename(id, nam
 
 type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;
-  /** duang's default for the agent, which pi does not know: the agent opened without it, on its own. */
   staleDefault?: string;
 };
-/**
- * Admission is agent-scoped and asymmetric, which is why FastAgent's `inProcessLease` cannot serve
- * it: that lease is a single-writer floor per SESSION (`tryAcquire` returns null while anyone holds
- * it), and it already guards session writes one layer down. Here several conversations of one agent
- * may send at once — hence a count, not a flag — while a model change or removal must exclude all of
- * them, including turns still opening their runtime. Shared-vs-exclusive is not what a `Set<string>`
- * of busy sessions can express.
- *
- * The exclusion is asymmetric in one more way: a send is refused while settings change, because
- * running it would use a model the person never saw, but a READ has nothing to revisit — it waits
- * and gets the runtime that replaced the old one.
- */
+// Agent-scoped admission: sends share (a count); a model change or removal excludes them all, including turns
+// still opening. FastAgent's per-session `inProcessLease` cannot express that.
 const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
 const changing = new Map<string, Promise<void>>();
 
 export class NoAgentError extends Error {}
-/**
- * The config each agent last failed to load in, as FastAgent named it: the only file a fresh config may
- * replace. Main keeps it rather than taking a path from the window.
- */
+// Main keeps the failing path rather than taking one from the window.
 const failedConfigs = new Map<string, string>();
 
-/**
- * An agent opens with or without a default model: a conversation that records its own runs on it, and only a
- * new one with none asks for one. A default on a provider duang does not offer (`retired`) still opens: pi
- * knows the model, the first send is refused as `model_unavailable` (`send.ts`), and the picker that opens on
- * it sets another.
- */
+// A default on a retired provider still opens: the first send is refused as `model_unavailable`.
 async function build(row: AgentRow): Promise<Opened> {
-  // FastAgent says "is not a fastagent agent" for a directory that is not there too, and that one must not
-  // be offered a scaffold: there is no folder to put it in.
-  // Forgotten before anything can fail: a failure that is not the config's (a folder it may not read) must
-  // not offer to replace the config.
+  // Before anything can fail: a failure that is not the config's must not offer to replace it.
+  // A missing folder must fail here: FastAgent calls it "not a fastagent agent", which offers a scaffold.
   failedConfigs.delete(row.id);
   await requireFolder(row.dir);
   try {
@@ -82,12 +59,7 @@ async function build(row: AgentRow): Promise<Opened> {
   }
 }
 
-/**
- * Opening only: duang's default is a model pi does not know (its endpoint was removed from a models.json, say).
- * The agent opens without it, on its config's model or none, and says which default it could not use, so the
- * window asks for another rather than the agent failing to open where no model can be chosen. A model change
- * builds with `build` itself, which refuses such a model instead.
- */
+// Opening only: an unknown default is dropped and reported as `staleDefault`; a model change refuses it.
 async function buildToOpen(row: AgentRow): Promise<Opened> {
   try {
     return await build(row);
@@ -98,9 +70,7 @@ async function buildToOpen(row: AgentRow): Promise<Opened> {
 }
 
 export async function openAgent(row: AgentRow): Promise<Opened> {
-  // Waiting, not failing: "try again" is not a choice the person can act on, and it reached the
-  // renderer as an unclassified error, which paints a working agent as broken. The registry read
-  // that admitted this call is stale once the change lands, so re-check what it checked.
+  // Wait rather than fail: "try again" is not actionable. The admitting read is stale after the change.
   while (changing.has(row.id)) {
     await changing.get(row.id);
     if (!(await registry.list()).some((a) => a.id === row.id)) throw new Error(`unknown agent ${row.id}`);
@@ -131,7 +101,6 @@ export async function withAgentRun(
   }
 }
 
-/** One agent's settings change, excluded against its own sends and announced to its own readers. */
 function change(id: string, apply: () => Promise<SessionResult>): Promise<SessionResult> {
   if (changing.has(id)) return Promise.resolve(refuse("agent_changing", "Agent settings are changing; try again."));
   if (sending.has(id))
@@ -165,7 +134,6 @@ export function setAgentModel(row: AgentRow, model: string, session?: string): P
   });
 }
 
-/** Points the agent at the folder it was moved to; the next open builds its runtime from there. */
 export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
   return change(id, async () => {
     await registry.relocate(id, dir);
@@ -175,10 +143,8 @@ export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
   });
 }
 
-/** Whether the agent's last load failed in its config, which a fresh one would get past. */
 export const configFailed = (id: string) => failedConfigs.has(id);
 
-/** Replaces the config the agent last failed to load in with a fresh one, keeping a copy of the old one. */
 export function resetAgentConfig(row: AgentRow): Promise<SessionResult> {
   return change(row.id, async () => {
     const config = failedConfigs.get(row.id);

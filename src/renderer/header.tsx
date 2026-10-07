@@ -1,4 +1,3 @@
-/** The bar over a conversation: who it is with, where it runs, and what it costs. */
 import { Fragment } from "react";
 import { ListBullets } from "@phosphor-icons/react";
 import type { ProviderUsage } from "../preload/index.ts";
@@ -9,7 +8,6 @@ import { Avatar } from "./avatar.tsx";
 import type { Face } from "./face.ts";
 import { Badge, Button } from "./ui.tsx";
 
-/** How full a limit is, as a 40px bar beside its percentage. */
 function Bar({ percent }: { percent: number }) {
   return (
     <span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-stroke">
@@ -18,17 +16,11 @@ function Bar({ percent }: { percent: number }) {
   );
 }
 
-/**
- * A plan login's windows beside its name in Settings: each one's share used and when it resets, the
- * rest in the tooltip. Nothing for an API key, and nothing for a failed read either: the numbers are
- * a glance, not a status to act on, and a failure never leaves old ones up (the store replaces them).
- */
 export function PlanUsage({
   plan,
   onPage,
 }: {
   plan?: { data?: ProviderUsage; error?: string };
-  /** Opens the provider's usage page, for a plan whose usage only that page shows. */
   onPage?: (provider: string) => void;
 }) {
   const data = plan?.data;
@@ -50,7 +42,6 @@ export function PlanUsage({
           <span key={w.label} className="flex items-center gap-1.5">
             {w.label}
             <Bar percent={w.percent} />
-            {/* Settings stacks plans in rows: a fixed width lines them up whatever the digits. */}
             <span className="min-w-[4ch] text-right">{w.percent.toFixed(0)}%</span>
             {reset && <span>~ {reset}</span>}
           </span>
@@ -60,7 +51,6 @@ export function PlanUsage({
   );
 }
 
-/** `ChatGPT plan · View usage`: a plan whose usage duang cannot read, with the way to its own page. */
 function PageLink({ provider, plan, onPage }: { provider: string; plan: string; onPage: (provider: string) => void }) {
   return (
     <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
@@ -80,14 +70,9 @@ type Usage = {
   plan?: { data?: ProviderUsage; error?: string };
   context?: { used: number; window: number };
   now?: number;
-  /** Opens the provider's usage page, for a plan whose usage only that page shows. */
   onPage?: (provider: string) => void;
 };
 
-/**
- * Every limit on this conversation in one table: each plan window's share, its reset and, for a day
- * or more, its pace against the clock (`▼` under, `▲` over), then the context and the plan's source.
- */
 export function UsageDetail({ plan, context, now = Date.now(), onPage }: Usage) {
   const data = plan?.data;
   const windows = data?.windows ?? [];
@@ -132,23 +117,11 @@ export function UsageDetail({ plan, context, now = Date.now(), onPage }: Usage) 
   );
 }
 
-/**
- * The header's right edge: how full this conversation's context is, and only that. It is the one number
- * that is about this conversation and moves as it goes; the plan's windows belong to the account and
- * change slowly, so they wait in the table a hover or a focus away, with the context's own size. Mixing
- * them in one slot (whichever is fuller) would change what the slot means from one glance to the next.
- *
- * The edge is always there, so the table always has somewhere to hang: a new conversation has no context
- * to report until its first answer (`–`), and the plan is still one hover away. The table shows what
- * exists; a plan read that failed or an API key adds no windows, never a stale percentage, and with
- * nothing to list there is no table.
- */
 export function UsageMeter({ plan, context, now, onPage }: Usage) {
   const percent = context ? (context.used / context.window) * 100 : undefined;
   const hasTable = context !== undefined || (plan?.data?.windows ?? []).length > 0 || (!!plan?.data?.page && !!onPage);
   return (
-    // Focusable when there is a table, so it is reachable without a pointer. A click focuses it too, so the
-    // table opens for keyboard focus only (`:focus-visible` on it or inside it), never stays pinned by a click.
+    // A click focuses it too, so the table opens only on `:focus-visible`, never pinned by a click.
     <div
       tabIndex={hasTable ? 0 : undefined}
       aria-label="Usage"
@@ -160,9 +133,8 @@ export function UsageMeter({ plan, context, now, onPage }: Usage) {
         {percent === undefined ? "–" : `${percent.toFixed(0)}%`}
       </span>
       {hasTable && (
-        // Padding, not margin, bridges the gap to the trigger, so the pointer can reach the page link in it.
-        // Hidden by opacity rather than `display: none`: Tab from the meter blurs it before the link takes
-        // focus, and a link inside a `display: none` box cannot take it. Keyboard focus on the link keeps it shown.
+        // Padding, not margin, so the pointer can reach the link. Opacity, not `display: none`: a link in a hidden
+        // box cannot take focus when Tab leaves the meter.
         <div className="pointer-events-none absolute top-full right-0 pt-3 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:opacity-100 group-has-[:focus-visible]:opacity-100">
           <div className="popover">
             <UsageDetail plan={plan} context={context} now={now} onPage={onPage} />
@@ -173,12 +145,6 @@ export function UsageMeter({ plan, context, now, onPage }: Usage) {
   );
 }
 
-/**
- * What you are looking at, floating over it: the agent, the folder it lives in, and its context and plan
- * usage, beside the one action on it. It hovers rather than sits in a bar because the transcript is the
- * page, and a full-width bar would cut it in two. Translucent, so text passing underneath reads as
- * scrolled away rather than deleted.
- */
 export function ConversationHeader({
   id,
   agent,
@@ -196,36 +162,23 @@ export function ConversationHeader({
 }: {
   id: string;
   agent: string;
-  /** The agent's avatar colour: the same number the roster wears. */
   colour: number;
-  /** The same face as its roster row's, except that it does not look toward itself. */
   face: Face;
   dir?: string;
-  /** The open conversation is running. */
   working: boolean;
-  /**
-   * Other conversations of the agent that are running while this one is not: the header says so rather than
-   * presenting this one as working, and a click goes to the one (`open`) or to the list of them.
-   */
   others?: { count: number; open?: () => void };
   context?: { used: number; window: number };
   plan?: { data?: ProviderUsage; error?: string };
   queued?: number;
-  /** The button that shows and hides this agent's conversations; absent while it has none to list. */
   list?: { open: boolean; unseen: number };
   onReveal: () => void;
   onUsagePage: (provider: string) => void;
 }) {
   return (
-    // The bar floats over the scroll area rather than inside it, so it must let the wheel through;
-    // only what you can actually grab, click or hover for a tooltip takes the pointer back.
+    // Floats over the scroll area, so it lets the wheel through; only interactive parts take the pointer.
     <header className="pointer-events-none absolute inset-x-4 top-2 z-10">
-      {/* Two parts, as Telegram splits a chat's info from what you can do to it: what you are looking
-          at, and the one thing to do about it. It runs the pane's width, as chrome does; the composer
-          below is the one that takes the reading column, to sit under the text. */}
       <div className="flex items-stretch gap-2">
         <div className="conversation-header flex min-w-0 flex-1 items-center gap-2.5 rounded-composer bg-surface/75 py-1.5 pr-4 pl-2 ring-1 ring-stroke backdrop-blur-xl">
-          {/* The same avatar as in the roster: whose work this is should not need reading. */}
           <Avatar id={id} name={agent} colour={colour} size={30} face={face} />
           <div className="min-w-0 flex-1">
             {/* The name doubles as the window's drag handle, which the frameless title bar needs. */}
@@ -234,8 +187,6 @@ export function ConversationHeader({
                 {agent}
               </div>
             </div>
-            {/* Where the agent lives, not what this conversation is called: an agent is a contact, and a
-                person talking to one is not asked to think about sessions. A click opens the folder. */}
             {dir && (
               <button
                 onClick={onReveal}
@@ -253,7 +204,6 @@ export function ConversationHeader({
           ) : (
             others && (
               <button
-                // One goes straight to it; several open the conversation list, which marks each.
                 onClick={others.open}
                 popoverTarget={others.open ? undefined : "conversations"}
                 title={others.open ? "Open the conversation that is working" : "Show the conversations that are working"}
@@ -270,8 +220,6 @@ export function ConversationHeader({
         </div>
         {list && (
           <div className="conversation-header grid aspect-square shrink-0 place-items-center rounded-full bg-surface/75 ring-1 ring-stroke backdrop-blur-xl">
-            {/* Opens the `ConversationList` popover by id and anchors it (index.css). A dot says one of
-                them finished while you were elsewhere, which is the reason to open it. */}
             <Button
               kind="ghost"
               size={40}

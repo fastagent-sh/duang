@@ -55,7 +55,6 @@ test("an agent's solid colour is its palette entry, written as hex", () => {
   assert.match(avatarHex(0), /^#[0-9a-f]{6}$/);
   assert.notEqual(avatarHex(0), avatarHex(1), "next-door agents differ");
   assert.equal(avatarHex(PALETTE.length), avatarHex(0), "and the palette repeats where the gradient's does");
-  // rose, the first entry, is a light warm pink: red over green over blue, all of them high.
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(avatarHex(0).slice(i, i + 2), 16)) as [number, number, number];
   assert.ok(r > g && r > b && b > 150, `rose is ${avatarHex(0)}`);
 });

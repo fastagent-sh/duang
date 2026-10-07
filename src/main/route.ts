@@ -1,13 +1,6 @@
-/**
- * The route a request takes, decided per connection by whoever knows the system's proxy rules
- * (Chromium, in the app) and carried out by undici. No Electron import, so it runs under `node --test`.
- */
 import { Agent, Dispatcher, ProxyAgent, Socks5ProxyAgent } from "undici";
 
-/**
- * A PAC answer ("PROXY h:p; DIRECT") as the proxy URL to use, or undefined for a direct connection.
- * ponytail: only the first entry is used; honour the fallback list when someone's PAC relies on it.
- */
+// ponytail: only the first entry is used; honour the fallback list when someone's PAC relies on it.
 export function routeOf(pac: string): string | undefined {
   const [kind = "", host] = pac.split(";")[0]!.trim().split(/\s+/);
   switch (kind.toUpperCase()) {
@@ -24,11 +17,6 @@ export function routeOf(pac: string): string | undefined {
   }
 }
 
-/**
- * `routeOf` for callers that must not stop over an answer it cannot use — the display and the
- * commands' variables. The only failure it expects is `routeOf`'s unsupported-route refusal, and it
- * hands that back as data to be shown; requests still fail through the dispatcher's own refusal.
- */
 export function tryRoute(pac: string): { proxy?: string } | { error: string } {
   try {
     const proxy = routeOf(pac);
@@ -38,23 +26,15 @@ export function tryRoute(pac: string): { proxy?: string } | { error: string } {
   }
 }
 
-/**
- * A proxy URL with a user name or password. Chromium's route answer ("PROXY h:p") drops them, so the
- * dispatcher could only reach such a proxy unauthenticated and be refused with a bare 407. Read from
- * the string because a launch variable often has no scheme (`user:pass@127.0.0.1:7890`).
- */
+// Chromium's "PROXY h:p" drops credentials. Read from the string: launch variables often have no scheme.
 export const hasCredentials = (url: string) => /^(?:[a-z][a-z0-9+.-]*:\/\/)?[^/@]*@/i.test(url);
 
-/** An agent whose every connection fails with `error`, so a routing failure reaches the caller as a request error. */
 const failing = (error: Error) =>
   new Agent({
     connect: (_options, callback) => callback(error, null),
   });
 
-/**
- * Asks `resolve` for each request's route and hands the request to the agent for it. The answer is
- * not cached: a VPN switched on or off is seen by the next request, which is the point.
- */
+// Not cached: a VPN switched on or off is seen by the next request.
 export class RoutedDispatcher extends Dispatcher {
   private agents = new Map<string, Dispatcher>();
   private resolve: (origin: string) => Promise<string>;
@@ -102,12 +82,7 @@ export class RoutedDispatcher extends Dispatcher {
   }
 }
 
-/**
- * What an agent's shell commands (git, npm, curl) should see: one proxy for everything, loopback
- * direct, in both spellings because curl reads only the lowercase `http_proxy`. Undefined means
- * "remove". Per-host PAC rules and the system bypass list cannot be expressed in these variables, so
- * they do not reach child processes.
- */
+// Both spellings: curl reads only lowercase. Per-host PAC rules and the bypass list cannot be expressed here.
 export function commandProxyEnv(proxy: string | undefined): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const name of ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"]) env[name] = env[name.toLowerCase()] = proxy;
@@ -115,11 +90,6 @@ export function commandProxyEnv(proxy: string | undefined): Record<string, strin
   return env;
 }
 
-/**
- * A request that got no answer, as the connection check reports it. `fetch failed` alone says nothing; the
- * cause and the route are what a person can act on, and the cause's code (`ECONNREFUSED`) is its own field
- * so the page can show it without reading the sentence.
- */
 export function unreachable(host: string, proxy: string | undefined, error: unknown): { error: string; code?: string } {
   const cause = (error as Error & { cause?: Error & { code?: string } }).cause;
   const why = cause ? `${cause.code ? `${cause.code}: ` : ""}${cause.message}` : (error as Error).message;

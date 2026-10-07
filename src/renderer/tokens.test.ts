@@ -3,13 +3,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-// docs/ui.md §5 and §7. The chrome's sizes; the conversation's own (15, headings, tables) are set in
-// index.css, which this does not read, and only Tailwind arbitrary values in `.tsx` are checked.
+// docs/ui.md §5 and §7: chrome sizes in `.tsx` arbitrary values only; index.css sets the conversation's own.
 const SIZES = new Set([11, 12, 13, 15, 22]);
 // Mono sits half a step above the sans beside it, since its x-height is smaller: 12.5, and only on mono.
 const MONO_HALF_STEP = 12.5;
 
-/** The quoted string the character at `index` is in: the run between the nearest quotes around it. */
 function enclosingString(source: string, index: number): string {
   const start = Math.max(source.lastIndexOf('"', index), source.lastIndexOf("`", index));
   const end = source.indexOf(source[start]!, index);
@@ -18,7 +16,7 @@ function enclosingString(source: string, index: number): string {
 
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
 
-/** Text sizes off the scale. The half step passes when the same string sets `font-mono`, wherever it is broken across lines. */
+/** 12.5 passes only when the same string sets `font-mono`. */
 export function sizesOffScale(source: string): string[] {
   const off: string[] = [];
   for (const match of source.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)) {
@@ -36,7 +34,6 @@ export function radiiOffScale(source: string): string[] {
     .map((match) => `line ${lineOf(source, match.index)}: ${match[1]}px`);
 }
 
-/** Every `.tsx` under the renderer, with its path. */
 function components(dir: string, prefix = ""): { name: string; source: string }[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
     entry.isDirectory()

@@ -1,15 +1,9 @@
 @import "tailwindcss";
 @source "../../node_modules/streamdown/dist/*.js";
 
-/*
- * Tokens for the rules in docs/ui.md §4. Every interactive role is a set — a component picks `bg-hover`, it never
- * computes a hover colour from a base. The neutral ramp carries a trace of the accent hue so violet
- * reads as part of the family rather than applied on top.
- */
+/* Tokens for docs/ui.md §4. Every interactive role is a set: a component picks `bg-hover`, never computes one. */
 @theme {
-  /* The transcript is the canvas and the canvas is the darkest layer; every panel sits above it.
-     Measured from Telegram's macOS dark theme, which reads calm because the steps are small and
-     nearly neutral — a trace of the accent hue keeps violet in the family. */
+  /* Measured from Telegram's macOS dark theme: small, nearly neutral steps with a trace of the accent hue. */
   --color-bg: oklch(0.225 0.004 285);
   --color-surface: oklch(0.27 0.005 285);
   --color-surface-2: oklch(0.315 0.006 285);
@@ -21,60 +15,34 @@
   --color-accent: oklch(0.72 0.16 295);
   --color-accent-weak: oklch(0.72 0.16 295 / 15%);
   --color-success: oklch(0.72 0.14 150);
-  /* Hue 65, not 75: at 75 the "no agent yet" badge comes out yellow-green, which reads as mud
-     rather than as a caution. Orange is the colour every platform uses for this. */
+  /* Hue 65, not 75: at 75 the warning reads yellow-green mud rather than caution. */
   --color-warning: oklch(0.79 0.15 65);
   --color-danger: oklch(0.68 0.17 25);
 
-  /*
-   * Accent as a surface is not accent as text, and one value cannot be both. As text it has to sit
-   * against the page, so dark mode needs it light; as a fill under white text it has to be dark, or
-   * the selected row turns into the brightest object on screen. These two are that second role, and
-   * they do not change between themes: a selected row is the same violet in both, the way macOS and
-   * Telegram keep one selection blue. L 0.52 against white is ~4.2:1, which is where Telegram's own
-   * selected row sits.
-   */
+  /* Accent as a fill under white text must be dark, unlike accent as text; the same in both themes.
+     L 0.52 against white is ~4.2:1, where Telegram's selected row sits. */
   --color-accent-fill: oklch(0.52 0.2 295);
   --color-danger-fill: oklch(0.52 0.2 25);
-  /* Text on any `*-fill`, not on the accent alone: both fills are dark enough for white. */
   --color-fill-fg: oklch(1 0 0);
 
-  /* Concentric: a popover is 14 with 6 of padding, so what sits in it is 8. The same in both modes. */
+  /* Concentric: a popover is 14 with 6 of padding, so what sits in it is 8. */
   --radius-card: 8px;
   --radius-float: 14px;
-  /* The composer's field: a pill when it holds one line, a rounded rectangle when it grows. */
   --radius-composer: 20px;
 
-  /* The system face, paired with the system's own CJK face: this is a native window with a hidden
-     title bar, and a web font beside it reads as a page rather than an app. */
-  /* `system-ui` first: it is what Chromium maps to SF. `-apple-system` is Safari's spelling and "SF Pro Text"
-     is not a name the system will hand out, so a stack that leads with them falls through both to PingFang SC
-     and draws every Latin letter of the chrome in it, with its wide hyphen and punctuation. */
+  /* `system-ui` first: Chromium maps it to SF. A stack leading with `-apple-system` or "SF Pro Text" falls
+     through to PingFang SC for every Latin letter. */
   --font-sans: system-ui, "PingFang SC", sans-serif;
-  /* Maple Mono NF CN first: one family covering ASCII, CJK, Nerd Font glyphs and ligatures, which is
-     what terminal output actually contains. The rest are fallbacks for machines without it. */
   --font-mono: "Maple Mono NF CN", "JetBrains Mono", "SF Mono", ui-monospace, "PingFang SC", monospace;
-  /* The conversation's own voice, defined below. */
   --font-prose: "Prose", "PingFang SC", sans-serif;
-  /* An agent's initials: rounder and bouncier than the answer's text, so the contact looks alive. A
-     Chinese name falls through to Prose's Chinese face. */
   --font-avatar: "Avatar", "Prose", "PingFang SC", sans-serif;
 
   --ease-ui: cubic-bezier(0.2, 0, 0, 1);
 }
 
-/*
- * Light mode is the same roles at different values, not a different design. The accent has to get
- * darker and more saturated here, or it turns grey on white.
- *
- * Plain custom properties, NOT a second `@theme`: Tailwind hoists `@theme` out of media queries, so
- * nesting one here silently made light the only theme. Utilities read `var(--color-*)` at runtime,
- * which is exactly what this overrides.
- */
+/* Plain custom properties, not a second `@theme`: Tailwind hoists `@theme` out of media queries. */
 @media (prefers-color-scheme: light) {
   :root {
-    /* Warm paper for reading, a slightly deeper sidebar, and a cooler code surface. Keep the
-       violet in the selection and actions, rather than tinting every neutral panel with it. */
     --color-bg: oklch(0.992 0.004 80);
     --color-surface: oklch(0.986 0.004 85);
     --color-surface-2: oklch(0.946 0.006 80);
@@ -91,23 +59,10 @@
   }
 }
 
-/*
- * "Prose" is two bundled faces under one name, both rounded: Nunito for Latin, and Resource Han
- * Rounded for Chinese, the design Maple Mono CN takes its CJK from, so the answer and the code it
- * talks about share their Chinese letterforms. The system sans made the answer indistinguishable
- * from every other chat app.
- *
- * Resource Han Rounded is cut to its `unicode-range` below, of that only GB2312's 6,763 hanzi
- * (1.1 MB a weight): `pyftsubset --text-file=<GB2312 hanzi> --unicodes=U+3000-303F,U+FF00-FFEF
- * --flavor=woff2 --layout-features='*'`. A rarer hanzi falls back to PingFang; dashes, ellipses
- * and curly quotes are Nunito's, in Chinese text too.
- */
-/* One face per script for each weight and style, with identical descriptors. Chromium picks a single
-   descriptor bucket before it looks at `unicode-range`: with the variable Nunito declared as
-   `200 1000` beside the CJK faces' `400` and `600`, it chose the CJK bucket and never loaded
-   Nunito, and Latin fell back to PingFang. The variable file serves both Latin weights.
-   Nunito is set 10% up: its x-height is 0.48em against Resource Han Rounded's 0.54, and at the
-   same nominal size its words read a step smaller than the Chinese beside them. */
+/* "Prose": Nunito for Latin, Resource Han Rounded for Chinese (the CJK of Maple Mono CN), cut to GB2312's hanzi:
+   `pyftsubset --text-file=<GB2312 hanzi> --unicodes=U+3000-303F,U+FF00-FFEF --flavor=woff2 --layout-features='*'`. */
+/* Identical descriptors per script: Chromium picks a descriptor bucket before `unicode-range`, and a variable
+   `200 1000` Nunito beside `400`/`600` CJK faces was never loaded. Nunito is 10% up to match the CJK x-height. */
 @font-face {
   font-family: "Prose";
   src: url("./fonts/nunito-latin-wght-normal.woff2") format("woff2-variations");
@@ -128,7 +83,7 @@
   font-weight: 600;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-/* Bold, not Medium, under Nunito's 600: a Chinese stroke needs more weight to read as emphasis. */
+/* Bold under Nunito's 600: a Chinese stroke needs more weight to read as emphasis. */
 @font-face {
   font-family: "Prose";
   src: url("./fonts/resource-han-rounded-cn-700-gb2312.woff2") format("woff2");
@@ -151,9 +106,7 @@
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-/* Chinese has no italic and the browser does not slant a face declared italic, so these render upright.
-   They exist to put the Chinese faces in the italic bucket beside Nunito's, at both weights: Chromium
-   picks the bucket before it reads unicode-range, and without them Chinese in emphasis leaves the family. */
+/* Upright, but in the italic bucket: without them Chinese in emphasis leaves the family. */
 @font-face {
   font-family: "Prose";
   src: url("./fonts/resource-han-rounded-cn-400-gb2312.woff2") format("woff2");
@@ -168,7 +121,6 @@
   font-style: italic;
   unicode-range: U+3000-303F, U+4E00-9FFF, U+FF00-FFEF;
 }
-/* Fredoka, cut to Latin: an avatar carries two letters, and a name that is not Latin uses Prose. */
 @font-face {
   font-family: "Avatar";
   src: url("./fonts/fredoka-latin-600.woff2") format("woff2");
@@ -182,9 +134,7 @@ body,
   height: 100%;
 }
 
-/* One column for reading and writing: prose, code, tables and the composer share its edges, so the eye
-   goes straight down from the text to the field. 840 at 15px keeps a line near 56 Chinese characters;
-   920 runs to 61 and the eye loses the next line, and 768 (51) read as narrow. */
+/* 840 at 15px keeps a line near 56 Chinese characters; 920 loses the next line, 768 reads narrow. */
 .column {
   width: 100%;
   max-width: 840px;
@@ -197,14 +147,10 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 13px;
-  /* A sixth of a space between Chinese and Latin or digits, where the writer left none; an existing
-     space is not doubled. Model output is inconsistent about it, and this makes it even. */
   text-autospace: normal;
 }
 
-/* Code and command output keep the ligatures the mono family ships with, and tabular figures so
-   columns of numbers in tool output line up. No autospace: Maple's CJK sits on a 2:1 grid with its
-   Latin, and a gap at every Chinese-Latin boundary pushes a line with Chinese in it out of column. */
+/* No autospace: Maple's CJK sits on a 2:1 grid with its Latin, and a gap would push lines out of column. */
 code,
 pre,
 .font-mono {
@@ -212,16 +158,7 @@ pre,
   text-autospace: no-autospace;
 }
 
-/*
- * Motion. Three shapes and nothing else, borrowed from Beautiful UI's vocabulary because it is a
- * small, consistent one: arrive by rising a little (`enter`), appear in place by growing into it
- * (`pop`), and say "still going" by sweeping a highlight across the words (`shimmer`) rather than
- * blinking their opacity, which is the cheapest-looking thing an interface can do.
- *
- * `interpolate-size` is what lets a disclosure animate to `auto` height without JavaScript
- * measuring anything. This is an Electron app on a known Chromium, so the feature is simply
- * available — in a browser it would need a fallback.
- */
+/* Three motions only: `enter` rises, `pop` grows in place, `shimmer` sweeps "still going". */
 :root {
   color-scheme: light dark;
   interpolate-size: allow-keywords;
@@ -252,8 +189,6 @@ pre,
   animation: enter 180ms var(--ease-ui) both;
 }
 
-/* A run's live mark: a dot that bounces, squashing where it lands. Rising decelerates and falling
-   accelerates, which is what makes it read as a ball rather than a dot sliding up and down. */
 @keyframes bounce {
   0% {
     transform: translateY(0) scale(1.3, 0.7);
@@ -279,8 +214,7 @@ pre,
   animation: pop 160ms var(--ease-ui) both;
 }
 
-/* Said only once it lasts long enough to notice: a flow that answers within a frame would otherwise
-   flash a word nobody can read. A fade with no movement, so reduced motion keeps it too. */
+/* Delayed so a flow that answers within a frame flashes nothing. No movement, so reduced motion keeps it. */
 @keyframes appear {
   from {
     opacity: 0;
@@ -290,8 +224,7 @@ pre,
   animation: appear 180ms var(--ease-ui) 500ms both;
 }
 
-/* The highlight has to be painted, not inherited: `currentColor` inside the gradient would resolve
-   to the transparent text colour this needs, and the sweep would be invisible. */
+/* Painted, not inherited: `currentColor` would resolve to the transparent text colour. */
 .shimmer {
   background-image: linear-gradient(
     100deg,
@@ -305,15 +238,9 @@ pre,
   animation: shimmer 2.4s linear infinite;
 }
 
-/*
- * Disclosures open by growing rather than by jumping. Every `<details>` in the app is one of two
- * things — a tool call or a thinking block — and both go from one line to a block of output, which
- * is exactly the jump that made the transcript feel like it was redrawing itself.
- */
 details::details-content {
   block-size: 0;
-  /* Only the height is clipped, for the growing: a tool card reaches 10px past its column on each side,
-     and `overflow: hidden` would cut its ring and corners off at the column's edge. */
+  /* A tool card reaches 10px past its column, and `overflow: hidden` would cut its ring. */
   overflow-x: visible;
   overflow-y: clip;
   transition:
@@ -324,11 +251,8 @@ details[open]::details-content {
   block-size: auto;
 }
 
-/* Avatars (avatar.tsx, face.ts): the drawing is who the agent is and never changes; the face is what it
-   is doing. Motion is small, continuous only while it works, and an outcome plays once, when it lands.
-   Gaze's eyes are <defs> drawn through <use>: only a plain class selector reaches those copies, so the
-   face reaches them as inherited variables, which is DiceBear's own pattern. Units inside the drawing are
-   its 100-unit viewBox, so the same numbers suit the 48px roster and the 30px header. */
+/* Gaze's eyes are <defs> drawn through <use>: only inherited variables reach those copies (DiceBear's pattern).
+   Units are the drawing's 100-unit viewBox, so the numbers suit every size. */
 .avatar {
   position: relative;
   --blink: avatar-blink 4.4s linear var(--delay) infinite;
@@ -386,18 +310,14 @@ details[open]::details-content {
   80% { transform: translateX(3%); }
 }
 .avatar[data-face="idle"] { --eye-a: var(--blink); }
-/* The agent on screen looks toward its conversation. */
 .avatar[data-face="open"] { --eye-a: var(--blink); --look-t: translate(3.5px, 0.6px); }
 .avatar[data-face="thinking"] { --eye-a: var(--blink); --look-a: avatar-ponder 3.2s ease-in-out var(--delay) infinite; }
 .avatar[data-face="tool"] { --eye-a: var(--blink); --look-a: avatar-scan 1.6s ease-in-out var(--delay) infinite; }
 .avatar[data-face="answering"] { --eye-a: var(--blink); --body-a: avatar-bob 0.9s ease-in-out var(--delay) infinite; }
-/* Happy eyes (avatar-svg.ts), and one hop when the outcome lands. */
 .avatar[data-face="done"] { --body-a: avatar-hop 0.9s ease-out 1; }
-/* Small eyes looking down, and one shake. */
 .avatar[data-face="failed"] { --look-t: translate(0, 3px); --body-a: avatar-shake 0.7s ease-out 1; }
 .avatar[data-face="broken"] { --eye-t: scaleY(0.14); }
 .avatar[data-face="broken"] .avatar-face { filter: grayscale(1) opacity(0.5); }
-/* Not born yet: an outline where it will be, and no face. */
 .avatar[data-face="unborn"] .avatar-face { opacity: 0; }
 .avatar[data-face="unborn"]::after {
   content: "";
@@ -408,7 +328,7 @@ details[open]::details-content {
   opacity: 0.35;
 }
 
-/* Motion is decoration here; every one of these states is also said in words. */
+/* Every state is also said in words. */
 @media (prefers-reduced-motion: reduce) {
   .enter,
   .pop,
@@ -417,7 +337,6 @@ details[open]::details-content {
   .animate-pulse {
     animation: none;
   }
-  /* Every face keeps its pose (eyes closed, looking down, happy) and loses its movement. */
   .avatar[data-face] {
     --eye-a: none;
     --look-a: none;
@@ -435,10 +354,7 @@ details[open]::details-content {
   background: transparent !important;
 }
 
-/* What you write, what you sent and what the agent answered are one voice: Prose at 15px, with a
-   leading that suits Chinese. The trace around them stays at 12, so the answer is the loudest text on the
-   page and the work that produced it the quietest. `pretty` keeps a paragraph from ending on a lone
-   character such as `单。`, which Chinese breaks into easily. */
+/* `pretty` keeps a paragraph from ending on a lone character such as `单。`. */
 .md,
 .bubble {
   font-family: var(--font-prose);
@@ -447,10 +363,7 @@ details[open]::details-content {
   text-wrap: pretty;
 }
 
-/* Keyboard focus is the app's own, not Chromium's default ring, which reads as a stray gold box on
-   this background. Pointer focus stays silent; :focus-visible is the browser's own judgement of that.
-   Text fields are left out: they show focus through their caret and their own container, so a ring
-   there is a second border around the first. */
+/* Chromium's default ring reads as a stray gold box here. Text fields show focus through their caret. */
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible,
@@ -460,19 +373,14 @@ summary:focus-visible,
   border-radius: 4px;
 }
 
-/* A control that fills its container edge to edge draws the ring inside itself: outside, the ring
-   lands in the container's clip and three sides of it disappear. The tool card's fold footer is
-   one — a disclosure clips its content so it can grow open. A plain class, not a Tailwind variant:
-   the rule above is unlayered and would beat any utility. */
+/* Inside, because the container clips (a disclosure grows open). A plain class: the unlayered rule above beats utilities. */
 .focus-inset:focus-visible {
   outline-offset: -2px;
   /* Back to the control's own corners, which the rule above flattens to 4px. */
   border-radius: revert-layer;
 }
 
-/* Popovers: the model list and the slash completions are two different things — one takes focus, one
-   must not — but they are the same surface floating above the same composer, so they share a look.
-   The only shadow in the app (§7). */
+/* The only shadow in the app (§7). */
 .popover {
   background: var(--color-surface);
   border-radius: var(--radius-float);
@@ -483,25 +391,17 @@ summary:focus-visible,
   padding: 6px;
 }
 
-/* What covers the transcript past the floating header and composer: the canvas at partial strength
-   over a slight blur, so a line passing there is still seen going by. */
 .veil {
   background: color-mix(in oklch, var(--color-bg) 65%, transparent);
   backdrop-filter: blur(3px);
 }
 
-/* The header still floats over the transcript; its lower edge, not a hard strip across the page,
-   separates the moving text from the controls. */
-/* The drop shadows below go in `--tw-shadow`, not `box-shadow`: the elements carry `ring-1`, which is a
-   box-shadow too, and a rule that set `box-shadow` itself would replace it, taking the hairline off the
-   composer, its discs and the header and the focus ring off the field. */
+/* `--tw-shadow`, not `box-shadow`: `ring-1` is a box-shadow too, and setting it would remove the hairline. */
 .conversation-header {
   --tw-shadow: 0 12px 24px -18px oklch(0 0 0 / 70%);
 }
 
-/* The roster's hairline starts where the text does (8px row padding + 48px avatar + 12px gap) and
-   gives way on both sides of a filled row, the open agent's or the one under the pointer, as
-   Telegram's does: a line running into a rounded fill reads as a cut. */
+/* Starts where the text does (8 padding + 48 avatar + 12 gap); a line running into a rounded fill reads as a cut. */
 .roster-row + .roster-row {
   position: relative;
   margin-top: 5px;
@@ -520,8 +420,7 @@ summary:focus-visible,
   visibility: hidden;
 }
 
-/* The conversation list hangs from the header's list button, right edges aligned. `inset` and
-   `margin` undo the UA's centred popover; `color` its CanvasText. */
+/* `inset` and `margin` undo the UA's centred popover; `color` its CanvasText. */
 .conversations-anchor {
   anchor-name: --conversations;
 }
@@ -535,7 +434,6 @@ summary:focus-visible,
   color: var(--color-text);
 }
 
-/* The one place the frameless title bar is paid for: the rail's top gap is draggable. */
 .drag {
   -webkit-app-region: drag;
 }
@@ -543,11 +441,7 @@ summary:focus-visible,
   -webkit-app-region: no-drag;
 }
 
-/*
- * Scrollbars: present where the pointer is, invisible otherwise, which is what macOS does. A rule that only
- * claimed it would draw a permanent grey bar down the transcript. The track keeps
- * its width either way — fading it in is a colour change, so nothing reflows when it appears.
- */
+/* Shown only under the pointer, like macOS. The track keeps its width, so nothing reflows. */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -564,18 +458,7 @@ summary:focus-visible,
   background: transparent;
 }
 
-/*
- * The agent's output reads as a report someone comes back to, so spacing groups rather than
- * separates, on the spacing scale (§7): a paragraph binds to the list it introduces (4) while two
- * paragraphs sit 12 apart, a heading stands 24 below what came before and 8 above what it
- * introduces, and code, tables and quotes take 16. One gap for every pair, which is what
- * Streamdown's own `space-y-4` gives, left every block equally separate, and nothing read as
- * belonging together.
- *
- * Streamdown ships shadcn-flavoured class names (`bg-muted`, `border-border`) that our palette does
- * not define, but marks every element with `data-streamdown`: that is the seam styled through. Its
- * blocks are children of an unmarked root, `.md > div`.
- */
+/* Streamdown's class names assume shadcn tokens we do not define; `data-streamdown` is the seam styled through. */
 .md > div > * {
   margin-block: 0;
 }
@@ -599,8 +482,7 @@ summary:focus-visible,
   margin-block: 24px;
 }
 
-/* 600, not the browser's 700: SF at 700 is heavier than PingFang's Semibold beside it, and answers
-   that lead every item with a bold sentence turned into a page of dark bars. */
+/* 600: SF at 700 is heavier than PingFang's Semibold beside it. */
 .md strong {
   font-weight: 600;
 }
@@ -660,8 +542,6 @@ summary:focus-visible,
   text-decoration: underline;
 }
 
-/* A table is part of the document: no frame, a header band in the code block's family of tints, and
-   hairlines between rows. The band starts on the column's edge, as a code block's fill does. */
 [data-streamdown="table-wrapper"] {
   position: relative;
   border: 0;
@@ -674,8 +554,7 @@ summary:focus-visible,
   border: 0;
   background: transparent;
 }
-/* Copy and fullscreen float over the header's far end on hover: as their own row they left an
-   empty band above every table. */
+/* Floated: as their own row they left an empty band above every table. */
 [data-streamdown="table-wrapper"] > div:not(:has(table)) {
   position: absolute;
   top: 4px;
@@ -719,17 +598,12 @@ summary:focus-visible,
   border-bottom: 0;
 }
 
-/* Inline code is the trace's own mono, set a step down and on the paper's deeper tint: a marked
-   word in the sentence, not a chip stuck on it. Regular weight, so a bold sentence does not turn
-   it into a dark bar. */
 .inline-code {
   font-size: max(0.875em, 11px);
   font-weight: 400;
   background: color-mix(in oklch, var(--color-surface-2) 80%, transparent);
 }
 
-/* Light mode gives navigation, writing and code different jobs without changing the floating
-   layout. Dark mode keeps its own palette and more restrained elevation. */
 @media (prefers-color-scheme: light) {
   .sidebar-panel {
     background: linear-gradient(155deg, oklch(0.982 0.007 80), var(--color-sidebar) 76%);
@@ -746,7 +620,7 @@ summary:focus-visible,
     box-shadow: 0 1px 3px oklch(0.3 0.02 285 / 10%);
   }
   .sidebar-add:hover {
-    /* Solid: --color-hover is a 4% tint, which would take the button's white off rather than deepen it. */
+    /* --color-hover is a 4% tint, which would lighten the button instead of deepening it. */
     background: var(--color-surface-2);
   }
   .roster-row[data-filled] > button {

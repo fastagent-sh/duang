@@ -16,7 +16,6 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
-/** Models as FastAgent describes them, by spec only: what these tests are about. */
 const described = (specs: string[]): Models => specs.map((spec) => ({ spec, thinkingLevels: ["off"] }));
 const ready: OpenResult = { ok: true, model: "provider/model", sessions: [] };
 const listed = (session: string): OpenResult =>
@@ -114,7 +113,6 @@ function harness() {
   return { api, store, emit, end, step, closed, opens };
 }
 
-/** Every pane the store showed, in order, without repeats. */
 function panes(store: ReturnType<typeof harness>["store"]) {
   const seen: string[] = [];
   const stop = store.subscribe(() => {
@@ -236,9 +234,7 @@ test("an agent with no default opens on its latest conversation; only a new one 
 });
 
 test("a store that React disposes and loads again still hears its conversations and sign-ins", async () => {
-  // Fast Refresh runs the App effect's cleanup and setup again on the same store, on every edit in
-  // development. The second setup must register for what main pushes again, or every run looks
-  // stuck and a sign-in never shows what its flow asks.
+  // Fast Refresh re-runs the App effect's cleanup and setup on the same store; setup must register again.
   const { api, store, emit, step } = harness();
   await store.load();
   store.dispose();
@@ -512,8 +508,7 @@ test("failed delete and abort remain visible; a stale stream never changes a reo
   emit(current, "run_started");
   emit(current, "tool_started", { id: "t", name: "bash" });
   assert.equal(store.getSnapshot().busy, true);
-  // A failed stream is said, and waits for the person; a dead subscription reports nothing further, so the
-  // run controls must not wait for `run_settled`.
+  // A failed stream waits for the person, and the run controls must not wait for `run_settled`.
   const opened = opens.length;
   end(current, "stream disconnected", "failed");
   await new Promise((resolve) => setImmediate(resolve));
@@ -1030,7 +1025,6 @@ test("the sidebar acts on the agent it names: deleting, listing and opening anot
   await store.load();
   assert.equal(store.getSnapshot().agentId, "a");
 
-  // B's row reads its conversations without opening it.
   await store.listSessions("b");
   assert.deepEqual(
     store.getSnapshot().sessions["b"]?.map((s) => s.session),
@@ -1038,8 +1032,7 @@ test("the sidebar acts on the agent it names: deleting, listing and opening anot
   );
   assert.equal(store.getSnapshot().agentId, "a", "listing is not opening");
 
-  // Deleting from B's row must reach B, not whichever agent happens to be open, and the row has to
-  // leave B's list even though B is not the agent on screen.
+  // Deleting from B's row reaches B and leaves B's list, though A is open.
   await store.deleteSession("b", "b-1");
   assert.deepEqual(deletes, [["b", "b-1"]]);
   assert.deepEqual(store.getSnapshot().sessions["b"], [], "the deleted conversation leaves the list");
@@ -1064,8 +1057,7 @@ test("an agent whose list cannot be read says why, on its own row", async () => 
   await store.listSessions("b");
   assert.equal(store.getSnapshot().sessionsError["b"], "runtime would not start");
   assert.equal(store.getSnapshot().states.b, "broken", "another agent's row says its setup in words");
-  // The open agent's state drives the main panel: a background re-read must not declare the
-  // window broken with nothing to show for it.
+  // A background re-read must not declare the open agent broken.
   api.openAgent = async () => ({ ok: false, code: "broken", message: "runtime would not start" });
   await store.listSessions("a");
   assert.equal(store.getSnapshot().states.a, "ready");
@@ -1132,8 +1124,7 @@ test("what finished while you were elsewhere is marked, and opening it spends th
   emit(other, "run_settled", { status: "failed", error: { message: "boom" } });
   assert.deepEqual(store.getSnapshot().unseen["a"] ?? {}, {}, "a run you watched settle is not news");
 
-  // A conversation nobody is watching is only kept alive while its turn is in flight, so the run
-  // has to start before walking away — which is also the only way to miss its outcome.
+  // Only a turn in flight keeps an unwatched conversation alive, so the run starts before leaving.
   emit(other, "run_started");
   await store.newConversation();
   emit(other, "run_settled", { status: "failed", error: { message: "boom" } });
@@ -1148,7 +1139,6 @@ test("what finished while you were elsewhere is marked, and opening it spends th
   store.dispose();
 });
 
-/** The runtime reporting a user message entering the conversation, as FastAgent's `user_message` does. */
 let entries = 0;
 const entered = (emit: ReturnType<typeof harness>["emit"], c: Parameters<ReturnType<typeof harness>["emit"]>[0], text: string, entryId = `e${++entries}`) =>
   emit(c, "user_message", { entryId, text });
@@ -1526,8 +1516,7 @@ test("a rename that cannot be read back, and one refused on a conversation nobod
   await store.renameSession("a", "s1", "Named");
   assert.equal(store.getSnapshot().sessionsError["a"], "runtime would not restart");
 
-  // A conversation of another agent, never opened here: there is no transcript to put a refusal in, so it
-  // is said by what it was, not as that agent's list failing to read nor with someone else's Retry.
+  // Never opened here: said by what it was, not as B's list failing.
   api.renameSession = async () => ({ ok: false, error: { code: "busy", message: "session is busy", retryable: true } });
   await store.renameSession("b", "never-opened", "Named");
   assert.deepEqual(store.getSnapshot().failure, { title: "The conversation was not renamed", reason: "session is busy" });
@@ -1937,7 +1926,6 @@ test("a run that failed while the person was elsewhere shows its failure, and Re
   emit(c, "run_settled", { status: "failed", error: { message: "Connection error.", retryable: true } });
   sent.resolve({ ok: false, error: { code: "run_failed", message: "Connection error.", retryable: true } });
   await sending;
-  // FastAgent's history, which now says how the answer ended.
   api.openSession = async () =>
     ({
       state: { status: "idle", pending: { steering: [], followUp: [] } },
@@ -2037,8 +2025,7 @@ test("a failure about another conversation is said there, and a refusal said bef
   api.openAgent = async (id) => (id === "b" ? listed("b1") : ready);
   await store.load();
   const c = store.getSnapshot().conversation!;
-  // Deleting a conversation of an agent that is not open: said by what it was, not in the open transcript,
-  // and not as that agent's list failing to read.
+  // Not open: said by what it was, not in the open transcript nor as B's list failing.
   api.deleteSession = async () => ({ ok: false, error: { code: "busy", message: "b1 is running", retryable: true } });
   await store.deleteSession("b", "b1");
   assert.deepEqual(store.getSnapshot().failure, { title: "The conversation was not deleted", reason: "b1 is running" });

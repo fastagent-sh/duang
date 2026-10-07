@@ -1,9 +1,5 @@
 #!/usr/bin/env node
-/**
- * Opens a verified release pull request: bumps the version on a `chore/release-X.Y.Z` branch, runs the checks the
- * app has to pass, and opens the PR. It never merges, tags or creates the GitHub Release; pushing the tag is what
- * builds the app and drafts the Release (.github/workflows/release.yml).
- */
+/** Opens a verified release PR. It never merges, tags or creates the Release; pushing the tag does that. */
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
@@ -106,7 +102,6 @@ async function main() {
   run("git", ["checkout", "-b", branch]);
   run("npm", ["version", version, "--no-git-tag-version"]);
   run("npm", ["test"]);
-  // Builds (type check included) and packages the app, then runs it outside the checkout.
   run("npm", ["run", "test:package"]);
   run("node", ["tests/smoke.mjs"]);
   run("node", ["tests/transcript.mjs"]);

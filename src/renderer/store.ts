@@ -18,18 +18,12 @@ import { message } from "./message.ts";
 import type { Fix } from "./problems.ts";
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
-/** main's code for a send refused because the conversation's model cannot run here (`send.ts`). */
 const MODEL_UNAVAILABLE_CODE = "model_unavailable";
-/** A conversation that loses its subscription again within this long of reconnecting by itself waits for the person. */
+// A subscription lost again this soon after reconnecting by itself waits for the person.
 const RECONNECT_GAP_MS = 30_000;
 
 export type AgentState = "ready" | "no_agent" | "missing_dir" | "broken";
-/**
- * What the main pane shows, one of these at a time. `settling` is an agent still opening, or a conversation
- * (or an agent with some) whose history has not arrived: the new-conversation page there would be a flash
- * of the wrong screen.
- * `start` is that page, for a new conversation.
- */
+// `settling`: an agent still opening, or history not yet arrived; showing `start` there would flash the wrong screen.
 type Pane =
   | "unreadable-registry"
   | "no-agents"
@@ -39,30 +33,17 @@ type Pane =
   | "settling"
   | "start"
   | "transcript";
-/**
- * Where the window was last left. Navigation, not conversation data: the transcript belongs to the
- * runtime, and losing this only costs one click. So it is stored as best effort and never repaired
- * — anything unreadable is simply a first start.
- */
+// Navigation only: losing it costs one click, so it is best effort and anything unreadable is a first start.
 const SELECTION_KEY = "duang.selection";
 const DRAFTS_KEY = "duang.drafts";
-/** Where an unreadable drafts value is moved, so the next write does not replace the person's text. */
+// An unreadable drafts value is moved here so the next write does not replace the person's text.
 const UNREADABLE_DRAFTS_KEY = "duang.drafts.unreadable";
 interface Selection {
   agentId?: string;
   perAgent: [string, string][];
-  /**
-   * The new conversation a fresh start (after repeated crashes) opened. Left as the selection, it is
-   * returned to like a conversation with a record, so a reload or restart does not fall back to the newest
-   * one, which is likely the conversation that crashed the window.
-   */
+  // A crash-recovery conversation, kept as the selection so a reload does not reopen the one that crashed.
   fresh?: string;
 }
-/**
- * Unsent text, kept until it is sent, cleared, or its conversation or agent goes away. Unlike the
- * selection it is the person's own words: a value that cannot be read is moved aside and reported,
- * not dropped, because the first write after this would otherwise replace it for good.
- */
 function readDrafts(): [string, string][] {
   let stored: string | null | undefined;
   try {
@@ -102,120 +83,61 @@ function writeStored(storageKey: string, value: string): void {
     console.error(`duang: ${storageKey} was not saved:`, error);
   }
 }
-/**
- * What an agent's roster row quotes: the newest output of the conversation it speaks for. Live while
- * this window holds that conversation, read once from its history otherwise. Presentation only: it
- * is never written anywhere, and the transcript stays the runtime's.
- */
+// Presentation only: never written anywhere; the transcript stays the runtime's.
 export interface Preview {
   session: string;
   text?: string;
   at?: number;
-  /** The history could not be read; the row says so rather than quoting something older. */
   error?: string;
 }
 export interface View extends SettingsView {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
-  /** Conversations per agent: every roster row shows its agent's latest one. */
   sessions: Record<string, SessionSummary[]>;
-  /** Why an agent has no list, per agent. An empty list and a failed one are not the same. */
+  // An empty list and a failed one are not the same.
   sessionsError: Record<string, string>;
   model?: string;
-  /** The agent list, or the agent selected, is being opened. */
   loading: boolean;
-  /** The agent whose model the picker is setting up; its conversation stays on screen meanwhile. */
   changingModel?: string;
-  /** About the open agent, or a failure with no conversation to note it in. */
   error?: string;
-  /** The open agent failed to load in its config, which a fresh one would get past. */
   errorInConfig?: true;
-  /**
-   * The default model duang keeps for this agent is one pi does not know (its endpoint was removed, say), so the
-   * agent opened without it. The picker opens on it, saying so, until another model is chosen.
-   */
   staleDefault?: { agentId: string; model: string };
-  /**
-   * An action that belongs to no conversation failed (renaming, adding, revealing or removing an agent):
-   * said above the pane until dismissed, never written into whichever conversation is open.
-   */
   failure?: { title: string; reason: string };
-  /** Why duang's own agent list could not be read. Not an empty list: the pane says so. */
   registryError?: string;
-  /** The model picker's contents: undefined while loading, so the picker can say so. */
   models?: Models;
   modelsError?: string;
-  /** What the picker's last "refresh models" is doing or said; cleared whenever the list is read again. */
   modelsRefresh?: { status: "running" } | { status: "done"; added: number } | { status: "failed"; error: string };
-  /** The `/` completion list for the selected agent. */
   commands: AgentCommand[];
   commandsError?: string;
   conversation?: Conversation;
-  /** The open conversation has a turn in flight. Subscription retention and the run controls read this. */
   busy: boolean;
-  /** What the main pane shows, derived once from everything above (`paneOf`). */
   pane: Pane;
-  /** The failure said over the pane, with its Retry; none when the pane itself explains it. */
   alert?: Trouble;
-  /**
-   * Why the composer cannot send, in the words the person should read, or undefined when it can.
-   * One rule, derived once: the placeholder shows it and `send` treats reaching it as a bug.
-   */
+  // One rule: the placeholder shows it and `send` treats reaching it as a bug.
   blocked?: string;
-  /**
-   * The open conversation ends on a turn that failed or was cut short, and its message can be sent again now
-   * (`resend`): that turn's note says what, whether this window heard the run live or read it back from history. Not the same
-   * as `retry`, which reopens a conversation whose view broke.
-   */
   resend?: { text: string; toolsRan: boolean };
-  /**
-   * A send was refused because the conversation's model cannot run here (its provider is not connected, or
-   * it is not offered). The picker opens on it, saying why. Cleared once a model is chosen, or the person
-   * goes to another conversation.
-   */
   unavailable?: { agentId: string; session: string; model: string };
-  /**
-   * The model picker is open. It belongs to the composer, but the reasons to open it come from everywhere: a
-   * conversation that needs a model, a refused send, a problem whose way on is another model, a provider
-   * connected from it in Settings (where the composer is not on screen).
-   */
   picker: boolean;
-  /** The open conversation runs on no model: it records none, and its agent has no default. */
   needsModel: boolean;
-  /** Why the conversation's model and effort cannot be changed now, or undefined when they can. */
   modelBlocked?: string;
-  /** Conversations with a turn in flight, per agent: the sidebar asks this of every agent it lists. */
   running: Record<string, string[]>;
-  /** Per agent with a turn in flight, the kind of work it is in (`phase`): its avatar's face follows it. */
   doing: Record<string, Activity>;
-  /** Conversations holding unsent text, per agent, so a draft never becomes unreachable. */
   unsent: Record<string, string[]>;
-  /**
-   * Outcomes that landed while the person was not looking at that conversation, per agent. Fact 4:
-   * runs are long and you come back to them, so "what happened while I was away" is the sidebar's
-   * job. Opening the conversation clears it — like an unread mark, it exists to be spent.
-   */
+  // Spent by opening the conversation, like an unread mark.
   unseen: Record<string, Record<string, "done" | "failed">>;
-  /** Plan windows per provider: the last answer, or why there is none. Main decides how often to ask. */
   usage: Record<string, { data?: ProviderUsage; error?: string }>;
-  /** Per agent, what its roster row quotes. */
   previews: Record<string, Preview>;
 }
 const key = (agentId: string, session: string) => `${agentId}/${session}`;
-/** A `key` back into its agent and session. */
 const unkey = (id: string): [string, string] => [id.slice(0, id.indexOf("/")), id.slice(id.indexOf("/") + 1)];
-/** [agentId, session] pairs into one list per agent. */
 const group = (pairs: [string, string][]): Record<string, string[]> => {
   const out: Record<string, string[]> = {};
   for (const [agentId, session] of pairs) (out[agentId] ??= []).push(session);
   return out;
 };
 
-/**
- * The pane, the alert above it and why the composer cannot send are one decision about the same facts,
- * made here and nowhere else: the screens read the answer.
- */
+// The pane, the alert and why the composer cannot send are one decision, made only here.
 function paneOf(view: View): Pane {
   const { agentId, conversation: c } = view;
   if (!agentId) return view.registryError ? "unreadable-registry" : "no-agents";
@@ -235,10 +157,8 @@ function paneOf(view: View): Pane {
 function alertOf(view: View): Trouble | undefined {
   const c = view.conversation;
   if (c?.error) return c.error;
-  // No agent: an unreadable list is its own page, which says why.
   if (!view.agentId || !view.error) return undefined;
-  // A setup problem's own panel explains it and offers the fix. The runtime's prose above it would
-  // contradict that: a plain project is told to run `fastagent init` while duang offers to scaffold it.
+  // A setup problem's own panel offers the fix; the runtime's prose ("run `fastagent init`") would contradict it.
   const state = view.states[view.agentId];
   if (state === "broken" || state === "no_agent" || state === "missing_dir") return undefined;
   return { title: "This agent could not be opened", advice: "Try again; its folder and conversations are untouched.", reason: view.error };
@@ -253,7 +173,6 @@ function modelBlockedBy(view: View): string | undefined {
     return "This agent is not ready";
   return undefined;
 }
-/** In the order the person should hear it: the nearest reason first, the agent's setup after. */
 function blockedBy(view: View): string | undefined {
   const c = view.conversation;
   const state = view.agentId ? view.states[view.agentId] : undefined;
@@ -270,12 +189,7 @@ function blockedBy(view: View): string | undefined {
   return undefined;
 }
 
-/** Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output. */
-/**
- * What the screens read that follows from the rest of the view and the conversations this window holds
- * (`held`), their unsent text (`unsent`) and the outcomes nobody has looked at (`unseen`), each keyed by
- * `key`. Derived on every publish and stored nowhere else.
- */
+// Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output.
 function derive(
   view: View,
   held: Conversation[],
@@ -331,31 +245,18 @@ export function createStore(api: DuangApi) {
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
   const drafts = new Map<string, string>(readDrafts());
-  /**
-   * Where each conversation was left scrolled, only while it was above the latest line: a conversation
-   * closes when it is left and its view unmounts (Settings, another agent), and what the person was
-   * reading is where they expect to come back to. Presentation only, kept for the window's life.
-   */
+  // Where each conversation was left scrolled above the latest line: leaving it unmounts its view.
   const scrolls = new Map<string, Place>();
   let persisted = "";
-  /** The conversation and its need for a model the picker last followed (`publish`). */
   let needsAsked: string | undefined;
-  /** Where each agent was left, so returning to it is not the same as opening it for the first time. */
   const stored = readSelection();
   const lastOpened = new Map<string, string>(stored?.perAgent);
-  /**
-   * What finished while you were elsewhere, keyed `agentId/session`. In memory on purpose: it is a
-   * fact about this window's attention, not about the conversation, and the transcript stays the
-   * only durable record of what happened.
-   */
+  // In memory on purpose: it is about this window's attention; the transcript is the only durable record.
   const unseen = new Map<string, "done" | "failed">();
   let lastAgent = stored?.agentId;
   let freshSession = stored?.fresh;
   let navigation = 0;
-  /**
-   * One request number per agent: taking one makes the answers to every earlier one stale, so a slow
-   * answer never overwrites a newer one. Returns whether this request is still the newest.
-   */
+  // One request number per agent: a slow answer never overwrites a newer one.
   const tickets = () => {
     const latest = new Map<string, number>();
     return (id: string) => {
@@ -364,21 +265,12 @@ export function createStore(api: DuangApi) {
       return () => latest.get(id) === request;
     };
   };
-  /** Taken by every read that writes an agent's conversation list: opening the agent and re-reading it. */
   const listTicket = tickets();
-  /** Taken by every read of the history an agent's row quotes. */
   const previewTicket = tickets();
   let modelsRequest = 0;
-  /**
-   * Previews by agent, with the list's `updatedAt` a read was taken at: a history read again only
-   * when the conversation moved on or the row now speaks for another one.
-   */
   const previews = new Map<string, Preview & { updatedAt?: number }>();
   let commandsFor: string | undefined;
-  /**
-   * The conversation an agent's row speaks for: the one on screen, else the one it was left on, else
-   * its newest — the order `selectAgent` reopens it in, so the row quotes what a click would show.
-   */
+  // Same order `selectAgent` reopens in, so the row quotes what a click would show.
   const selectedSession = (id: string): string | undefined => {
     if (view.conversation?.agentId === id) return view.conversation.session;
     const list = view.sessions[id] ?? [];
@@ -388,26 +280,19 @@ export function createStore(api: DuangApi) {
   };
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
-    // A conversation this window holds is live, so its row quotes it as it streams. Read before the
-    // loop below releases anything: the last event of a settled run is what the row should keep.
-    // A message sent to start a turn is the newest thing in it from the moment it is sent, not once the
-    // runtime reports it: until then the row would quote what came before, such as the last failure.
+    // Read before the loop below releases anything: a settled run's last event is what the row keeps.
+    // A sent message is the newest thing from the moment it is sent, not once the runtime reports it.
     for (const c of conversations.values())
       if (!c.loading && selectedSession(c.agentId) === c.session) {
         const opening = c.waiting.findLast((item) => item.opens);
         previews.set(c.agentId, { session: c.session, ...previewOf(opening ? [...c.items, opening] : c.items) });
       }
-    // A quote from a conversation the row no longer speaks for (deleted, or left for another) is
-    // dropped rather than shown as current; `readPreview` fetches the right one.
     for (const [id, preview] of previews) if (selectedSession(id) !== preview.session) previews.delete(id);
     view.previews = Object.fromEntries([...previews].map(([id, { updatedAt: _read, ...preview }]) => [id, preview]));
-    // How long a view keeps its subscription is decided here, where every way a turn can end passes,
-    // so no ending path has to remember. A conversation nobody is looking at is retained only while
-    // it can still produce something this view needs: its own backfill, or a turn in flight.
+    // Retention is decided here, where every way a turn ends passes. A conversation nobody looks at is kept
+    // only while it can still produce something: its own backfill, or a turn in flight.
     for (const c of conversations.values()) if (!busy(c) && c !== view.conversation && !c.loading) close(c);
-    // A conversation the runtime has never heard of exists only while it is on screen. Without a row
-    // of its own, walking away from unsent text is the same as discarding it. The open conversation
-    // holds its own draft, so read both here: this is the single view of what is unsent.
+    // A conversation the runtime never heard of exists only on screen, so leaving its unsent text would discard it.
     const unsent = new Map(drafts);
     if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
     const serialized = JSON.stringify([...unsent].filter(([, text]) => text.trim()));
@@ -416,9 +301,7 @@ export function createStore(api: DuangApi) {
       writeStored(DRAFTS_KEY, serialized);
     }
     view = derive(view, [...conversations.values()], unsent, unseen);
-    // A conversation that cannot start without a model opens the list rather than leave the person guessing;
-    // one that has a model (just chosen, or opened instead) closes it. Only on those changes: a list the
-    // person closed stays closed.
+    // Only on these changes: a list the person closed stays closed.
     const asks = `${view.conversation?.agentId}/${view.conversation?.session}/${view.needsModel}`;
     if (asks !== needsAsked) {
       needsAsked = asks;
@@ -426,11 +309,7 @@ export function createStore(api: DuangApi) {
     }
     for (const listener of listeners) listener();
   };
-  /**
-   * A problem in a conversation, in the transcript it belongs to: what it means for the person (`title`,
-   * `advice`) in front of main's or the runtime's own words, kept verbatim. `warning` is a refusal: it
-   * never ran (§9), so the text is still the person's to edit, while a failure has already had effects.
-   */
+  // `warning` is a refusal: it never ran, so the text is still the person's; a failure already had effects.
   const note = (
     c: Conversation | undefined,
     problem: { error: unknown; title: string; tone?: "warning" | "error"; advice?: string; fix?: Fix },
@@ -441,13 +320,8 @@ export function createStore(api: DuangApi) {
     c.items = [...c.items, { kind: "note", tone, text: reason, reason, ...said, at: Date.now() }];
     publish();
   };
-  /** A failed action that belongs to no conversation, said above the pane by what it was. */
   const fail = (title: string, error: unknown) => publish({ failure: { title, reason: message(error) } });
-  /**
-   * About one conversation that may not be the open one (renaming or deleting it from the list): in its
-   * transcript when this window holds it, else above the pane by what it was. Never on its agent's row,
-   * which says that the list could not be read: a refused delete is not that.
-   */
+  // Never on its agent's row, which means the list could not be read: a refused delete is not that.
   const reportOn = (agentId: string, session: string, title: string, error: unknown, tone: "warning" | "error") => {
     const held = conversations.get(key(agentId, session));
     if (held) note(held, { error, title, tone });
@@ -461,19 +335,13 @@ export function createStore(api: DuangApi) {
   const leave = () => publish({ conversation: undefined });
   const { onStep, ...settings } = createSettings(api, () => view, publish);
 
-  /**
-   * Re-reads one agent's conversations, the open agent's included. A failure lands on that agent's
-   * row, where the sidebar and the conversation list both say it: an empty list and a list that
-   * could not be read are not the same answer.
-   */
+  // A failure lands on that agent's row: an empty list and an unreadable one are not the same answer.
   async function listSessions(id: string) {
     const current = listTicket(id);
     const settle = (patch: Partial<View>) => {
       if (current()) publish(patch);
     };
-    // Another agent's row says its setup in words, so the answer's state is kept for it. Never the
-    // open agent's: `states` drives the main panel, and `selectAgent` owns that one. The open
-    // agent's model is what the composer shows, so the answer refreshes it.
+    // Never the open agent's `states`: they drive the main panel, which `selectAgent` owns.
     const own = (value: AgentState, model?: string) =>
       id === view.agentId ? (model ? { model } : {}) : { states: { ...view.states, [id]: value } };
     try {
@@ -491,7 +359,6 @@ export function createStore(api: DuangApi) {
     }
   }
 
-  /** Quotes the conversation an agent's row speaks for when this window does not hold it. */
   async function readPreview(id: string) {
     const session = selectedSession(id);
     if (!session || conversations.has(key(id, session))) return;
@@ -522,11 +389,9 @@ export function createStore(api: DuangApi) {
     // the place being read. (A conversation that was closed, as a retry does, is not on screen.)
     const open = view.conversation;
     if (open?.agentId === agentId && open.session === session && conversations.get(key(agentId, session)) === open) return;
-    // Looking at it is what spends the mark.
     unseen.delete(key(agentId, session));
     lastOpened.set(agentId, session);
     lastAgent = agentId;
-    // Kept only while it is still where some agent was left.
     if (freshSession && ![...lastOpened.values()].includes(freshSession)) freshSession = undefined;
     writeStored(
       SELECTION_KEY,
@@ -559,7 +424,6 @@ export function createStore(api: DuangApi) {
     }
   }
 
-  /** One message into the conversation, from the draft or from Retry. A refused one returns to the draft. */
   async function submit(c: Conversation, text: string) {
     // Notes from before this send are not this send's: a refusal said for an earlier message is said again.
     const before = c.items.length;
@@ -575,8 +439,7 @@ export function createStore(api: DuangApi) {
         if (!waiting()) return;
         const model = c.state?.model ?? view.model;
         if (result.error.code === MODEL_UNAVAILABLE_CODE && model) {
-          // The way on is choosing a model, so the picker opens on it and says why; nothing goes in the
-          // transcript, because nothing happened in the conversation.
+          // Nothing happened in the conversation, so nothing goes in the transcript; the picker says why.
           unsent(c, echo);
           publish({ unavailable: { agentId: c.agentId, session: c.session, model }, picker: true });
           return;
@@ -602,9 +465,7 @@ export function createStore(api: DuangApi) {
     const listCurrent = listTicket(id);
     const left = view.agentId;
     leave();
-    // The agent being left stops being live on screen; its row keeps quoting what it was left on.
     if (left && left !== id) void readPreview(left);
-    // The command names belong to the agent's definition, so they do not survive the switch.
     commandsFor = undefined;
     publish({
       agentId: id,
@@ -625,14 +486,12 @@ export function createStore(api: DuangApi) {
       publish({
         loading: false,
         model: result.model,
-        // A re-read that started after this one already wrote a newer list.
         ...(listCurrent() ? { sessions: { ...view.sessions, [id]: result.sessions } } : {}),
         states: { ...view.states, [id]: "ready" },
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const running = [...conversations.values()].find((c) => c.agentId === id && busy(c));
-      // Coming back to an agent returns to the conversation you left, including one the runtime does
-      // not know yet. It is dropped when its session is gone and nothing local keeps it alive.
+      // Including a conversation the runtime does not know yet; dropped when nothing local keeps it alive.
       const previous = lastOpened.get(id);
       const revivable =
         previous &&
@@ -642,12 +501,10 @@ export function createStore(api: DuangApi) {
           previous === freshSession)
           ? previous
           : undefined;
-      // `session` names the conversation the click was about. It is opened here, inside the same
-      // navigation guard, rather than chained after this call — a `.then(open)` outside would land
-      // on whichever agent the selection had moved to by the time the runtime finished starting.
+      // Opened here, inside the navigation guard: a `.then(open)` outside would land on whichever agent the
+      // selection had moved to by then.
       await open(session ?? revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
-      // Choosing another model is the way on, so the picker opens on the conversation that just opened, once it has:
-      // opening one sets the picker by whether that conversation has a model to run.
+      // After the conversation opened: opening one sets the picker by whether it has a model.
       if (request === navigation)
         publish(result.staleDefault ? { staleDefault: { agentId: id, model: result.staleDefault }, picker: true } : { staleDefault: undefined });
     } catch (error) {
@@ -656,11 +513,7 @@ export function createStore(api: DuangApi) {
     }
   }
 
-  /**
-   * The model and thinking levels the runtime lists for a conversation, read again after a model change
-   * replaced the runtime (its `state_changed` came before the subscription moved). A conversation with no
-   * record yet has them too: the runtime reports what its first turn would run on.
-   */
+  // Read again after a model change: its `state_changed` came before the subscription moved.
   async function readSettings(c: Conversation) {
     try {
       const { model, thinkingLevel, availableThinkingLevels } = await api.readState(c.agentId, c.session);
@@ -679,18 +532,11 @@ export function createStore(api: DuangApi) {
       note(c, { error, title: "This conversation's settings could not be read" });
     }
   }
-  /**
-   * Setting a model or effort on a conversation not begun yet makes the runtime keep a record of it. The list
-   * is read again then, so the conversation stays reachable once the person leaves it, rather than vanishing
-   * until some later read brings it back.
-   */
+  // Setting a model on a conversation not begun yet makes the runtime record it; re-list so it stays reachable.
   async function keepListed(c: Conversation) {
     if (!view.sessions[c.agentId]?.some((s) => s.session === c.session)) await listSessions(c.agentId);
   }
-  /**
-   * A run that ends while you are reading something else is the thing you came back for. A run you stopped
-   * yourself is not news. Either way the conversation list moves.
-   */
+  // A run you stopped yourself is not news.
   function settled(c: Conversation, outcome: Settled) {
     if (c !== view.conversation && outcome !== "aborted")
       unseen.set(key(c.agentId, c.session), outcome === "completed" ? "done" : "failed");
@@ -702,10 +548,8 @@ export function createStore(api: DuangApi) {
     if (frame.ended) {
       lost(c, frame.ended, Date.now());
       publish();
-      // FastAgent's contract for a subscriber it let go (a backlog that overflowed, a runtime replaced): listen
-      // again and read the history. The open conversation does that once by itself; one that ends again soon
-      // after says so and waits for the person, rather than reconnecting in a loop. Not while a send is still
-      // answering: a refused one puts its words back in this conversation's composer, which reopening replaces.
+      // FastAgent's contract for a subscriber it let go: listen again and read the history. Once by itself; again
+      // soon after waits for the person. Not while a send answers: a refusal refills this composer, which reopening replaces.
       const id = key(c.agentId, c.session);
       if (
         frame.ended.why === "let_go" &&
@@ -723,14 +567,9 @@ export function createStore(api: DuangApi) {
     if (outcome) settled(c, outcome);
     publish();
   };
-  /**
-   * What main pushes to this window, registered by `load` and dropped by `dispose`: App's effect
-   * setup and cleanup. React runs that cleanup and then the setup again on the same store (Fast
-   * Refresh does, on every edit in development), so registering anywhere else left a store that
-   * still read history and lists but never heard a live event, and every run looked stuck.
-   */
+  // Registered by `load` and dropped by `dispose`: React (and Fast Refresh) re-runs setup on the same store,
+  // and registering anywhere else left a store that never heard a live event.
   let stopFrames: (() => void) | undefined;
-  /** When each conversation last reconnected by itself, so a subscription that keeps ending is said, not looped. */
   const reconnected = new Map<string, number>();
   let resetting = false;
   let stopSteps: (() => void) | undefined;
@@ -739,13 +578,11 @@ export function createStore(api: DuangApi) {
     stopSteps ??= api.onLoginStep(onStep);
   };
 
-  /** `fresh`: start on a new conversation of the agent, not the one it was left on (main asks after crashes). */
   async function load({ fresh = false }: { fresh?: boolean } = {}) {
     listen();
     publish({ loading: true, error: undefined, registryError: undefined });
-    // The avatars' style is read beside the agent list and lands first, so the roster is never drawn in
-    // the default style and then redrawn. Its one failure is an unreadable settings file, which leaves the
-    // default: main reports it when it starts, and the Settings page when it is opened.
+    // Lands before the roster, so it is never drawn in the default style first. An unreadable settings file
+    // keeps the default; main and the Settings page report it.
     const avatar = api.getSettings().then(
       ({ avatar }) => publish({ avatar }),
       () => {},
@@ -754,10 +591,8 @@ export function createStore(api: DuangApi) {
       const agents = await api.listAgents();
       await avatar;
       publish({ agents, loading: false });
-      // Reopen the agent this machine was last using; a removed one falls back to the first row.
       const start = agents.find((row) => row.id === lastAgent) ?? agents[0];
-      // Every row shows its latest conversation, so every agent's list is read; that boots each
-      // runtime, the same as opening it would.
+      // Reading each list boots each runtime, the same as opening it would.
       for (const row of agents) if (row !== start) void listSessions(row.id);
       if (fresh) freshSession = crypto.randomUUID();
       if (start) await selectAgent(start.id, fresh ? freshSession : undefined);
@@ -769,9 +604,7 @@ export function createStore(api: DuangApi) {
   return {
     ...settings,
     getSnapshot: () => view,
-    /** Where this conversation was left, if it was left above the latest line. */
     scrollOf: (agentId: string, session: string) => scrolls.get(key(agentId, session)),
-    /** `undefined`: at the latest line, which is where a conversation opens anyway. */
     rememberScroll(agentId: string, session: string, place: Place | undefined) {
       if (place === undefined) scrolls.delete(key(agentId, session));
       else scrolls.set(key(agentId, session), place);
@@ -784,18 +617,9 @@ export function createStore(api: DuangApi) {
     },
     load,
     selectAgent,
-    /**
-     * Conversations for an agent that is not open. This boots that agent's runtime, the same as
-     * opening it would: FastAgent owns the session list, and duang will not keep a second copy of
-     * where sessions live.
-     *
-     * A failure belongs to that agent, never to the transcript being read, so it is published
-     * against that agent and its row says it. It never touches the open agent's `states`: that drives
-     * the main panel, and a background read would otherwise put the window into "this agent is broken"
-     * with no message to show for it. Another agent's state is kept, for its row to say.
-     */
+    // FastAgent owns the session list; duang keeps no second copy. A failure belongs to that agent's row and never
+    // touches the open agent's `states`, which would put the window into "this agent is broken".
     listSessions,
-    /** duang's label for the agent; the directory keeps its name. */
     async renameAgent(id: string, name: string) {
       try {
         await api.renameAgent(id, name);
@@ -805,10 +629,7 @@ export function createStore(api: DuangApi) {
       }
     },
     open,
-    /**
-     * Read on every opening of the picker, for the open agent: its own `models.json` is part of the
-     * list, and a provider connected or disconnected in Settings shows on the next opening.
-     */
+    // Read on every opening: the agent's `models.json` and Settings' provider changes show up.
     async loadModels() {
       const id = view.agentId;
       const request = ++modelsRequest;
@@ -821,12 +642,7 @@ export function createStore(api: DuangApi) {
         if (request === modelsRequest) publish({ modelsError: message(error) });
       }
     },
-    /**
-     * Fetches models released after the bundled catalog, for the open agent, when the person asks.
-     * The list stays as it was on a failure, with the reason beside it: a failed refresh does not
-     * make the models already there any less runnable. A reopened picker reads the list itself and
-     * drops this one's answer, as does a switch to another agent.
-     */
+    // A failed refresh keeps the list: the models already there are no less runnable.
     async refreshModels() {
       const id = view.agentId;
       // Not before the list has arrived: there would be nothing to count against, and the reading in flight
@@ -844,11 +660,7 @@ export function createStore(api: DuangApi) {
           publish({ modelsRefresh: { status: "failed", error: message(error) } });
       }
     },
-    /**
-     * Asked whenever the open conversation's provider or run state changes; main answers from its
-     * cache inside the gap, so asking often costs nothing. A failure replaces the numbers: showing a
-     * stale percentage as current would be the quiet kind of wrong.
-     */
+    // Main answers from its cache inside the gap. A failure replaces the numbers: a stale percentage is quietly wrong.
     async loadUsage(provider: string) {
       try {
         const data = await api.providerUsage(provider);
@@ -860,7 +672,6 @@ export function createStore(api: DuangApi) {
     dismissFailure: () => publish({ failure: undefined }),
     openPicker: () => publish({ picker: true }),
     closePicker: () => publish({ picker: false }),
-    /** A plan whose usage only its provider's page shows: main opens that page in the browser. */
     async openUsagePage(provider: string) {
       try {
         await api.openUsagePage(provider);
@@ -868,7 +679,6 @@ export function createStore(api: DuangApi) {
         fail("The usage page did not open", error);
       }
     },
-    /** Once per agent, on the first `/`: the names are the definition's, and it is live. */
     async loadCommands() {
       const id = view.agentId;
       if (!id || commandsFor === id) return;
@@ -877,8 +687,7 @@ export function createStore(api: DuangApi) {
         const commands = await api.listCommands(id);
         if (commandsFor === id) publish({ commands });
       } catch (error) {
-        // Release the once-per-agent claim: without this the agent is stuck with an empty
-        // completion list for the rest of the session. The next `/` keystroke retries.
+        // Without this the agent keeps an empty completion list; the next `/` retries.
         if (commandsFor === id) {
           commandsFor = undefined;
           publish({ commandsError: message(error) });
@@ -905,7 +714,6 @@ export function createStore(api: DuangApi) {
     async pickModel(model: string) {
       const id = view.agentId;
       const c = view.conversation;
-      // The picker belongs to the conversation on screen; an agent that is open always has one.
       if (!id || !c) return;
       const request = navigation;
       // Cleared however the change ends, including after the person went to another agent.
@@ -924,9 +732,7 @@ export function createStore(api: DuangApi) {
         settle();
         if (request !== navigation) return;
         publish({ model, error: undefined, unavailable: undefined, staleDefault: undefined, states: { ...view.states, [id]: "ready" } });
-        // The open conversation stays exactly as it is: main moved its subscription to the new runtime.
-        // The runtime announced the change before that subscription listened again, so the model and
-        // levels are read, not waited for.
+        // The runtime announced the change before the subscription listened again, so read the settings, not wait.
         await readSettings(c);
         await keepListed(c);
       } catch (error) {
@@ -934,10 +740,7 @@ export function createStore(api: DuangApi) {
         if (request === navigation) note(c, { error, title: "The model was not changed" });
       }
     },
-    /**
-     * The open conversation's thinking level. Nothing is shown ahead of the runtime: the new level
-     * arrives as its own `state_changed`, and a refusal is shown as one.
-     */
+    // Nothing shown ahead of the runtime: the new level arrives as its own `state_changed`.
     async setThinking(level: string) {
       const id = view.agentId;
       const c = view.conversation;
@@ -950,7 +753,6 @@ export function createStore(api: DuangApi) {
         note(c, { error, title: "The effort was not changed" });
       }
     },
-    /** The agent's config does not load: a fresh one in its place, the old one kept beside it. */
     async resetConfig() {
       const id = view.agentId;
       // One at a time: the page stays up until the agent has reopened, and a second click is not a second reset.
@@ -966,7 +768,6 @@ export function createStore(api: DuangApi) {
         resetting = false;
       }
     },
-    /** The agent's folder was moved: the person shows where it is, and the agent opens from there. */
     async relocateAgent() {
       const id = view.agentId;
       if (!id) return;
@@ -1018,32 +819,24 @@ export function createStore(api: DuangApi) {
         fail("The agent was not removed", error);
       }
     },
-    /**
-     * Names a conversation, in FastAgent, which owns the label. The list is re-read afterwards
-     * rather than patched locally: the summary that matters is the one the runtime reports.
-     */
     async renameSession(id: string, session: string, name: string) {
       try {
         const result = await api.renameSession(id, session, name);
         if (!result.ok) return reportOn(id, session, "The conversation was not renamed", result.error.message, "warning");
-        // The name is FastAgent's now; re-read rather than patch, through the same ordered path
-        // expanding uses, so a failed read is reported instead of leaving the old label in place.
+        // Re-read rather than patch, so a failed read is reported instead of keeping the old label.
         await listSessions(id);
       } catch (error) {
         reportOn(id, session, "The conversation was not renamed", error, "warning");
       }
     },
-    /** The sidebar can delete a conversation of an agent that is not the open one, so it is named. */
     async deleteSession(id: string, session: string) {
       try {
         const result = await api.deleteSession(id, session);
-        // Refused: nothing was deleted, and the conversation it is about says so.
         if (!result.ok) return reportOn(id, session, "The conversation was not deleted", result.error.message, "warning");
         const c = conversations.get(key(id, session));
         if (c) close(c);
         drafts.delete(key(id, session));
         scrolls.delete(key(id, session));
-        // The runtime confirmed the deletion, so the row goes now, whichever agent it belongs to.
         publish({
           sessions: { ...view.sessions, [id]: (view.sessions[id] ?? []).filter((s) => s.session !== session) },
         });
@@ -1064,10 +857,6 @@ export function createStore(api: DuangApi) {
       c.draft = "";
       await submit(c, text);
     },
-    /**
-     * Sends the failed turn's message again, as a new turn: the failure stays in the transcript, and so does
-     * whatever the failed run already did. Offered only while `view.resend` is.
-     */
     async resend() {
       const c = view.conversation;
       const again = view.resend;

@@ -1,12 +1,3 @@
-/**
- * Every control the app owns, on one page, so "what do we have and what does it look like" is
- * answered by looking rather than by reading docs/ui.md.
- *
- * Shown at `#gallery`; `npm run shots` captures it in both colour modes. Not a component framework:
- * every section renders the app's own components with fixed props, so a change to one shows here.
- * Surfaces that need live state (the lists, the header, the composer) are captured by the shots of
- * the running app instead.
- */
 import { ArrowClockwise, ArrowUp, FolderOpen, Plug, Plus, Stop, Swap, Trash, X } from "@phosphor-icons/react";
 import { Badge, Button } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
@@ -17,7 +8,6 @@ import { CodeBlock } from "./code.tsx";
 import { UsageDetail, UsageMeter } from "./header.tsx";
 import { Message, RunStatus, Tool, WorkBlock } from "./transcript-view.tsx";
 
-/** One instant for every fixed item, so the page renders the same in each shot. */
 const FIXED = new Date(2026, 0, 5, 9, 41).getTime();
 
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {

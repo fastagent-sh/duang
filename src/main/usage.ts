@@ -1,39 +1,22 @@
-/**
- * A subscription's rate-limit windows (Claude 5h/7d), read from the endpoint Claude's own clients use.
- * It is not documented, so a changed shape is an error with the provider's words, never an empty result.
- * Sign in with ChatGPT has none to read: chatgpt.com's usage route refuses its token (401
- * `rejected_by_access_enforcement`), and api.openai.com's answers carry no rate-limit headers. OpenAI's
- * guidance for such an app is to link to the plan's own usage page, so that login answers with `page`.
- *
- * The token comes from FastAgent's `getAuth`, which refreshes an expired OAuth login under the
- * credential file's lock — the same path a run takes — so duang is never a second writer. The token
- * stays in main; the renderer gets numbers.
- */
+// The endpoint is undocumented: a changed shape is an error, never an empty result. ChatGPT's usage route
+// refuses our token, so that login answers with its `page`. `getAuth` refreshes under the file's lock.
 import { createPiModels } from "@fastagent-sh/fastagent/pi";
 
 export interface UsageWindow {
-  /** "5h", "7d": the window's length, as a person names it. */
   label: string;
-  /** 0–100, used. */
   percent: number;
-  /** Epoch ms, when known. */
   resetsAt?: number;
   windowSeconds: number;
 }
 
-/** Undefined `windows` means the provider has none to report for this credential (an API key). */
 export interface ProviderUsage {
   provider: string;
   windows?: UsageWindow[];
-  /** The plan's usage is only on its provider's page (`openUsagePage`), named by whose plan it is. */
   page?: string;
   fetchedAt: number;
 }
 
-/**
- * Plans whose usage only their provider's page shows, by provider id. Main owns the address: the window
- * asks for a provider's page and never hands main a URL to open.
- */
+// Main owns the address: the window never hands main a URL to open.
 const PAGES: Record<string, { plan: string; url: string }> = {
   // Sign in with ChatGPT (OpenAI's guidance: https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions).
   openai: { plan: "ChatGPT", url: "https://chatgpt.com/settings/usage" },
@@ -100,7 +83,6 @@ async function read(provider: string, authPath: string): Promise<ProviderUsage> 
   const endpoint = endpoints[provider];
   if (!endpoint && !PAGES[provider]) return { provider, fetchedAt };
   const models = createPiModels({ authPath });
-  // Only a subscription login has a plan; an API key's limits are per request, not per plan.
   if ((await models.checkAuth(provider))?.type !== "oauth") return { provider, fetchedAt };
   if (!endpoint) return { provider, page: PAGES[provider]!.plan, fetchedAt };
   const token = (await models.getAuth(provider))?.auth.apiKey;
@@ -108,22 +90,13 @@ async function read(provider: string, authPath: string): Promise<ProviderUsage> 
   return { provider, windows: await endpoint(token), fetchedAt };
 }
 
-/**
- * One answer per login per gap, shared by concurrent callers: keyed by the file and the provider,
- * since the file is what holds the login. A failure is kept for the gap too: retrying a 429 sooner
- * is how it stays a 429.
- */
+// A failure is kept for the gap too: retrying a 429 sooner keeps it a 429.
 const recent = new Map<string, { at: number; answer: Promise<ProviderUsage> }>();
 
-/**
- * A provider's login in that file changed (connected, replaced, disconnected): the next ask reads the
- * new one instead of the old login's answer for the rest of the gap.
- */
 export function forgetUsage(provider: string, authPath: string): void {
   recent.delete(`${authPath}\0${provider}`);
 }
 
-/** `authPath` is the credential file whose login pays for the conversation: duang's own. */
 export function providerUsage(provider: string, authPath: string, now = Date.now()): Promise<ProviderUsage> {
   const key = `${authPath}\0${provider}`;
   const hit = recent.get(key);

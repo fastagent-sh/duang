@@ -1,13 +1,4 @@
-/**
- * Screenshots of the real window, for looking at the design instead of describing it.
- *
- * Same isolation as the smoke check — temporary agents, temporary credentials, a fake model
- * response — but it asserts nothing. It drives one conversation that contains every shape the
- * transcript has to draw, then writes dark and light shots of the result, trace, narrow window,
- * sidebar, model picker, settings and component gallery to `out/shots/`.
- *
- *   npm run shots && open out/shots/app-dark.png
- */
+// Screenshots of the real window to `out/shots/`; asserts nothing. `npm run shots && open out/shots/app-dark.png`
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -115,9 +106,8 @@ if (root) {
             ? { id: "fc_2", type: "function_call", call_id: "call_2", name: "bash", arguments: JSON.stringify({ command: "bun run i18n:check" }) }
             : { id: "msg", type: "message", role: "assistant", content: [{ type: "output_text", text: ANSWER, annotations: [] }] };
       const tool = requests < 3;
-      // Every turn reasons first, so the transcript carries a real run of thinking-and-tool lines:
-      // that alternation is the rhythm §8 is about, and one tool call on its own never shows it. A
-      // reasoning item has to open its own output slot before its deltas mean anything.
+      // Every turn reasons first, so the shot shows the thinking-and-tool rhythm (§8). A reasoning item opens its
+      // own output slot before its deltas mean anything.
       const thought = THOUGHTS[requests - 1];
       const reasoning = { id: `rs_${requests}`, type: "reasoning", summary: [{ type: "summary_text", text: thought }] };
       const say =
@@ -138,8 +128,7 @@ if (root) {
             ]
           : []),
         { type: "response.output_item.added", output_index: index, item: { ...item, ...(tool ? { arguments: "" } : { content: [] }) } },
-        // Chunked on purpose: a fence is unclosed for most of the stream, which is where the
-        // renderer's block detection actually gets tested.
+        // Chunked so a fence stays unclosed for most of the stream.
         ...(tool ? [] : chunk(ANSWER, 40).map((delta) => ({ type: "response.output_text.delta", output_index: index, delta }))),
         { type: "response.output_item.done", output_index: index, item },
         {
@@ -192,8 +181,7 @@ if (root) {
       for (const theme of ["dark", "light"]) {
         nativeTheme.themeSource = theme;
         await new Promise((resolve) => setTimeout(resolve, 400));
-        // After the theme has settled, not before: switching it relays out the highlighted code and
-        // moves the bottom out from under a scroll position taken earlier.
+        // After the theme settles: switching it relays out highlighted code.
         await evaluate(`(() => {
           const box = document.querySelector('[aria-label="Transcript"]');
           if (box) box.scrollTop = ${position === "top" ? "0" : "box.scrollHeight"};
@@ -206,12 +194,10 @@ if (root) {
         console.log(path);
       }
     };
-    // The work block open, and the failed call inside it: expanded arguments and output are a state
-    // the transcript draws, and a sheet of closed rows never shows it.
+    // Expanded arguments and output are a state a sheet of closed rows never shows.
     const failedCall = `[...document.querySelectorAll('details')].find((d) => d.querySelector('summary').textContent.includes('i18n:check'))`;
     await evaluate(`document.querySelector('details').open = true; ${failedCall}.open = true`);
-    // The live tail is the view people actually sit in, so that is what the shot shows. The printed
-    // number is the clearance between the last line and the composer (App.tsx `bottomGap`).
+    // The printed number is the clearance between the last line and the composer (App.tsx `bottomGap`).
     console.log(
       "clearance above composer:",
       await evaluate(`(() => {
@@ -234,8 +220,7 @@ if (root) {
     await until(`!document.querySelector('.composer .popover button')`, "the command list closes");
     await evaluate(`document.querySelector('details').open = false`);
     await capture("app-start", "top");
-    // Wide enough that the column stops growing: where its centring and its edges against the
-    // composer actually show.
+    // Wide enough that the column stops growing.
     win.setSize(1500, 1040);
     await new Promise((resolve) => setTimeout(resolve, 200));
     console.log("wide column edges vs composer:", await evaluate(`(() => { const a = document.querySelector('[aria-label="Transcript"] .column').getBoundingClientRect(); const b = document.querySelector('.composer').getBoundingClientRect(); return [a.left - b.left, a.right - b.right, a.width].join(","); })()`));
@@ -260,9 +245,7 @@ if (root) {
     await capture("models-effort");
     await evaluate(`document.querySelector('dialog').close()`);
 
-    // Reopened, the conversation is history: nothing in it arrived just now, so nothing in it may
-    // float in as if it had. Printed rather than asserted, like the clearance above — and 0 is the
-    // only right answer.
+    // Reopened, nothing is new, so nothing may float in. Printed rather than asserted; 0 is the only right answer.
     const reopened = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
     win.webContents.reload();
     await reopened;
@@ -282,11 +265,9 @@ if (root) {
     await evaluate(`document.querySelector('#appearance-heading').scrollIntoView({ block: "start" })`);
     await capture("settings-avatars", "keep");
 
-    // The component sheet, in the same window and the same build as the app it documents.
-    // The sheet is a page, not a window: make the viewport tall enough to hold it in one image.
+    // The sheet is a page: a viewport tall enough to hold it in one image.
     win.setSize(1180, 2000);
-    // Changing only the fragment is an in-page navigation — the document, and the hash the app read
-    // at startup, stay as they were. The reload is what makes it a real load.
+    // A fragment change alone is an in-page navigation; the reload makes it a real load.
     await win.loadURL(`${win.webContents.getURL().split("#")[0]}#gallery`);
     const reloaded = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
     win.webContents.reload();

@@ -6,21 +6,13 @@ import { Boundary, Button } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
 import "./index.css";
 
-// `#gallery` is the component sheet (docs/ui.md §6b), read once at load. It must not be a live
-// switch: a `[look](#gallery)` link in a model's answer would otherwise unmount the app mid-run,
-// dropping its session subscriptions with no way back.
+// Read once: a `[look](#gallery)` link in an answer would otherwise unmount the app mid-run.
 const page = window.location.hash === "#gallery" ? <Gallery /> : <App />;
 
-/*
- * One icon weight for the whole app. Phosphor's `regular` is a hairline at the 12–16px this
- * interface uses — beside 13px text at 600 it reads as a thinner, greyer thing than the words next
- * to it, which is most of what made the UI look drawn by a compiler. `bold` sits at roughly SF
- * Symbols' semibold, which is the weight macOS itself puts next to text of this size.
- */
+// Phosphor's `regular` is a hairline at 12–16px; `bold` matches SF Symbols' semibold beside text this size.
 createRoot(document.getElementById("root")!).render(
   <IconContext.Provider value={{ weight: "bold" }}>
-    {/* The last net: a conversation's own boundary (App) catches what a transcript throws, so this one
-        is for the rest of the window. Reloading reopens it; runs in main keep going either way. */}
+    {/* The last net: a conversation's own boundary (App) catches transcript errors. Runs in main keep going. */}
     <Boundary
       fallback={(error) => (
         <div className="flex h-full">

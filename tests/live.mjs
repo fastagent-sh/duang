@@ -1,15 +1,5 @@
-/**
- * Real provider check for issue #5: no faked HTTP, this machine's own duang credential file.
- * Opt-in (`DUANG_LIVE=1`), spends a few model tokens, and prints no credential values.
- *
- * Isolated: a temporary userData/registry and a throwaway agent directory. NOT isolated on purpose:
- * the credential file. The temporary userData's `auth.json` is a symlink to the real one, never a copy:
- * a copied OAuth login is invalidated the first time either copy refreshes. Real refresh writes back
- * through the link, as it does in the app.
- *
- * Quit duang first. FastAgent locks the path it was given, so this run and a running app would hold
- * different locks over the same file and could refresh one login at once.
- */
+// Opt-in (`DUANG_LIVE=1`): real providers, this machine's duang credential file, a few tokens. `auth.json` is a
+// symlink, never a copy: a copied OAuth login breaks when either refreshes. Quit duang first: two locks, one file.
 import assert from "node:assert/strict";
 import { existsSync, symlinkSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -74,8 +64,7 @@ if (root) {
 
     const models = await call("listModels", "live");
     const before = await readFile(authFile, "utf8");
-    // Not simply the first OpenAI spec: the picker also lists models a ChatGPT account may not run
-    // (see the note in issue #5), and this check is about credentials, not entitlements.
+    // Not simply the first OpenAI spec: a ChatGPT account may not run every listed model (issue #5).
     const chatgpt = process.env.DUANG_LIVE_OPENAI ?? models.find(({ spec }) => spec === "openai/gpt-5.5")?.spec;
     const anthropic = models.find(({ spec }) => spec.startsWith("anthropic/claude-sonnet"))?.spec;
     assert.ok(chatgpt && anthropic, `needs OpenAI and Anthropic in ${authFile}, got ${models.map(({ spec }) => spec).join(", ")}`);
@@ -88,8 +77,7 @@ if (root) {
     if (chatgptRun.ok) {
       console.log(`OpenAI reply: ${JSON.stringify((await reply(first)).text)}`);
     } else {
-      // A quota or entitlement refusal still proves the token resolved and the account was
-      // recognised. A credential fault must not pass as one, so name those explicitly.
+      // A quota or entitlement refusal still proves the token resolved; a credential fault must not pass as one.
       assert.doesNotMatch(chatgptRun.error.message, /not configured|refresh|unauthor|invalid[_ ]api|401/i);
       console.log(`OpenAI credentials accepted, provider refused the run: ${chatgptRun.error.message}`);
     }

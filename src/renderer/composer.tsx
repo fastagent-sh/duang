@@ -1,4 +1,3 @@
-/** Where a message is written: the draft, `/` completion, the model it goes to, send and stop. */
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowClockwise, ArrowUp, CaretDown, Check, MagnifyingGlass, Plug, Prohibit, Stop } from "@phosphor-icons/react";
 import { complete, completionQuery, matches, spelling } from "./commands.ts";
@@ -11,19 +10,11 @@ import { unavailableNotice } from "./problems.ts";
 import { pickerModels } from "./catalog.ts";
 import type { Models } from "../preload/index.ts";
 
-/** What a thinking level is called; a level this list does not know is shown as the runtime spelled it. */
 const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
 const levelName = (level: string) => LEVELS[level] ?? level;
 
-/**
- * How hard the conversation's model thinks: a row of stops on a track. The runtime lists what the model
- * supports, and the track shows the level the runtime reports, nothing ahead of it: a choice is written
- * and the runtime's `state_changed` moves the track a few milliseconds later.
- *
- * Choosing writes a durable entry into the conversation's record, so choosing is explicit. A native
- * radio group would choose at every stop the arrow keys cross; these are buttons, where the arrows move
- * the focus and Enter, Space or a click choose.
- */
+// Choosing writes a durable entry, so it is explicit: buttons, not a radio group that chooses at every
+// stop the arrow keys cross. The track shows only what the runtime reports.
 function Effort({ levels, level, onPick }: { levels: string[]; level: string; onPick: (level: string) => void }) {
   const stops = useRef<(HTMLButtonElement | null)[]>([]);
   const index = Math.max(0, levels.indexOf(level));
@@ -47,7 +38,7 @@ function Effort({ levels, level, onPick }: { levels: string[]; level: string; on
         }}
       >
         <span className="absolute inset-x-0 h-2 rounded-full bg-hover" />
-        {/* Filled to the centre of the chosen stop (stops are 20px wide); the stops it covers turn light. */}
+        {/* Stops are 20px wide. */}
         <span
           className="absolute left-0 h-2 rounded-full bg-accent-fill"
           style={{ width: `calc((100% - 20px) * ${levels.length > 1 ? index / (levels.length - 1) : 0} + 10px)` }}
@@ -74,11 +65,6 @@ function Effort({ levels, level, onPick }: { levels: string[]; level: string; on
   );
 }
 
-/**
- * The model list and the conversation's effort, floating above the composer chip that opened them.
- * Models sit under their provider, the current one first, each by the name it declares (its id when it
- * declares none) with its context window; the search matches the name and the whole `provider/id`.
- */
 function ModelPicker({
   view,
   store,
@@ -93,21 +79,11 @@ function ModelPicker({
   view: View;
   store: Store;
   current?: string;
-  /**
-   * The levels the runtime lists for the model the conversation runs on. Absent when it has none to list:
-   * the conversation has no model yet (`needsModel`), or the runtime could not read the conversation's settings.
-   */
   thinking?: { level: string; levels: string[] };
   needsModel: boolean;
-  /** The conversation's model, when a send was just refused because it cannot run: said at the top. */
   unavailable?: string;
-  /**
-   * The agent's default in duang, which this computer does not know any more: said at the top. A model chosen
-   * here sets the open conversation's model too, as any choice in the picker does, so the notice says so.
-   */
   stale?: string;
   onClose: () => void;
-  /** Opens Settings on the providers to add; a connection made there returns here. */
   onProviders: () => void;
 }) {
   const { models, modelsError: error, modelsRefresh: refresh } = view;
@@ -123,14 +99,12 @@ function ModelPicker({
   useEffect(() => {
     const el = dialog.current!;
     const anchor = el.parentElement!.getBoundingClientRect();
-    // Right edges aligned: the chip is at the composer's right end, and the list opens toward the text.
     el.style.left = `${Math.max(8, Math.min(anchor.right - 300, window.innerWidth - 308))}px`;
     el.style.bottom = `${window.innerHeight - anchor.top + 8}px`;
     // Tall enough for a dozen rows and the effort track; the list scrolls, the search and the track do not.
     el.style.maxHeight = `${Math.min(480, Math.max(160, anchor.top - 16))}px`;
     el.showModal();
-    // showModal() moves focus itself, after React has honoured autoFocus. Typing is what this list is
-    // for; the filter gets the caret.
+    // showModal() moves focus itself after React's autoFocus.
     el.querySelector("input")?.focus();
     return () => el.close();
   }, []);
@@ -141,7 +115,6 @@ function ModelPicker({
   const shown = matching.slice(0, 60);
   // Cut off after grouping, a provider past the limit would not even show its heading: say so.
   const hidden = matching.length - shown.length;
-  // Providers in the order they first appear, which puts the current model's first.
   const groups = new Map<string, Models>();
   for (const model of shown) {
     const provider = model.spec.slice(0, model.spec.indexOf("/"));
@@ -157,7 +130,7 @@ function ModelPicker({
         event.stopPropagation();
         close();
       }}
-      // The modal owns Escape while it is open: the window-level handler behind it stops runs.
+      // The window-level Escape handler behind it stops runs.
       onKeyDown={(event) => {
         if (event.key === "Escape") event.stopPropagation();
       }}
@@ -175,7 +148,6 @@ function ModelPicker({
       className="popover fixed m-0 top-auto right-auto w-[300px] flex-col overflow-hidden p-0 text-text open:flex backdrop:bg-transparent"
     >
       {error ? (
-        // Inside the popover already: the tinted note, not a second floating surface.
         <div className="p-2">
         <Problem
           tone="error"
@@ -190,8 +162,7 @@ function ModelPicker({
         </div>
       ) : models?.length === 0 ? (
         <div className="space-y-3 p-4 text-[13px] leading-relaxed text-muted">
-          {/* Empty is not always "nothing connected": a ChatGPT sign-in whose model list could not be read at
-              sign-in lists no model either, while Settings shows it connected. */}
+          {/* Empty is not always "nothing connected": a ChatGPT sign-in whose list could not be read lists none. */}
           <p>
             No model is available. Connect a provider with a subscription or an API key, or reconnect one that lists
             no models (a ChatGPT sign-in whose model list could not be read).
@@ -259,7 +230,6 @@ function ModelPicker({
                   <button
                     key={spec}
                     data-model={spec}
-                    // The id is what the chip and the agent's config say; the name is how the model calls itself.
                     title={spec}
                     onClick={() => {
                       dialog.current?.close();
@@ -302,11 +272,6 @@ function ModelPicker({
   );
 }
 
-/**
- * Why the picker opened by itself: the message just sent cannot run on this conversation's model. Said in
- * one plain sentence, with the way on: choose a model below, or connect the provider it needs (which
- * returns here).
- */
 function Unavailable({ model, models, onProviders }: { model: string; models?: Models; onProviders: () => void }) {
   const notice = unavailableNotice(model, models);
   if (!notice) return null;
@@ -322,7 +287,6 @@ function Unavailable({ model, models, onProviders }: { model: string; models?: M
   );
 }
 
-/** Why the picker opened by itself, at its top: what is wrong in a line, and what to do. */
 function Notice({ title, advice, children }: { title: string; advice: string; children?: ReactNode }) {
   return (
     <div role="status" className="mx-1.5 mt-1.5 flex gap-2.5 rounded-card bg-surface-2 px-3 py-2.5 text-[13px]">
@@ -339,18 +303,8 @@ function Notice({ title, advice, children }: { title: string; advice: string; ch
   );
 }
 
-/** For measuring a line of the draft in the field's own font, without laying it out. */
 const ruler = document.createElement("canvas").getContext("2d")!;
 
-/**
- * The composer, in Telegram's one-row shape: the field, and one round button on the right that is
- * what the next action is — Send, Stop while a run is live and nothing is typed, Steer while it is
- * live and something is. The settings that belong to the next message
- * rather than to the app sit inside the field, where Telegram keeps its emoji, which is why the
- * model chip lives here and not in a settings screen.
- *
- * Enter sends, Shift+Enter breaks the line; when it cannot send, the placeholder says why.
- */
 export function Composer({
   view,
   store,
@@ -362,10 +316,8 @@ export function Composer({
 }) {
   const { agentId, conversation: c, busy } = view;
   const agent = view.agents.find((row) => row.id === agentId);
-  // What the conversation will RUN with, else the agent's own default. Nothing else may answer
-  // this: a chip that names a model the turn will not use is the failure worth avoiding.
+  // What the conversation will run with: a chip naming a model the turn will not use is the failure to avoid.
   const model = c?.state?.model ?? view.model;
-  // The levels are the runtime's, per conversation and per model, a conversation not begun yet included.
   const thinking =
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
       ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
@@ -373,16 +325,12 @@ export function Composer({
   const { needsModel, modelBlocked, picker: picking } = view;
   const value = c?.draft ?? "";
   const disabled = !!view.blocked;
-  /** Nothing to send: whitespace is not a message. */
   const empty = value.trim() === "";
 
   const input = useRef<HTMLTextAreaElement>(null);
   const field = useRef<HTMLDivElement>(null);
   const chip = useRef<HTMLDivElement>(null);
-  // The model chip sits beside the text while the draft is one line, and under it once it is not:
-  // beside a taller draft it would reserve a column down every line for something that fits on one.
-  // Decided from the draft and the room, never from how the text happens to wrap, so it cannot flip
-  // back and forth as the change of width changes the wrapping.
+  // Decided from the draft and the room, never from the wrapping, so it cannot flip as the width changes.
   const [stacked, setStacked] = useState(false);
   const [fieldWidth, setFieldWidth] = useState(0);
   useEffect(() => {
@@ -399,8 +347,7 @@ export function Composer({
     if (!text || !box || !side) return;
     const style = getComputedStyle(text);
     const padding = getComputedStyle(box);
-    // What is left of the field's width for the text, once the chip and the gap after it are paid for; 12px
-    // of margin so a line that only just fits is not left to wrap.
+    // 12px margin so a line that only just fits does not wrap.
     const room = box.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight) - side.offsetWidth - 8 - 12;
     ruler.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     setStacked(value.includes("\n") || ruler.measureText(value).width > room);
@@ -416,31 +363,26 @@ export function Composer({
   const [dismissed, setDismissed] = useState(false);
   const [cursor, setCursor] = useState(0);
   const list = useRef<HTMLDivElement>(null);
-  /** The arrow keys moved the cursor, so its row has to be brought into view; the pointer only ever lands on rows already in it. */
+  // Only arrow keys need to scroll the cursor's row into view; the pointer lands on visible rows.
   const stepped = useRef(false);
   useEffect(() => {
     if (stepped.current) list.current?.querySelector("[data-chosen]")?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
-  // A send refused because this conversation's model cannot run: the picker says why, and the chip stays
-  // marked until a model is chosen.
   const stuck = !!c && view.unavailable?.session === c.session && view.unavailable.agentId === c.agentId && view.unavailable.model === model;
   // Every opening rereads the credential file, so a provider connected in Settings shows up.
-  // The list is the open agent's, so switching agents with the picker open reads it again.
   useEffect(() => {
     if (picking) void store.loadModels();
   }, [picking, agentId, store]);
 
   const query = completionQuery(value);
-  // Not while the model picker is open: two floating lists over one composer read as a mistake.
+  // Two floating lists over one composer read as a mistake.
   const suggestions = query === undefined || dismissed || picking ? [] : matches(view.commands, query);
   const chosen = suggestions[Math.min(cursor, suggestions.length - 1)];
 
-  // The first `/` is what asks for the names; the store decides they are fetched once per agent.
   useEffect(() => {
     if (query !== undefined && agentId && !disabled) void store.loadCommands();
   }, [query, agentId, disabled, store]);
-  // Escape hides the list for the name as typed; typing on is a new request for it. Keeping it
-  // dismissed until the line stops being a command leaves `/d` with no completion at all.
+  // Keeping it dismissed until the line stops being a command would leave `/d` with no completion.
   useEffect(() => {
     setDismissed(false);
     setCursor(0);
@@ -448,16 +390,14 @@ export function Composer({
   }, [query]);
 
   return (
-    // Positioned so it paints above the veil beneath it, which is absolutely placed and would
-    // otherwise blur every button in the row.
+    // Positioned so it paints above the absolutely placed veil, which would blur the buttons.
     <div className="composer relative">
-      {/* pl-4 is the field's own inset: these lines start where its text does. */}
       {view.commandsError && query !== undefined && (
         <p role="alert" className="text-danger text-[11px] mb-1.5 pl-4">
           {view.commandsError}
         </p>
       )}
-      {/* Pressing `/` on an agent with no skills would do nothing at all, which reads as broken. */}
+      {/* `/` on an agent with no skills would otherwise do nothing, which reads as broken. */}
       {query !== undefined && !view.commandsError && view.commands.length === 0 && agent && (
         <p className="text-muted text-[11px] mb-1.5 pl-4">
           No commands — this agent has no skills in <span className="font-mono">{home(agent.dir)}/fastagent/skills</span>
@@ -466,14 +406,11 @@ export function Composer({
       <div className="flex items-end gap-2">
         <div ref={field} className="composer-card relative flex min-w-0 flex-1 flex-wrap items-end gap-x-2 gap-y-1 rounded-composer bg-surface py-1.5 pr-1.5 pl-4 ring-1 ring-stroke focus-within:ring-accent/50">
           {suggestions.length > 0 && (
-            // The model picker's surface and rows: one list look, so the two floating lists read as the same kind of thing.
             <div ref={list} className="popover absolute bottom-full left-0 z-20 mb-2 max-h-72 w-[420px] max-w-full overflow-y-auto">
               {suggestions.map((command, index) => (
                 <button
                   key={command.name}
-                  // Moved, not entered: the list scrolls under a pointer that is resting on it when the keys
-                  // step, the browser then reports the row now under it as entered, and the cursor would be
-                  // taken from the keys by a mouse nobody moved.
+                  // Moved, not entered: the list scrolling under a resting pointer reports a new row as entered.
                   onMouseMove={(event) => {
                     if (!event.movementX && !event.movementY) return;
                     stepped.current = false;
@@ -485,7 +422,7 @@ export function Composer({
                     command === chosen ? "bg-hover" : ""
                   }`}
                 >
-                  {/* What accepting it inserts: a bare `/weather` typed by hand would reach the model as text. */}
+                  {/* A bare `/weather` typed by hand would reach the model as text. */}
                   <span className="shrink-0">/{spelling(command)}</span>
                   <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{command.description}</span>
                   <span className="shrink-0 text-[12px] text-muted">{command.source}</span>
@@ -512,7 +449,7 @@ export function Composer({
                   e.stopPropagation();
                   return setDismissed(true);
                 }
-                // Enter and Tab accept the name rather than send: a bare `/name` is never a message.
+                // A bare `/name` is never a message.
                 if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && chosen) {
                   e.preventDefault();
                   return store.setDraft(complete(chosen));
@@ -525,9 +462,7 @@ export function Composer({
             }}
             placeholder={view.blocked ?? (busy ? "steer the run…" : "Ask, build, / for commands…")}
             disabled={disabled}
-            // The field matches the leading of the bubble it turns into: a composer that types tighter
-            // than it sends makes a long message reflow the moment it is sent. The 1px keeps one line
-            // as tall as the model chip beside it (28).
+            // Same leading as the bubble it becomes, so a long message does not reflow on send. 1px keeps one line 28 tall.
             className={`bubble min-h-7 min-w-0 resize-none bg-transparent py-px outline-none ${stacked ? "basis-full" : "flex-1"}  placeholder:text-muted disabled:opacity-40`}
           />
           <div ref={chip} className="relative ml-auto min-w-0 max-w-[45%]">
@@ -535,15 +470,12 @@ export function Composer({
               kind="ghost"
               size={28}
               onClick={picking ? store.closePicker : store.openPicker}
-              // The chip truncates a long spec, so the tooltip carries the whole name in both states.
               disabled={modelBlocked && model ? `${modelBlocked} (${model})` : (modelBlocked ?? false)}
               title={model ? `Model for this agent: ${model}` : "Model for this agent"}
-              // Tinted, so it reads as the button it is beside the field's own text.
               className={`max-w-full bg-hover ${(!model && needsModel) || stuck ? "text-warning" : ""}`}
             >
               {model ? (
-                // The provider is quieter than the id but never dropped: `openai/` and `azure-openai-responses/`
-                // offer the same ids and are paid for differently.
+                // `openai/` and `azure-openai-responses/` offer the same ids and are paid for differently.
                 <span className="min-w-0 truncate text-[13px]">
                   <span className="text-muted">{model.slice(0, model.indexOf("/") + 1)}</span>
                   <span className="text-text">{model.slice(model.indexOf("/") + 1)}</span>
@@ -574,8 +506,6 @@ export function Composer({
             )}
           </div>
         </div>
-        {/* While a turn runs and nothing is typed, the button that sent it is the button that stops it:
-            stopping is where the eye already is, not in a corner of the window. */}
         {busy && empty ? (
           <Button
             kind="danger"
@@ -583,13 +513,10 @@ export function Composer({
             size={40}
             onClick={() => void store.abort()}
             aria-label="Stop the run"
-            // Stopping ends the run, not its consequences; a tool that already wrote a file is done.
             title="Stop (Esc) — work its tools already finished is not undone"
             icon={<Stop size={16} weight="fill" />}
           />
         ) : (
-          // While a turn runs, what is typed steers it: it joins after the current step. Stop is back once the
-          // field is empty, and Esc stops at any time. With nothing typed it stays, dimmed, saying why.
           <Button
             kind="primary"
             size={40}

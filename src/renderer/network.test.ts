@@ -17,7 +17,6 @@ test("a saved proxy reads back into the form with its port, default ports includ
   assert.deepEqual(manualFields("https://proxy.corp:443"), { scheme: "https", server: "proxy.corp", port: "443" });
   assert.deepEqual(manualFields("socks5://[::1]:1080"), { scheme: "socks5", server: "[::1]", port: "1080" });
   assert.throws(() => manualFields("http://proxy.corp"), /not scheme:\/\/host:port/);
-  // What the form saves reads back unchanged.
   const saved = manualUrl("https", "proxy.corp", "443");
   assert.deepEqual("url" in saved && manualFields(saved.url), { scheme: "https", server: "proxy.corp", port: "443" });
 });

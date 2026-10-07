@@ -1,13 +1,4 @@
-/**
- * How duang says something went wrong (docs/ui.md §9b): what it means for the person, what to do, the
- * way on as a button, and the original words kept verbatim but out of the way. One shape at three sizes:
- *
- * - `card`: in the transcript, where the run or the send it is about happened.
- * - `strip`: floating under the header, about the conversation's view or an action outside it; it never
- *   pushes the transcript down.
- * - `page`: in place of the conversation, when there is nothing else to show (an agent that cannot load,
- *   an agent list that cannot be read, a view that could not be drawn).
- */
+// docs/ui.md §9b: `card` in the transcript, `strip` floating under the header, `page` in place of the conversation.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretRight, Check, Copy, Info, Prohibit, WarningCircle, X } from "@phosphor-icons/react";
 import { Button } from "./ui.tsx";
@@ -22,13 +13,8 @@ const ICON = {
 const TINT = { error: "bg-danger/8", warning: "bg-warning/10", info: "bg-surface-2" };
 const COLOUR = { error: "text-danger", warning: "text-warning", info: "text-muted" };
 
-/** A reason short enough to read in place; anything longer folds behind "Details". */
 const SHORT = 140;
 
-/**
- * The original words, verbatim, out of the way: folded to their first line beside the buttons, opening into
- * a selectable well (on a line of its own) with a way to copy them for a report. On a page, the well itself.
- */
 function Reason({ text, as }: { text: string; as: "folded" | "well" }) {
   const [open, setOpen] = useState(as === "well");
   const [copied, setCopied] = useState<"yes" | string>();
@@ -78,11 +64,6 @@ function Reason({ text, as }: { text: string; as: "folded" | "well" }) {
   );
 }
 
-/**
- * What fills the pane when there is no conversation to show: a mark, a title, a sentence on what it means,
- * whatever it needs to show, and the ways on. Setup pages wear it too, so a problem and a first step look
- * like the same app.
- */
 export function Page({
   tone,
   icon,
@@ -99,7 +80,7 @@ export function Page({
   children?: ReactNode;
 }) {
   return (
-    // In the transcript's box, clear of the floating header, so the composer never moves.
+    // Clear of the floating header, so the composer never moves.
     <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-16 pb-5">
       <div role={tone === "error" || tone === "warning" ? "alert" : undefined} className="mx-auto mt-10 max-w-md space-y-3 text-center">
         <span className={`mx-auto grid size-8 place-items-center rounded-card bg-surface-2 ${tone === "accent" ? "text-accent" : COLOUR[tone]}`}>
@@ -126,13 +107,9 @@ export function Problem({
   layout = "card",
 }: {
   tone: ProblemTone;
-  /** What it means for the person, in their words: "The provider did not accept the sign-in". */
   title: string;
-  /** What to do about it, when there is something besides the buttons. */
   advice?: ReactNode;
-  /** The original words, verbatim. */
   reason?: string;
-  /** The ways on, as buttons; the first is the one most likely to fix it. */
   actions?: ReactNode;
   onDismiss?: () => void;
   layout?: "card" | "strip" | "page";
@@ -143,7 +120,7 @@ export function Problem({
         {reason && <Reason text={reason} as="well" />}
       </Page>
     );
-  // Short words that nothing else explains are the explanation, said beside the title; anything else folds.
+  // Short words nothing else explains are said beside the title; anything else folds.
   const said = advice ?? (reason && reason.length <= SHORT && !reason.includes("\n") ? reason : undefined);
   const folded = reason !== undefined && said !== reason;
   const body = (
@@ -166,8 +143,6 @@ export function Problem({
       )}
     </div>
   );
-  // A strip floats over the transcript, so it wears the popover's surface; a card is part of the record, a
-  // tinted note the width of what it says.
   return layout === "strip" ? (
     <div className="popover pointer-events-auto !px-3 !py-2.5">{body}</div>
   ) : (

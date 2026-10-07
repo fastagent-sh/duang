@@ -122,7 +122,6 @@ test("a run starts only on a model the picker would offer; a steer joins the run
 test("quitting stops every send in flight and waits for each run to settle, but not past its limit", async () => {
   const held = sends();
   assert.equal(held.busy(), false);
-  // Two conversations with runs going; each settles when it is aborted.
   const settle = new Map<string, () => void>();
   const run = (key: string) =>
     held.hold(key, () => new Promise<SessionResult>((resolve) => settle.set(key, () => resolve(refusal("aborted")))));
@@ -150,8 +149,7 @@ test("quitting stops every send in flight and waits for each run to settle, but 
   assert.equal(!meanwhile.ok && meanwhile.error.code, "quitting");
   assert.equal(held.busy(), false);
 
-  // A run that does not settle (a tool that cannot be cancelled), and one whose abort fails: neither keeps
-  // quitting waiting past the limit.
+  // A run that never settles and one whose abort fails: neither keeps quitting waiting past the limit.
   const stuckHeld = sends();
   const stuckSettle = new Map<string, () => void>();
   const stuckRun = (key: string) =>

@@ -1,15 +1,5 @@
-/**
- * The installed app, as someone gets it: the packaged duang.app copied out of the repository, so nothing resolves
- * from the repository's node_modules (inside it, a module missing from app.asar is found there anyway, and the gap
- * stays hidden). Run after `npm run package`, which `npm run test:package` does.
- *
- * 1. Every package in app.asar finds each dependency and required peer inside the bundle.
- * 2. The app starts on an isolated profile, loads an agent's TypeScript config, runs a bash call and answers, against
- *    a local fake model endpoint in the agent's models.json. Driven over the DevTools protocol.
- * 3. A second duang on the same profile shows the first, a new window when it had none, and leaves.
- *
- * No credentials or network needed.
- */
+// Copied out of the repository: inside it, a module missing from app.asar resolves from node_modules anyway.
+// Checks bundle completeness, a real run against a local model, and the single-instance handoff.
 import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -25,7 +15,6 @@ assert.ok(existsSync(built), `${built} does not exist: run npm run package first
 const root = mkdtempSync(join(tmpdir(), "duang-packaged-"));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Each package's dependencies and non-optional peers, resolved the way Node would from inside the bundle. */
 function missingDependencies(bundle) {
   const packages = [];
   const walk = (dir) => {
@@ -167,8 +156,7 @@ async function run() {
   await until("document.querySelector('main').innerText.includes('Installed answer.')", "the answer");
   assert.equal(readFileSync(join(project, "proof.txt"), "utf8").trim(), "installed", "bash ran in the project");
 
-  // 3. One duang per profile: a second one shows the first and leaves, also when the first has no window left (on
-  //    macOS it keeps running after its last window closes, and a second launch must not look like nothing happened).
+  // 3. A second duang shows the first and leaves, also when the first has no window left.
   const pages = () =>
     fetch(`http://127.0.0.1:${port}/json`)
       .then((r) => r.json())
