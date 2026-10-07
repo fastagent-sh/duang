@@ -1,3 +1,5 @@
+import { modelIdOf, providerOf } from "./catalog.ts";
+
 // The reason is always shown verbatim beside this; only its own markers (HTTP status, error code) are read,
 // so an unrecognised reason gets the plain title and no guess.
 
@@ -58,8 +60,8 @@ export function explainRunFailure(reason: string): Explained {
 // Nothing while the list loads, which would say the wrong thing first.
 export function unavailableNotice(model: string, models: readonly { spec: string }[] | undefined): { title: string; connect?: string } | undefined {
   if (!models || models.some(({ spec }) => spec === model)) return undefined;
-  const provider = model.slice(0, model.indexOf("/"));
+  const provider = providerOf(model);
   return models.some(({ spec }) => spec.startsWith(`${provider}/`))
-    ? { title: `${model.slice(provider.length + 1)} isn't available` }
+    ? { title: `${modelIdOf(model)} isn't available` }
     : { title: `${provider} isn't connected`, connect: provider };
 }
