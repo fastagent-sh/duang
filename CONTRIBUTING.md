@@ -123,7 +123,8 @@ for a coding agent to merge. External-contributor PRs need maintainer review; a 
 review is recommended for credential handling, IPC/security boundaries, persistence and workflows.
 
 Repository settings allow squash merges only, use the PR title/body, delete merged branches, and
-allow updating a PR branch. Auto-merge and workflow approval of PRs are disabled. Do not force-push
+allow updating a PR branch and auto-merge, which merges a PR once its required checks pass. Workflow
+approval of PRs is disabled. Do not force-push
 or delete `main`; require resolved review conversations and green `Desktop checks` and `CodeQL` before merging.
 
 `main` is protected server-side with the settings versioned in
