@@ -18,7 +18,7 @@ import {
   withAgentRun,
   type AgentRow,
 } from "./agents.ts";
-import { authPath, modelsFor, refreshModels } from "./credentials.ts";
+import { authPath, modelsFor, refreshModels } from "./models.ts";
 import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
 import { forgetUsage, providerUsage, usagePage } from "./usage.ts";
 import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";

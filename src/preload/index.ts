@@ -11,8 +11,8 @@ import type {
 
 export type { AgentRow } from "../main/agent-files.ts";
 import type { AgentRow } from "../main/agent-files.ts";
-export type { Models } from "../main/credentials.ts";
-import type { Models } from "../main/credentials.ts";
+export type { Models } from "../main/models.ts";
+import type { Models } from "../main/models.ts";
 export type { ProviderUsage, UsageWindow } from "../main/usage.ts";
 export type { AvatarStyle, Network } from "../main/settings.ts";
 import type { AvatarStyle, Network, Settings } from "../main/settings.ts";

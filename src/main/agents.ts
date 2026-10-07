@@ -2,7 +2,7 @@ import { app } from "electron";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
 import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
-import { authPath } from "./credentials.ts";
+import { authPath } from "./models.ts";
 import { refuse } from "./send.ts";
 import {
   AgentRegistry,
