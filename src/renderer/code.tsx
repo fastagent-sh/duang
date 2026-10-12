@@ -1,7 +1,8 @@
 // Only `code` is overridden: Streamdown's `pre` marks a fenced block, and replacing it made every block inline.
-import { Suspense, use, useEffect, useRef, useState } from "react";
+import { Suspense, use } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
 import { ShikiHighlighter, createHighlighterCore, createJavaScriptRegexEngine } from "react-shiki/core";
+import { useCopy } from "./ui.tsx";
 
 const highlighterReady = createHighlighterCore({
   themes: [import("@shikijs/themes/catppuccin-latte"), import("@shikijs/themes/catppuccin-mocha")],
@@ -82,20 +83,13 @@ function Highlighted({ code, language }: { code: string; language: string }) {
 }
 
 function CopyButton({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef(0);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const { copied, failed, copy } = useCopy(code);
   return (
     <button
-      aria-label="Copy code"
-      title="Copy code"
-      className="absolute top-2.5 right-3 p-1 text-muted hover:text-text"
-      onClick={() => {
-        void navigator.clipboard.writeText(code).then(() => {
-          setCopied(true);
-          timer.current = window.setTimeout(() => setCopied(false), 1500);
-        });
-      }}
+      aria-label={failed ? `Could not copy: ${failed}` : copied ? "Copied" : "Copy code"}
+      title={failed ? `Could not copy: ${failed}` : copied ? "Copied" : "Copy code"}
+      className={`absolute top-2.5 right-3 p-1 text-muted hover:text-text ${failed ? "text-danger" : ""}`}
+      onClick={copy}
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>

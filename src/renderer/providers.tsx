@@ -6,7 +6,7 @@ import { keyStep, type SignIn } from "./settings-store.ts";
 import type { Store, View } from "./store.ts";
 import { PlanUsage } from "./plan-usage.tsx";
 import { Group, row } from "./settings.tsx";
-import { Badge, Button } from "./ui.tsx";
+import { Badge, Button, useCopy } from "./ui.tsx";
 
 type Way = ProviderRow["ways"][number];
 
@@ -439,20 +439,16 @@ function FlowInfo({ info, store, className = "" }: { info: NonNullable<SignIn["i
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(timer);
-  }, [copied]);
+  const { copied, failed, copy } = useCopy(text);
   return (
     <Button
       kind="ghost"
       size={28}
-      onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true))}
+      onClick={copy}
+      title={failed ? `Could not copy: ${failed}` : undefined}
       icon={copied ? <Check size={13} /> : <Copy size={13} />}
     >
-      {copied ? "Copied" : label}
+      {failed ? "Not copied" : copied ? "Copied" : label}
     </Button>
   );
 }
