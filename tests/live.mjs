@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import electron from "electron";
 import { isolated } from "./harness.mjs";
+import { open, windowDriver } from "./window.mjs";
 
 const ASK = "Reply with exactly: OK";
 
@@ -22,7 +23,7 @@ if (root) {
   app.setPath("userData", data);
 
   let win;
-  const evaluate = (expression) => win.webContents.executeJavaScript(expression, true);
+  let evaluate;
   const call = (name, ...args) =>
     evaluate(`window.duang.${name}(${args.map((a) => JSON.stringify(a)).join(", ")})`);
   /** The assistant's own words, so a "success" with no answer cannot pass. */
@@ -53,14 +54,8 @@ if (root) {
     const authFile = join(data, "auth.json");
     symlinkSync(real, authFile);
 
-    const loaded = new Promise((resolve) => {
-      app.once("browser-window-created", (_event, window) => {
-        win = window;
-        win.webContents.once("did-finish-load", resolve);
-      });
-    });
-    await import("../out/main/index.js");
-    await loaded;
+    win = await open();
+    ({ evaluate } = windowDriver(win));
 
     const models = await call("listModels", "live");
     const before = await readFile(authFile, "utf8");
