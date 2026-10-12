@@ -91,6 +91,18 @@ export interface Preview {
   at?: number;
   error?: string;
 }
+// Why the person is being asked for a model: the conversation's own question (it has nothing to run with), the
+// agent's default this computer no longer knows, or the model a send was turned away for. Choosing a model, or
+// leaving the conversation, clears it.
+export type ModelAsk =
+  | { reason: "needs" }
+  | { reason: "gone"; model: string }
+  | { reason: "refused"; model: string };
+// A send the runtime refused for its model, and duang's own default for an agent that pi does not know: stored
+// facts, each about one conversation or one agent, turned into the ask above in one place.
+type Refusal = { agentId: string; session: string; model: string };
+type StaleDefault = { agentId: string; model: string };
+
 export interface View extends SettingsView {
   agents: AgentRow[];
   agentId?: string;
@@ -103,7 +115,6 @@ export interface View extends SettingsView {
   changingModel?: string;
   error?: string;
   errorInConfig?: true;
-  staleDefault?: { agentId: string; model: string };
   failure?: { title: string; reason: string };
   registryError?: string;
   models?: Models;
@@ -118,8 +129,9 @@ export interface View extends SettingsView {
   // One rule: the placeholder shows it and `send` treats reaching it as a bug.
   blocked?: string;
   resend?: { text: string; toolsRan: boolean };
-  unavailable?: { agentId: string; session: string; model: string };
+  modelAsk?: ModelAsk;
   picker: boolean;
+  // No model anywhere for this conversation: what the chip says.
   needsModel: boolean;
   modelBlocked?: string;
   running: Record<string, string[]>;
@@ -190,12 +202,27 @@ function blockedBy(view: View): string | undefined {
   return undefined;
 }
 
+// The one place that decides what the picker has to say: a send refused for this conversation's model first (the
+// most recent answer to why it cannot run), then the agent's default this computer no longer knows, then a
+// conversation with no model at all.
+function modelAskOf(view: View, refusal: Refusal | undefined, staleDefault: StaleDefault | undefined): ModelAsk | undefined {
+  const { agentId, conversation: c } = view;
+  if (!agentId || !c || c.loading) return undefined;
+  if (refusal && refusal.agentId === agentId && refusal.session === c.session) return { reason: "refused", model: refusal.model };
+  if (staleDefault?.agentId === agentId) return { reason: "gone", model: staleDefault.model };
+  // As opposed to duang not knowing the model yet, which does not ask for one.
+  if (view.states[agentId] === "ready" && !(c.state?.model ?? view.model)) return { reason: "needs" };
+  return undefined;
+}
+
 // Runtime data stays in the runtime; this store owns selection, drafts and live, not-yet-durable output.
 function derive(
   view: View,
   held: Conversation[],
   unsent: Map<string, string>,
   unseen: Map<string, "done" | "failed">,
+  refusal: Refusal | undefined,
+  staleDefault: StaleDefault | undefined,
 ): View {
   const running = held.filter(busy);
   const open = view.conversation;
@@ -206,13 +233,13 @@ function derive(
     doing: Object.fromEntries(running.map((c) => [c.agentId, phase(c.items, c.state?.status).activity])),
     unsent: group([...unsent].filter(([, text]) => text.trim()).map(([id]) => unkey(id))),
     unseen: {},
-    // As opposed to duang not knowing the model yet, which does not ask for one.
     needsModel: !!open && !open.loading && view.states[open.agentId] === "ready" && !(open.state?.model ?? view.model),
   };
   for (const [id, outcome] of unseen) {
     const [agentId, session] = unkey(id);
     (derived.unseen[agentId] ??= {})[session] = outcome;
   }
+  derived.modelAsk = modelAskOf(derived, refusal, staleDefault);
   derived.pane = paneOf(derived);
   derived.alert = alertOf(derived);
   derived.blocked = blockedBy(derived);
@@ -249,7 +276,9 @@ export function createStore(api: DuangApi) {
   // Where each conversation was left scrolled above the latest line: leaving it unmounts its view.
   const scrolls = new Map<string, Place>();
   let persisted = "";
-  let needsAsked: string | undefined;
+  let asked: string | undefined;
+  let refusal: Refusal | undefined;
+  let staleDefault: StaleDefault | undefined;
   const stored = readSelection();
   const lastOpened = new Map<string, string>(stored?.perAgent);
   // In memory on purpose: it is about this window's attention; the transcript is the only durable record.
@@ -271,14 +300,19 @@ export function createStore(api: DuangApi) {
   let modelsRequest = 0;
   const previews = new Map<string, Preview & { updatedAt?: number }>();
   let commandsFor: string | undefined;
-  // Same order `selectAgent` reopens in, so the row quotes what a click would show.
-  const selectedSession = (id: string): string | undefined => {
-    if (view.conversation?.agentId === id) return view.conversation.session;
-    const list = view.sessions[id] ?? [];
+  // Which conversation an agent opens: the one it was left on while anything still knows it (the runtime, a held
+  // conversation, unsent text, or the fresh start a crash left selected), else one running now, else the newest
+  // the runtime lists. One rule, so the row quotes what a click opens.
+  const openable = (id: string, sessions: SessionSummary[]): string | undefined => {
+    const held = [...conversations.values()].filter((c) => c.agentId === id);
+    const known = (session: string) =>
+      sessions.some((s) => s.session === session) || held.some((c) => c.session === session);
     const left = lastOpened.get(id);
-    if (left && (list.some((s) => s.session === left) || conversations.has(key(id, left)))) return left;
-    return [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0]?.session;
+    if (left && (known(left) || drafts.get(key(id, left))?.trim() || left === freshSession)) return left;
+    return held.find(busy)?.session ?? [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0]?.session;
   };
+  const selectedSession = (id: string): string | undefined =>
+    view.conversation?.agentId === id ? view.conversation.session : openable(id, view.sessions[id] ?? []);
   const publish = (patch: Partial<View> = {}) => {
     view = { ...view, ...patch };
     // Read before the loop below releases anything: a settled run's last event is what the row keeps.
@@ -301,12 +335,15 @@ export function createStore(api: DuangApi) {
       persisted = serialized;
       writeStored(DRAFTS_KEY, serialized);
     }
-    view = derive(view, [...conversations.values()], unsent, unseen);
-    // Only on these changes: a list the person closed stays closed.
-    const asks = `${view.conversation?.agentId}/${view.conversation?.session}/${view.needsModel}`;
-    if (asks !== needsAsked) {
-      needsAsked = asks;
-      view.picker = view.needsModel;
+    view = derive(view, [...conversations.values()], unsent, unseen, refusal, staleDefault);
+    // A picker the person closed stays closed: it opens when the ask becomes a different one, and closes when
+    // there is nothing to ask. A refusal opened it where it happened, so a return does not open it again.
+    const question = view.modelAsk
+      ? `${view.conversation?.agentId}/${view.conversation?.session}/${view.modelAsk.reason}/${view.modelAsk.reason === "needs" ? "" : view.modelAsk.model}`
+      : "";
+    if (question !== asked) {
+      asked = question;
+      if (view.modelAsk?.reason !== "refused") view.picker = !!view.modelAsk;
     }
     for (const listener of listeners) listener();
   };
@@ -390,6 +427,8 @@ export function createStore(api: DuangApi) {
     // the place being read. (A conversation that was closed, as a retry does, is not on screen.)
     const open = view.conversation;
     if (open?.agentId === agentId && open.session === session && conversations.get(key(agentId, session)) === open) return;
+    // A conversation that was refused for its model is not this one's: the ask belongs to what is being opened.
+    refusal = undefined;
     unseen.delete(key(agentId, session));
     lastOpened.set(agentId, session);
     lastAgent = agentId;
@@ -402,12 +441,12 @@ export function createStore(api: DuangApi) {
     // conversation" in between. Publishing the next one is what makes the previous one stop being current.
     const existing = conversations.get(key(agentId, session));
     if (existing) {
-      publish({ conversation: existing, error: undefined, unavailable: undefined });
+      publish({ conversation: existing, error: undefined });
       return;
     }
     const c = createConversation(agentId, session, drafts.get(key(agentId, session)) ?? "");
     conversations.set(key(agentId, session), c);
-    publish({ conversation: c, error: undefined, unavailable: undefined });
+    publish({ conversation: c, error: undefined });
     try {
       const result = await api.openSession(agentId, session, c.subscription);
       if (conversations.get(key(agentId, session)) !== c) return;
@@ -442,7 +481,8 @@ export function createStore(api: DuangApi) {
         if (result.error.code === MODEL_UNAVAILABLE_CODE && model) {
           // Nothing happened in the conversation, so nothing goes in the transcript; the picker says why.
           unsent(c, echo);
-          publish({ unavailable: { agentId: c.agentId, session: c.session, model }, picker: true });
+          refusal = { agentId: c.agentId, session: c.session, model };
+          publish({ picker: true });
           return;
         }
         if (
@@ -491,23 +531,12 @@ export function createStore(api: DuangApi) {
         states: { ...view.states, [id]: "ready" },
       });
       const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-      const running = [...conversations.values()].find((c) => c.agentId === id && busy(c));
-      // Including a conversation the runtime does not know yet; dropped when nothing local keeps it alive.
-      const previous = lastOpened.get(id);
-      const revivable =
-        previous &&
-        (result.sessions.some((s) => s.session === previous) ||
-          conversations.has(key(id, previous)) ||
-          drafts.get(key(id, previous))?.trim() ||
-          previous === freshSession)
-          ? previous
-          : undefined;
+      staleDefault = result.staleDefault ? { agentId: id, model: result.staleDefault } : undefined;
       // Opened here, inside the navigation guard: a `.then(open)` outside would land on whichever agent the
       // selection had moved to by then.
-      await open(session ?? revivable ?? running?.session ?? newest?.session ?? crypto.randomUUID());
-      // After the conversation opened: opening one sets the picker by whether it has a model.
-      if (request === navigation)
-        publish(result.staleDefault ? { staleDefault: { agentId: id, model: result.staleDefault }, picker: true } : { staleDefault: undefined });
+      await open(session ?? openable(id, result.sessions) ?? crypto.randomUUID());
+      // After the conversation opened: opening one is what sets the ask, by what it can run.
+      if (request === navigation) publish();
     } catch (error) {
       if (request === navigation)
         publish({ loading: false, error: message(error), states: { ...view.states, [id]: "broken" } });
@@ -605,6 +634,8 @@ export function createStore(api: DuangApi) {
   return {
     ...settings,
     getSnapshot: () => view,
+    // Which conversation this agent would open: the row quotes its output, and a click opens it.
+    sessionFor: (agentId: string) => selectedSession(agentId),
     scrollOf: (agentId: string, session: string) => scrolls.get(key(agentId, session)),
     rememberScroll(agentId: string, session: string, place: Place | undefined) {
       if (place === undefined) scrolls.delete(key(agentId, session));
@@ -732,7 +763,9 @@ export function createStore(api: DuangApi) {
         publish({ agents: await api.listAgents() });
         settle();
         if (request !== navigation) return;
-        publish({ model, error: undefined, unavailable: undefined, staleDefault: undefined, states: { ...view.states, [id]: "ready" } });
+        refusal = undefined;
+        staleDefault = undefined;
+        publish({ model, error: undefined, states: { ...view.states, [id]: "ready" } });
         // The runtime announced the change before the subscription listened again, so read the settings, not wait.
         await readSettings(c);
         await keepListed(c);
