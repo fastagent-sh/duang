@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 import { isolated, withoutCredentials } from "./harness.mjs";
+import { open, windowDriver } from "./window.mjs";
 
 const root = await isolated(import.meta.url, { name: "smoke", timeout: 90000 });
 if (root) {
@@ -198,75 +199,27 @@ if (root) {
       console.error("Electron smoke timed out");
       app.exit(1);
     }, 60000);
-    async function evaluate(expression) {
-      try {
-        return await win.webContents.executeJavaScript(expression, true);
-      } catch (error) {
-        console.error("Renderer expression:", expression, "Console:", errors);
-        throw error;
-      }
-    }
-    async function until(expression, description) {
-      for (let i = 0; i < 200; i++) {
-        if (await evaluate(expression)) return;
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      throw new Error(`Timed out: ${description}\n${await evaluate("document.body.innerText")}`);
-    }
-    async function click(text) {
-      await evaluate(`(() => {
-    const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)} || b.firstElementChild?.textContent === ${JSON.stringify(text)});
-    if (!button) throw new Error('Missing button: ' + ${JSON.stringify(text)});
-    button.focus();
-    button.click();
-  })()`);
-    }
+    let until, evaluate, type, send, click;
     async function chooseModel(model) {
       await until("document.querySelector('dialog input') !== null", "model filter");
-      await evaluate(`(() => {
-        const input = document.querySelector('dialog input');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(model)});
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      })()`);
+      await type(model, "dialog input");
       await until(`document.querySelector('dialog button[data-model="${model}"]')`, "filtered model");
       await evaluate(`document.querySelector('dialog button[data-model="${model}"]').click()`);
-    }
-    async function type(text) {
-      await evaluate(`(() => {
-    const input = document.querySelector('textarea');
-    input.focus();
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(text)});
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  })()`);
     }
     const listOpen = "!!document.querySelector('#conversations:popover-open')";
     async function showConversations() {
       if (!(await evaluate(listOpen))) await evaluate(`document.querySelector('main > header button[title="Conversations"]').click()`);
       await until(listOpen, "the conversation list opens");
     }
-    async function message(text) {
-      await evaluate(`(() => {
-    const input = document.querySelector('textarea');
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(text)});
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  })()`);
-      // Send can be pressed once the draft has text, on the render after the input event.
-      await until("document.querySelector('button[aria-label=\"Send\"]:not([aria-disabled])') !== null", "Send is ready for a draft");
-      await evaluate("document.querySelector('button[aria-label=\"Send\"]').click()");
-    }
 
     try {
-      const loaded = new Promise((resolve) => {
-        app.once("browser-window-created", (_event, window) => {
-          win = window;
-          win.webContents.on("console-message", (event) => {
+      win = await open({
+        attach: (window) =>
+          window.webContents.on("console-message", (event) => {
             if (event.level === "error") errors.push(event.message);
-          });
-          win.webContents.once("did-finish-load", resolve);
-        });
+          }),
       });
-      await import("../out/main/index.js");
-      await loaded;
+      ({ until, evaluate, type, send, click } = windowDriver(win, { timeout: 20000, poll: 25, dump: () => errors.join("\n") }));
       // Focus emulation, as Playwright does: without page focus Chromium fires no focus events, and stealing OS
       // focus is unreliable on macOS 14+.
       win.webContents.debugger.attach();
@@ -312,7 +265,7 @@ if (root) {
         "first model unlocks composer",
       );
       assert.equal(await readFile(join(workspace, "fastagent", "fastagent.config.ts"), "utf8"), "export default {};\n");
-      await message("Read hello.txt and answer.");
+      await send("Read hello.txt and answer.");
       await until(
         "document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')",
         "stream settles",
@@ -438,7 +391,7 @@ if (root) {
 
       // A turn that fails after taking its message is offered again, as a new turn, through the real runtime.
       reject = true;
-      await message("Fail once, then answer.");
+      await send("Fail once, then answer.");
       await until("document.querySelector('main').innerText.includes('Synthetic key revoked')", "the failure is in the transcript");
       await until("!!document.querySelector('main button[title^=\"Send this message again\"]')", "Retry is offered under it");
       reject = false;
@@ -460,7 +413,7 @@ if (root) {
       await until("document.querySelector('main').innerText.includes('Synthetic key revoked')", "a failure reopens from history");
 
       hold = true;
-      await message("Hold this turn so I can stop it.");
+      await send("Hold this turn so I can stop it.");
       await until("document.querySelector('button[aria-label=\"Stop the run\"]') !== null", "active stop control");
       // State and consequences in words, not only in colour.
       assert.match(
@@ -543,7 +496,7 @@ if (root) {
       gate = new Promise((resolve) => {
         release = resolve;
       });
-      await message("Answer while I look elsewhere.");
+      await send("Answer while I look elsewhere.");
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on')", "left the running conversation");
       release();
@@ -594,7 +547,7 @@ if (root) {
         "document.body.innerText.includes('What should we work on?') && !document.querySelector('textarea').disabled",
         "directory-configured model",
       );
-      await message("Use the configured model with the selected credentials.");
+      await send("Use the configured model with the selected credentials.");
       await until("document.querySelector('main').innerText.includes('Smoke answer') && !document.querySelector('main .bounce')", "configured model uses the same credential file");
 
       const models = await evaluate("window.duang.listModels('configured')");
@@ -621,7 +574,7 @@ if (root) {
         !/Reconnect|runtime was rebuilt/.test(await evaluate("document.querySelector('main').innerText")),
         "and it does not say its subscription was cut",
       );
-      await message("Use the Anthropic conversation model.");
+      await send("Use the Anthropic conversation model.");
       await until("document.querySelector('main').innerText.includes('Anthropic smoke answer') && !document.querySelector('main .bounce')", "synthetic Anthropic OAuth request");
       assert.equal(anthropicRequests, 1);
       // Effort is the conversation's own level, from the list its runtime gives for the model it runs.
@@ -746,7 +699,7 @@ if (root) {
       await evaluate(`[...document.querySelectorAll('#conversations button')].find((b) => b.textContent.includes('Use the configured model')).click()`);
       await until("document.body.innerText.includes('anthropic/claude-sonnet-4-5') && !document.querySelector('textarea').disabled", "history keeps its provider despite Codex default");
       assert.equal(await evaluate("window.duang.openAgent('configured').then(r => r.model)"), otherModel);
-      await message("Continue the historical Anthropic conversation.");
+      await send("Continue the historical Anthropic conversation.");
       await until("document.querySelector('main').innerText.split('Anthropic smoke answer').length === 3 && !document.querySelector('main .bounce')", "mixed-provider history resolves its own credential");
       assert.equal(anthropicRequests, 2);
 
@@ -1421,7 +1374,7 @@ if (root) {
       assert.equal(await electron.session.defaultSession.resolveProxy("https://github.com"), "SOCKS 127.0.0.1:1080");
       const answers = () => evaluate("document.querySelector('main').innerText.split('Smoke answer').length");
       const before = await answers();
-      await message("Send through a SOCKS4 PAC answer.");
+      await send("Send through a SOCKS4 PAC answer.");
       await until(`document.querySelector('main').innerText.split('Smoke answer').length > ${before} && !document.querySelector('main .bounce')`, "a send is not stopped by the commands' route");
       settingsItem.click();
       await until(
@@ -1552,7 +1505,7 @@ if (root) {
       // Made last, so the rows earlier steps count on are untouched.
       await evaluate("document.querySelector('button[title^=\"New conversation\"]').click()");
       await until("document.body.innerText.includes('What should we work on?') && !document.querySelector('textarea').disabled", "a new conversation");
-      await message("A second conversation, with a history of its own.");
+      await send("A second conversation, with a history of its own.");
       await until(
         `${reading} !== null && ${reading}.querySelectorAll('.column > *').length >= 2 && !document.querySelector('main .bounce')`,
         "the second conversation has settled",

@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractAll } from "@electron/asar";
 import { chunk, withoutCredentials, writeMockModels } from "./harness.mjs";
+import { driver } from "./window.mjs";
 
 const built = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "mac-arm64", "duang.app");
 assert.ok(existsSync(built), `${built} does not exist: run npm run package first`);
@@ -141,18 +142,13 @@ async function run() {
       });
       socket.send(JSON.stringify({ id: n, method: "Runtime.evaluate", params: { expression, awaitPromise: true, returnByValue: true } }));
     });
-  async function until(expression, what, ms = 30000) {
-    for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await evaluate(expression).catch(() => false)) return;
-    throw new Error(`Timed out: ${what}\n${await evaluate("document.querySelector('main')?.innerText")}\n${first.output()}`);
-  }
+  // The window is another process here, reached over the DevTools protocol, so only the driving is shared.
+  const { until, send } = driver(evaluate, { timeout: 30000, poll: 100, dump: () => first.output() });
 
   // The page is listed as soon as the window exists, before its preload has run: wait for the app's API.
   await until("typeof window.duang?.listAgents === 'function'", "the window's preload API");
   assert.equal(await evaluate("window.duang.listAgents().then((agents) => agents.map((a) => a.name).join())"), "Installed", "the isolated profile");
-  await until("!!document.querySelector('textarea') && !document.querySelector('textarea').disabled", "the agent opens");
-  await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, 'go'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  await until("!!document.querySelector('button[aria-label=Send]')", "Send is offered");
-  await evaluate("document.querySelector('button[aria-label=Send]').click()");
+  await send("go");
   await until("document.querySelector('main').innerText.includes('Installed answer.')", "the answer");
   assert.equal(readFileSync(join(project, "proof.txt"), "utf8").trim(), "installed", "bash ran in the project");
 

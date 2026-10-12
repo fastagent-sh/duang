@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 import { isolated, withoutCredentials } from "./harness.mjs";
+import { open, windowDriver } from "./window.mjs";
 
 const ANSWER = `Here is what the \`ListingResult\` component does, and the part worth changing.
 
@@ -146,31 +147,11 @@ if (root) {
       });
     };
 
-    const loaded = new Promise((resolve) => {
-      app.once("browser-window-created", (_event, window) => {
-        win = window;
-        win.webContents.once("did-finish-load", resolve);
-      });
-    });
-    await import("../out/main/index.js");
-    await loaded;
-    win.setSize(1180, 860);
-
-    const evaluate = (expression) => win.webContents.executeJavaScript(expression, true);
-    const until = async (expression, what) => {
-      for (let i = 0; i < 400; i++) {
-        if (await evaluate(expression)) return;
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      throw new Error(`Timed out waiting for ${what}`);
-    };
+    win = await open({ size: [1180, 860] });
+    const { evaluate, until, type } = windowDriver(win, { timeout: 10000, poll: 25 });
 
     await until("document.querySelector('textarea') && !document.querySelector('textarea').disabled", "composer");
-    await evaluate(`(() => {
-      const input = document.querySelector('textarea');
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, '读一下这个文件, 跑一次 i18n 检查, 然后解释 ListingResult 的核心部分');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    })()`);
+    await type("读一下这个文件, 跑一次 i18n 检查, 然后解释 ListingResult 的核心部分");
     await until("document.querySelector('button[aria-label=\"Send\"]:not([aria-disabled])') !== null", "Send is ready for a draft");
     await evaluate(`document.querySelector('button[aria-label="Send"]').click()`);
     await until("document.body.innerText.includes('sectionsGenerated')", "the answer");
@@ -210,13 +191,13 @@ if (root) {
     );
     await capture("app");
     // The `/` list: the same surface and rows as the model picker.
-    await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, '/'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await type("/");
     await until(`document.querySelector('.composer .popover button')`, "the command list");
     // The cursor at the last row of a list that scrolls: the row is brought fully into view.
     await evaluate(`document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
     await new Promise((resolve) => setTimeout(resolve, 200));
     await capture("commands");
-    await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await type("");
     await until(`!document.querySelector('.composer .popover button')`, "the command list closes");
     await evaluate(`document.querySelector('details').open = false`);
     await capture("app-start", "top");
