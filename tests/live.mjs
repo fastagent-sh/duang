@@ -59,10 +59,21 @@ if (root) {
 
     const models = await call("listModels", "live");
     const before = await readFile(authFile, "utf8");
-    // Not simply the first OpenAI spec: a ChatGPT account may not run every listed model (issue #5).
-    const chatgpt = process.env.DUANG_LIVE_OPENAI ?? models.find(({ spec }) => spec === "openai/gpt-5.5")?.spec;
+    // `openai/gpt-5.5` first because a ChatGPT account may not run every listed model (issue #5); a catalog that
+    // no longer lists it falls back to the first OpenAI model, whose refusal step 1 tolerates and reports.
+    const chatgpt =
+      process.env.DUANG_LIVE_OPENAI ??
+      models.find(({ spec }) => spec === "openai/gpt-5.5")?.spec ??
+      models.find(({ spec }) => spec.startsWith("openai/"))?.spec;
     const anthropic = models.find(({ spec }) => spec.startsWith("anthropic/claude-sonnet"))?.spec;
-    assert.ok(chatgpt && anthropic, `needs OpenAI and Anthropic in ${authFile}, got ${models.map(({ spec }) => spec).join(", ")}`);
+    // Which half is missing, and what the catalog holds: "needs OpenAI and Anthropic" alone sent one reader
+    // looking for a login when the real complaint was a model name the catalog had dropped.
+    assert.ok(
+      chatgpt && anthropic,
+      `needs a runnable OpenAI model and an Anthropic one in ${authFile}: ` +
+        `${chatgpt ? "OpenAI ok" : "no openai/ model listed"}, ${anthropic ? "Anthropic ok" : "no anthropic/claude-sonnet model listed"}` +
+        ` (listed: ${models.map(({ spec }) => spec).join(", ") || "none"})`,
+    );
     console.log(`Credential file: ${authFile}\nUsing: ${chatgpt} + ${anthropic}`);
 
     // 1. Agent default (OpenAI) runs with the credentials already on this machine.
