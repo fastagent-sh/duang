@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clock } from "./sessions.ts";
+import { clock } from "./time.ts";
 import { pace, paceLabel, resetLabel, tokens } from "./usage.ts";
 
 const HOUR = 3600;

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { DotsThree, GearSix, Plus, WarningCircle } from "@phosphor-icons/react";
 import type { AgentRow, DuangApi } from "../preload/index.ts";
-import { stamp, type Row } from "./sessions.ts";
+import { stamp } from "./time.ts";
+import type { Row } from "./sessions.ts";
 import { Avatar } from "./avatar.tsx";
 import { faceOf } from "./face.ts";
 import { Badge, Button, Pill, type Tone } from "./ui.tsx";
