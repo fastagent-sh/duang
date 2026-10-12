@@ -19,6 +19,11 @@ export async function modelsFor(dir: string): Promise<Models> {
   return (await availableModelsFromDir(dir, credentials)).filter((model) => !retired(model.spec));
 }
 
+/** Whether the agent can run this model now: its own `models.json`, the shared one, and pi's catalog. */
+export async function offered(dir: string, model: string): Promise<boolean> {
+  return (await modelsFor(dir)).some((candidate) => candidate.spec === model);
+}
+
 // Only on request, never on its own; when it rejects the old list stays valid.
 export const refreshModels = inflight(async (dir: string): Promise<Models> => {
   await refreshModelCatalog(dir, credentials);

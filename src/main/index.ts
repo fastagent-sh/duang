@@ -1,50 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent, type WebContents } from "electron";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { app, BrowserWindow, dialog, Menu, nativeTheme } from "electron";
+import { join } from "node:path";
 import {
-  addAgent,
-  agentRow,
-  createAgentIn,
-  listAgents,
-  openAgent,
-  openAgentResult,
-  registryFile,
-  relocateAgent,
-  resetAgentConfig,
-  removeAgent,
-  renameAgent,
-  setAgentModel,
-  withAgentRun,
-} from "./agents.ts";
-import { authPath } from "./credential-file.ts";
-import { modelsFor, refreshModels } from "./models.ts";
-import { disconnect, listProviders, startLogin, type LoginMethod, type LoginOutcome } from "./providers.ts";
-import { forgetUsage, providerUsage, usagePage } from "./usage.ts";
-import { applyNetwork, describeRoute, syncCommandProxy, testConnection } from "./proxy.ts";
-import { avatar, DEFAULTS, network, SettingsFile } from "./settings.ts";
+  readAppSettings,
+  registerIpc,
+  releaseWindow,
+  requestSettings,
+  runsBusy,
+  stopAllRuns,
+} from "./ipc/index.ts";
+import { applyNetwork } from "./proxy.ts";
+import { DEFAULTS } from "./settings.ts";
 import { rememberBounds, savedBounds } from "./window-state.ts";
-import { subscriptions, type Listener } from "./follow.ts";
-import { refuse, send, sends } from "./send.ts";
-import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
-import { isAddressableSession, type SessionEvent } from "@fastagent-sh/fastagent/session";
-import type { SessionFrame } from "../preload/index.ts";
-
-const settings = new SettingsFile(join(app.getPath("userData"), "settings.json"));
-
-// A new window's listener can register after `did-finish-load`, and a message to no listener is dropped,
-// so the request waits until the renderer asks.
-let settingsPending = false;
-
-function openSettings(): void {
-  const existing = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-  if (existing) {
-    existing.show();
-    existing.webContents.send("app:settings");
-    return;
-  }
-  settingsPending = true;
-  createWindow();
-}
 
 // Replacing Electron's default menu replaces all of it; without the Edit roles ⌘C and ⌘V stop working.
 function setApplicationMenu(): void {
@@ -56,7 +22,7 @@ function setApplicationMenu(): void {
         submenu: [
           { role: "about" },
           { type: "separator" },
-          { id: "settings", label: "Settings…", accelerator: "Command+,", click: openSettings },
+          { id: "settings", label: "Settings…", accelerator: "Command+,", click: () => requestSettings(createWindow) },
           { type: "separator" },
           { role: "services" },
           { type: "separator" },
@@ -97,12 +63,9 @@ function createWindow(): BrowserWindow {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => event.preventDefault());
   const senderId = win.webContents.id;
-  // Closing or reloading the window (⌘R, a renderer crash) leaves nobody to answer its sign-in, so it
-  // ends, which also closes the provider's callback server; the webContents id survives a reload.
-  const release = () => {
-    sessions.closeWindow(senderId);
-    if (signIn?.senderId === senderId) signIn.flow.cancel();
-  };
+  // Closing or reloading the window (⌘R, a renderer crash) leaves nobody to answer its subscriptions or its
+  // sign-in; the webContents id survives a reload, which is why it is the id and not the window.
+  const release = () => releaseWindow(senderId);
   win.webContents.on("destroyed", release);
   win.webContents.on("did-start-loading", release);
   reloadWhenGone(win);
@@ -149,192 +112,7 @@ function reloadWhenGone(win: BrowserWindow): void {
   });
 }
 
-function requireSession(session: string): void {
-  if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
-}
 
-async function sessionOf(agentId: string, session: string) {
-  requireSession(session);
-  return (await openAgent(await agentRow(agentId))).control.sessions.get(session);
-}
-
-let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
-
-// A Stop that arrives before the run exists is answered here.
-const inFlight = sends();
-
-const sessions = subscriptions(sessionOf);
-const listener = (sender: WebContents): Listener<SessionEvent> => ({
-  id: sender.id,
-  post: (frame: SessionFrame) => {
-    if (!sender.isDestroyed()) sender.send("session:event", frame);
-  },
-});
-
-function register(): void {
-  ipcMain.handle("agents:list", () => listAgents());
-  ipcMain.handle("agents:add", async () => {
-    // createDirectory: the project you want an agent in may not exist yet, and macOS hides New Folder
-    // unless it is asked for.
-    const picked = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
-    if (!picked.canceled && picked.filePaths[0]) return addAgent(picked.filePaths[0]);
-  });
-  ipcMain.handle("agent:open", (_e, agentId: string) => openAgentResult(agentId));
-  ipcMain.handle("agent:relocate", async (_e, id: string) => {
-    const row = await agentRow(id);
-    const picked = await dialog.showOpenDialog({ properties: ["openDirectory"], message: `Where is "${row.name}" now?` });
-    if (picked.canceled || !picked.filePaths[0]) return undefined;
-    return relocateAgent(row.id, picked.filePaths[0]);
-  });
-  ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await agentRow(id)));
-  ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await agentRow(id)).dir));
-  ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
-    if (typeof model !== "string") throw new Error("Model must be a string");
-    if (session !== undefined) requireSession(session);
-    const row = await agentRow(id);
-    if (!(await modelsFor(row.dir)).some((offered) => offered.spec === model))
-      return refuse(MODEL_UNAVAILABLE_CODE, `${model} is not available to this agent — pick another.`);
-    const result = await setAgentModel(row, model, session);
-    if (result.ok) await sessions.rebindAgent(id);
-    return result;
-  });
-  ipcMain.handle("session:state", async (_e, id: string, session: string) => (await sessionOf(id, session)).state());
-  ipcMain.handle("session:setThinking", async (_e, id: string, session: string, level: string) => {
-    if (typeof level !== "string") throw new Error("Thinking level must be a string");
-    return (await sessionOf(id, session)).update({ thinkingLevel: level });
-  });
-  ipcMain.handle("agent:remove", async (_e, id: string) => {
-    const result = await removeAgent(id);
-    if (result.ok) sessions.endAgent(id, "The agent was removed");
-    return result;
-  });
-  ipcMain.handle("agent:rename", async (_e, id: string, name: string) => {
-    if (typeof name !== "string" || !name.trim()) throw new Error("An agent name cannot be empty");
-    await renameAgent((await agentRow(id)).id, name.trim());
-  });
-  ipcMain.handle("agent:commands", async (_e, id: string) =>
-    (await openAgent(await agentRow(id))).control.commands(),
-  );
-  ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await agentRow(id)).dir));
-  ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
-  // Read on every open, so a file fixed by hand shows without a restart. The route is its own call: a PAC
-  // script can be slow, and the roster must not wait on it.
-  ipcMain.handle("settings:get", () => settings.read());
-  ipcMain.handle("network:route", () => describeRoute());
-  ipcMain.handle("settings:setAvatar", (_e, value: unknown) => settings.change({ avatar: avatar(value) }));
-  ipcMain.handle("settings:setNetwork", (_e, value: unknown) => {
-    const next = network(value);
-    return settings.change({ network: next }, async () => {
-      await applyNetwork(next);
-      return describeRoute();
-    });
-  });
-  ipcMain.handle("settings:reveal", () => shell.showItemInFolder(settings.path));
-  ipcMain.handle("app:settingsPending", () => {
-    const pending = settingsPending;
-    settingsPending = false;
-    return pending;
-  });
-  ipcMain.handle("network:test", () => testConnection());
-  ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await agentRow(id)).dir));
-  ipcMain.handle("models:refresh", async (_e, id: string) => refreshModels((await agentRow(id)).dir));
-  // `empty` is never written: reading it shows what env variables alone provide. In userData, not a shared tmp dir.
-  const empty = join(app.getPath("userData"), "no-credentials.json");
-  ipcMain.handle("providers:list", () => listProviders(authPath, empty));
-  ipcMain.handle("providers:reveal", () =>
-    existsSync(authPath) ? shell.showItemInFolder(authPath) : shell.openPath(dirname(authPath)),
-  );
-  ipcMain.handle("providers:disconnect", async (_e, provider: string) => {
-    if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
-    await disconnect(authPath, provider);
-    forgetUsage(provider, authPath);
-  });
-  ipcMain.handle("providers:login", async (e, provider: string, method: LoginMethod): Promise<LoginOutcome> => {
-    if (typeof provider !== "string" || (method !== "oauth" && method !== "api_key"))
-      throw new Error("A sign-in names a provider and oauth or api_key");
-    if (signIn) return { ok: false, error: "Another sign-in is in progress." };
-    const flow = startLogin({
-      provider,
-      method,
-      authPath,
-      send: (step) => {
-        if (!e.sender.isDestroyed()) e.sender.send("providers:step", step);
-      },
-      open: (url) => shell.openExternal(url),
-    });
-    signIn = { senderId: e.sender.id, flow };
-    try {
-      const outcome = await flow.result;
-      if (outcome.ok) forgetUsage(provider, authPath);
-      return outcome;
-    } finally {
-      signIn = undefined;
-    }
-  });
-  ipcMain.handle("providers:answer", (e, id: string, value: string) => {
-    if (typeof id !== "string" || typeof value !== "string") throw new Error("An answer is a prompt id and a string");
-    if (signIn?.senderId === e.sender.id) signIn.flow.answer(id, value);
-  });
-  ipcMain.handle("providers:cancel", (e) => {
-    if (signIn?.senderId === e.sender.id) signIn.flow.cancel();
-  });
-  ipcMain.handle("providers:open", async (e, url: string) => {
-    if (signIn?.senderId !== e.sender.id) throw new Error("No sign-in is in progress");
-    await signIn.flow.reopen(url);
-  });
-  ipcMain.handle("usage:get", (_e, provider: string) => {
-    if (typeof provider !== "string" || !provider) throw new Error("Provider must be a non-empty string");
-    return providerUsage(provider, authPath);
-  });
-  ipcMain.handle("usage:open", (_e, provider: string) => {
-    if (typeof provider !== "string") throw new Error("Provider must be a string");
-    return shell.openExternal(usagePage(provider));
-  });
-  ipcMain.handle("app:unseen", (_e, count: number) => {
-    if (!Number.isInteger(count) || count < 0) throw new Error(`Unseen count must be a non-negative integer: ${count}`);
-    app.setBadgeCount(count);
-  });
-
-  // Native, so Rename looks like the system's. Chromium also raises `contextmenu` for Shift+F10 and the Menu key.
-  ipcMain.handle("menu:popup", async (event, items: { id: string; label: string }[]) => {
-    if (!Array.isArray(items) || items.some((item) => typeof item?.id !== "string" || typeof item.label !== "string"))
-      throw new Error("Menu items must be { id, label } strings");
-    const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
-    return new Promise<string | undefined>((resolve) => {
-      const menu = Menu.buildFromTemplate(items.map(({ id, label }) => ({ label, click: () => resolve(id) })));
-      menu.popup({ window: win, callback: () => resolve(undefined) });
-    });
-  });
-  ipcMain.handle("session:rename", async (_e, id: string, session: string, name: string) => {
-    if (typeof name !== "string" || !name.trim()) throw new Error("A conversation name cannot be empty");
-    return (await sessionOf(id, session)).update({ name: name.trim() });
-  });
-  // A refused delete must leave the live subscription intact.
-  ipcMain.handle("session:delete", async (_e, id: string, session: string) => (await sessionOf(id, session)).delete());
-  ipcMain.handle("session:close", (e, subscription: string) => sessions.close(e.sender.id, subscription));
-  ipcMain.handle("session:entries", async (_e, id: string, session: string) => (await sessionOf(id, session)).entries());
-  ipcMain.handle("session:open", async (e, id: string, session: string, subscription: string) => {
-    requireSession(session);
-    const bound = await sessions.open(listener(e.sender), id, session, subscription);
-    return { entries: await bound.entries(), state: await bound.state() };
-  });
-  ipcMain.handle("session:send", async (_e: IpcMainInvokeEvent, id: string, session: string, text: string) => {
-    requireSession(session);
-    if (typeof text !== "string" || !text.trim()) throw new Error("Message must not be empty");
-    // Held before the first await: a Stop sent right after this message must find it.
-    return inFlight.hold(id, session, async (stopped) => {
-      // The agent's commands spawn during this run; they get the route as it is now.
-      await syncCommandProxy();
-      const row = await agentRow(id);
-      const offered = async (model: string) => (await modelsFor(row.dir)).some((m) => m.spec === model);
-      return withAgentRun(row, ({ agent, control }) => send(agent, control.sessions.get(session), text, stopped, offered));
-    });
-  });
-  ipcMain.handle("session:abort", async (_e, id: string, session: string) => {
-    requireSession(session);
-    return inFlight.stop(id, session, async () => (await sessionOf(id, session)).abort());
-  });
-}
 
 // One duang per userData (the app and `npm run dev` share it): two would write one registry with no lock and
 // refresh one OAuth login twice.
@@ -354,7 +132,7 @@ void app
   .then(async () => {
     let saved = DEFAULTS;
     try {
-      saved = await settings.read();
+      saved = await readAppSettings();
     } catch (error) {
       // Guessing a manual proxy is worse than the system's; said here and on Settings until the file is fixed.
       dialog.showErrorBox(
@@ -364,7 +142,7 @@ void app
     }
     await applyNetwork(saved.network);
     setApplicationMenu();
-    register();
+    registerIpc();
     createWindow();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -384,7 +162,7 @@ app.on("window-all-closed", () => {
 const QUIT_WAIT_MS = 5000;
 let quitting = false;
 app.on("before-quit", (event) => {
-  if (quitting || !inFlight.busy()) return;
+  if (quitting || !runsBusy()) return;
   event.preventDefault();
   const quit = dialog.showMessageBoxSync({
     type: "warning",
@@ -398,9 +176,7 @@ app.on("before-quit", (event) => {
   if (quit !== 0) return;
   // Quitting again while this waits quits at once.
   quitting = true;
-  void inFlight
-    .stopAll(async (agentId, session) => (await sessionOf(agentId, session)).abort(), QUIT_WAIT_MS)
-    .then((settled) => {
+  void stopAllRuns(QUIT_WAIT_MS).then((settled) => {
       if (!settled) console.error(`duang: a stopped run had not settled after ${QUIT_WAIT_MS} ms; quitting cuts it`);
       app.quit();
     });
