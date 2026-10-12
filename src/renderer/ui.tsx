@@ -1,5 +1,23 @@
 // Tailwind's later rule wins regardless of class order, so anything a call site might change is a prop here.
-import { Component, type ButtonHTMLAttributes, type ErrorInfo, type ReactNode, type Ref } from "react";
+import { Component, useEffect, useRef, useState, type ButtonHTMLAttributes, type ErrorInfo, type ReactNode, type Ref } from "react";
+import { copyToClipboard } from "./copy.ts";
+
+/**
+ * Copies text and says so for a moment. A refused clipboard is said on the control, never swallowed: a button
+ * that does nothing when the click landed reads as broken.
+ */
+export function useCopy(text: string, resetAfter = 1500) {
+  const [said, setSaid] = useState<"idle" | "copied" | { failed: string }>("idle");
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const copy = () =>
+    void copyToClipboard(text).then((result) => {
+      setSaid(result.ok ? "copied" : { failed: result.error });
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setSaid("idle"), result.ok ? resetAfter : 4000);
+    });
+  return { copied: said === "copied", failed: typeof said === "object" ? said.failed : undefined, copy };
+}
 
 // `aria-disabled`, not `disabled`: a natively disabled button cannot be focused, so its reason could not be
 // reached (WAI-ARIA APG). Activation is dropped here instead.
