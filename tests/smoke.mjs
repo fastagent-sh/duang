@@ -340,6 +340,27 @@ if (root) {
         })()`),
         "an answer is followed by its time and a copy control",
       );
+      // A refused clipboard is said on the control, not swallowed (docs/ui.md §9b, the way on). The refusal is
+      // real — an unfocused document rejects `writeText` — but whether this window is focused depends on the
+      // machine, so it is stubbed here. Without a failure branch the control says nothing and this fails.
+      const refusedCopy = await evaluate(`(async () => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: { writeText: () => Promise.reject(new Error("Document is not focused.")) },
+        });
+        try {
+          const copy = document.querySelector('main button[aria-label="Copy message"]');
+          copy.click();
+          for (let i = 0; i < 40; i++) {
+            if (copy.parentElement.textContent.includes("could not copy")) break;
+            await new Promise((resolve) => setTimeout(resolve, 25));
+          }
+          return copy.parentElement.textContent;
+        } finally {
+          delete navigator.clipboard;
+        }
+      })()`);
+      assert.match(refusedCopy, /could not copy: Document is not focused\./, "a refused clipboard is said on the control");
 
       // The card now separates arguments from result, so read the whole card rather than its first block.
       const transcript = await evaluate("document.querySelector('details details').textContent");
