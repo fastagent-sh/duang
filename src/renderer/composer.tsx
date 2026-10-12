@@ -8,6 +8,10 @@ import { tokens } from "./usage.ts";
 import { Problem } from "./problem.tsx";
 import { unavailableNotice } from "./problems.ts";
 import { modelIdOf, pickerModels, providerOf } from "./catalog.ts";
+import type { ModelAsk } from "./store.ts";
+
+// The picker's notice is only about a model that cannot run: a conversation with no model is not a problem.
+type ModelProblem = Extract<ModelAsk, { reason: "gone" | "refused" }>;
 import type { Models } from "../preload/index.ts";
 
 const LEVELS: Record<string, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
@@ -71,8 +75,7 @@ function ModelPicker({
   current,
   thinking,
   needsModel,
-  unavailable,
-  stale,
+  ask,
   onClose,
   onProviders,
 }: {
@@ -81,8 +84,7 @@ function ModelPicker({
   current?: string;
   thinking?: { level: string; levels: string[] };
   needsModel: boolean;
-  unavailable?: string;
-  stale?: string;
+  ask?: ModelProblem;
   onClose: () => void;
   onProviders: () => void;
 }) {
@@ -173,16 +175,7 @@ function ModelPicker({
         </div>
       ) : (
         <>
-          {unavailable ? (
-            <Unavailable model={unavailable} models={models} onProviders={onProviders} />
-          ) : (
-            stale && (
-              <Notice
-                title={`${stale} is no longer available`}
-                advice="It is this agent's default. The model you choose here becomes the default, and this conversation's model."
-              />
-            )
-          )}
+          {ask && <AskNotice ask={ask} models={models} onProviders={onProviders} />}
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <MagnifyingGlass size={15} className="shrink-0 text-muted" aria-hidden />
             <input
@@ -272,8 +265,16 @@ function ModelPicker({
   );
 }
 
-function Unavailable({ model, models, onProviders }: { model: string; models?: Models; onProviders: () => void }) {
-  const notice = unavailableNotice(model, models);
+/** Why the picker came up by itself, at its top: what is wrong in a line, and what to do. */
+function AskNotice({ ask, models, onProviders }: { ask: ModelProblem; models?: Models; onProviders: () => void }) {
+  if (ask.reason === "gone")
+    return (
+      <Notice
+        title={`${ask.model} is no longer available`}
+        advice="It is this agent's default. The model you choose here becomes the default, and this conversation's model."
+      />
+    );
+  const notice = unavailableNotice(ask.model, models);
   if (!notice) return null;
   const { title, connect } = notice;
   return (
@@ -322,7 +323,7 @@ export function Composer({
     c?.state?.thinkingLevel !== undefined && c.state.availableThinkingLevels
       ? { level: c.state.thinkingLevel, levels: c.state.availableThinkingLevels }
       : undefined;
-  const { needsModel, modelBlocked, picker: picking } = view;
+  const { needsModel, modelAsk, modelBlocked, picker: picking } = view;
   const value = c?.draft ?? "";
   const disabled = !!view.blocked;
   const empty = value.trim() === "";
@@ -368,7 +369,7 @@ export function Composer({
   useEffect(() => {
     if (stepped.current) list.current?.querySelector("[data-chosen]")?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
-  const stuck = !!c && view.unavailable?.session === c.session && view.unavailable.agentId === c.agentId && view.unavailable.model === model;
+  const stuck = modelAsk?.reason === "refused" && modelAsk.model === model;
   // Every opening rereads the credential file, so a provider connected in Settings shows up.
   useEffect(() => {
     if (picking) void store.loadModels();
@@ -495,8 +496,7 @@ export function Composer({
                 current={model}
                 thinking={thinking}
                 needsModel={needsModel}
-                unavailable={stuck ? model : undefined}
-                stale={view.staleDefault && view.staleDefault.agentId === agentId ? view.staleDefault.model : undefined}
+                ask={modelAsk?.reason === "needs" ? undefined : modelAsk}
                 onClose={store.closePicker}
                 onProviders={() => {
                   store.closePicker();

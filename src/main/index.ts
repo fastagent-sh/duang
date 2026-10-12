@@ -3,20 +3,18 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   addAgent,
+  agentRow,
   createAgentIn,
   listAgents,
-  MissingDirError,
-  NoAgentError,
   openAgent,
+  openAgentResult,
   registryFile,
   relocateAgent,
   resetAgentConfig,
-  configFailed,
   removeAgent,
   renameAgent,
   setAgentModel,
   withAgentRun,
-  type AgentRow,
 } from "./agents.ts";
 import { authPath } from "./credential-file.ts";
 import { modelsFor, refreshModels } from "./models.ts";
@@ -151,21 +149,13 @@ function reloadWhenGone(win: BrowserWindow): void {
   });
 }
 
-// These throw: an unknown agent or unaddressable session is a bug in this app. Refusals a person can act on
-// are values (`refuse`).
-async function requireAgent(agentId: string): Promise<AgentRow> {
-  const row = (await listAgents()).find((a) => a.id === agentId);
-  if (!row) throw new Error(`unknown agent ${agentId}`);
-  return row;
-}
-
 function requireSession(session: string): void {
   if (typeof session !== "string" || !isAddressableSession(session)) throw new Error("Invalid session id");
 }
 
 async function sessionOf(agentId: string, session: string) {
   requireSession(session);
-  return (await openAgent(await requireAgent(agentId))).control.sessions.get(session);
+  return (await openAgent(await agentRow(agentId))).control.sessions.get(session);
 }
 
 let signIn: { senderId: number; flow: ReturnType<typeof startLogin> } | undefined;
@@ -189,28 +179,19 @@ function register(): void {
     const picked = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
     if (!picked.canceled && picked.filePaths[0]) return addAgent(picked.filePaths[0]);
   });
-  ipcMain.handle("agent:open", async (_e, agentId: string) => {
-    try {
-      const { control, modelSpec, staleDefault } = await openAgent(await requireAgent(agentId));
-      return { ok: true, sessions: await control.sessions.list(), model: modelSpec, ...(staleDefault && { staleDefault }) };
-    } catch (error) {
-      const code = error instanceof NoAgentError ? "no_agent" : error instanceof MissingDirError ? "missing_dir" : "broken";
-      const message = error instanceof Error ? error.message : String(error);
-      return code === "broken" && configFailed(agentId) ? { ok: false, code, message, inConfig: true } : { ok: false, code, message };
-    }
-  });
+  ipcMain.handle("agent:open", (_e, agentId: string) => openAgentResult(agentId));
   ipcMain.handle("agent:relocate", async (_e, id: string) => {
-    const row = await requireAgent(id);
+    const row = await agentRow(id);
     const picked = await dialog.showOpenDialog({ properties: ["openDirectory"], message: `Where is "${row.name}" now?` });
     if (picked.canceled || !picked.filePaths[0]) return undefined;
     return relocateAgent(row.id, picked.filePaths[0]);
   });
-  ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await requireAgent(id)));
-  ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await requireAgent(id)).dir));
+  ipcMain.handle("agent:resetConfig", async (_e, id: string) => resetAgentConfig(await agentRow(id)));
+  ipcMain.handle("agent:scaffold", async (_e, id: string) => createAgentIn((await agentRow(id)).dir));
   ipcMain.handle("agent:setModel", async (_e, id: string, model: string, session?: string) => {
     if (typeof model !== "string") throw new Error("Model must be a string");
     if (session !== undefined) requireSession(session);
-    const row = await requireAgent(id);
+    const row = await agentRow(id);
     if (!(await modelsFor(row.dir)).some((offered) => offered.spec === model))
       return refuse(MODEL_UNAVAILABLE_CODE, `${model} is not available to this agent — pick another.`);
     const result = await setAgentModel(row, model, session);
@@ -229,12 +210,12 @@ function register(): void {
   });
   ipcMain.handle("agent:rename", async (_e, id: string, name: string) => {
     if (typeof name !== "string" || !name.trim()) throw new Error("An agent name cannot be empty");
-    await renameAgent((await requireAgent(id)).id, name.trim());
+    await renameAgent((await agentRow(id)).id, name.trim());
   });
   ipcMain.handle("agent:commands", async (_e, id: string) =>
-    (await openAgent(await requireAgent(id))).control.commands(),
+    (await openAgent(await agentRow(id))).control.commands(),
   );
-  ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await requireAgent(id)).dir));
+  ipcMain.handle("agent:reveal", async (_e, id: string) => shell.showItemInFolder((await agentRow(id)).dir));
   ipcMain.handle("registry:reveal", () => shell.showItemInFolder(registryFile));
   // Read on every open, so a file fixed by hand shows without a restart. The route is its own call: a PAC
   // script can be slow, and the roster must not wait on it.
@@ -255,8 +236,8 @@ function register(): void {
     return pending;
   });
   ipcMain.handle("network:test", () => testConnection());
-  ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await requireAgent(id)).dir));
-  ipcMain.handle("models:refresh", async (_e, id: string) => refreshModels((await requireAgent(id)).dir));
+  ipcMain.handle("models:list", async (_e, id: string) => modelsFor((await agentRow(id)).dir));
+  ipcMain.handle("models:refresh", async (_e, id: string) => refreshModels((await agentRow(id)).dir));
   // `empty` is never written: reading it shows what env variables alone provide. In userData, not a shared tmp dir.
   const empty = join(app.getPath("userData"), "no-credentials.json");
   ipcMain.handle("providers:list", () => listProviders(authPath, empty));
@@ -344,7 +325,7 @@ function register(): void {
     return inFlight.hold(id, session, async (stopped) => {
       // The agent's commands spawn during this run; they get the route as it is now.
       await syncCommandProxy();
-      const row = await requireAgent(id);
+      const row = await agentRow(id);
       const offered = async (model: string) => (await modelsFor(row.dir)).some((m) => m.spec === model);
       return withAgentRun(row, ({ agent, control }) => send(agent, control.sessions.get(session), text, stopped, offered));
     });

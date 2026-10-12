@@ -40,6 +40,12 @@ export default function App() {
       view.unsent[id],
       view.unseen[id],
     );
+  // The row quotes the conversation a click opens; an agent whose selection the runtime has not heard of yet
+  // falls back to its newest.
+  const latest = (id: string) => {
+    const list = rowsFor(id);
+    return list.find((row) => row.session === store.sessionFor(id)) ?? list.find((row) => !row.fresh);
+  };
   const sessionRows = rowsFor(agentId ?? "");
 
   useEffect(() => {
@@ -138,7 +144,7 @@ export default function App() {
           doing={view.doing}
           unseen={view.unseen}
           previews={view.previews}
-          latest={(id) => rowsFor(id).find((row) => !row.fresh)}
+          latest={latest}
           errors={view.sessionsError}
           settingsOpen={Boolean(settings)}
           onSelect={(id) => {

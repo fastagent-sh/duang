@@ -602,14 +602,14 @@ test("an agent whose default model pi does not know opens, with the picker open 
     id === "a" ? { ok: true, sessions: [], model: "provider/model", staleDefault: "local/gone" } : { ok: true, sessions: [], model: "provider/model" };
   await store.load();
   assert.equal(store.getSnapshot().pane, "start", "the agent opens on its own model");
-  assert.deepEqual(store.getSnapshot().staleDefault, { agentId: "a", model: "local/gone" });
+  assert.deepEqual(store.getSnapshot().modelAsk, { reason: "gone", model: "local/gone" });
   assert.equal(store.getSnapshot().picker, true, "a model is asked for, though the agent has one to run");
   await store.selectAgent("b");
-  assert.equal(store.getSnapshot().staleDefault, undefined, "another agent's default is fine");
+  assert.equal(store.getSnapshot().modelAsk, undefined, "another agent's default is fine");
   await store.selectAgent("a");
   assert.equal(store.getSnapshot().picker, true, "and asked again on coming back while it is still gone");
   await store.pickModel("provider/model");
-  assert.equal(store.getSnapshot().staleDefault, undefined, "a chosen model is the default now");
+  assert.equal(store.getSnapshot().modelAsk, undefined, "a chosen model is the default now");
   store.dispose();
 });
 
@@ -1588,6 +1588,24 @@ test("a roster row quotes the newest output of the conversation it speaks for, l
   store.dispose();
 });
 
+test("the conversation a row quotes is the one a click opens, even one only unsent text still keeps alive", async () => {
+  const { api, store } = harness();
+  api.openAgent = async (id) => (id === "b" ? listed("b-newest") : ready);
+  await store.load();
+  await store.selectAgent("b");
+  await store.newConversation();
+  const unborn = store.getSnapshot().conversation!.session;
+  store.setDraft("still unsent");
+  await store.selectAgent("a");
+  // The runtime never heard of it, and this window released it: the unsent text is what keeps it the one to open.
+  assert.equal(store.getSnapshot().sessions["b"]?.some((s) => s.session === unborn), false);
+  assert.equal(store.sessionFor("b"), unborn);
+  await store.selectAgent("b");
+  assert.equal(store.getSnapshot().conversation?.session, unborn, "a click opens the conversation the row quoted");
+  assert.equal(store.getSnapshot().conversation?.draft, "still unsent");
+  store.dispose();
+});
+
 test("a slow history read cannot replace a newer one", async () => {
   const { api, store } = harness();
   const at = (updatedAt: number) =>
@@ -2080,15 +2098,13 @@ test("a send refused because the model cannot run opens the picker on it, and wr
   });
   store.setDraft("Summarise the latest notes");
   await store.send();
-  const asked = store.getSnapshot().unavailable;
-  assert.equal(asked?.model, "anthropic/claude-sonnet-4-5");
-  assert.equal(asked?.session, c.session);
+  assert.deepEqual(store.getSnapshot().modelAsk, { reason: "refused", model: "anthropic/claude-sonnet-4-5" });
   assert.equal(store.getSnapshot().picker, true, "the picker opens on it");
   assert.equal(c.items.length, 0, "nothing happened in the conversation, so nothing is written there");
   assert.equal(c.draft, "Summarise the latest notes", "the message waits for the model to be chosen");
   // Choosing a model is the way on, and ends the request.
   await store.pickModel("provider/model");
-  assert.equal(store.getSnapshot().unavailable, undefined);
+  assert.equal(store.getSnapshot().modelAsk, undefined);
   store.dispose();
 });
 

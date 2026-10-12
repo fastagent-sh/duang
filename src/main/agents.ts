@@ -1,7 +1,7 @@
 import { app } from "electron";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
-import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
+import { NO_SUCH_SESSION_CODE, type SessionResult, type SessionSummary } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credential-file.ts";
 import { refuse } from "./send.ts";
 import {
@@ -14,8 +14,7 @@ import {
   type AgentRow,
 } from "./agent-files.ts";
 
-export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
-export const registryFile = join(app.getPath("userData"), "agents.json");
+export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";export const registryFile = join(app.getPath("userData"), "agents.json");
 const registry = new AgentRegistry(registryFile);
 export const listAgents = () => registry.list();
 export const addAgent = (dir: string) => registry.add(dir);
@@ -25,6 +24,14 @@ type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;
   staleDefault?: string;
 };
+
+/** Why an agent is not ready: no agent in this folder yet, its folder is gone, or its definition does not load. */
+export type AgentSetup = "no_agent" | "missing_dir" | "broken";
+
+/** What the window's open call answers: the agent's sessions and model, or why it could not be opened. */
+export type OpenResult =
+  | { ok: true; sessions: SessionSummary[]; model?: string; staleDefault?: string }
+  | { ok: false; code: AgentSetup; message: string; inConfig?: true };
 // Agent-scoped admission: sends share (a count); a model change or removal excludes them all, including turns
 // still opening. FastAgent's per-session `inProcessLease` cannot express that.
 const opened = new Map<string, Promise<Opened>>();
@@ -69,6 +76,13 @@ async function buildToOpen(row: AgentRow): Promise<Opened> {
   }
 }
 
+/** An agent's row in the registry. An unknown id is a bug in this app, so this throws rather than refusing. */
+export async function agentRow(agentId: string): Promise<AgentRow> {
+  const row = (await listAgents()).find((candidate) => candidate.id === agentId);
+  if (!row) throw new Error(`unknown agent ${agentId}`);
+  return row;
+}
+
 export async function openAgent(row: AgentRow): Promise<Opened> {
   // Wait rather than fail: "try again" is not actionable. The admitting read is stale after the change.
   while (changing.has(row.id)) {
@@ -83,6 +97,22 @@ export async function openAgent(row: AgentRow): Promise<Opened> {
     if (opened.get(row.id) === promise) opened.delete(row.id);
   });
   return promise;
+}
+
+/**
+ * The window's open call: the agent's sessions and its model, or why it could not be opened. Decided here,
+ * beside the runtime's own errors, so the window takes one shape and never classifies a condition itself.
+ */
+export async function openAgentResult(agentId: string): Promise<OpenResult> {
+  try {
+    const { control, modelSpec, staleDefault } = await openAgent(await agentRow(agentId));
+    return { ok: true, sessions: await control.sessions.list(), model: modelSpec, ...(staleDefault && { staleDefault }) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof NoAgentError) return { ok: false, code: "no_agent", message };
+    if (error instanceof MissingDirError) return { ok: false, code: "missing_dir", message };
+    return configFailed(agentId) ? { ok: false, code: "broken", message, inConfig: true } : { ok: false, code: "broken", message };
+  }
 }
 
 /** Count admission as busy too: model changes must not race a turn that is still opening its runtime. */
