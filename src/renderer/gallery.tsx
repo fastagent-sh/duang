@@ -5,7 +5,7 @@ import { BrokenAgent, MissingFolder } from "./panels.tsx";
 import { Avatar } from "./avatar.tsx";
 import type { Face } from "./face.ts";
 import { CodeBlock } from "./code.tsx";
-import { UsageDetail, UsageMeter } from "./header.tsx";
+import { UsageDetail, UsageMeter } from "./plan-usage.tsx";
 import { Message, RunStatus, Tool, WorkBlock } from "./transcript-view.tsx";
 
 const FIXED = new Date(2026, 0, 5, 9, 41).getTime();

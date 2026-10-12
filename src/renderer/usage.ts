@@ -1,5 +1,5 @@
 import type { UsageWindow } from "../preload/index.ts";
-import { clock } from "./sessions.ts";
+import { clock } from "./time.ts";
 
 const DAY_MS = 24 * 3600 * 1000;
 
