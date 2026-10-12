@@ -371,7 +371,12 @@ export function createStore(api: DuangApi) {
     void api.closeSession(c.subscription).catch((error) => fail("A conversation was not released", error));
   };
   const leave = () => publish({ conversation: undefined });
-  const { onStep, ...settings } = createSettings(api, () => view, publish);
+  // A provider disconnected here leaves a plan's numbers behind, which this store owns: it drops them, so the
+  // settings sub-store never reaches into state it does not own.
+  const { onStep, ...settings } = createSettings(api, () => view, publish, (provider) => {
+    const { [provider]: _gone, ...usage } = view.usage;
+    publish({ usage });
+  });
 
   // A failure lands on that agent's row: an empty list and an unreadable one are not the same answer.
   async function listSessions(id: string) {

@@ -6,7 +6,6 @@ import type {
   LoginStep,
   Network,
   ProviderRow,
-  ProviderUsage,
   Route,
 } from "../preload/index.ts";
 import { message } from "./message.ts";
@@ -46,9 +45,13 @@ export interface SettingsView {
   providersError?: string;
   signIn?: SignIn;
 }
-type Shared = SettingsView & { usage: Record<string, { data?: ProviderUsage; error?: string }> };
-
-export function createSettings(api: DuangApi, view: () => Shared, publish: (patch: Partial<Shared>) => void) {
+export function createSettings(
+  api: DuangApi,
+  view: () => SettingsView,
+  publish: (patch: Partial<SettingsView>) => void,
+  // A provider's stored login is gone, so whatever this window cached for it is not its owner's to keep.
+  disconnected: (provider: string) => void,
+) {
   // A slow check for a route that has since changed must not land on the new one, nor an earlier
   // network choice's answer after a later one's.
   let connectionRequest = 0;
@@ -156,8 +159,7 @@ export function createSettings(api: DuangApi, view: () => Shared, publish: (patc
         return publish({ providersError: message(error) });
       }
       // The header asks again only when its provider, run or conversation changes, so drop the gone plan's numbers.
-      const { [provider]: _gone, ...usage } = view().usage;
-      publish({ usage });
+      disconnected(provider);
       await loadProviders();
     },
     // From nothing on every opening: a file fixed by hand shows up, and nothing stale is shown as current.
