@@ -16,3 +16,17 @@ test("copying answers what to say, and a refused clipboard is a reason rather th
     error: "the clipboard is gone",
   });
 });
+
+test("a clipboard that throws where it is read is a refusal, not an exception out of the click", async () => {
+  // What a missing `navigator.clipboard` does: reading `writeText` of undefined throws before any promise exists.
+  const missing = await copyToClipboard("plain text", () => {
+    throw new TypeError("Cannot read properties of undefined (reading 'writeText')");
+  });
+  assert.deepEqual(missing, { ok: false, error: "Cannot read properties of undefined (reading 'writeText')" });
+  assert.deepEqual(
+    await copyToClipboard("plain text", () => {
+      throw "the clipboard is gone";
+    }),
+    { ok: false, error: "the clipboard is gone" },
+  );
+});
