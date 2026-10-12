@@ -174,7 +174,7 @@ npm run test:smoke    # the real app with a fake model: the local workflow, then
 npm run shots         # screenshots of the real window in both colour modes, into out/shots/
 npm run test:package  # package, then run the installed app outside the checkout
 npm run test:perf     # timings on a 150-turn conversation (machine-dependent, not in CI)
-DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls with this machine's duang logins
+DUANG_LIVE=1 npm run test:live  # opt-in: real provider calls with this machine's duang logins; two providers, any two
 ```
 
 FastAgent is pinned to an exact published version. Automated tests use isolated data and fake model
