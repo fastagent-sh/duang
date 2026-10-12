@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import electron from "electron";
 import { chunk, isolated, withoutCredentials, writeMockModels } from "./harness.mjs";
+import { open, sleep, windowDriver } from "./window.mjs";
 
 const TURNS = Number(process.env.TURNS ?? 150);
 const serve = (respond) => {
@@ -80,14 +81,7 @@ if (root) {
   writeFileSync(join(data, "agents.json"), JSON.stringify([{ id: "l", name: "Long", dir: project, colour: 3 }, { id: "o", name: "Other", dir: other, colour: 5 }]));
   app.setPath("userData", data);
   let win;
-  app.once("browser-window-created", (_event, window) => (win = window));
-  const evaluate = (expression) => win.webContents.executeJavaScript(expression, true);
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  async function until(expression, what, ms = 60000) {
-    const start = Date.now();
-    for (; Date.now() - start < ms; await sleep(10)) if (await evaluate(expression)) return Date.now() - start;
-    throw new Error(`Timed out: ${what}`);
-  }
+  let evaluate, until, type;
   const frames = (ms) =>
     evaluate(`new Promise((resolve) => { const d = []; let last = performance.now(); const end = last + ${ms}; const step = (t) => { d.push(t - last); last = t; if (t < end) requestAnimationFrame(step); else resolve(d); }; requestAnimationFrame(step); })`);
   const quantile = (d, q) => [...d].sort((a, b) => a - b)[Math.min(d.length - 1, Math.floor(q * d.length))];
@@ -95,10 +89,8 @@ if (root) {
   const loaded = `document.querySelector('[aria-label="Transcript"]')?.innerText.includes('Turn ${TURNS}:') && !document.querySelector('[aria-busy=true]')`;
 
   async function run() {
-    await import("../out/main/index.js");
-    for (let t = 0; t < 200 && !win; t++) await sleep(50);
-    win.setSize(1280, 820);
-    await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+    win = await open({ size: [1280, 820] });
+    ({ evaluate, until, type } = windowDriver(win, { timeout: 60000, poll: 10 }));
     await evaluate(`window.__long = []; new PerformanceObserver((list) => { for (const e of list.getEntries()) window.__long.push(e.duration); }).observe({ type: "longtask" }); 1`);
     const opened = await until(loaded, "the long conversation opens");
     // The rest is drawn above in batches: the view must not move while it is, and no batch may freeze it.
@@ -122,7 +114,7 @@ if (root) {
     const scroll = await frames(Math.min(20000, (height / 120) * 18));
     await scrolling;
     await evaluate(`document.querySelector('[aria-label="Transcript"]').scrollTop = 1e9`);
-    await evaluate(`(() => { const i = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, 'one more'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await type("one more");
     await until("!!document.querySelector('button[aria-label=Send]')", "Send");
     const streaming = frames(8000);
     await evaluate("document.querySelector('button[aria-label=Send]').click()");

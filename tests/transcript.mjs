@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import electron from "electron";
 import { chunk, isolated, withoutCredentials, writeMockModels } from "./harness.mjs";
+import { open, windowDriver } from "./window.mjs";
 
 const root = await isolated(import.meta.url, { name: "transcript", timeout: 120000 });
 if (root) {
@@ -80,29 +81,15 @@ if (root) {
   };
 
   let win;
-  app.once("browser-window-created", (_event, window) => (win = window));
-  const evaluate = (expression) => win.webContents.executeJavaScript(expression, true);
-  async function until(expression, what, ms = 20000) {
-    for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 50)))
-      if (await evaluate(expression).catch(() => false)) return;
-    throw new Error(`Timed out: ${what}\n${await evaluate("document.querySelector('main')?.innerText").catch(() => "")}`);
-  }
+  // Bound by `run` once the window exists; the helpers below read them through these.
+  let until, type, send, evaluate, transcript;
   const live = () =>
     evaluate(`[...document.querySelectorAll('[aria-label="Transcript"] .bounce')].map((dot) => ({
       text: dot.parentElement.innerText.replace(/\\s+/g, " ").trim(),
       inBlock: !!dot.closest("summary"),
     }))`);
-  const transcript = () => evaluate(`document.querySelector('[aria-label="Transcript"]')?.innerText ?? ""`);
   const button = () => evaluate(`document.querySelector('button[aria-label="Stop the run"], button[aria-label="Steer the run"], button[aria-label="Send"]')?.getAttribute('aria-label')`);
-  const type = (text) =>
-    evaluate(`(() => { const i = document.querySelector('textarea'); i.focus(); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(i, ${JSON.stringify(text)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  async function send(text) {
-    await until("!!document.querySelector('textarea') && !document.querySelector('textarea').disabled", "the composer is ready");
-    await type(text);
-    await until("!!document.querySelector('button[aria-label=Send]:not([aria-disabled])')", "Send is offered");
-    await evaluate("document.querySelector('button[aria-label=Send]').click()");
-  }
-  const idle = () => until(`!document.querySelector('button[aria-label="Stop the run"]') && !document.querySelector('[aria-label="Transcript"] .bounce')`, "the run ends", 30000);
+  const idle = () => until(`!document.querySelector('button[aria-label="Stop the run"]') && !document.querySelector('[aria-label="Transcript"] .bounce')`, "the run ends", { timeout: 30000 });
   async function oneLine(what, { inBlock, says }) {
     const lines = await live();
     assert.equal(lines.length, 1, `${what}: one live line, not ${JSON.stringify(lines)}`);
@@ -111,9 +98,8 @@ if (root) {
   }
 
   async function run() {
-    await import("../out/main/index.js");
-    for (let t = 0; t < 200 && !win; t++) await new Promise((r) => setTimeout(r, 50));
-    await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+    win = await open();
+    ({ until, type, send, evaluate, transcript } = windowDriver(win, { timeout: 20000, poll: 50 }));
 
     // Two calls running: their block is the live line, and the composer stops or steers.
     script.push({ text: "Checking.", tools: [waitsFor("a"), waitsFor("b")] }, { text: "Both done." });
@@ -169,7 +155,7 @@ if (root) {
     await until(`/retrying 1\\/3/.test(document.querySelector('[aria-label="Transcript"] .bounce')?.parentElement.innerText ?? '')`, "a retry waited out");
     await oneLine("a retry waited out", { inBlock: false, says: /retrying 1\/3 the provider had a problem/ });
     assert.equal((await transcript()).match(/retrying 1\/3/g)?.length, 1, "said once, by the live line");
-    await until(`document.querySelector('[aria-label="Transcript"]').innerText.includes('Answered after a retry.')`, "the answer after the retry", 30000);
+    await until(`document.querySelector('[aria-label="Transcript"]').innerText.includes('Answered after a retry.')`, "the answer after the retry", { timeout: 30000 });
     await idle();
     assert.match(await transcript(), /retried once: the provider had a problem/);
     assert.doesNotMatch(await transcript(), /retrying/, "no wait is left claimed");
