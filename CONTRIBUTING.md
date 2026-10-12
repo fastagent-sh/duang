@@ -147,6 +147,12 @@ git branch -d <merged-branch>
 git fetch --prune origin
 ```
 
+A **stacked** PR, one based on another open PR's branch, needs one extra step once its parent merges: rebase
+it onto the new `main` (`git rebase --onto main <parent-branch> <branch>`) and force-push, rather than using
+the PR's *Update branch*. Updating replays the parent's original commits, which `main` now holds as a squash,
+so it reports conflicts that the rebase does not; the rebase also leaves the PR showing only its own commits.
+GitHub retargets the PR to `main` once the parent's branch is deleted.
+
 ## Releases
 
 A release is the macOS app (`duang-X.Y.Z-arm64.dmg`) attached to a GitHub Release `vX.Y.Z`. Start from a
