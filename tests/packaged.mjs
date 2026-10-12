@@ -8,11 +8,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractAll } from "@electron/asar";
-import { chunk, withoutCredentials, writeMockModels } from "./harness.mjs";
+import { chunk, requireFreshBuild, withoutCredentials, writeMockModels } from "./harness.mjs";
 import { driver } from "./window.mjs";
 
 const built = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "mac-arm64", "duang.app");
-assert.ok(existsSync(built), `${built} does not exist: run npm run package first`);
+// The packaged app, not `out/`: `npm run package` refreshes it, and a source edit makes it stale.
+requireFreshBuild([join(built, "Contents", "Resources", "app.asar")], "npm run package");
 const root = mkdtempSync(join(tmpdir(), "duang-packaged-"));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
