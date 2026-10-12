@@ -45,7 +45,7 @@ import {
   type Work,
 } from "./transcript.ts";
 import type { SessionState } from "@fastagent-sh/fastagent/session";
-import { clock } from "./sessions.ts";
+import { clock } from "./time.ts";
 import { Badge, Button, type Tone } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
 import type { Fix } from "./problems.ts";

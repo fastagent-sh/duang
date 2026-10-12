@@ -246,11 +246,12 @@ A problem is said for the person, not for the program that noticed it, in this o
 4. **The original words**, verbatim, because they are what a report needs; folded out of the way when
    the title already explains them.
 
-Size follows scope, at three placements of one component (`problem.tsx`): a **card** in the transcript
-where a run or send went wrong (only the latest carries buttons; earlier ones are history); a **strip**
-floating under the header for this view or an action outside any conversation, so nothing below moves;
-a **page** when there is nothing else to show. Setup pages share the page's shape, so a first step and
-a problem look like the same app.
+Size follows scope, at four placements of one shape: a **card** in the transcript where a run or send
+went wrong (only the latest carries buttons; earlier ones are history); a **strip** floating under the
+header for this view or an action outside any conversation, so nothing below moves; a **page** when there
+is nothing else to show; and a **notice** at the top of the model picker (`composer.tsx`), which stacks its
+title over its advice because the picker is 300 px wide. The first three are `problem.tsx`; setup pages
+share the page's shape, so a first step and a problem look like the same app.
 
 ## 10. Motion
 

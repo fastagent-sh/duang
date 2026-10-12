@@ -4,7 +4,7 @@ import { CaretDown, CaretRight, Check, Copy, DotsThree, Globe, Key, MagnifyingGl
 import type { DuangApi, ProviderRow } from "../preload/index.ts";
 import { keyStep, type SignIn } from "./settings-store.ts";
 import type { Store, View } from "./store.ts";
-import { PlanUsage } from "./header.tsx";
+import { PlanUsage } from "./plan-usage.tsx";
 import { Group, row } from "./settings.tsx";
 import { Badge, Button } from "./ui.tsx";
 
