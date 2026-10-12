@@ -48,7 +48,7 @@ if (root) {
     const real = join(app.getPath("appData"), "duang", "auth.json");
     assert.ok(
       existsSync(real),
-      `${real} does not exist. Sign in with ChatGPT (OpenAI) and connect Anthropic in duang (Settings → Model providers), or ` +
+      `${real} does not exist. Connect the providers to check in duang (Settings → Model providers), or ` +
         `sign in with the CLI pointed at it: FASTAGENT_AUTH_PATH="${real}" fastagent login`,
     );
     const authFile = join(data, "auth.json");
@@ -59,54 +59,69 @@ if (root) {
 
     const models = await call("listModels", "live");
     const before = await readFile(authFile, "utf8");
-    // `openai/gpt-5.5` first because a ChatGPT account may not run every listed model (issue #5); a catalog that
-    // no longer lists it falls back to the first OpenAI model, whose refusal step 1 tolerates and reports.
-    const chatgpt =
+    const providerOf = (spec) => spec.slice(0, spec.indexOf("/"));
+    const firstOf = (provider) => models.find(({ spec }) => providerOf(spec) === provider)?.spec;
+    // The rule this check covers needs two providers in one credential file, and any pair does it: OpenAI +
+    // Anthropic are used when both are listed (the pair it started with), else the first two the catalog holds.
+    // One provider cannot run this check: there is no cross-provider history to keep.
+    const openai =
       process.env.DUANG_LIVE_OPENAI ??
       models.find(({ spec }) => spec === "openai/gpt-5.5")?.spec ??
-      models.find(({ spec }) => spec.startsWith("openai/"))?.spec;
-    const anthropic = models.find(({ spec }) => spec.startsWith("anthropic/claude-sonnet"))?.spec;
+      firstOf("openai");
+    const claude = models.find(({ spec }) => spec.startsWith("anthropic/claude-sonnet"))?.spec;
+    const listed = [...new Set(models.map(({ spec }) => providerOf(spec)))];
+    // OpenAI takes the first slot when it is listed: it is the provider the issue behind this check named, and
+    // its model is chosen with care above rather than taken as the first the provider lists.
+    const ordered = listed.includes("openai") ? ["openai", ...listed.filter((provider) => provider !== "openai")] : listed;
+    const [defaultModel, otherModel] =
+      openai && claude
+        ? [openai, claude]
+        : ordered.slice(0, 2).map((provider) => (provider === "openai" ? openai : firstOf(provider)));
     // Which half is missing, and what the catalog holds: "needs OpenAI and Anthropic" alone sent one reader
     // looking for a login when the real complaint was a model name the catalog had dropped.
     assert.ok(
-      chatgpt && anthropic,
-      `needs a runnable OpenAI model and an Anthropic one in ${authFile}: ` +
-        `${chatgpt ? "OpenAI ok" : "no openai/ model listed"}, ${anthropic ? "Anthropic ok" : "no anthropic/claude-sonnet model listed"}` +
-        ` (listed: ${models.map(({ spec }) => spec).join(", ") || "none"})`,
+      defaultModel && otherModel,
+      `needs two providers in ${authFile} (OpenAI + Anthropic, or any other pair): ` +
+        `${defaultModel ? `first ${defaultModel}` : "no provider listed"}, ` +
+        `${otherModel ? `second ${otherModel}` : "nothing else listed"}` +
+        ` (listed: ${models.map(({ spec }) => spec).join(", ") || "none"}${process.env.DUANG_LIVE_OTHER ? `, DUANG_LIVE_OTHER=${process.env.DUANG_LIVE_OTHER}` : ""})`,
     );
-    console.log(`Credential file: ${authFile}\nUsing: ${chatgpt} + ${anthropic}`);
+    const other = process.env.DUANG_LIVE_OTHER ?? otherModel;
+    console.log(`Credential file: ${authFile}\nUsing: ${defaultModel} + ${other}`);
 
-    // 1. Agent default (OpenAI) runs with the credentials already on this machine.
-    assert.deepEqual(await call("setModel", "live", chatgpt), { ok: true });
+    // 1. The agent's default runs with the credentials already on this machine. The first provider is the one
+    // `openai/gpt-5.5` names where it exists, because a ChatGPT account may not run every listed model (#5).
+    assert.deepEqual(await call("setModel", "live", defaultModel), { ok: true });
     const first = crypto.randomUUID();
-    const chatgptRun = await call("send", "live", first, ASK);
-    if (chatgptRun.ok) {
-      console.log(`OpenAI reply: ${JSON.stringify((await reply(first)).text)}`);
+    const defaultRun = await call("send", "live", first, ASK);
+    if (defaultRun.ok) {
+      console.log(`${defaultModel} reply: ${JSON.stringify((await reply(first)).text)}`);
     } else {
       // A quota or entitlement refusal still proves the token resolved; a credential fault must not pass as one.
-      assert.doesNotMatch(chatgptRun.error.message, /not configured|refresh|unauthor|invalid[_ ]api|401/i);
-      console.log(`OpenAI credentials accepted, provider refused the run: ${chatgptRun.error.message}`);
+      assert.doesNotMatch(defaultRun.error.message, /not configured|refresh|unauthor|invalid[_ ]api|401/i);
+      console.log(`${defaultModel} credentials accepted, provider refused the run: ${defaultRun.error.message}`);
     }
 
     // 2. A conversation moved to the other provider.
     const second = crypto.randomUUID();
-    assert.deepEqual(await call("setModel", "live", anthropic, second), { ok: true });
-    assert.deepEqual(await call("send", "live", second, ASK), { ok: true }, "Anthropic conversation send");
+    assert.deepEqual(await call("setModel", "live", other, second), { ok: true });
+    assert.deepEqual(await call("send", "live", second, ASK), { ok: true }, `${other} conversation send`);
 
-    // 3. Issue #5's reported case: agent default is OpenAI again, history stays Anthropic and runs.
-    assert.deepEqual(await call("setModel", "live", chatgpt), { ok: true });
-    assert.equal((await call("openAgent", "live")).model, chatgpt, "agent default is OpenAI");
+    // 3. Issue #5's reported case: the agent's default is the first provider again, and the conversation keeps
+    // the model the other provider recorded, and still runs.
+    assert.deepEqual(await call("setModel", "live", defaultModel), { ok: true });
+    assert.equal((await call("openAgent", "live")).model, defaultModel, `agent default is ${defaultModel}`);
     assert.deepEqual(await call("send", "live", second, "Reply with exactly: STILL OK"), { ok: true }, "history send");
     const history = await reply(second);
-    assert.equal(history.model, anthropic, "the historical conversation kept its own model");
+    assert.equal(history.model, other, `the historical conversation kept its own model (${other})`);
     assert.match(history.text, /STILL OK/i);
-    console.log(`Anthropic history (${history.model}) reply: ${JSON.stringify(history.text)}`);
+    console.log(`${other} history (${history.model}) reply: ${JSON.stringify(history.text)}`);
 
     // Refresh may legitimately rewrite tokens; it must stay a readable file with the same providers.
     const after = await readFile(authFile, "utf8");
     assert.deepEqual(Object.keys(JSON.parse(after)).sort(), Object.keys(JSON.parse(before)).sort());
     console.log(`Credential file ${after === before ? "unchanged" : "rewritten by OAuth refresh"}, providers intact.`);
-    console.log("Live check passed: real OpenAI default, real Anthropic history, one credential file.");
+    console.log(`Live check passed: ${defaultModel} as the agent's default, ${other} kept by its conversation, one credential file.`);
   }
 
   const timeout = setTimeout(() => {
