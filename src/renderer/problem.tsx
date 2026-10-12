@@ -1,7 +1,7 @@
 // docs/ui.md §9b: `card` in the transcript, `strip` floating under the header, `page` in place of the conversation.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { CaretRight, Check, Copy, Info, Prohibit, WarningCircle, X } from "@phosphor-icons/react";
-import { Button } from "./ui.tsx";
+import { Button, useCopy } from "./ui.tsx";
 
 type ProblemTone = "error" | "warning" | "info";
 
@@ -17,9 +17,7 @@ const SHORT = 140;
 
 function Reason({ text, as }: { text: string; as: "folded" | "well" }) {
   const [open, setOpen] = useState(as === "well");
-  const [copied, setCopied] = useState<"yes" | string>();
-  const timer = useRef(0);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const { copied, failed, copy } = useCopy(text, 2000);
   return (
     <>
       {as === "folded" && (
@@ -40,23 +38,11 @@ function Reason({ text, as }: { text: string; as: "folded" | "well" }) {
           <Button
             kind="ghost"
             size={28}
-            aria-label={copied === "yes" ? "Copied" : "Copy the details"}
-            title={copied && copied !== "yes" ? `Could not copy: ${copied}` : "Copy the details"}
-            icon={copied === "yes" ? <Check size={13} /> : <Copy size={13} />}
+            aria-label={copied ? "Copied" : "Copy the details"}
+            title={failed ? `Could not copy: ${failed}` : "Copy the details"}
+            icon={copied ? <Check size={13} /> : <Copy size={13} />}
             className="absolute top-1.5 right-1.5"
-            onClick={() =>
-              // A refused clipboard says so on the button rather than looking broken.
-              navigator.clipboard
-                .writeText(text)
-                .then(
-                  () => setCopied("yes"),
-                  (error: unknown) => setCopied(error instanceof Error ? error.message : String(error)),
-                )
-                .finally(() => {
-                  window.clearTimeout(timer.current);
-                  timer.current = window.setTimeout(() => setCopied(undefined), 2000);
-                })
-            }
+            onClick={copy}
           />
         </div>
       )}

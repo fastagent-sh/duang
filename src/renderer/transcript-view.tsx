@@ -46,7 +46,7 @@ import {
 } from "./transcript.ts";
 import type { SessionState } from "@fastagent-sh/fastagent/session";
 import { clock } from "./time.ts";
-import { Badge, Button, type Tone } from "./ui.tsx";
+import { Badge, Button, useCopy, type Tone } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
 import type { Fix } from "./problems.ts";
 
@@ -482,10 +482,7 @@ export function Message({
 }
 
 function Footer({ text, at }: { text: string; at: number }) {
-  const [copied, setCopied] = useState(false);
-  const [failed, setFailed] = useState<string>();
-  const timer = useRef(0);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const { copied, failed, copy } = useCopy(text);
   return (
     <div className="mt-1.5 flex h-5 items-center gap-1 text-[11px] text-muted">
       <span className="tabular-nums">{clock(at)}</span>
@@ -497,19 +494,7 @@ function Footer({ text, at }: { text: string; at: number }) {
         title={failed ?? "Copy this answer"}
         icon={copied ? <Check size={13} /> : <Copy size={13} />}
         className={`transition-opacity ${failed ? "" : "opacity-0"} group-hover/msg:opacity-100 focus-visible:opacity-100`}
-        onClick={() => {
-          // Clipboards get refused (unfocused window, another process); the failure takes the button's label.
-          navigator.clipboard.writeText(text).then(
-            () => {
-              setCopied(true);
-              timer.current = window.setTimeout(() => setCopied(false), 1500);
-            },
-            (error: unknown) => {
-              setFailed(String(error instanceof Error ? error.message : error));
-              timer.current = window.setTimeout(() => setFailed(undefined), 4000);
-            },
-          );
-        }}
+        onClick={copy}
       />
     </div>
   );
