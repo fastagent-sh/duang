@@ -1,7 +1,7 @@
 import { app } from "electron";
 import { join } from "node:path";
 import { createPiAgentFromDir } from "@fastagent-sh/fastagent/pi";
-import { NO_SUCH_SESSION_CODE, type SessionResult } from "@fastagent-sh/fastagent/session";
+import { NO_SUCH_SESSION_CODE, type SessionResult, type SessionSummary } from "@fastagent-sh/fastagent/session";
 import { authPath } from "./credential-file.ts";
 import { refuse } from "./send.ts";
 import {
@@ -14,8 +14,7 @@ import {
   type AgentRow,
 } from "./agent-files.ts";
 
-export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";
-export const registryFile = join(app.getPath("userData"), "agents.json");
+export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";export const registryFile = join(app.getPath("userData"), "agents.json");
 const registry = new AgentRegistry(registryFile);
 export const listAgents = () => registry.list();
 export const addAgent = (dir: string) => registry.add(dir);
@@ -25,6 +24,14 @@ type Opened = Awaited<ReturnType<typeof createPiAgentFromDir>> & {
   control: NonNullable<Awaited<ReturnType<typeof createPiAgentFromDir>>["sessionControl"]>;
   staleDefault?: string;
 };
+
+/** Why an agent is not ready: no agent in this folder yet, its folder is gone, or its definition does not load. */
+export type AgentSetup = "no_agent" | "missing_dir" | "broken";
+
+/** What the window's open call answers: the agent's sessions and model, or why it could not be opened. */
+export type OpenResult =
+  | { ok: true; sessions: SessionSummary[]; model?: string; staleDefault?: string }
+  | { ok: false; code: AgentSetup; message: string; inConfig?: true };
 // Agent-scoped admission: sends share (a count); a model change or removal excludes them all, including turns
 // still opening. FastAgent's per-session `inProcessLease` cannot express that.
 const opened = new Map<string, Promise<Opened>>();

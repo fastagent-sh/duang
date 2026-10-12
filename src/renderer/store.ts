@@ -1,7 +1,7 @@
 import { ABORTED_CODE } from "@fastagent-sh/fastagent/core";
 import { NO_ACTIVE_RUN_CODE, type AgentCommand, type SessionSummary } from "@fastagent-sh/fastagent/session";
 import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
-import type { AgentRow, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
+import type { AgentRow, AgentSetup, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
 import { fromEntries, phase, previewOf, queueView, type Activity, type Place } from "./transcript.ts";
 import {
   accepted,
@@ -23,7 +23,7 @@ import { createSettings, type SettingsView } from "./settings-store.ts";
 // A subscription lost again this soon after reconnecting by itself waits for the person.
 const RECONNECT_GAP_MS = 30_000;
 
-export type AgentState = "ready" | "no_agent" | "missing_dir" | "broken";
+export type AgentState = "ready" | AgentSetup;
 // `settling`: an agent still opening, or history not yet arrived; showing `start` there would flash the wrong screen.
 type Pane =
   | "unreadable-registry"

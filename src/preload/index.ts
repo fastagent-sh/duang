@@ -6,11 +6,12 @@ import type {
   SessionEvent,
   SessionResult,
   SessionState,
-  SessionSummary,
 } from "@fastagent-sh/fastagent/session";
 
 export type { AgentRow } from "../main/agent-files.ts";
 import type { AgentRow } from "../main/agent-files.ts";
+export type { AgentSetup, OpenResult } from "../main/agents.ts";
+import type { OpenResult } from "../main/agents.ts";
 export type { Models } from "../main/models.ts";
 import type { Models } from "../main/models.ts";
 export type { ProviderUsage, UsageWindow } from "../main/usage.ts";
@@ -22,15 +23,6 @@ import type { LoginMethod, LoginOutcome, LoginStep, ProviderRow } from "../main/
 import type { ConnectionCheck, Route } from "../main/proxy.ts";
 import type { Frame } from "../main/follow.ts";
 import type { ProviderUsage } from "../main/usage.ts";
-
-export type OpenResult =
-  | { ok: true; sessions: SessionSummary[]; model?: string; staleDefault?: string }
-  | {
-      ok: false;
-      code: "no_agent" | "missing_dir" | "broken";
-      message: string;
-      inConfig?: true;
-    };
 
 export type SessionFrame = Frame<SessionEvent>;
 
