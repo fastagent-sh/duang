@@ -76,6 +76,13 @@ async function buildToOpen(row: AgentRow): Promise<Opened> {
   }
 }
 
+/** An agent's row in the registry. An unknown id is a bug in this app, so this throws rather than refusing. */
+export async function agentRow(agentId: string): Promise<AgentRow> {
+  const row = (await listAgents()).find((candidate) => candidate.id === agentId);
+  if (!row) throw new Error(`unknown agent ${agentId}`);
+  return row;
+}
+
 export async function openAgent(row: AgentRow): Promise<Opened> {
   // Wait rather than fail: "try again" is not actionable. The admitting read is stale after the change.
   while (changing.has(row.id)) {
@@ -90,6 +97,22 @@ export async function openAgent(row: AgentRow): Promise<Opened> {
     if (opened.get(row.id) === promise) opened.delete(row.id);
   });
   return promise;
+}
+
+/**
+ * The window's open call: the agent's sessions and its model, or why it could not be opened. Decided here,
+ * beside the runtime's own errors, so the window takes one shape and never classifies a condition itself.
+ */
+export async function openAgentResult(agentId: string): Promise<OpenResult> {
+  try {
+    const { control, modelSpec, staleDefault } = await openAgent(await agentRow(agentId));
+    return { ok: true, sessions: await control.sessions.list(), model: modelSpec, ...(staleDefault && { staleDefault }) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof NoAgentError) return { ok: false, code: "no_agent", message };
+    if (error instanceof MissingDirError) return { ok: false, code: "missing_dir", message };
+    return configFailed(agentId) ? { ok: false, code: "broken", message, inConfig: true } : { ok: false, code: "broken", message };
+  }
 }
 
 /** Count admission as busy too: model changes must not race a turn that is still opening its runtime. */
