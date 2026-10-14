@@ -20,6 +20,8 @@ import { message } from "./message.ts";
 import { createDraftStorage } from "./drafts.ts";
 import type { Fix } from "./problems.ts";
 import { createSettings, type SettingsView } from "./settings-store.ts";
+import { createAgentResources, type AgentResourcesView } from "./agent-resources.ts";
+import { createProviderUsage } from "./provider-usage.ts";
 
 // A subscription lost again this soon after reconnecting by itself waits for the person.
 const RECONNECT_GAP_MS = 30_000;
@@ -78,7 +80,7 @@ export type ModelAsk =
 type Refusal = { agentId: string; session: string; model: string };
 type StaleDefault = { agentId: string; model: string };
 
-export interface View extends SettingsView {
+export interface View extends SettingsView, AgentResourcesView {
   agents: AgentRow[];
   agentId?: string;
   states: Record<string, AgentState>;
@@ -93,11 +95,6 @@ export interface View extends SettingsView {
   failure?: { title: string; reason: string };
   registryError?: string;
   draftsError?: string;
-  models?: Models;
-  modelsError?: string;
-  modelsRefresh?: { status: "running" } | { status: "done"; added: number } | { status: "failed"; error: string };
-  commands: AgentCommand[];
-  commandsError?: string;
   conversation?: Conversation;
   busy: boolean;
   pane: Pane;
@@ -273,9 +270,7 @@ export function createStore(api: DuangApi) {
   };
   const listTicket = tickets();
   const previewTicket = tickets();
-  let modelsRequest = 0;
   const previews = new Map<string, Preview & { updatedAt?: number }>();
-  let commandsFor: string | undefined;
   // Which conversation an agent opens: the one it was left on while anything still knows it (the runtime, a held
   // conversation, unsent text, or the fresh start a crash left selected), else one running now, else the newest
   // the runtime lists. One rule, so the row quotes what a click opens.
@@ -345,10 +340,9 @@ export function createStore(api: DuangApi) {
   const leave = () => publish({ conversation: undefined });
   // A provider disconnected here leaves a plan's numbers behind, which this store owns: it drops them, so the
   // settings sub-store never reaches into state it does not own.
-  const { onStep, ...settings } = createSettings(api, () => view, publish, (provider) => {
-    const { [provider]: _gone, ...usage } = view.usage;
-    publish({ usage });
-  });
+  const { select: selectResources, ...resources } = createAgentResources(api, () => view, publish);
+  const { forget: forgetUsage, ...usage } = createProviderUsage(api, () => view, publish);
+  const { onStep, ...settings } = createSettings(api, () => view, publish, forgetUsage);
 
   // A failure lands on that agent's row: an empty list and an unreadable one are not the same answer.
   async function listSessions(id: string) {
@@ -484,7 +478,7 @@ export function createStore(api: DuangApi) {
     const left = view.agentId;
     leave();
     if (left && left !== id) void readPreview(left);
-    commandsFor = undefined;
+    selectResources();
     publish({
       agentId: id,
       model: undefined,
@@ -610,6 +604,8 @@ export function createStore(api: DuangApi) {
 
   return {
     ...settings,
+    ...resources,
+    ...usage,
     getSnapshot: () => view,
     // Which conversation this agent would open: the row quotes its output, and a click opens it.
     sessionFor: (agentId: string) => selectedSession(agentId),
@@ -638,46 +634,6 @@ export function createStore(api: DuangApi) {
       }
     },
     open,
-    // Read on every opening: the agent's `models.json` and Settings' provider changes show up.
-    async loadModels() {
-      const id = view.agentId;
-      const request = ++modelsRequest;
-      publish({ models: undefined, modelsError: undefined, modelsRefresh: undefined });
-      if (!id) return;
-      try {
-        const models = await api.listModels(id);
-        if (request === modelsRequest) publish({ models });
-      } catch (error) {
-        if (request === modelsRequest) publish({ modelsError: message(error) });
-      }
-    },
-    // A failed refresh keeps the list: the models already there are no less runnable.
-    async refreshModels() {
-      const id = view.agentId;
-      // Not before the list has arrived: there would be nothing to count against, and the reading in flight
-      // would be dropped (a failure then leaves a picker with no list and nothing to retry).
-      if (!id || !view.models || view.modelsRefresh?.status === "running") return;
-      const request = ++modelsRequest;
-      const before = new Set(view.models.map((model) => model.spec));
-      publish({ modelsRefresh: { status: "running" } });
-      try {
-        const models = await api.refreshModels(id);
-        if (request !== modelsRequest || view.agentId !== id) return;
-        publish({ models, modelsRefresh: { status: "done", added: models.filter((model) => !before.has(model.spec)).length } });
-      } catch (error) {
-        if (request === modelsRequest && view.agentId === id)
-          publish({ modelsRefresh: { status: "failed", error: message(error) } });
-      }
-    },
-    // Main answers from its cache inside the gap. A failure replaces the numbers: a stale percentage is quietly wrong.
-    async loadUsage(provider: string) {
-      try {
-        const data = await api.providerUsage(provider);
-        publish({ usage: { ...view.usage, [provider]: { data } } });
-      } catch (error) {
-        publish({ usage: { ...view.usage, [provider]: { error: message(error) } } });
-      }
-    },
     dismissFailure: () => publish({ failure: undefined }),
     openPicker: () => publish({ picker: true }),
     closePicker: () => publish({ picker: false }),
@@ -686,21 +642,6 @@ export function createStore(api: DuangApi) {
         await api.openUsagePage(provider);
       } catch (error) {
         fail("The usage page did not open", error);
-      }
-    },
-    async loadCommands() {
-      const id = view.agentId;
-      if (!id || commandsFor === id) return;
-      commandsFor = id;
-      try {
-        const commands = await api.listCommands(id);
-        if (commandsFor === id) publish({ commands });
-      } catch (error) {
-        // Without this the agent keeps an empty completion list; the next `/` retries.
-        if (commandsFor === id) {
-          commandsFor = undefined;
-          publish({ commandsError: message(error) });
-        }
       }
     },
     newConversation: () => open(crypto.randomUUID()),
