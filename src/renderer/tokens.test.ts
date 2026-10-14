@@ -17,7 +17,7 @@ function enclosingString(source: string, index: number): string {
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
 
 /** 12.5 passes only when the same string sets `font-mono`. */
-export function sizesOffScale(source: string): string[] {
+function sizesOffScale(source: string): string[] {
   const off: string[] = [];
   for (const match of source.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)) {
     const px = Number(match[1]);
@@ -28,7 +28,7 @@ export function sizesOffScale(source: string): string[] {
 }
 
 /** Arbitrary radii; a bubble's tail and inline code are the only 4. */
-export function radiiOffScale(source: string): string[] {
+function radiiOffScale(source: string): string[] {
   return [...source.matchAll(/rounded-(?:[a-z]+-)?\[(\d+)px\]/g)]
     .filter((match) => match[1] !== "4")
     .map((match) => `line ${lineOf(source, match.index)}: ${match[1]}px`);
