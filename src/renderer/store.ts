@@ -17,6 +17,7 @@ import {
   type Trouble,
 } from "./conversation.ts";
 import { message } from "./message.ts";
+import { createDraftStorage } from "./drafts.ts";
 import type { Fix } from "./problems.ts";
 import { createSettings, type SettingsView } from "./settings-store.ts";
 
@@ -36,35 +37,11 @@ type Pane =
   | "transcript";
 // Navigation only: losing it costs one click, so it is best effort and anything unreadable is a first start.
 const SELECTION_KEY = "duang.selection";
-const DRAFTS_KEY = "duang.drafts";
-// An unreadable drafts value is moved here so the next write does not replace the person's text.
-const UNREADABLE_DRAFTS_KEY = "duang.drafts.unreadable";
 interface Selection {
   agentId?: string;
   perAgent: [string, string][];
   // A crash-recovery conversation, kept as the selection so a reload does not reopen the one that crashed.
   fresh?: string;
-}
-function readDrafts(): [string, string][] {
-  let stored: string | null | undefined;
-  try {
-    stored = globalThis.localStorage?.getItem(DRAFTS_KEY);
-  } catch {
-    // Storage that cannot be read at all (disabled) has nothing to lose, only nothing to restore.
-    return [];
-  }
-  if (!stored) return [];
-  try {
-    const parsed: unknown = JSON.parse(stored);
-    const pair = (entry: unknown) =>
-      Array.isArray(entry) && entry.length === 2 && typeof entry[0] === "string" && typeof entry[1] === "string";
-    if (Array.isArray(parsed) && parsed.every(pair)) return parsed as [string, string][];
-    throw new Error("expected a list of [conversation, text] pairs");
-  } catch (error) {
-    writeStored(UNREADABLE_DRAFTS_KEY, stored);
-    console.error(`duang: unreadable drafts moved to ${UNREADABLE_DRAFTS_KEY}:`, error);
-    return [];
-  }
 }
 function readSelection(): Selection | undefined {
   try {
@@ -79,8 +56,6 @@ function writeStored(storageKey: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(storageKey, value);
   } catch (error) {
-    // A full or disabled store costs a click, or unsent text, after the next restart; the window goes on, and
-    // the log says why.
     console.error(`duang: ${storageKey} was not saved:`, error);
   }
 }
@@ -272,10 +247,10 @@ export function createStore(api: DuangApi) {
   };
   const listeners = new Set<() => void>();
   const conversations = new Map<string, Conversation>();
-  const drafts = new Map<string, string>(readDrafts());
+  const draftStorage = createDraftStorage();
+  const drafts = new Map<string, string>(draftStorage.entries);
   // Where each conversation was left scrolled above the latest line: leaving it unmounts its view.
   const scrolls = new Map<string, Place>();
-  let persisted = "";
   let asked: string | undefined;
   let refusal: Refusal | undefined;
   let staleDefault: StaleDefault | undefined;
@@ -330,11 +305,7 @@ export function createStore(api: DuangApi) {
     // A conversation the runtime never heard of exists only on screen, so leaving its unsent text would discard it.
     const unsent = new Map(drafts);
     if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
-    const serialized = JSON.stringify([...unsent].filter(([, text]) => text.trim()));
-    if (serialized !== persisted) {
-      persisted = serialized;
-      writeStored(DRAFTS_KEY, serialized);
-    }
+    draftStorage.save([...unsent].filter(([, text]) => text.trim()));
     view = derive(view, [...conversations.values()], unsent, unseen, refusal, staleDefault);
     // A picker the person closed stays closed: it opens when the ask becomes a different one, and closes when
     // there is nothing to ask. A refusal opened it where it happened, so a return does not open it again.
