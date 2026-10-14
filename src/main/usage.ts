@@ -35,21 +35,25 @@ export const MIN_GAP_MS = 3 * 60 * 1000;
 
 const label = (seconds: number) => (seconds % DAY === 0 ? `${seconds / DAY}d` : `${Math.round(seconds / HOUR)}h`);
 
-function need<T>(value: T | undefined | null, what: string): T {
-  if (value === undefined || value === null) throw new Error(`usage response has no ${what}`);
-  return value;
-}
-
 export function parseAnthropic(body: unknown): UsageWindow[] {
-  type Window = { utilization?: number; resets_at?: string | null };
-  const data = body as { five_hour?: Window | null; seven_day?: Window | null };
-  const window = (w: Window | null | undefined, seconds: number, name: string): UsageWindow | undefined => {
-    if (!w) return undefined;
-    const resetsAt = w.resets_at ? Date.parse(w.resets_at) : undefined;
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("usage response must be an object");
+  const data = body as Record<string, unknown>;
+  const window = (w: unknown, seconds: number, name: string): UsageWindow | undefined => {
+    if (w === undefined || w === null) return undefined;
+    if (typeof w !== "object" || Array.isArray(w)) throw new Error(`${name} must be an object`);
+    const { utilization, resets_at } = w as Record<string, unknown>;
+    if (utilization === undefined || utilization === null) throw new Error(`usage response has no ${name}.utilization`);
+    if (typeof utilization !== "number" || !Number.isFinite(utilization)) throw new Error(`${name}.utilization must be a finite number`);
+    let resetsAt: number | undefined;
+    if (resets_at !== undefined && resets_at !== null) {
+      const parsed = typeof resets_at === "string" ? Date.parse(resets_at) : NaN;
+      if (!Number.isFinite(parsed)) throw new Error(`${name}.resets_at must be a valid timestamp`);
+      resetsAt = parsed;
+    }
     return {
       label: label(seconds),
-      percent: need(w.utilization, `${name}.utilization`),
-      ...(resetsAt !== undefined && Number.isFinite(resetsAt) ? { resetsAt } : {}),
+      percent: utilization,
+      ...(resetsAt !== undefined && { resetsAt }),
       windowSeconds: seconds,
     };
   };

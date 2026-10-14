@@ -25,6 +25,18 @@ test("the plan's shape parses, and a missing field is an error rather than zero"
   assert.throws(() => parseAnthropic({}), /neither five_hour nor seven_day/);
 });
 
+test("usage fields must be valid before they reach a renderer", () => {
+  for (const utilization of ["70", NaN, Infinity, -Infinity])
+    assert.throws(() => parseAnthropic({ five_hour: { utilization } }), /five_hour.utilization must be a finite number/);
+  for (const body of [null, [], "response"]) assert.throws(() => parseAnthropic(body), /must be an object/);
+  for (const window of [false, [], "window"]) assert.throws(() => parseAnthropic({ five_hour: window }), /five_hour must be an object/);
+  for (const resets_at of ["not-a-date", "", 123, []])
+    assert.throws(() => parseAnthropic({ five_hour: { utilization: 4, resets_at } }), /five_hour.resets_at must be a valid timestamp/);
+  assert.deepEqual(parseAnthropic({ five_hour: null, seven_day: { utilization: 120 } }), [
+    { label: "7d", percent: 120, windowSeconds: 7 * 24 * HOUR },
+  ]);
+});
+
 test("a subscription is read with its own token; an API key has no windows; a refusal keeps the provider's words", async () => {
   const calls: { url: string; authorization: string | null }[] = [];
   let status = 200;
@@ -79,6 +91,16 @@ test("a subscription is read with its own token; an API key has no windows; a re
   forgetUsage("anthropic", auth);
   assert.equal((await providerUsage("anthropic", auth, t2 + 3)).windows?.length, 1);
   assert.equal(calls.at(-1)?.authorization, "Bearer sk-ant-oat01-new");
+});
+
+test("a malformed endpoint response rejects usage before IPC can forward it", async () => {
+  const file = join(dir, "malformed.json");
+  await writeFile(file, JSON.stringify({ anthropic: { type: "oauth", access: "test", refresh: "r", expires: Date.now() + 3_600_000 } }));
+  globalThis.fetch = async () => Response.json({ five_hour: { utilization: "70", resets_at: null } });
+  await assert.rejects(providerUsage("anthropic", file), /five_hour.utilization must be a finite number/);
+  globalThis.fetch = async () => Response.json({ five_hour: { utilization: 70, resets_at: null } });
+  forgetUsage("anthropic", file);
+  assert.equal((await providerUsage("anthropic", file)).windows?.[0]?.percent, 70);
 });
 
 test("a ChatGPT sign-in's usage is its own page, which only main can name; an OpenAI key has no plan", async () => {
