@@ -278,7 +278,7 @@ test("refreshing models reports what arrived, keeps the list on failure, and ans
   await store.selectAgent("b");
   away.resolve(described(["provider/from-a"]));
   await gone;
-  assert.deepEqual(store.getSnapshot().models?.map((model) => model.spec), ["provider/current"], "agent A's list is not agent B's");
+  assert.equal(store.getSnapshot().models, undefined, "agent B never presents agent A's list as its own");
   store.dispose();
 });
 
