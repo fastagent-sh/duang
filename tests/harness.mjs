@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 
@@ -34,7 +34,7 @@ function newestMtime(target, root) {
 export function requireFreshBuild(outputs = BUILT, how = "npm run build") {
   const newest = Math.max(...SOURCES.map((source) => newestMtime(source, ROOT)));
   const oldest = Math.min(
-    ...outputs.map((output) => statSync(join(ROOT, output), { throwIfNoEntry: false })?.mtimeMs || 0),
+    ...outputs.map((output) => statSync(resolve(ROOT, output), { throwIfNoEntry: false })?.mtimeMs || 0),
   );
   if (oldest > newest) return;
   throw new Error(
