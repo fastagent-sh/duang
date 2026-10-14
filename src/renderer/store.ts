@@ -1,7 +1,7 @@
 import { ABORTED_CODE } from "@fastagent-sh/fastagent/core";
-import { NO_ACTIVE_RUN_CODE, type AgentCommand, type SessionSummary } from "@fastagent-sh/fastagent/session";
+import { NO_ACTIVE_RUN_CODE, type SessionSummary } from "@fastagent-sh/fastagent/session";
 import { MODEL_UNAVAILABLE_CODE } from "../shared/refusals.ts";
-import type { AgentRow, AgentSetup, DuangApi, Models, ProviderUsage, SessionFrame } from "../preload/index.ts";
+import type { AgentRow, AgentSetup, DuangApi, SessionFrame } from "../preload/index.ts";
 import { fromEntries, phase, previewOf, queueView, type Activity, type Place } from "./transcript.ts";
 import {
   accepted,
@@ -21,7 +21,7 @@ import { createDraftStorage } from "./drafts.ts";
 import type { Fix } from "./problems.ts";
 import { createSettings, type SettingsView } from "./settings-store.ts";
 import { createAgentResources, type AgentResourcesView } from "./agent-resources.ts";
-import { createProviderUsage } from "./provider-usage.ts";
+import { createProviderUsage, type PlanUsageView } from "./provider-usage.ts";
 
 // A subscription lost again this soon after reconnecting by itself waits for the person.
 const RECONNECT_GAP_MS = 30_000;
@@ -112,7 +112,7 @@ export interface View extends SettingsView, AgentResourcesView {
   unsent: Record<string, string[]>;
   // Spent by opening the conversation, like an unread mark.
   unseen: Record<string, Record<string, "done" | "failed">>;
-  usage: Record<string, { data?: ProviderUsage; error?: string }>;
+  usage: PlanUsageView;
   previews: Record<string, Preview>;
 }
 const key = (agentId: string, session: string) => `${agentId}/${session}`;
@@ -340,8 +340,8 @@ export function createStore(api: DuangApi) {
   const leave = () => publish({ conversation: undefined });
   // A provider disconnected here leaves a plan's numbers behind, which this store owns: it drops them, so the
   // settings sub-store never reaches into state it does not own.
-  const { select: selectResources, ...resources } = createAgentResources(api, () => view, publish);
-  const { forget: forgetUsage, ...usage } = createProviderUsage(api, () => view, publish);
+  const { select: selectResources, closeModels, ...resources } = createAgentResources(api, publish);
+  const { forget: forgetUsage, ...usage } = createProviderUsage(api, publish);
   const { onStep, ...settings } = createSettings(api, () => view, publish, forgetUsage);
 
   // A failure lands on that agent's row: an empty list and an unreadable one are not the same answer.
@@ -478,15 +478,13 @@ export function createStore(api: DuangApi) {
     const left = view.agentId;
     leave();
     if (left && left !== id) void readPreview(left);
-    selectResources();
+    selectResources(id);
     publish({
       agentId: id,
       model: undefined,
       error: undefined,
       errorInConfig: undefined,
       loading: true,
-      commands: [],
-      commandsError: undefined,
     });
     try {
       const result = await api.openAgent(id);
@@ -636,7 +634,10 @@ export function createStore(api: DuangApi) {
     open,
     dismissFailure: () => publish({ failure: undefined }),
     openPicker: () => publish({ picker: true }),
-    closePicker: () => publish({ picker: false }),
+    closePicker() {
+      closeModels();
+      publish({ picker: false });
+    },
     async openUsagePage(provider: string) {
       try {
         await api.openUsagePage(provider);
@@ -765,6 +766,7 @@ export function createStore(api: DuangApi) {
         if (view.agentId !== id) return;
         ++navigation;
         const { [id]: _gone, ...rest } = view.sessions;
+        selectResources();
         publish({ agentId: undefined, conversation: undefined, error: undefined, sessions: rest });
         if (view.agents[0]) await selectAgent(view.agents[0].id);
       } catch (error) {
@@ -840,6 +842,7 @@ export function createStore(api: DuangApi) {
       stopFrames?.();
       stopSteps?.();
       stopFrames = stopSteps = undefined;
+      selectResources();
       for (const c of conversations.values()) close(c);
     },
   };

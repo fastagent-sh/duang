@@ -10,59 +10,71 @@ export interface AgentResourcesView {
   commandsError?: string;
 }
 
-export function createAgentResources(
-  api: DuangApi,
-  snapshot: () => AgentResourcesView & { agentId?: string },
-  publish: (patch: Partial<AgentResourcesView>) => void,
-) {
-  let modelsRequest = 0;
-  let commandsFor: string | undefined;
+export function createAgentResources(api: DuangApi, publish: (patch: Partial<AgentResourcesView>) => void) {
+  let selected: { id: string } | undefined;
+  let modelRead: object | undefined;
+  let commandsFor: typeof selected;
+  let models: Models | undefined;
+  let refreshing = false;
   return {
-    select: () => { commandsFor = undefined; },
-    // Read on every opening: the agent's `models.json` and Settings' provider changes show up.
+    select(id?: string) {
+      selected = id ? { id } : undefined;
+      modelRead = commandsFor = undefined;
+      models = undefined;
+      refreshing = false;
+      publish({ models: undefined, modelsError: undefined, modelsRefresh: undefined, commands: [], commandsError: undefined });
+    },
+    closeModels() {
+      modelRead = undefined;
+      refreshing = false;
+      publish({ modelsRefresh: undefined });
+    },
     async loadModels() {
-      const id = snapshot().agentId;
-      const request = ++modelsRequest;
+      const origin = selected;
+      const request = (modelRead = {});
+      models = undefined;
+      refreshing = false;
       publish({ models: undefined, modelsError: undefined, modelsRefresh: undefined });
-      if (!id) return;
+      if (!origin) return;
       try {
-        const models = await api.listModels(id);
-        if (request === modelsRequest) publish({ models });
+        const answer = await api.listModels(origin.id);
+        if (selected !== origin || modelRead !== request) return;
+        models = answer;
+        publish({ models });
       } catch (error) {
-        if (request === modelsRequest) publish({ modelsError: message(error) });
+        if (selected === origin && modelRead === request) publish({ modelsError: message(error) });
       }
     },
-    // A failed refresh keeps the list: the models already there are no less runnable.
     async refreshModels() {
-      const { agentId: id, models } = snapshot();
-      // Not before the list has arrived: there would be nothing to count against, and the reading in flight
-      // would be dropped (a failure then leaves a picker with no list and nothing to retry).
-      if (!id || !models || snapshot().modelsRefresh?.status === "running") return;
-      const request = ++modelsRequest;
+      const origin = selected;
+      if (!origin || !models || refreshing) return;
+      const request = (modelRead = {});
       const before = new Set(models.map((model) => model.spec));
+      refreshing = true;
       publish({ modelsRefresh: { status: "running" } });
       try {
-        const models = await api.refreshModels(id);
-        if (request !== modelsRequest || snapshot().agentId !== id) return;
+        const answer = await api.refreshModels(origin.id);
+        if (selected !== origin || modelRead !== request) return;
+        models = answer;
+        refreshing = false;
         publish({ models, modelsRefresh: { status: "done", added: models.filter((model) => !before.has(model.spec)).length } });
       } catch (error) {
-        if (request === modelsRequest && snapshot().agentId === id)
-          publish({ modelsRefresh: { status: "failed", error: message(error) } });
+        if (selected !== origin || modelRead !== request) return;
+        refreshing = false;
+        publish({ modelsRefresh: { status: "failed", error: message(error) } });
       }
     },
     async loadCommands() {
-      const id = snapshot().agentId;
-      if (!id || commandsFor === id) return;
-      commandsFor = id;
+      const origin = selected;
+      if (!origin || commandsFor === origin) return;
+      commandsFor = origin;
       try {
-        const commands = await api.listCommands(id);
-        if (commandsFor === id) publish({ commands });
+        const commands = await api.listCommands(origin.id);
+        if (selected === origin) publish({ commands, commandsError: undefined });
       } catch (error) {
-        // Without this the agent keeps an empty completion list; the next `/` retries.
-        if (commandsFor === id) {
-          commandsFor = undefined;
-          publish({ commandsError: message(error) });
-        }
+        if (selected !== origin) return;
+        commandsFor = undefined;
+        publish({ commandsError: message(error) });
       }
     },
   };

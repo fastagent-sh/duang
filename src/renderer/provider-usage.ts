@@ -3,24 +3,28 @@ import { message } from "./message.ts";
 
 export type PlanUsageView = Record<string, { data?: ProviderUsage; error?: string }>;
 
-export function createProviderUsage(
-  api: DuangApi,
-  snapshot: () => { usage: PlanUsageView },
-  publish: (patch: { usage: PlanUsageView }) => void,
-) {
+export function createProviderUsage(api: DuangApi, publish: (patch: { usage: PlanUsageView }) => void) {
+  let usage: PlanUsageView = {};
+  const requests = new Map<string, object>();
   return {
     forget(provider: string) {
-      const { [provider]: _gone, ...usage } = snapshot().usage;
+      requests.delete(provider);
+      const { [provider]: _gone, ...remaining } = usage;
+      usage = remaining;
       publish({ usage });
     },
-    // Main answers from its cache inside the gap. A failure replaces the numbers: a stale percentage is quietly wrong.
     async loadUsage(provider: string) {
+      const request = {};
+      requests.set(provider, request);
+      let answer: PlanUsageView[string];
       try {
-        const data = await api.providerUsage(provider);
-        publish({ usage: { ...snapshot().usage, [provider]: { data } } });
+        answer = { data: await api.providerUsage(provider) };
       } catch (error) {
-        publish({ usage: { ...snapshot().usage, [provider]: { error: message(error) } } });
+        answer = { error: message(error) };
       }
+      if (requests.get(provider) !== request) return;
+      usage = { ...usage, [provider]: answer };
+      publish({ usage });
     },
   };
 }

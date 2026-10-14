@@ -122,7 +122,12 @@ the conversation model changed without changing the default. This still needs ac
 
 **Renderer state is a plain TS store read through `useSyncExternalStore`.** No state library: the
 authoritative state lives in the runtime and is re-read (`state()`, `entries()`) rather than
-derived from our own writes.
+derived from our own writes. Agent resources own the model list, commands and their read identities;
+every navigation starts a new identity even when returning to the same agent. Leaving the agent or
+closing the picker invalidates its unfinished reads. Provider usage owns its plan snapshots and
+per-provider read identities; disconnecting or replacing a login invalidates both. The settings
+slice rejects reads from a superseded opening or an earlier network choice. These results never
+need a component to decide whether they still belong on screen.
 
 **The client persists almost nothing** — `userData/agents.json`: currently each agent's id, name,
 directory, avatar colour and optional model override. Reads validate the file; only a missing file means an empty

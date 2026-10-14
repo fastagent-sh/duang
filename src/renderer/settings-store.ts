@@ -49,13 +49,13 @@ export function createSettings(
   api: DuangApi,
   view: () => SettingsView,
   publish: (patch: Partial<SettingsView>) => void,
-  // A provider's stored login is gone, so whatever this window cached for it is not its owner's to keep.
-  disconnected: (provider: string) => void,
+  credentialsChanged: (provider: string) => void,
 ) {
   // A slow check for a route that has since changed must not land on the new one, nor an earlier
   // network choice's answer after a later one's.
   let connectionRequest = 0;
   let networkRequest = 0;
+  let settingsRead: object | undefined;
 
   const onStep = (step: LoginStep) => {
     const s = view().signIn;
@@ -113,6 +113,7 @@ export function createSettings(
       } finally {
         if (login === mine) login = undefined;
       }
+      if (outcome.ok) credentialsChanged(provider.id);
       const shown = view().signIn;
       if (shown?.provider !== provider || shown.way !== way) return;
       if (!outcome.ok && outcome.cancelled) return publish({ signIn: undefined });
@@ -158,21 +159,23 @@ export function createSettings(
       } catch (error) {
         return publish({ providersError: message(error) });
       }
-      // The header asks again only when its provider, run or conversation changes, so drop the gone plan's numbers.
-      disconnected(provider);
+      credentialsChanged(provider);
       await loadProviders();
     },
     // From nothing on every opening: a file fixed by hand shows up, and nothing stale is shown as current.
     async loadSettings(): Promise<{ network: Network; route: Route } | undefined> {
+      const request = (settingsRead = {});
+      ++connectionRequest;
       publish({ settings: undefined, settingsError: undefined, connection: undefined });
       try {
         const [{ network, avatar }, route] = await Promise.all([api.getSettings(), api.getRoute()]);
+        if (settingsRead !== request) return;
         const settings = { network, route };
         publish({ settings, avatar });
         void checkConnection();
         return settings;
       } catch (error) {
-        publish({ settingsError: message(error) });
+        if (settingsRead === request) publish({ settingsError: message(error) });
       }
     },
     async setAvatar(avatar: AvatarStyle): Promise<string | undefined> {
@@ -184,6 +187,8 @@ export function createSettings(
       }
     },
     async setNetwork(network: Network): Promise<string | undefined> {
+      settingsRead = undefined;
+      ++connectionRequest;
       const request = ++networkRequest;
       try {
         const route = await api.setNetwork(network);
