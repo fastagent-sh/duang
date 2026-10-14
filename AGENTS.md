@@ -47,7 +47,7 @@ verification of existing code, not a rewrite. Resolve conflicting product polici
 
 ## Working and verification
 
-duang is unreleased: there are no real agents or users. Never add backward compatibility,
+duang is early and has published unsigned macOS releases. Never add backward compatibility,
 migrations, legacy-format detection or compatibility shims. When a format, layout or contract
 changes, change the code, tests and docs to the new one and drop the old.
 

@@ -79,7 +79,7 @@ list answers *which one*. Neither repeats the other, and neither is colour or mo
 
 **An avatar has three layers, kept apart.** The *drawing* is who the agent is and never changes with
 state. The *face* follows what the agent is doing, one face at a time by how much it asks of the
-person (an outcome you missed outranks work in progress, which outranks idle). The *ring* is presence.
+person (setup problems outrank work in progress, then unseen outcomes, then idle). The *ring* is presence.
 Motion is small, continuous only while an agent works, and an outcome plays once, when it lands;
 under reduced motion each face keeps its pose so the states stay apart.
 
