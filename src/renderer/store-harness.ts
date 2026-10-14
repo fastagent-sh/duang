@@ -1,6 +1,6 @@
-import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
+import type { SessionResult } from "@fastagent-sh/fastagent/session";
 import type { Ending } from "../main/follow.ts";
-import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
+import type { DuangApi, Models, LoginStep, OpenResult, SessionFrame } from "../preload/index.ts";
 import { createStore } from "./store.ts";
 
 export function deferred<T>() {

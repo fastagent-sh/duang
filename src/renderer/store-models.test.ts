@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
-import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
-import { deferred, described, empty, harness, listed, panes, ready } from "./store-harness.ts";
+import type { SessionResult } from "@fastagent-sh/fastagent/session";
+import type { Models } from "../preload/index.ts";
+import { deferred, described, empty, harness, ready } from "./store-harness.ts";
 
 
 test("an agent whose default model pi does not know opens, with the picker open on it, until another is chosen", async () => {

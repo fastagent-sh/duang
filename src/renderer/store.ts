@@ -499,7 +499,6 @@ export function createStore(api: DuangApi) {
         ...(listCurrent() ? { sessions: { ...view.sessions, [id]: result.sessions } } : {}),
         states: { ...view.states, [id]: "ready" },
       });
-      const newest = [...result.sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
       staleDefault = result.staleDefault ? { agentId: id, model: result.staleDefault } : undefined;
       // Opened here, inside the navigation guard: a `.then(open)` outside would land on whichever agent the
       // selection had moved to by then.

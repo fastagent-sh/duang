@@ -14,7 +14,8 @@ import {
   type AgentRow,
 } from "./agent-files.ts";
 
-export { createAgentIn, MissingDirError, type AgentRow } from "./agent-files.ts";export const registryFile = join(app.getPath("userData"), "agents.json");
+export { createAgentIn } from "./agent-files.ts";
+export const registryFile = join(app.getPath("userData"), "agents.json");
 const registry = new AgentRegistry(registryFile);
 export const listAgents = () => registry.list();
 export const addAgent = (dir: string) => registry.add(dir);
@@ -38,7 +39,7 @@ const opened = new Map<string, Promise<Opened>>();
 const sending = new Map<string, number>();
 const changing = new Map<string, Promise<void>>();
 
-export class NoAgentError extends Error {}
+class NoAgentError extends Error {}
 // Main keeps the failing path rather than taking one from the window.
 const failedConfigs = new Map<string, string>();
 
@@ -173,7 +174,7 @@ export function relocateAgent(id: string, dir: string): Promise<SessionResult> {
   });
 }
 
-export const configFailed = (id: string) => failedConfigs.has(id);
+const configFailed = (id: string) => failedConfigs.has(id);
 
 export function resetAgentConfig(row: AgentRow): Promise<SessionResult> {
   return change(row.id, async () => {
