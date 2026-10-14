@@ -653,6 +653,7 @@ if (root) {
       await showConversations();
       const rowsBefore = await evaluate(newRows);
       await evaluate("document.getElementById('conversations').hidePopover()");
+      await until(`${chip} && !${chip}.hasAttribute('aria-disabled')`, "the new conversation's model chip is ready");
       await evaluate(`${chip}.click()`);
       await until("document.querySelector('dialog [role=radio][aria-label=\"High\"]')", "a new conversation offers effort before its first message");
       await evaluate(`document.querySelector('dialog [role=radio][aria-label="High"]').click()`);
@@ -1548,6 +1549,53 @@ if (root) {
       await evaluate(`document.querySelector('#conversations').hidePopover()`);
       await settledOnHistory("and back to the second");
       await noStartScreen("moving back");
+
+      await evaluate(`(() => {
+        window.__draftWrite = Storage.prototype.setItem;
+        window.__draftFull = true;
+        Storage.prototype.setItem = function(key, value) {
+          if (key === 'duang.drafts' && window.__draftFull) throw new Error('Synthetic draft storage full');
+          return window.__draftWrite.call(this, key, value);
+        };
+      })()`);
+      await type("Keep this unsent text");
+      await until("document.body.innerText.includes('Synthetic draft storage full')", "a failed draft save is visible");
+      assert.equal(await evaluate("document.querySelector('textarea').value"), "Keep this unsent text");
+      await evaluate("window.__draftFull = false");
+      await evaluate(`document.querySelector('button[title^="Model for this agent"]').click()`);
+      await until("!document.body.innerText.includes('Draft storage needs attention')", "the same draft is saved after storage recovers");
+      assert.match(await evaluate("localStorage.getItem('duang.drafts')"), /Keep this unsent text/);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("document.querySelector('dialog') === null", "the picker closes after the storage check");
+      await evaluate("Storage.prototype.setItem = window.__draftWrite; void 0");
+
+      // Chromium does not run new-document scripts until the Page domain is enabled.
+      await win.webContents.debugger.sendCommand("Page.enable");
+      const protection = await win.webContents.debugger.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
+        source: `localStorage.setItem('duang.drafts', '{original unsent text');
+          window.__draftWrite = Storage.prototype.setItem;
+          Storage.prototype.setItem = function(key, value) {
+            if (key === 'duang.drafts.unreadable') throw new Error('Synthetic quarantine refused');
+            return window.__draftWrite.call(this, key, value);
+          };`,
+      });
+      win.webContents.reload();
+      await new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
+      await until("document.body.innerText.includes('Synthetic quarantine refused') && document.querySelector('textarea')?.disabled === false", "a failed quarantine is visible and editing remains available");
+      await type("New text stays in memory");
+      await until("document.querySelector('textarea').value === 'New text stays in memory'", "the protected draft remains editable");
+      assert.equal(await evaluate("localStorage.getItem('duang.drafts')"), "{original unsent text");
+      assert.equal(await evaluate("localStorage.getItem('duang.drafts.unreadable')"), null);
+      for (const mode of ["light", "dark"]) {
+        electron.nativeTheme.themeSource = mode;
+        await until(`matchMedia('(prefers-color-scheme: ${mode})').matches`, `${mode} draft warning`);
+        await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        const image = await win.webContents.capturePage();
+        await writeFile(fileURLToPath(new URL(`../out/draft-storage-${mode}.png`, import.meta.url)), image.toPNG());
+      }
+      await win.webContents.debugger.sendCommand("Page.removeScriptToEvaluateOnNewDocument", protection);
+      await evaluate("Storage.prototype.setItem = window.__draftWrite; localStorage.removeItem('duang.drafts')");
 
       assert.equal(BrowserWindow.getAllWindows().length, 1);
       assert.deepEqual(errors, []);
