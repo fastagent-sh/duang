@@ -7,6 +7,7 @@ import { join } from "node:path";
 import electron from "electron";
 import { isolated } from "./harness.mjs";
 import { open, windowDriver } from "./window.mjs";
+import { assertLiveReply, selectLiveModels } from "./live-models.mjs";
 
 const ASK = "Reply with exactly: OK";
 
@@ -59,34 +60,10 @@ if (root) {
 
     const models = await call("listModels", "live");
     const before = await readFile(authFile, "utf8");
-    const providerOf = (spec) => spec.slice(0, spec.indexOf("/"));
-    const firstOf = (provider) => models.find(({ spec }) => providerOf(spec) === provider)?.spec;
-    // The rule this check covers needs two providers in one credential file, and any pair does it: OpenAI +
-    // Anthropic are used when both are listed (the pair it started with), else the first two the catalog holds.
-    // One provider cannot run this check: there is no cross-provider history to keep.
-    const openai =
-      process.env.DUANG_LIVE_OPENAI ??
-      models.find(({ spec }) => spec === "openai/gpt-5.5")?.spec ??
-      firstOf("openai");
-    const claude = models.find(({ spec }) => spec.startsWith("anthropic/claude-sonnet"))?.spec;
-    const listed = [...new Set(models.map(({ spec }) => providerOf(spec)))];
-    // OpenAI takes the first slot when it is listed: it is the provider the issue behind this check named, and
-    // its model is chosen with care above rather than taken as the first the provider lists.
-    const ordered = listed.includes("openai") ? ["openai", ...listed.filter((provider) => provider !== "openai")] : listed;
-    const [defaultModel, otherModel] =
-      openai && claude
-        ? [openai, claude]
-        : ordered.slice(0, 2).map((provider) => (provider === "openai" ? openai : firstOf(provider)));
-    // Which half is missing, and what the catalog holds: "needs OpenAI and Anthropic" alone sent one reader
-    // looking for a login when the real complaint was a model name the catalog had dropped.
-    assert.ok(
-      defaultModel && otherModel,
-      `needs two providers in ${authFile} (OpenAI + Anthropic, or any other pair): ` +
-        `${defaultModel ? `first ${defaultModel}` : "no provider listed"}, ` +
-        `${otherModel ? `second ${otherModel}` : "nothing else listed"}` +
-        ` (listed: ${models.map(({ spec }) => spec).join(", ") || "none"}${process.env.DUANG_LIVE_OTHER ? `, DUANG_LIVE_OTHER=${process.env.DUANG_LIVE_OTHER}` : ""})`,
-    );
-    const other = process.env.DUANG_LIVE_OTHER ?? otherModel;
+    const [defaultModel, other] = selectLiveModels(models, {
+      first: process.env.DUANG_LIVE_OPENAI,
+      second: process.env.DUANG_LIVE_OTHER,
+    });
     console.log(`Credential file: ${authFile}\nUsing: ${defaultModel} + ${other}`);
 
     // 1. The agent's default runs with the credentials already on this machine. The first provider is the one
@@ -95,7 +72,9 @@ if (root) {
     const first = crypto.randomUUID();
     const defaultRun = await call("send", "live", first, ASK);
     if (defaultRun.ok) {
-      console.log(`${defaultModel} reply: ${JSON.stringify((await reply(first)).text)}`);
+      const answer = await reply(first);
+      assertLiveReply(answer, defaultModel);
+      console.log(`${defaultModel} reply: ${JSON.stringify(answer.text)}`);
     } else {
       // A quota or entitlement refusal still proves the token resolved; a credential fault must not pass as one.
       assert.doesNotMatch(defaultRun.error.message, /not configured|refresh|unauthor|invalid[_ ]api|401/i);
