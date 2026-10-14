@@ -140,12 +140,17 @@ shows no plan windows, never a stale percentage: the numbers are a glance, and a
 not something to act on. The context is FastAgent's, once it reports it
 ([fastagent#608](https://github.com/fastagent-sh/fastagent/issues/608)).
 
-A conversation is created immediately and becomes a runtime-owned row. Selection reads FastAgent
+A new conversation is selectable immediately in the client. It becomes a runtime-owned row when
+its first message is recorded or its model or effort is set. Selection reads FastAgent
 history; the client does not save a second transcript. A conversation can be renamed and deleted,
 with destructive deletion confirmed. Until it is named, its row borrows its first message. Renaming is
 `Rename…` in the row's native context menu (also Shift+F10 and the Menu key) or a double click, in place;
 an empty name is not a rename, and duang never invents a name from the model's output. The current local view keeps unsent text with its conversation
-across navigation and application restart. A send rejected before admission remains a draft, and a refusal is said each time, even when an
+across navigation and application restart. A failed draft save shows a warning with its original error
+while editing remains available; the next state publication retries the unsaved value. An invalid stored
+value is preserved in `duang.drafts.unreadable` before new drafts may replace it. If reading or preserving
+that value fails, its original key stays untouched until a reload with working storage. Copy unsent text
+before closing or reloading a window that reports a storage problem. A send rejected before admission remains a draft, and a refusal is said each time, even when an
 earlier message got the same one. A run starts only on a model the picker would offer to the agent: a
 conversation whose provider was disconnected, or recorded on a route duang no longer runs, refuses a send,
 and since choosing a model is the way on, the model picker opens by itself on it: a line at its top says
@@ -194,7 +199,7 @@ The composer is one row: the field with the model chip inside its right end, and
 that is the next action: Send, disabled and saying why while the draft is empty (whitespace is
 empty); Stop while a run is live and nothing is typed; Steer while it is live and something is.
 The model chip moves under the text once the draft is more than one line. It sends with Enter, inserts a newline with Shift+Enter and leaves IME composition to
-the input method. `⌘N` or the sidebar's New conversation action starts a conversation in the open
+the input method. `⌘N` or the header's conversation list's New conversation action starts a conversation in the open
 agent and focuses its composer when ready; Escape dismisses an active overlay before it can stop a
 run. While a run is live the composer steers it (the round button is Stop while the field is empty and Steer once it holds text; Esc always stops); the runtime decides the actual admission. A sent message waits below the output until the runtime reports it entering the conversation, and is placed there; one the run ends with still queued returns to the draft. A refused send is not shown as delivered. The roster is one tab stop with arrow
 navigation, and the transcript is focusable. While a run waits on the model and nothing has come from it for 30 seconds (a steer of the person's own does not count), its status line adds `no output for 45s`: a thinking model can be that quiet and be fine, so it is said plainly, and a running tool, which has its own clock, does not add it. A tool call reopened from history shows its arguments, as it did live. A long conversation opened at its latest line shows that end at once and draws the rest above it over the next
@@ -254,8 +259,8 @@ sign-in and API keys for pi's built-in providers, disconnecting, and the picker'
 the model picker, per conversation.
 
 **Model picker.** The list is already the open agent's, custom endpoints included (#59). With
-no model to list it says so (naming a ChatGPT sign-in to reconnect as one cause) and offers **Connect a provider**; otherwise it ends with **Manage
-providers…**. Both open Settings. Returning from a successful connection reopens the picker without
+no model to list it says so (naming a ChatGPT sign-in to reconnect as one cause) and offers **Connect a provider**,
+which opens Settings. Otherwise, providers are managed from the Settings row in the sidebar. Returning from a successful connection reopens the picker without
 choosing a model for the person.
 
 **Choosing.** Connecting happens in place, in the provider's own row of Settings; there is no
