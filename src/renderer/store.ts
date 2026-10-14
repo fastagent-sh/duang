@@ -92,6 +92,7 @@ export interface View extends SettingsView {
   errorInConfig?: true;
   failure?: { title: string; reason: string };
   registryError?: string;
+  draftsError?: string;
   models?: Models;
   modelsError?: string;
   modelsRefresh?: { status: "running" } | { status: "done"; added: number } | { status: "failed"; error: string };
@@ -305,7 +306,7 @@ export function createStore(api: DuangApi) {
     // A conversation the runtime never heard of exists only on screen, so leaving its unsent text would discard it.
     const unsent = new Map(drafts);
     if (view.conversation) unsent.set(key(view.conversation.agentId, view.conversation.session), view.conversation.draft);
-    draftStorage.save([...unsent].filter(([, text]) => text.trim()));
+    view.draftsError = draftStorage.save([...unsent].filter(([, text]) => text.trim()));
     view = derive(view, [...conversations.values()], unsent, unseen, refusal, staleDefault);
     // A picker the person closed stays closed: it opens when the ask becomes a different one, and closes when
     // there is nothing to ask. A refusal opened it where it happened, so a return does not open it again.

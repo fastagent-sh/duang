@@ -128,8 +128,11 @@ derived from our own writes.
 directory, avatar colour and optional model override. Reads validate the file; only a missing file means an empty
 registry. Writes serialize read/modify/rename, so concurrent changes do not lose rows and a failed
 write never publishes an in-memory success. Conversations remain the runtime's files. The renderer
-persists drafts and selection in localStorage (a drafts value it cannot read is moved to
-`duang.drafts.unreadable` and reported, never overwritten); live output and attention marks are presentation
+persists drafts and selection in localStorage. The draft storage boundary preserves an invalid value in
+`duang.drafts.unreadable` before allowing new writes. If reading or preserving it fails, the original key
+stays protected until a reload with working storage. A save failure is shown in the window; editing stays
+available, and the next publication retries the unsaved value. Only a successful write suppresses a repeat
+save. Selection remains best effort. Live output and attention marks are presentation
 state, not a second durable transcript. Remote contacts and credentials are future work: never
 store access tokens alongside contact metadata; use OS-backed secure storage for secrets. Model
 credentials live in duang's own `userData/auth.json`, written through FastAgent's credential store. App preferences

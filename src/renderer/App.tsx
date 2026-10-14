@@ -161,6 +161,62 @@ export default function App() {
           onMenu={duang.menu}
         />
         <main className="relative flex-1 flex flex-col min-w-0 min-h-0">
+          {/* Floating over the pane, so nothing below moves when one comes or goes (docs/ui.md §9b). */}
+          {(view.draftsError || (!settings && (view.failure || alert || c?.ended))) && (
+            <div className="pointer-events-none absolute inset-x-0 top-20 z-[7] px-6">
+              <div className="column space-y-2">
+                {view.draftsError && (
+                  <Problem
+                    layout="strip"
+                    tone="warning"
+                    title="Draft storage needs attention"
+                    advice="Keep a copy of your unsent text before closing or reloading this window."
+                    reason={view.draftsError}
+                  />
+                )}
+                {!settings && view.failure && (
+                  <Problem
+                    layout="strip"
+                    tone="error"
+                    title={view.failure.title}
+                    reason={view.failure.reason}
+                    onDismiss={store.dismissFailure}
+                  />
+                )}
+                {!settings && (alert ? (
+                  <Problem
+                    layout="strip"
+                    tone="error"
+                    title={alert.title}
+                    advice={alert.advice}
+                    reason={alert.reason}
+                    actions={
+                      <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
+                        Reconnect
+                      </Button>
+                    }
+                  />
+                ) : (
+                  // An ended subscription is not a failure: the conversation is intact, this view stopped
+                  // listening. Said in the calm voice, with the one action that fixes it.
+                  c?.ended && (
+                    <Problem
+                      layout="strip"
+                      tone="info"
+                      title="This conversation stopped updating"
+                      advice="Nothing was lost. Reconnect to follow it again."
+                      reason={c.ended}
+                      actions={
+                        <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
+                          Reconnect
+                        </Button>
+                      }
+                    />
+                  )
+                ))}
+              </div>
+            </div>
+          )}
           {settings ? (
             <Settings
               view={view}
@@ -228,53 +284,6 @@ export default function App() {
                   }}
                   onMenu={duang.menu}
                 />
-              )}
-              {/* Floating over the pane, so nothing below moves when one comes or goes (docs/ui.md §9b). */}
-              {(view.failure || alert || c?.ended) && (
-                <div className="pointer-events-none absolute inset-x-0 top-20 z-[7] px-6">
-                  <div className="column space-y-2">
-                    {view.failure && (
-                      <Problem
-                        layout="strip"
-                        tone="error"
-                        title={view.failure.title}
-                        reason={view.failure.reason}
-                        onDismiss={store.dismissFailure}
-                      />
-                    )}
-                    {alert ? (
-                      <Problem
-                        layout="strip"
-                        tone="error"
-                        title={alert.title}
-                        advice={alert.advice}
-                        reason={alert.reason}
-                        actions={
-                          <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
-                            Reconnect
-                          </Button>
-                        }
-                      />
-                    ) : (
-                      // An ended subscription is not a failure: the conversation is intact, this view stopped
-                      // listening. Said in the calm voice, with the one action that fixes it.
-                      c?.ended && (
-                        <Problem
-                          layout="strip"
-                          tone="info"
-                          title="This conversation stopped updating"
-                          advice="Nothing was lost. Reconnect to follow it again."
-                          reason={c.ended}
-                          actions={
-                            <Button kind="secondary" size={28} icon={<ArrowClockwise size={12} />} onClick={() => void store.retry()}>
-                              Reconnect
-                            </Button>
-                          }
-                        />
-                      )
-                    )}
-                  </div>
-                </div>
               )}
               {pane === "unreadable-registry" ? (
                 // Not an empty registry: "add your first agent" would deny the failure.

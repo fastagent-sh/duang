@@ -72,6 +72,37 @@ test("unreadable drafts are moved aside, not overwritten by the next write", asy
 });
 
 
+test("a draft save failure is visible, keeps the text, and clears after storage recovers", async (t) => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  let failing = false;
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem(key: string, value: string) {
+        if (failing && key === "duang.drafts") throw new Error("storage full");
+        values.set(key, value);
+      },
+    },
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, "localStorage", original);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  });
+  const { store } = harness();
+  t.after(store.dispose);
+  await store.load();
+  failing = true;
+  store.setDraft("keep this text");
+  assert.equal(store.getSnapshot().conversation?.draft, "keep this text");
+  assert.match(store.getSnapshot().draftsError ?? "", /storage full/);
+  failing = false;
+  store.setDraft("keep this text");
+  assert.equal(store.getSnapshot().draftsError, undefined);
+  assert.match(values.get("duang.drafts") ?? "", /keep this text/);
+});
+
 test("a conversation opened mid-run shows its unanswered calls as running, not stopped", async () => {
   const { api, store } = harness();
   const entries: SessionEntry[] = [
