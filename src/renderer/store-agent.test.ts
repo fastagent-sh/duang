@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
-import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
-import { deferred, described, empty, harness, listed, panes, ready } from "./store-harness.ts";
+import type { SessionResult } from "@fastagent-sh/fastagent/session";
+import type { DuangApi, LoginOutcome, OpenResult, ProviderRow } from "../preload/index.ts";
+import { deferred, empty, harness, listed, panes, ready } from "./store-harness.ts";
 
 test("an agent's existing conversation opens straight into it, never by way of the new-conversation page", async () => {
   const { api, store } = harness();

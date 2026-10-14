@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
+import type { DuangApi, LoginOutcome, ProviderRow } from "../preload/index.ts";
 import { keyStep } from "./settings-store.ts";
-import { deferred, described, empty, harness, listed, panes, ready } from "./store-harness.ts";
+import { deferred, harness } from "./store-harness.ts";
 
 
 test("settings are read fresh each time, and only the newest change and check land", async () => {

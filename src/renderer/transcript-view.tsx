@@ -19,7 +19,6 @@ import {
   MagnifyingGlass,
   PencilSimple,
   Terminal,
-  WarningCircle,
   X,
 } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
@@ -48,7 +47,6 @@ import type { SessionState } from "@fastagent-sh/fastagent/session";
 import { clock } from "./time.ts";
 import { Badge, Button, useCopy, type Tone } from "./ui.tsx";
 import { Problem } from "./problem.tsx";
-import type { Fix } from "./problems.ts";
 
 // The clock counts from when this window saw the run start, so a run reopened halfway shows none, not a wrong one.
 export function RunStatus({

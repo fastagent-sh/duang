@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionEntry, SessionResult } from "@fastagent-sh/fastagent/session";
-import type { DuangApi, LoginOutcome, Models, LoginStep, OpenResult, ProviderRow, SessionFrame } from "../preload/index.ts";
+import type { DuangApi, OpenResult } from "../preload/index.ts";
 import { queueView } from "./transcript.ts";
-import { deferred, described, empty, harness, listed, panes, ready } from "./store-harness.ts";
+import { deferred, empty, harness, listed, ready } from "./store-harness.ts";
 
 
 test("drafts stay with conversations; rejected sends preserve text and report the original error", async () => {
